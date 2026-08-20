@@ -1,0 +1,187 @@
+Columns (legacy API)/Basic
+Columns (legacy API)/Borders
+Columns (legacy API)/Horizontal Scrolling
+Columns (legacy API)/Mixed items
+Columns (legacy API)/Tree
+Columns (legacy API)/Word-wrapping
+Configuration
+Configuration/Backend Flags
+Configuration/Capture, Logging
+Configuration/Style, Fonts
+Examples/Assets Browser
+Examples/Auto-resizing window
+Examples/Console
+Examples/Constrained Resizing window
+Examples/Custom rendering
+Examples/Custom rendering/BG & FG draw lists
+Examples/Custom rendering/Canvas
+Examples/Custom rendering/Draw Channels
+Examples/Custom rendering/Primitives
+Examples/Documents
+Examples/Fullscreen window
+Examples/Log
+Examples/Long text display
+Examples/Manipulating window titles##1
+Examples/Manipulating window titles##2
+Examples/Manipulating window titles##3
+Examples/Menu
+Examples/Menu/Append to an existing menu
+Examples/Menu/Colors
+Examples/Menu/Options
+Examples/Property editor
+Examples/Property Editor
+Examples/Simple layout
+Examples/Simple overlay
+Help
+Inputs & Focus/Dragging
+Inputs & Focus/Focus from code
+Inputs & Focus/Inputs
+Inputs & Focus/Mouse Cursors
+Inputs & Focus/Outputs
+Inputs & Focus/Outputs/WantCapture override
+Inputs & Focus/Shortcuts
+Inputs & Focus/Tabbing
+Layout/Basic Horizontal Layout
+Layout/Basic Horizontal Layout/Dummy
+Layout/Basic Horizontal Layout/Manual wrapping
+Layout/Basic Horizontal Layout/SameLine
+Layout/Basic Horizontal Layout/SameLine (more)
+Layout/Basic Horizontal Layout/SameLine (with offset)
+Layout/Child windows
+Layout/Groups
+Layout/Overlap Mode
+Layout/Scrolling/Horizontal
+Layout/Scrolling/Horizontal (more)
+Layout/Scrolling/Horizontal contents size demo window
+Layout/Scrolling/Vertical
+Layout/Text Baseline Alignment
+Layout/Text Clipping
+Layout/Widgets Width
+Menu/Edit
+Menu/Examples
+Menu/File
+Menu/Tools
+Popups/Context menus
+Popups/Menus inside a regular window
+Popups/Modals
+Popups/Popups
+Tables/Advanced
+Tables/Angled headers
+Tables/Background color
+Tables/Basic
+Tables/Borders, background
+Tables/Columns flags
+Tables/Columns widths
+Tables/Context menus
+Tables/Custom headers
+Tables/Explicit widths
+Tables/Horizontal scrolling
+Tables/Item width
+Tables/Nested tables
+Tables/Outer size
+Tables/Padding
+Tables/Reorderable, hideable, with headers
+Tables/Resizable, fixed
+Tables/Resizable, mixed
+Tables/Resizable, stretch
+Tables/Row height
+Tables/Sorting
+Tables/Synced instances
+Tables/Tree view
+Tables/Vertical scrolling, with clipping
+Tools/About Dear ImGui
+Tools/Style Editor
+Widgets
+Widgets/Basic
+Widgets/Basic/Button
+Widgets/Basic/Buttons (Colored)
+Widgets/Basic/Buttons (Repeating)
+Widgets/Basic/Checkbox
+Widgets/Basic/ColorEdit3, ColorEdit4
+Widgets/Basic/Combo
+Widgets/Basic/DragInt, DragFloat
+Widgets/Basic/InputInt, InputFloat
+Widgets/Basic/InputText
+Widgets/Basic/ListBox
+Widgets/Basic/RadioButton
+Widgets/Basic/Slider (enum)
+Widgets/Basic/SliderAngle
+Widgets/Basic/SliderInt, SliderFloat
+Widgets/Bullets
+Widgets/Collapsing Headers
+Widgets/Color
+Widgets/Color/ColorButton (simple)
+Widgets/Color/ColorButton (with custom Picker popup)
+Widgets/Color/ColorButton (with Picker)
+Widgets/Color/ColorEdit
+Widgets/Color/ColorEdit (float display)
+Widgets/Color/ColorEdit (HSV, with Alpha)
+Widgets/Color/ColorPicker
+Widgets/Combo
+Widgets/Data Types
+Widgets/Data Types/Drags
+Widgets/Data Types/Inputs
+Widgets/Data Types/Sliders
+Widgets/Disable Blocks
+Widgets/Drag and drop
+Widgets/Drag and drop/Copy-swap items
+Widgets/Drag and Drop/Drag to reorder items (simple)
+Widgets/Drag and drop/Standard widgets
+Widgets/Drag and Drop/Tooltip at target location
+Widgets/Drag and Slider Flags
+Widgets/Fonts
+Widgets/Images
+Widgets/Images/Textured buttons
+Widgets/List Boxes
+Widgets/Live Edit Flgs
+Widgets/Multi-component Widgets
+Widgets/Plotting
+Widgets/Progress Bars
+Widgets/Querying Item Status (Edited,Active,Hovered etc.)
+Widgets/Querying Window Status (Focused,Hovered etc.)
+Widgets/Selectables
+Widgets/Selectables/Alignment
+Widgets/Selectables/Basic
+Widgets/Selectables/Grid
+Widgets/Selectables/In Tables
+Widgets/Selectables/Multiple items on the same line
+Widgets/Selectables/Rendering more items on the same line
+Widgets/Selection State & Multi-Select
+Widgets/Selection State/Multi-Select
+Widgets/Selection State/Multi-Select (advanced)
+Widgets/Selection State/Multi-Select (checkboxes)
+Widgets/Selection State/Multi-Select (dual list box)
+Widgets/Selection State/Multi-Select (in a table)
+Widgets/Selection State/Multi-Select (manual/simplified, without BeginMultiSelect)
+Widgets/Selection State/Multi-Select (multiple scopes)
+Widgets/Selection State/Multi-Select (trees)
+Widgets/Selection State/Multi-Select (with clipper)
+Widgets/Selection State/Multi-Select (with deletion)
+Widgets/Selection State/Single-Select
+Widgets/Tabs
+Widgets/Tabs/Advanced & Close Button
+Widgets/Tabs/Basic
+Widgets/Tabs/TabItemButton & Leading-Trailing flags
+Widgets/Text
+Widgets/Text Filter
+Widgets/Text Input
+Widgets/Text Input/Completion, History, Edit Callbacks
+Widgets/Text Input/Eliding, Alignment
+Widgets/Text Input/Filtered Text Input
+Widgets/Text Input/Miscellaneous
+Widgets/Text Input/Multi-line Text Input
+Widgets/Text Input/Password input
+Widgets/Text Input/Resize Callback
+Widgets/Text/Colored Text
+Widgets/Text/Font Size
+Widgets/Text/UTF-8 Text
+Widgets/Text/Word Wrapping
+Widgets/Tooltips
+Widgets/Tree Nodes
+Widgets/Tree Nodes/Advanced
+Widgets/Tree Nodes/Basic Trees
+Widgets/Tree Nodes/Clipping Large Trees
+Widgets/Tree Nodes/Hierarchy Lines
+Widgets/Tree Nodes/Selectable Nodes
+Widgets/Vertical Sliders
+Window options

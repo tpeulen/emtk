@@ -1,0 +1,14 @@
+# Generated, never edited by hand.
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+
+# The glyph atlas is *not* here: `cmtk/atlas/chrome.{png,json}` is committed on
+# purpose, so using cmtk needs no font engine and no build step. `tools/
+# bake_chrome_atlas.py` regenerates it when the font or the point size changes.

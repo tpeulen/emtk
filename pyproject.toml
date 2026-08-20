@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cmtk"
+version = "0.1.0"
+description = "Dear ImGui for Python: an immediate-mode GUI toolkit that draws through a painter, with nothing to compile."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+# The upstream MIT texts travel with the code that was ported from them.
+license-files = ["LICENSE", "licenses/*.txt"]
+authors = [{name = "Thomas-Otavio Peulen"}]
+keywords = ["gui", "imgui", "immediate-mode", "opengl", "webassembly", "pyodide"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: User Interfaces",
+    "Typing :: Typed",
+]
+#: None. That is the point -- see README.md.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.urls]
+Source = "https://github.com/tpeulen/cmtk"
+
+[tool.setuptools.packages.find]
+include = ["cmtk*"]
+
+[tool.setuptools.package-data]
+# The baked glyph atlas is not decoration: every string in an interface is
+# measured with it, so a wheel without it installs and then cannot lay out
+# a menu bar.
+cmtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
