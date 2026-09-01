@@ -2,8 +2,9 @@
 
 This is the other implementation of :class:`~.painter.Painter`. It draws
 nothing: it *appends*, building one interleaved vertex array that
-``render/wgsl/ui.wgsl`` turns into the panel, the strip, the menus and the
-transport in a single draw call.
+:mod:`cmtk.wgsl`'s ``ui.wgsl`` turns into the panel, the strip, the menus
+and the transport in a single draw call. :mod:`cmtk.wgpu_host` is the host
+that does it.
 
 Why that is worth doing is measured, not assumed. ``wgpu_view`` records the
 ``QPainter`` path at **9.6 ms of a 21 ms frame** with a quarter-million beads on
@@ -229,6 +230,13 @@ class QuadPainter:
         #: A texel well inside the opaque block, so filtering cannot reach its
         #: edge. Every rectangle in the chrome samples this one point.
         self._solid_uv = (sx + sw * 0.5, sy + sh * 0.5)
+        #: The host's image placement, or ``None``: a callable taking the
+        #: ``handle`` :meth:`image` received and returning
+        #: ``((u0, v0), (u1, v1))`` in whatever texture the host binds, or
+        #: ``None`` to decline. cmtk never looks inside the handle -- where
+        #: an image lives is the host's knowledge (an atlas it owns), which
+        #: is why this is a hook rather than a table.
+        self.image_uv_resolver = None
         #: Advance width of one character, in logical pixels.
         self._advance = atlas.advance() * self._font_scale
         #: Logical pixels per baked texel, for the glyph quad.
@@ -440,6 +448,46 @@ class QuadPainter:
         """Fill a rectangle. No outline."""
         u, v = self._solid_uv
         self._corner_quad(x, y, w, h, u, v, 0.0, 0.0, _rgba(colour))
+
+    def image(
+        self,
+        x: float,
+        y: float,
+        w: float,
+        h: float,
+        handle,
+        uv0=(0.0, 0.0),
+        uv1=(1.0, 1.0),
+        tint: Colour = (255, 255, 255, 255),
+    ) -> None:
+        """Blit *handle* into the box (the optional ``Painter.image`` op).
+
+        ``handle`` is host-defined and opaque to cmtk. This painter resolves
+        it through :attr:`image_uv_resolver` -- a callable the *host*
+        installs, returning ``((u0, v0), (u1, v1))`` in the host's own
+        texture, or ``None`` to decline. Without a resolver, or when it
+        declines, the box degrades to a :meth:`fill_rect` in *tint*: the
+        same fallback :func:`cmtk.painter.image` gives every painter
+        without the operation, so a missing image reads as a coloured box
+        rather than a crash or silence.
+
+        ``uv0``/``uv1`` window into the handle's region (0..1 of it), so a
+        host can draw a sub-rectangle of a placed image without placing it
+        twice.
+        """
+        resolve = self.image_uv_resolver
+        region = resolve(handle) if callable(resolve) else None
+        if region is None:
+            self.fill_rect(x, y, w, h, tint)
+            return
+        (ru0, rv0), (ru1, rv1) = region
+        fu0, fv0 = uv0
+        fu1, fv1 = uv1
+        u = ru0 + max(fu0, 0.0) * (ru1 - ru0)
+        v = rv0 + max(fv0, 0.0) * (rv1 - rv0)
+        uw = (min(fu1, 1.0) - max(fu0, 0.0)) * (ru1 - ru0)
+        vh = (min(fv1, 1.0) - max(fv0, 0.0)) * (rv1 - rv0)
+        self._corner_quad(x, y, w, h, u, v, uw, vh, _rgba(tint))
 
     def stroke_rect(
         self,

@@ -130,7 +130,7 @@ def widgets_basic(state: DemoState, io: cmtk.IO, storage: dict) -> RecordingPain
         # ImGui::InputTextWithHint("input text (w/ hint)", "enter text here", ...);
         cmtk.input_text_with_hint("input text (w/ hint)", "enter text here", "")
         # ImGui::InputFloat("input float", &f0, 0.01f, 1.0f, "%.3f");
-        _, state.f = cmtk.input_float("input float", state.f, 0.01, "%.3f")
+        _, state.f = cmtk.input_float("input float", state.f, 0.01, 1.0, "%.3f")
         # ImGui::InputInt("input int", &i0);
         _, state.i = cmtk.input_int("input int", state.i)
 

@@ -498,3 +498,79 @@ def test_a_column_of_controls_stays_inside_its_column():
     for x, y, w, h, *_rest in painter.fills + painter.strokes:
         assert x >= left[0]
         assert x + w <= right[0] + right[2]
+
+
+# --------------------------------------------------------------------------- #
+# The window follows the frame
+#
+# A host resizes. cmtk keeps windows in `storage`, which is carried across
+# frames on purpose -- and a *stored* box does not follow a frame box that
+# changed. Every test above builds fresh state per frame, which is exactly the
+# arrangement in which this cannot be seen: the content stopped at the old
+# window's edge and the rest of the widened one stayed blank.
+# --------------------------------------------------------------------------- #
+def _window_size_across(boxes, **begin_kw):
+    """Draw one window per box, sharing io and storage as a host does."""
+    import cmtk
+    from cmtk.testing import PixelPainter
+
+    io, storage, seen = cmtk.IO(), {}, []
+    for w, h in boxes:
+        painter = PixelPainter(int(w), int(h), background=(0, 0, 0, 255))
+        with cmtk.frame(painter, (0, 0, float(w), float(h)),
+                        io=io, storage=storage):
+            cmtk.begin("w", **begin_kw)
+            seen.append((cmtk.get_window_size(),
+                         cmtk.get_content_region_avail()))
+            cmtk.end()
+    return seen
+
+
+def test_a_window_with_no_box_of_its_own_follows_the_frame():
+    """It *is* the frame, so it has to keep being the frame -- growing and
+    shrinking with the host, not only on the frame that created it."""
+    seen = _window_size_across([(900, 620), (1400, 900), (700, 400)])
+    assert [size for size, _avail in seen] == [(900, 620), (1400, 900), (700, 400)]
+
+
+def test_the_content_region_follows_it_too():
+    """What a widget asking for ``-1`` width gets. A plot sized from a stale
+    content region is the visible half of this bug."""
+    seen = _window_size_across([(900, 620), (1400, 900)])
+    assert [avail for _size, avail in seen] == [(900.0, 620.0), (1400.0, 900.0)]
+
+
+def test_a_window_given_a_box_keeps_it():
+    """An explicit box is the caller's decision and outranks the frame."""
+    import cmtk
+    from cmtk.testing import PixelPainter
+
+    io, storage, seen = cmtk.IO(), {}, []
+    for w, h in ((900, 620), (1400, 900)):
+        painter = PixelPainter(w, h, background=(0, 0, 0, 255))
+        with cmtk.frame(painter, (0, 0, float(w), float(h)), io=io, storage=storage):
+            cmtk.begin("w", box=(10.0, 10.0, 300.0, 200.0))
+            seen.append(cmtk.get_window_size())
+            cmtk.end()
+    assert seen == [(300, 200), (300, 200)]
+
+
+def test_an_auto_resizing_window_still_sizes_to_its_content():
+    """``auto_resize`` sizes the window in ``end()``, which is the earliest
+    its content is known -- so the *first* frame is still frame-sized. What
+    must not happen is the second one going back: following the frame would
+    overwrite the measured size every frame and the window would never
+    shrink at all."""
+    import cmtk
+    from cmtk.testing import PixelPainter
+
+    io, storage, seen = cmtk.IO(), {}, []
+    for w, h in ((900, 620), (1400, 900), (700, 400)):
+        painter = PixelPainter(w, h, background=(0, 0, 0, 255))
+        with cmtk.frame(painter, (0, 0, float(w), float(h)), io=io, storage=storage):
+            cmtk.begin("w", auto_resize=True)
+            cmtk.text("short")
+            seen.append(cmtk.get_window_size())
+            cmtk.end()
+    assert seen[0] == (900, 620), "the first frame cannot know the content yet"
+    assert all(size[0] < 100 for size in seen[1:]), seen

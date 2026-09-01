@@ -25,6 +25,7 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest"]
+docs = ["sphinx>=8.0", "sphinx-rtd-theme>=3.0"]
 
 [project.urls]
 Source = "https://github.com/tpeulen/cmtk"
@@ -35,8 +36,17 @@ include = ["cmtk*"]
 [tool.setuptools.package-data]
 # The baked glyph atlas is not decoration: every string in an interface is
 # measured with it, so a wheel without it installs and then cannot lay out
-# a menu bar.
-cmtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png"]
+# a menu bar. `wgsl/*.wgsl` is the same kind of thing for the GPU host: the
+# shader is read from disk at pipeline time, so a wheel without it works in
+# a checkout and fails on an install.
+cmtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png", "wgsl/*.wgsl"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# cmtk has no dependencies, and its tests must be runnable without a toolkit
+# installed. pytest-qt is not one of cmtk's plugins -- but if it happens to be
+# in the environment without a Qt binding beside it, it refuses to let pytest
+# start at all, and cmtk's whole suite becomes unrunnable for a reason that
+# has nothing to do with cmtk. The one test that needs Qt uses the `qt_app`
+# fixture in tests/conftest.py, which skips when Qt is absent.
+addopts = "-p no:pytest-qt"

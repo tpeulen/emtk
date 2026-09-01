@@ -80,6 +80,46 @@ def test_the_scalar_forms_dispatch_on_the_value(ctx):
     assert isinstance(as_int, int) and isinstance(as_float, float)
 
 
+def test_the_scalar_forms_also_take_the_references_leading_data_type(ctx):
+    """``SliderScalar(label, data_type, p_data, p_min, p_max, fmt, flags)``.
+
+    The reference passes an ``ImGuiDataType`` *second* and cmtk infers the
+    type from the value instead -- which is the right instinct in Python and
+    the wrong signature, because a port hands its arguments over
+    positionally. Without this the data type landed in the value slot and
+    the value in the minimum: `TypeError: slider_scalar() takes from 4 to 5
+    positional arguments but 7 were given` on a good day, and a silently
+    wrong range on a bad one.
+    """
+    _c, v = cmtk.slider_scalar("##a", cmtk.im.DataType.DOUBLE, 0.5, 0.0, 1.0,
+                               "%.5f", cmtk.im.SliderFlags.LOGARITHMIC)
+    assert v == pytest.approx(0.5)
+
+    _c, d = cmtk.drag_scalar("##d", cmtk.im.DataType.FLOAT, 1.5, 0.1, 0.0, 10.0)
+    assert d == pytest.approx(1.5)
+
+    _c, i = cmtk.input_scalar("##i", cmtk.im.DataType.S32, 4, 1, 10)
+    assert i == 4
+
+
+def test_a_typed_scalar_keeps_the_value_out_of_the_bounds(ctx):
+    """The bug this guards is the quiet one: with the arguments shifted by
+    one, the value was read as a bound and the slider clamped to nonsense
+    instead of raising."""
+    # 5.0 with bounds 0..10 is mid-range, and stays there.
+    _c, mid = cmtk.slider_scalar("##m", cmtk.im.DataType.DOUBLE, 5.0, 0.0, 10.0)
+    assert mid == pytest.approx(5.0)
+    # The same numbers untyped must agree -- one signature, two spellings.
+    _c, same = cmtk.slider_scalar("##n", 5.0, 0.0, 10.0)
+    assert same == pytest.approx(mid)
+
+
+def test_the_untyped_scalar_spelling_still_takes_keywords(ctx):
+    """`slider_scalar_n` and cmtk's own callers pass these by name."""
+    _c, v = cmtk.slider_scalar("##k", 0.25, v_min=0.0, v_max=1.0)
+    assert v == pytest.approx(0.25)
+
+
 def test_a_vertical_slider_reads_top_to_bottom(ctx):
     """Down is *less*: the reference's VSlider grows upward."""
     ctx.io.mouse_pos = (5.0, 5.0)
@@ -393,3 +433,24 @@ def test_a_draw_callback_runs_in_order():
     dl.add_rect_filled((0, 0), (1, 1), (0, 0, 0, 255))
     dl.add_callback(lambda _dl, data: seen.append(data), "payload")
     assert seen == ["payload"]
+
+
+def test_the_function_keys_and_space_have_codes():
+    """`None` is not "unbound", it is *wrong*: `io.key == Key.SPACE` is then
+    false for every key including space, so a shortcut bound to one silently
+    never fires. cmc toggles its acquisition on F2 and had no F2 to test."""
+    import cmtk.keys as keys
+
+    assert cmtk.im.Key.SPACE == keys.KEY_SPACE
+    assert cmtk.im.Key.INSERT == keys.KEY_INSERT
+    codes = [getattr(cmtk.im.Key, f"F{n}") for n in range(1, 13)]
+    assert all(isinstance(c, int) for c in codes)
+    # contiguous, in order, as Qt numbers them -- an off-by-one here binds
+    # every shortcut to its neighbour
+    assert codes == list(range(codes[0], codes[0] + 12))
+
+
+def test_a_function_key_press_is_seen(ctx):
+    ctx.io.key = cmtk.im.Key.F2
+    assert cmtk.im.is_key_pressed(cmtk.im.Key.F2)
+    assert not cmtk.im.is_key_pressed(cmtk.im.Key.F3)

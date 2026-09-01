@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
+from .flags import Axis, MouseCursor
 from .im_core import (BackendFlags, ButtonFlags, Col, ConfigFlags,
                       ItemFlags, get_current_context)
 
@@ -53,6 +54,7 @@ __all__ = [
     "label_text", "button", "small_button", "invisible_button", "checkbox",
     "radio_button", "slider_float", "slider_int", "drag_float", "drag_int",
     "progress_bar", "selectable", "combo", "separator", "same_line", "spacing",
+    "splitter", "splitter_behavior",
     "dummy", "indent", "unindent", "begin_group", "end_group", "columns",
     "next_column", "new_line", "push_id", "pop_id", "get_id",
     "is_item_hovered", "is_item_active", "is_item_clicked", "get_item_rect",
@@ -66,9 +68,15 @@ __all__ = [
 # --------------------------------------------------------------------------- #
 # Windows and layout -- thin passes through to the context
 # --------------------------------------------------------------------------- #
-def begin(name: str, box=None, **kwargs) -> bool:
-    """``ImGui::Begin``."""
-    return get_current_context().begin(name, box, **kwargs)
+def begin(name: str, box=None, flags: int = 0, **kwargs) -> bool:
+    """``ImGui::Begin``.
+
+    The reference's second argument is ``bool *p_open`` and cmtk's is the
+    window's *box* -- cmtk windows are placed by the caller, and there is no
+    close button to write through. A port therefore drops the ``p_open`` and
+    keeps the flags, which is what ``tools/autoport`` rewrites it to.
+    """
+    return get_current_context().begin(name, box, flags, **kwargs)
 
 
 def set_next_window_auto_resize(auto: bool = True) -> None:
@@ -100,7 +108,16 @@ def spacing() -> None:
     get_current_context().layout.spacing()
 
 
-def dummy(w: float, h: float):
+def dummy(w, h: Optional[float] = None):
+    """``ImGui::Dummy``: reserve space without drawing in it.
+
+    The reference takes one ``ImVec2``; cmtk spells sizes as two scalars.
+    Both work here, because a port arrives holding whichever its source had
+    -- ``Dummy(ImVec2(w, h))`` and ``Dummy(bb.GetSize())`` are the same call
+    in C++, and only the first survives being flattened into two arguments.
+    """
+    if h is None:
+        w, h = w
     return get_current_context().layout.dummy(w, h)
 
 
@@ -120,7 +137,16 @@ def end_group():
     return get_current_context().layout.end_group()
 
 
-def columns(count: int) -> None:
+def columns(count: int = 1, id: str | None = None, border: bool = True) -> None:
+    """``ImGui::Columns(count, id, border)``.
+
+    The trailing two are the reference's, and a port passes all three. ``id``
+    scopes the stored widths in C++; cmtk's layout keys them off the window
+    already. ``border`` is the divider, which this layout does not draw.
+    Both are accepted so the call resolves -- a TypeError here took the
+    whole panel down before its first column.
+    """
+    del id, border
     get_current_context().layout.columns(count)
 
 
@@ -133,6 +159,246 @@ def separator() -> None:
     box = ctx.layout.separator()
     x, y, w, h = box
     ctx.draw.add_line((x, y + h * 0.5), (x + w, y + h * 0.5), _col(Col.TEXT_DISABLED), 1.0)
+
+
+def _has_alpha(colour) -> bool:
+    """Is *colour* something to paint, or the reference's "nothing"?
+
+    ``None``, and the packed ``0`` that C++ writes for a transparent
+    ``ImU32``, both mean draw nothing. A tuple means draw it, unless it
+    carries an explicit zero alpha.
+    """
+    if colour is None:
+        return False
+    if isinstance(colour, int):
+        return bool(colour >> 24)        # IM_COL32_A_MASK
+    return len(colour) < 4 or colour[3] > 0
+
+
+def _as_box(box) -> tuple[float, float, float, float]:
+    """``(x, y, w, h)`` from either cmtk's box or the reference's ``ImRect``.
+
+    cmtk spells a rectangle as position-and-size everywhere; Dear ImGui's
+    internal signatures -- and ``SplitterBehavior`` is one of them -- take an
+    ``ImRect``, which is two corners. A port therefore arrives holding the
+    other spelling, and it is one line to accept it rather than make every
+    such call site convert. Duck-typed on ``min``/``max`` so cmtk needs no
+    opinion about whose ``ImRect`` class it is.
+    """
+    lo = getattr(box, "min", None)
+    if lo is not None:
+        hi = box.max
+        return (float(lo[0]), float(lo[1]),
+                float(hi[0]) - float(lo[0]), float(hi[1]) - float(lo[1]))
+    x, y, w, h = box
+    return (float(x), float(y), float(w), float(h))
+
+
+def splitter_behavior(box, item_id, axis, size1: float, size2: float,
+                      min_size1: float = 0.0, min_size2: float = 0.0,
+                      hover_extend: float = 0.0,
+                      hover_visibility_delay: float = 0.0,
+                      bg_col=None) -> tuple[bool, float, float]:
+    """``ImGui::SplitterBehavior``: drag *box* to move space between two panes.
+
+    The *interaction*, with no bar drawn -- :func:`splitter` is the whole
+    control. Split out because that is the seam the reference has, and a
+    window that draws its own divider (an inset line, a grip, a gradient)
+    wants the dragging without the drawing.
+
+    C++ writes the new sizes through ``float *size1, float *size2``; there is
+    no such thing here, so they come back:
+
+        changed, left_w, right_w = im.splitter_behavior(
+            bar_box, im.get_id("##split"), im.Axis.X,
+            left_w, right_w, 120.0, 200.0)
+
+    Parameters
+    ----------
+    box : tuple of float
+        ``(x, y, w, h)`` of the divider, in screen coordinates. The
+        reference's two-corner ``ImRect`` is accepted too, since that is
+        what its own signature takes and what a port arrives holding.
+    item_id
+        The interaction id, from :func:`get_id`. Two splitters in one window
+        that share an id share their drag.
+    axis : int
+        :data:`~cmtk.flags.Axis.X` for a vertical bar between two columns,
+        :data:`~cmtk.flags.Axis.Y` for a horizontal one between two rows.
+        This is the axis the *sizes* run along, not the bar.
+    size1, size2 : float
+        The two panes' current sizes along *axis*.
+    min_size1, min_size2 : float
+        How small each may get. The drag stops rather than swapping them.
+    hover_extend : float
+        Grow the hit box by this much on each side, along *axis* only. A
+        4-pixel divider is hard to hit and easy to overshoot; the reference's
+        own docking splitters extend theirs, and so should any bar thin
+        enough to look tidy.
+    hover_visibility_delay : float
+        Seconds the pointer must rest on the bar before :func:`is_item_hovered`
+        reports it. Stops a bar between two panes flashing every time the
+        pointer crosses it on the way somewhere else. The drag itself is
+        never delayed -- a press is a press.
+    bg_col
+        Fill the hit box with this colour first, as the reference's
+        ``bg_col`` does. ``None`` -- or a zero alpha, which is how C++
+        spells it -- draws nothing.
+
+    Returns
+    -------
+    tuple
+        ``(changed, size1, size2)``. *changed* is true on the frames the
+        drag actually moved the boundary, so a caller can save its layout
+        without writing a settings file sixty times a second.
+
+    Notes
+    -----
+    The delta is measured from where in the bar the press landed, and applied
+    to the *current* box each frame -- so a caller that re-lays-out from the
+    returned sizes tracks the pointer exactly, with no drift and no need to
+    remember anything itself.
+    """
+    ctx = get_current_context()
+    a = 1 if axis == 1 else 0
+    x, y, w, h = _as_box(box)
+    if hover_extend:
+        if a == 0:
+            x, w = x - hover_extend, w + hover_extend * 2.0
+        else:
+            y, h = y - hover_extend, h + hover_extend * 2.0
+    interact = (x, y, w, h)
+    # The reference draws the fill only `if (bg_col & IM_COL32_A_MASK)` -- a
+    # zero alpha means no fill, and its callers spell "none" as the literal
+    # `0`. So does a port of one, which is why this tests the alpha rather
+    # than `is not None`: given `0` it would otherwise try to paint with an
+    # integer and fail inside the draw list, three frames from the call.
+    if _has_alpha(bg_col):
+        ctx.draw.add_rect_filled((x, y), (x + w, y + h), bg_col)
+
+    hovered, held, _pressed = ctx.button_behavior(
+        interact, item_id, ButtonFlags.ALLOW_OVERLAP)
+
+    store = ctx.get_storage(item_id)
+    if hovered and hover_visibility_delay > 0.0 and not held:
+        store["hover_t"] = store.get("hover_t", 0.0) + ctx.io.delta_time
+        if store["hover_t"] < hover_visibility_delay:
+            hovered = False
+    elif not hovered:
+        store.pop("hover_t", None)
+
+    if hovered or held:
+        set_mouse_cursor(MouseCursor.RESIZE_EW if a == 0 else MouseCursor.RESIZE_NS)
+    # What the bar should *look* like, which is not what `is_item_hovered`
+    # says: that is the raw hit, and it is deliberately not delayed. Kept
+    # here so :func:`splitter` draws the state this function decided on --
+    # reading the raw hit instead made `hover_visibility_delay` change the
+    # cursor and not the colour, which is half a feature.
+    store["hovered"] = bool(hovered)
+    store["held"] = bool(held)
+
+    changed = False
+    if held:
+        # Where in the bar the press landed. Kept, so the boundary follows
+        # the point the pointer grabbed rather than jumping it to the centre.
+        if "click_offset" not in store:
+            store["click_offset"] = ctx.io.mouse_pos[a] - interact[a]
+        delta = ctx.io.mouse_pos[a] - store["click_offset"] - interact[a]
+        # Clamp before applying, not after: clamping the *sizes* afterwards
+        # lets the pointer run far past the limit and the bar then lags all
+        # the way back on the return journey.
+        delta = max(delta, min_size1 - size1)
+        delta = min(delta, size2 - min_size2)
+        if delta != 0.0:
+            size1 += delta
+            size2 -= delta
+            changed = True
+    else:
+        store.pop("click_offset", None)
+    return (changed, float(size1), float(size2))
+
+
+def splitter(str_id: str, axis, thickness: float, long_axis_size: float,
+             size1: float, size2: float, min_size1: float = 0.0,
+             min_size2: float = 0.0, hover_extend: float = 8.0,
+             bar_margin: float = 4.0,
+             hover_visibility_delay: float = 0.0) -> tuple[bool, float, float]:
+    """A draggable divider between two panes: behaviour, cursor, bar, layout.
+
+    Placed at the cursor, like any other item, and it reserves its own space
+    -- so the pane after it starts where the bar ends instead of underneath
+    it. Between two children that is::
+
+        im.begin_child((*im.get_cursor_screen_pos(), left_w, 0))
+        ...
+        im.end_child()
+        im.same_line(0.0, 0.0)
+        moved, left_w, right_w = im.splitter(
+            "##vsplit", im.Axis.X, 12.0, full_h, left_w, right_w, 260.0, 360.0)
+        im.same_line(0.0, 0.0)
+        im.begin_child((*im.get_cursor_screen_pos(), right_w, 0))
+
+    Parameters
+    ----------
+    str_id : str
+        Label-style id for the drag; never drawn.
+    axis : int
+        :data:`~cmtk.flags.Axis.X` for a vertical bar (side-by-side panes),
+        :data:`~cmtk.flags.Axis.Y` for a horizontal one (stacked panes).
+    thickness : float
+        The space the divider occupies -- the *hit* target and the layout
+        cost, not the visible line.
+    long_axis_size : float
+        How far it runs across the panes it divides.
+    size1, size2, min_size1, min_size2, hover_extend, hover_visibility_delay
+        As :func:`splitter_behavior`. The delay gates the bar's colour and
+        the cursor, never the drag.
+    bar_margin : float
+        Inset the drawn bar by this much on each side, so a comfortable
+        grab target does not look like a slab. The line is never thinner
+        than two pixels however wide the margin asks to be.
+
+    Returns
+    -------
+    tuple
+        ``(changed, size1, size2)``.
+
+    Notes
+    -----
+    A splitter is what every application with two resizable panes writes for
+    itself, and it is not a natural thing to get right: the hit box wants to
+    be bigger than the bar, the cursor has to change, the delta has to be
+    taken from the grab point, and both minimums have to hold at once. cmc
+    had four copies of it in four files.
+    """
+    ctx = get_current_context()
+    a = 1 if axis == 1 else 0
+    x, y = ctx.layout.cursor
+    box = ((x, y, thickness, long_axis_size) if a == 0
+           else (x, y, long_axis_size, thickness))
+    item_id = ctx.get_id(str_id)
+    changed, size1, size2 = splitter_behavior(
+        box, item_id, a, size1, size2, min_size1, min_size2,
+        hover_extend, hover_visibility_delay)
+    state = ctx.get_storage(item_id)
+    held = state.get("held", False)
+    hovered = state.get("hovered", False)
+    # Reserve the space *after* the behaviour: the hit box may be wider than
+    # the bar, but what the layout owes the next item is the bar's own room.
+    ctx.layout.dummy(box[2], box[3])
+
+    bar = max(2.0, thickness - bar_margin * 2.0)
+    inset = (thickness - bar) * 0.5
+    bx, by, bw, bh = box
+    if a == 0:
+        bx, bw = bx + inset, bar
+    else:
+        by, bh = by + inset, bar
+    colour = (_col(Col.SEPARATOR_ACTIVE) if held
+              else _col(Col.SEPARATOR_HOVERED) if hovered
+              else _col(Col.SEPARATOR))
+    ctx.draw.add_rect_filled((bx, by), (bx + bw, by + bh), colour)
+    return (changed, size1, size2)
 
 
 def push_id(key: Any) -> None:
@@ -167,7 +433,18 @@ def get_item_rect():
     return get_current_context().get_item_rect()
 
 
-def calc_text_size(text_: str):
+def calc_text_size(text_: str, text_end=None, hide_double_hash: bool = False,
+                   wrap_width: float = -1.0):
+    """``CalcTextSize`` with the trailing C parameters accepted and honest:
+    ``text_end`` truncates, ``hide_double_hash`` hides what follows ``##``,
+    ``wrap_width`` is accepted (cmtk measures unwrapped)."""
+    if text_end is not None:
+        try:
+            text_ = text_[:int(text_end)]
+        except (TypeError, ValueError):
+            pass
+    if hide_double_hash and "##" in text_:
+        text_ = text_.split("##", 1)[0]
     return get_current_context().draw.calc_text_size(text_)
 
 
@@ -526,22 +803,52 @@ def selectable(label: str, selected: bool = False, size=None) -> bool:
     return pressed
 
 
-def combo(label: str, current: int, items: Sequence[str]) -> tuple[bool, int]:
+def combo(label: str, current: int, items: Sequence[str],
+          items_count: int = -1,
+          popup_max_height_in_items: int = -1) -> tuple[bool, int]:
     """``ImGui::Combo``: click steps to the next item.
 
     The reference opens a popup; the popup lives on the overlay stack, so this
     is the closed form and :func:`~cmtk.im.Context.open_popup` is how a
     port that needs the list draws it.
+
+    ``items_count`` and ``popup_max_height_in_items`` are the reference's
+    trailing parameters. C++ has no length on an array of pointers, so the
+    count has to be passed; a Python sequence carries its own, but a port
+    passes it positionally all the same -- and without somewhere for it to
+    land the call was a TypeError that took the panel with it.
     """
+    if items_count is not None and 0 <= items_count < len(items):
+        items = list(items)[:items_count]
+    del popup_max_height_in_items        # this closed form has no popup
     ctx = get_current_context()
     height = _frame_height(ctx)
-    box = ctx.layout.row(height=height)
-    hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
-    ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
+    # `SetNextItemWidth` applies to a combo in the reference, as it does to
+    # every framed input. Ignoring it made the box span the row, so a
+    # `SameLine()` after one put the next widget off the right edge -- the
+    # toolbar shape every settings panel starts with.
+    # The label sits *beside* the frame in the reference, and the item's width
+    # covers both -- which is what makes `SameLine()` after a combo clear the
+    # label instead of drawing the next widget on top of it.
+    visible = _visible_label(label)
+    label_w = ((ctx.style.item_inner_spacing[0] + ctx.draw.calc_text_size(visible)[0])
+               if visible else 0.0)
+    frame_w = ctx.take_next_item_width(None)
+    if frame_w is None:
+        box = ctx.layout.row(height=height)          # fill the row, as before
+        frame_w = max(box[2] - label_w, height)
+    else:
+        box = ctx.layout.row(height=height, width=frame_w + label_w)
+    frame = (box[0], box[1], frame_w, height)
+    hovered, _held, pressed = ctx.button_behavior(frame, ctx.get_id(label))
+    ctx.draw.add_rect_filled((frame[0], frame[1]), (frame[0] + frame_w, frame[1] + height),
                              _col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
     shown = items[current] if 0 <= current < len(items) else ""
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]), _col(Col.TEXT), str(shown))
+    ctx.draw.add_text((frame[0] + ctx.style.frame_padding[0], frame[1]), _col(Col.TEXT), str(shown))
+    if visible:
+        ctx.draw.add_text((frame[0] + frame_w + ctx.style.item_inner_spacing[0], box[1]),
+                          _col(Col.TEXT), visible)
     if pressed and items:
         return (True, (current + 1) % len(items))
     return (False, current)
@@ -689,35 +996,67 @@ def slider_angle(label: str, rad: float, degrees_min: float = -360.0,
     return (changed, math.radians(degrees))
 
 
-def input_float(label: str, v: float, step: float = 0.0, fmt: str = "%.3f"
-                ) -> tuple[bool, float]:
-    """``ImGui::InputFloat``: the field, plus -/+ when a step is given."""
+def input_float(label: str, v: float, step: float = 0.0,
+                step_fast: float = 0.0, fmt: str = "%.3f",
+                flags: int = 0) -> tuple[bool, float]:
+    """``ImGui::InputFloat``: the field, plus -/+ when a step is given.
+
+    *step_fast* is the reference's larger step, taken when Ctrl is held --
+    the demo's own line is ``InputFloat("input float", &f0, 0.01f, 1.0f,
+    "%.3f")``, a hundred-to-one ratio between the two. It sits fourth
+    because that is where the reference puts it, and a port hands its
+    arguments over positionally.
+    """
     ctx = get_current_context()
     changed = False
-    if step:
+    if step or step_fast:
+        by = step_fast if (step_fast and ctx.io.key_ctrl) else step
         ctx.push_id(label)
         if arrow_button("##-", Dir.LEFT):
-            v, changed = v - step, True
+            v, changed = v - by, True
         same_line(0.0, ctx.style.item_inner_spacing[0])
         if arrow_button("##+", Dir.RIGHT):
-            v, changed = v + step, True
+            v, changed = v + by, True
         same_line(0.0, ctx.style.item_inner_spacing[0])
         ctx.pop_id()
     edited, v = drag_float(label, v, max(step, 0.01) or 0.01, fmt=fmt)
     return (changed or edited, v)
 
 
-def input_int(label: str, v: int, step: int = 1) -> tuple[bool, int]:
-    changed, value = input_float(label, float(v), float(step), "%.0f")
+def input_int(label: str, v: int, step: int = 1, step_fast: int = 100,
+              flags: int = 0) -> tuple[bool, int]:
+    """``ImGui::InputInt``. The reference's defaults are 1 and 100 -- the
+    fast step is a hundred times the slow one, taken with Ctrl held."""
+    changed, value = input_float(label, float(v), float(step),
+                                 float(step_fast), fmt="%.0f", flags=flags)
     return (changed, int(round(value)))
 
 
-def input_text(label: str, value: str, hint: str = "") -> tuple[bool, str]:
+def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[bool, str]:
     """``ImGui::InputText``: the field, edited by the keys in ``io``.
 
     A port gets the box, the caret and the text; the *keys* come from
     ``io.key`` and ``io.text``, which is where the host puts them.
+
+    ``flags`` accepts ``im.InputTextFlags`` bits: ``CHARS_HEXADECIMAL`` and
+    ``CHARS_DECIMAL`` filter what is typed, ``READ_ONLY`` forbids editing,
+    ``ALWAYS_OVERWRITE`` replaces the last character, and
+    ``ENTER_RETURNS_TRUE`` makes the changed flag report the Enter key.
+
+    *value* may also be a C ``char`` buffer -- a list, NUL-terminated --
+    because that is what the reference's signature takes and what a port
+    therefore fills in the two lines above the call. It is read to its first
+    NUL and the edited **string** is what comes back, which is what the C++
+    assigns out of the buffer on the next line anyway.
     """
+    from .cpp_compat import String
+    from .flags import InputTextFlags as _ITF
+
+    if isinstance(value, (list, tuple, bytearray, bytes)):
+        value = str(String(value))
+
+    read_only = bool(flags & _ITF.READ_ONLY)
+    enter_returns = bool(flags & _ITF.ENTER_RETURNS_TRUE)
     ctx = get_current_context()
     box = ctx.layout.row(height=_frame_height(ctx),
                          width=ctx.take_next_item_width(None))
@@ -732,11 +1071,23 @@ def input_text(label: str, value: str, hint: str = "") -> tuple[bool, str]:
     # ...or the keyboard put the focus here, which is what Tab is for.
     focused = focus.get("id") == item_id or ctx.is_nav_focused(item_id)
 
+    if flags & _ITF.CHARS_HEXADECIMAL:
+        typed = "".join(c for c in ctx.io.text if c in "0123456789abcdefABCDEF")
+    elif flags & _ITF.CHARS_DECIMAL:
+        typed = "".join(c for c in ctx.io.text if c in "-+.0123456789")
+    else:
+        typed = ctx.io.text
+
     changed = False
-    if focused and ctx.io.text:
-        value, changed = value + ctx.io.text, True
-    if focused and ctx.io.key in (_BACKSPACE, _DELETE) and value:
+    if focused and typed and not read_only:
+        if flags & _ITF.ALWAYS_OVERWRITE and value:
+            value, changed = value[:-1] + typed, True
+        else:
+            value, changed = value + typed, True
+    if focused and ctx.io.key in (_BACKSPACE, _DELETE) and value and not read_only:
         value, changed = value[:-1], True
+    if enter_returns:
+        changed = focused and ctx.io.key == _ENTER and bool(typed or value)
 
     ctx.draw.add_rect_filled(
         (box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
@@ -757,12 +1108,24 @@ def input_text(label: str, value: str, hint: str = "") -> tuple[bool, str]:
     return (changed, value)
 
 
+_ENTER = 13  # KEY_RETURN, plain: im_core owns the Qt-valued table
+
+
 def input_text_with_hint(label: str, hint: str, value: str) -> tuple[bool, str]:
     return input_text(label, value, hint)
 
 
-def color_button(desc_id: str, col, size=None) -> bool:
-    """``ImGui::ColorButton``: a swatch that behaves like a button."""
+def color_button(desc_id: str, col, flags: int = 0, size=None) -> bool:
+    """``ImGui::ColorButton``: a swatch that behaves like a button.
+
+    The reference's signature is ``(desc_id, col, flags, size)``, and a port
+    passes all four positionally. Without ``flags`` in the middle the call
+    was a TypeError -- and a swatch is the one widget a settings panel puts
+    in every row of a channel table, so one missing parameter cost the whole
+    panel. The bits are accepted; what this draws is the swatch, which is
+    what the caller wanted from it.
+    """
+    del flags                      # accepted, and this swatch has no options
     ctx = get_current_context()
     width, side = _calc_item_size(size, _frame_height(ctx), _frame_height(ctx))
     box = ctx.layout.row(height=side, width=width)
@@ -875,7 +1238,26 @@ def get_window_height() -> float:
 
 
 def get_color_u32(which, alpha_mul: float = 1.0):
+    """``ImGui::GetColorU32``: a style index, or a colour, as cmtk paints it.
+
+    The reference's colour overload takes an ``ImVec4`` -- **floats 0..1** --
+    while cmtk paints in bytes 0..255, so a ported
+    ``GetColorU32(ImVec4(0.05f, 0.05f, 0.05f, 0.85f))`` handed the painter
+    four floats. Under the headless painter that is arithmetic and draws
+    something near black; under Qt it is a ``TypeError`` from ``QColor``.
+    Neither is what the C++ asked for, and the first is worse because it
+    looks like it worked.
+
+    Floats are converted. The test is the *values*, not the type: a colour
+    whose components are all within 0..1 is the reference's ImVec4 -- bytes
+    in that range are a black so nearly transparent that no interface asks
+    for it on purpose -- and anything above 1 is already bytes.
+    """
     colour = _col(which) if isinstance(which, int) else tuple(which)
+    if colour and all(isinstance(c, float) and 0.0 <= c <= 1.0 for c in colour):
+        from .widgets.color import floats_to_rgba
+
+        colour = floats_to_rgba(colour)
     if alpha_mul == 1.0 or len(colour) < 4:
         return colour
     return (*colour[:3], int(colour[3] * alpha_mul))
@@ -1033,7 +1415,15 @@ def align_text_to_frame_padding_() -> None:      # kept for symmetry in ports
 
 
 # -- trees ------------------------------------------------------------------ #
-def set_next_item_open(is_open: bool) -> None:
+def set_next_item_open(is_open: bool, cond: int = 0) -> None:
+    """``ImGui::SetNextItemOpen``.
+
+    *cond* is accepted for signature parity. cmtk keeps no ``.ini``, so
+    there is no stored state for ``Once``/``FirstUseEver`` to defer to and
+    every condition reduces to "set it": honouring them would mean
+    remembering what a *previous run* did, which is exactly the thing cmtk
+    does not do.
+    """
     _ctx().state(("next_open",))["open"] = bool(is_open)
 
 
@@ -1262,6 +1652,16 @@ class TableFlags:
     SIZING_MASK = 7 << 13
     SCROLL_X = 1 << 16
     SCROLL_Y = 1 << 17
+    # The reference's bit. cmtk has no .ini to save to, so it changes
+    # nothing here -- but a port that ORs it in must still resolve the name,
+    # and an AttributeError in a flag expression takes the whole table with
+    # it before a single row is drawn.
+    NO_SAVED_SETTINGS = 1 << 4
+    CONTEXT_MENU_IN_BODY = 1 << 5
+    NO_PAD_INNER_X = 1 << 22
+    NO_HOST_EXTEND_X = 1 << 24
+    NO_HOST_EXTEND_Y = 1 << 25
+    HIGHLIGHT_HOVERED_COLUMN = 1 << 26
 
 
 class TableColumnFlags:
@@ -1926,8 +2326,8 @@ def input_int4(label, v):
     return _componentwise(input_int, label, v[:4], 0)
 
 
-def input_double(label, v, step=0.0, fmt="%.6f"):
-    return input_float(label, v, step, fmt)
+def input_double(label, v, step=0.0, step_fast=0.0, fmt="%.6f"):
+    return input_float(label, v, step, step_fast, fmt)
 
 
 def drag_float_range2(label, v_min, v_max, speed=1.0, low=None, high=None,
@@ -1955,22 +2355,68 @@ def drag_int_range2(label, v_min, v_max, speed=1.0, low=None, high=None,
 
 #: `*Scalar` in C++ is the type-erased form the typed ones call. Python is
 #: already type-erased, so these dispatch on the value handed in.
-def drag_scalar(label, v, speed=1.0, v_min=None, v_max=None, fmt=None):
+#: The reference's scalar widgets take an ``ImGuiDataType`` *second*, before
+#: the value: ``SliderScalar(label, data_type, p_data, p_min, p_max, ...)``.
+#: cmtk infers the type from the value instead, which is the right instinct
+#: in Python and the wrong *signature* -- a port hands its arguments over
+#: positionally, so the data type landed in the value and the value in the
+#: minimum. Both spellings are accepted: ``im.DataType`` members are strings
+#: and a slider's value never is, so which was passed is unambiguous.
+def _without_data_type(args: tuple) -> tuple:
+    return args[1:] if args and isinstance(args[0], str) else args
+
+
+def _arg(args: tuple, i: int, kw: dict, name: str, default=None):
+    if len(args) > i:
+        return args[i]
+    return kw.get(name, default)
+
+
+def drag_scalar(label, *args, **kw):
+    """``ImGui::DragScalar``, with or without the leading data type.
+
+    Trailing ``ImGuiSliderFlags`` are accepted and ignored: cmtk's drags are
+    linear, so ``LOGARITHMIC`` would change the picture and there is nothing
+    here to change it with. Said out loud rather than left as a silent
+    difference from the C++.
+    """
+    args = _without_data_type(args)
+    v = _arg(args, 0, kw, "v")
+    speed = _arg(args, 1, kw, "speed", 1.0)
+    v_min = _arg(args, 2, kw, "v_min")
+    v_max = _arg(args, 3, kw, "v_max")
+    fmt = _arg(args, 4, kw, "fmt")
     if isinstance(v, int):
         return drag_int(label, v, speed, v_min, v_max, fmt or "%d")
     return drag_float(label, v, speed, v_min, v_max, fmt or "%.3f")
 
 
-def slider_scalar(label, v, v_min, v_max, fmt=None):
+def slider_scalar(label, *args, **kw):
+    """``ImGui::SliderScalar``, with or without the leading data type.
+
+    Trailing flags are accepted and ignored -- see :func:`drag_scalar`.
+    """
+    args = _without_data_type(args)
+    v = _arg(args, 0, kw, "v")
+    v_min = _arg(args, 1, kw, "v_min")
+    v_max = _arg(args, 2, kw, "v_max")
+    fmt = _arg(args, 3, kw, "fmt")
     if isinstance(v, int):
         return slider_int(label, v, int(v_min), int(v_max), fmt or "%d")
     return slider_float(label, v, v_min, v_max, fmt or "%.3f")
 
 
-def input_scalar(label, v, step=None):
+def input_scalar(label, *args, **kw):
+    """``ImGui::InputScalar``, with or without the leading data type."""
+    args = _without_data_type(args)
+    v = _arg(args, 0, kw, "v")
+    step = _arg(args, 1, kw, "step")
+    step_fast = _arg(args, 2, kw, "step_fast")
+    fmt = _arg(args, 3, kw, "fmt")
     if isinstance(v, int):
-        return input_int(label, v, int(step or 1))
-    return input_float(label, v, float(step or 0.0))
+        return input_int(label, v, int(step or 1), int(step_fast or 100))
+    return input_float(label, v, float(step or 0.0), float(step_fast or 0.0),
+                       fmt or "%.3f")
 
 
 def drag_scalar_n(label, values, speed=1.0, v_min=None, v_max=None, fmt=None):
@@ -2175,12 +2621,70 @@ def is_window_collapsed() -> bool:
     return False
 
 
-def set_next_window_pos(pos, *_args) -> None:
-    get_current_context().state(("next_window",))["pos"] = tuple(pos)
+def set_next_window_pos(pos, cond: int = 0, *_args) -> None:
+    """``SetNextWindowPos``: place the next ``begin`` at *pos*.
+
+    Parameters
+    ----------
+    pos : tuple
+        ``(x, y)`` in the frame's units.
+    cond : int, optional
+        A ``Cond``: ``ALWAYS`` (the default) re-places every frame, ``ONCE``
+        and ``FIRST_USE_EVER`` place the window when it is created, and
+        ``APPEARING`` places it whenever it was absent last frame.
+
+    Notes
+    -----
+    Under any condition but ``ALWAYS`` the window becomes *sticky*: it keeps
+    the box across frames instead of taking the frame's, which is what a
+    floating sub-window is asking for. See
+    :meth:`cmtk.im_core.Context.set_window_placement` for the same thing
+    said once for a whole application.
+
+    The pivot argument of ImGui's third parameter is accepted and ignored:
+    cmtk windows have no title bar to pivot about.
+    """
+    state = get_current_context().state(("next_window",))
+    state["pos"] = tuple(pos)
+    state["pos_cond"] = int(cond)
 
 
-def set_next_window_size(size, *_args) -> None:
-    get_current_context().state(("next_window",))["size"] = tuple(size)
+def set_next_window_size(size, cond: int = 0, *_args) -> None:
+    """``SetNextWindowSize``: size the next ``begin`` to *size*.
+
+    Parameters
+    ----------
+    size : tuple
+        ``(width, height)``.
+    cond : int, optional
+        As :func:`set_next_window_pos`.
+    """
+    state = get_current_context().state(("next_window",))
+    state["size"] = tuple(size)
+    state["size_cond"] = int(cond)
+
+
+def set_window_placement(placement: str) -> None:
+    """Choose how a window opened with **no box** is first placed.
+
+    Parameters
+    ----------
+    placement : str
+        ``cmtk.PLACE_FRAME`` (the default: the window is the frame and
+        follows it) or ``cmtk.PLACE_CASCADE`` (placed once, at a stepped
+        offset, then sticky).
+
+    Notes
+    -----
+    Not part of Dear ImGui's API -- ImGui always cascades, and cmtk's
+    default does not, because cmtk's first callers were single full-window
+    interfaces. An application with floating sub-windows wants
+    ``PLACE_CASCADE`` and would otherwise draw every one of them over the
+    whole frame and over each other.
+
+    See :meth:`cmtk.im_core.Context.set_window_placement`, which this calls.
+    """
+    get_current_context().set_window_placement(placement)
 
 
 def set_next_window_collapsed(collapsed: bool, *_args) -> None:
@@ -2562,7 +3066,7 @@ __all__ += [
     "get_cursor_start_pos", "calc_item_width", "is_window_appearing",
     "is_window_collapsed", "set_next_window_pos", "set_next_window_size",
     "set_next_window_collapsed", "set_next_window_focus",
-    "set_next_window_auto_resize",
+    "set_next_window_auto_resize", "set_window_placement",
     "set_next_window_bg_alpha", "set_window_pos", "set_window_size",
     "set_window_focus", "set_window_collapsed", "is_key_down",
     "is_key_pressed", "is_key_released", "get_key_name",

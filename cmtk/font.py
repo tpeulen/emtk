@@ -77,6 +77,19 @@ class Atlas:
         return (self._advance / baked) / self.scale if baked else 1.0 / self.scale
 
     @property
+    def font_pt(self) -> float:
+        """Point size the atlas was baked at.
+
+        A painter that scales the baked face needs it: ``font_scale`` is a
+        *multiple* of the bake, so a host asked for 9 pt has to divide by
+        this to get one. Hard-coding the number in the host is how a
+        re-baked atlas silently changes every layout that trusted it.
+
+        Defaults to 8 for an atlas baked before the baker recorded it.
+        """
+        return float(self._meta.get("font_pt", 8))
+
+    @property
     def line_height(self) -> float:
         """Height of one line, in logical pixels."""
         meta = self._meta

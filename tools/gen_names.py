@@ -94,7 +94,7 @@ def main(argv=None) -> int:
         if block.group(0) == fresh:
             print("cmtk name map is current")
             return 0
-        print("cmtk name map is stale: run tools/gen_cmtk_names.py")
+        print("cmtk name map is stale: run tools/gen_names.py")
         return 1
     INIT.write_text(text[: block.start()] + fresh + text[block.end():])
     print(f"wrote {fresh.count(chr(10)) - 2} names")

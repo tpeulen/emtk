@@ -133,6 +133,12 @@ class Plot:
         self._y_axis.set_pixels(y + h, y)  # bottom -> Min, top -> Max: inverts Y.
 
         p.fill_rect(x, y, w, h, _FRAME_BG)
+        # The tick *labels* sit in the margin to the left of the box, so they
+        # have to be drawn before the clip that bounds the box -- inside it
+        # they are clipped away and the plot draws gridlines with nothing to
+        # read them by.
+        if self.show_ticks:
+            self._draw_tick_labels(p)
         p.push_clip(x, y, w, h)
         try:
             if self.show_ticks:
@@ -154,11 +160,24 @@ class Plot:
         for v in self._y_axis.ticks():
             py = self._y_axis.to_pixels(v)
             p.fill_rect(x, py, w, 1.0, _GRID_COLOUR)
-            p.text(x - 34.0, py - 6.0, 30.0, 12.0, ALIGN_RIGHT | ALIGN_VCENTER,
-                   f"{v:g}", _TICK_TEXT)
         for v in self._x_axis.ticks():
             px = self._x_axis.to_pixels(v)
             p.fill_rect(px, y, 1.0, h, _GRID_COLOUR)
+
+    def _draw_tick_labels(self, p) -> None:
+        """The y ticks' numbers, in the margin left of the box. Callers that
+        draw a plot flush to a window edge get nothing -- reserve the margin,
+        as :mod:`cmtk.implot` does."""
+        x = self.x
+        for v in self._y_axis.ticks():
+            py = self._y_axis.to_pixels(v)
+            p.text(x - 34.0, py - 6.0, 30.0, 12.0, ALIGN_RIGHT | ALIGN_VCENTER,
+                   self.format_tick(v), _TICK_TEXT)
+
+    def format_tick(self, v: float) -> str:
+        """How a tick value is spelled. Overridden by a log axis, where the
+        stored value is the exponent and the reader wants the sample."""
+        return f"{v:g}"
 
     def _draw_line(self, p, series: dict) -> None:
         xs, ys, colour, width = series["xs"], series["ys"], series["colour"], series["width"]

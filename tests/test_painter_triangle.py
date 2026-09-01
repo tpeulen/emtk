@@ -57,9 +57,15 @@ def test_a_diagonal_line_offsets_perpendicular_to_its_own_direction():
         assert on_start or on_end
 
 
-def test_qt_painter_fills_a_triangle_at_its_three_corners(qapp):
-    """The Qt backend draws the same shape it is asked for, pixel-checked."""
-    qtgui = pytest.importorskip("qtpy.QtGui")
+def test_qt_painter_fills_a_triangle_at_its_three_corners(qt_app):
+    """The Qt backend draws the same shape it is asked for, pixel-checked.
+
+    ``qt_app`` is cmtk's own fixture (``tests/conftest.py``), not pytest-qt's
+    ``qapp``: asking for a fixture a plugin supplies makes the whole suite
+    depend on that plugin, and without it this was a collection error rather
+    than the skip an optional backend deserves.
+    """
+    qtgui = pytest.importorskip("qtpy.QtGui", exc_type=ImportError)
     from qtpy import QtCore
 
     from cmtk.qt_painter import QtPainter

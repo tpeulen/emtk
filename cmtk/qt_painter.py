@@ -23,11 +23,90 @@ from .painter import (
     Colour,
 )
 
-__all__ = ["QtPainter"]
+__all__ = ["QtPainter", "png_decode", "image_bytes"]
 
 #: Point size of the chrome's font. Read from ``InternalGui.FONT_PT`` by the
 #: caller; repeated here only as the fallback for a painter built standalone.
 DEFAULT_FONT_PT = 9
+
+
+# --------------------------------------------------------------------------- #
+# Decoding, which is Qt's other useful trick
+# --------------------------------------------------------------------------- #
+def png_decode(data: bytes):
+    """``(width, height, rgba bytes)`` from PNG *data*, using Qt's decoder.
+
+    Parameters
+    ----------
+    data : bytes
+
+    Returns
+    -------
+    tuple
+
+    Raises
+    ------
+    ValueError
+        If Qt will not read *data*. Raised rather than returning an empty
+        image, which a caller would upload as a fully transparent atlas and
+        read as a layout bug.
+
+    Notes
+    -----
+    Here because this is the module that already depends on a toolkit, and
+    because the caller is :func:`cmtk.gpu_atlas.png_decode`, which wants
+    this when it is available and the pure-Python decoder in :mod:`.testing`
+    when it is not. The difference on cmtk's own 640x2795 atlas is about
+    **2 seconds**: the fallback unfilters it one byte at a time.
+    """
+    from qtpy import QtGui
+
+    image = QtGui.QImage()
+    if not image.loadFromData(data):
+        raise ValueError("Qt could not decode this image")
+    return image_bytes(image)
+
+
+def image_bytes(image):
+    """``(width, height, rgba bytes)`` from a ``QImage``, tightly packed.
+
+    Parameters
+    ----------
+    image : QtGui.QImage
+
+    Returns
+    -------
+    tuple
+
+    Notes
+    -----
+    ``constBits`` is a ``memoryview`` on PySide and a ``sip.voidptr`` on
+    PyQt, and a scanline may be padded, so neither the type nor the stride
+    can be assumed. Both cases are handled below; a host that assumed
+    either one works on one binding and returns sheared pixels on the
+    other.
+    """
+    from qtpy import QtGui
+
+    image = image.convertToFormat(QtGui.QImage.Format_RGBA8888)
+    width, height = image.width(), image.height()
+    stride = image.bytesPerLine()
+    bits = image.constBits()
+    try:
+        raw = bytes(bits)
+    except (TypeError, IndexError, ValueError):
+        # PyQt hands back a `sip.voidptr` of unknown size, which refuses to
+        # be read until it is told how long it is. PySide hands back a
+        # `memoryview`, which does not have `setsize` at all.
+        bits.setsize(stride * height)
+        raw = bytes(bits)
+    if stride == width * 4:
+        return width, height, raw
+    packed = bytearray(width * height * 4)
+    for row in range(height):
+        start = row * stride
+        packed[row * width * 4:(row + 1) * width * 4] = raw[start:start + width * 4]
+    return width, height, bytes(packed)
 
 
 class QtPainter:
@@ -114,6 +193,58 @@ class QtPainter:
         return int(flags)
 
     # -- the interface -----------------------------------------------------
+
+    #: ``id(texture) -> (revision, QImage)``. A live frame is re-uploaded
+    #: every frame and a colour map almost never, so the QImage is rebuilt
+    #: only when the revision moves. Class-level, because a QtPainter is
+    #: constructed per paint event and a per-instance cache would never hit.
+    _image_cache: dict = {}
+
+    def image(self, x: float, y: float, w: float, h: float, handle,
+              uv0=(0.0, 0.0), uv1=(1.0, 1.0),
+              tint: Colour = (255, 255, 255, 255)) -> None:
+        """Draw *handle* into the box.
+
+        A :class:`~cmtk.texture.Texture` is wrapped in a ``QImage`` over the
+        same bytes -- no graphics API in the application, which is the point.
+        Anything else is opaque to cmtk and degrades to a tinted box, the
+        same fallback every painter gives.
+        """
+        from qtpy import QtCore, QtGui
+
+        from .texture import Texture
+
+        if not isinstance(handle, Texture):
+            self.fill_rect(x, y, w, h, tint)
+            return
+
+        key = id(handle)
+        hit = self._image_cache.get(key)
+        if hit is None or hit[0] != handle.revision:
+            # bytes(), not a view: QImage does not own the buffer it is given,
+            # and a bytearray that the application keeps writing would be
+            # repainted mid-frame -- or freed under Qt entirely.
+            img = QtGui.QImage(bytes(handle.px), handle.width, handle.height,
+                               handle.width * 4,
+                               QtGui.QImage.Format_RGBA8888)
+            self._image_cache[key] = (handle.revision, img)
+        else:
+            img = hit[1]
+
+        src = QtCore.QRectF(uv0[0] * handle.width, uv0[1] * handle.height,
+                            (uv1[0] - uv0[0]) * handle.width,
+                            (uv1[1] - uv0[1]) * handle.height)
+        painter = self._p
+        painter.save()
+        try:
+            if tuple(tint)[:3] != (255, 255, 255):
+                painter.setOpacity((list(tint) + [255])[3] / 255.0)
+            # nearest neighbour: a scientific image scaled up should show its
+            # pixels rather than a smooth guess between them
+            painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, False)
+            painter.drawImage(self._rect(x, y, w, h), img, src)
+        finally:
+            painter.restore()
 
     def fill_rect(self, x: float, y: float, w: float, h: float, colour: Colour) -> None:
         """Fill a rectangle. No outline."""

@@ -1,0 +1,242 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painter backends &mdash; cmtk 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Testing your UI" href="testing.html" />
+    <link rel="prev" title="Widget guide" href="widgets.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cmtk
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Immediate mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-frame-lifecycle">The frame lifecycle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#ids">IDs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#hit-testing-is-a-by-product-of-drawing">Hit-testing is a by-product of drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-six-operation-painter-contract">The six-operation painter contract</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">Porting from Dear ImGui</a></li>
+<li class="toctree-l1"><a class="reference internal" href="widgets.html">Widget guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Painter backends</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#qt-painter">Qt painter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#qt-host">Qt host</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#gpu-quad-painter">GPU quad painter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#wgpu-host">wgpu host</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pyodide-browser">Pyodide / browser</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#cmtk-testing-pixelpainter"><code class="docutils literal notranslate"><span class="pre">cmtk.testing.PixelPainter</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing your UI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cmtk</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Painter backends</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/backends.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="painter-backends">
+<h1>Painter backends<a class="headerlink" href="#painter-backends" title="Link to this heading"></a></h1>
+<p>A backend is a class that implements the <code class="xref py py-class docutils literal notranslate"><span class="pre">Painter</span></code>
+protocol. <code class="docutils literal notranslate"><span class="pre">cmtk.painter.REQUIRED_OPERATIONS</span></code> lists what it must do;
+<code class="docutils literal notranslate"><span class="pre">OPTIONAL_OPERATIONS</span></code> may be left out, and <code class="docutils literal notranslate"><span class="pre">ACCELERATIONS</span></code> are faster
+spellings of what the helpers already decompose.</p>
+<section id="qt-painter">
+<h2>Qt painter<a class="headerlink" href="#qt-painter" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cmtk.qt_painter.QtPainter</span></code> draws through a <code class="docutils literal notranslate"><span class="pre">QPainter</span></code>. It is the
+reference implementation: the images it produces were byte-identical to the
+direct <code class="docutils literal notranslate"><span class="pre">QPainter</span></code> calls the chrome used before the painter interface
+existed, and a test asserted it.</p>
+<p>Importing this module does not pull Qt into the process at import time.
+The class is built inside the constructor, so a headless test never pays
+the import cost.</p>
+</section>
+<section id="qt-host">
+<h2>Qt host<a class="headerlink" href="#qt-host" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cmtk.qt_host.ControlHost</span></code> is a <code class="docutils literal notranslate"><span class="pre">QWidget</span></code> that knows nothing about
+any particular control. It paints whatever it was given through
+<code class="xref py py-class docutils literal notranslate"><span class="pre">QtPainter</span></code> and forwards presses, drags, wheels
+and keys. One widget and not one per control, because each would
+re-derive the same four event translations.</p>
+</section>
+<section id="gpu-quad-painter">
+<h2>GPU quad painter<a class="headerlink" href="#gpu-quad-painter" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">cmtk.quad_painter.QuadPainter</span></code> builds one interleaved vertex array
+that a GPU shader turns into the whole interface in a single draw call.
+Each quad is six vertices (two triangles, no index buffer) carrying
+position, UV, colour and clip rectangle.</p>
+<p>Why this exists is measured: the <code class="docutils literal notranslate"><span class="pre">QPainter</span></code> path cost 9.6 ms of a
+21 ms frame with a quarter-million beads on screen.</p>
+</section>
+<section id="wgpu-host">
+<h2>wgpu host<a class="headerlink" href="#wgpu-host" title="Link to this heading"></a></h2>
+<p>cmtk is <strong>WGSL-native</strong>, and this is the GPU path the toolkit is built
+around. <code class="docutils literal notranslate"><span class="pre">cmtk/wgsl/ui.wgsl</span></code> is the shader – one file, in the toolkit,
+loaded by <code class="docutils literal notranslate"><span class="pre">cmtk.wgsl.load_wgsl</span></code> – and an application that draws cmtk’s
+interface inside its own render pass loads the <em>same</em> file rather than
+keeping a second copy of it. Two copies of one pipeline’s shader are two
+things to keep in step, and they do not stay in step.</p>
+<p><code class="docutils literal notranslate"><span class="pre">cmtk.wgpu_host.WgpuControlHost</span></code> is a Qt widget that draws a control
+through <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadPainter</span></code>. Qt’s job is a window;
+<code class="docutils literal notranslate"><span class="pre">rendercanvas</span></code> turns that into a surface, and nothing is rasterised on
+the CPU. It forwards presses, drags, wheels and keys exactly as the Qt host
+does, and swaps in at a call site by changing the name:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.wgpu_host</span><span class="w"> </span><span class="kn">import</span> <span class="n">WgpuControlHost</span>
+
+<span class="n">widget</span> <span class="o">=</span> <span class="n">WgpuControlHost</span><span class="p">(</span><span class="n">editor</span><span class="p">,</span> <span class="n">on_change</span><span class="o">=</span><span class="n">save</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">cmtk.wgpu_host.WgpuRenderer</span></code> is the half that needs <strong>no window and no
+toolkit</strong>. Give it a texture view and it draws into it; give it nothing and
+<code class="docutils literal notranslate"><span class="pre">grab()</span></code> renders offscreen and hands back a NumPy array:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.wgpu_host</span><span class="w"> </span><span class="kn">import</span> <span class="n">WgpuRenderer</span>
+
+<span class="n">renderer</span> <span class="o">=</span> <span class="n">WgpuRenderer</span><span class="p">()</span>
+<span class="n">painter</span> <span class="o">=</span> <span class="n">renderer</span><span class="o">.</span><span class="n">painter</span><span class="p">()</span>
+<span class="n">painter</span><span class="o">.</span><span class="n">fill_rect</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="p">(</span><span class="mi">255</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">255</span><span class="p">))</span>
+<span class="n">pixels</span> <span class="o">=</span> <span class="n">renderer</span><span class="o">.</span><span class="n">grab</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>   <span class="c1"># (32, 64, 4) uint8</span>
+</pre></div>
+</div>
+<p>That is what makes the GPU path checkable: headless green is not the same
+as the interface being there, and a test that measures ink and its bounding
+box against <code class="docutils literal notranslate"><span class="pre">PixelPainter</span></code> is worth more than any assertion about calls
+made.</p>
+<p>The whole interface – panels, menus, text and images – is <strong>one</strong> draw,
+and <code class="docutils literal notranslate"><span class="pre">renderer.draw_calls</span></code> says so. Two decisions buy that: the clip
+rectangle rides on the <em>vertex</em> rather than being a scissor rect, and a
+rectangle samples the atlas’s opaque block rather than taking a second
+pipeline.</p>
+<p>Images go through a second texture, selected by a <strong>negative u</strong>: an
+image’s u is <code class="docutils literal notranslate"><span class="pre">-(1</span> <span class="pre">+</span> <span class="pre">texel_x</span> <span class="pre">/</span> <span class="pre">width)</span></code> while every glyph and rectangle u
+is a texel coordinate <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">0</span></code>, so the fragment shader picks the texture
+from the sign alone. That keeps one draw call and keeps images in the
+interface’s draw order – text drawn after an image lands <em>on</em> it.
+<code class="docutils literal notranslate"><span class="pre">cmtk.gpu_atlas.ImageAtlas</span></code> is where a <code class="xref py py-class docutils literal notranslate"><span class="pre">Texture</span></code> is
+placed, and the host installs it as the painter’s <code class="docutils literal notranslate"><span class="pre">image_uv_resolver</span></code>.</p>
+<p>What the host uploads lives in <code class="docutils literal notranslate"><span class="pre">cmtk.gpu_atlas</span></code>: the combined glyph atlas
+(baked rows on top, the runtime cache underneath – a host that uploads only
+the baked half draws the <em>wrong glyph</em> for anything the baker never saw),
+the image atlas, and the negative-u encoding. That module names no toolkit
+and needs no adapter, so those conventions are testable anywhere.</p>
+<p>There is deliberately <strong>one</strong> GPU host and <strong>one</strong> shading language. An
+OpenGL/GLSL host existed alongside this one and was retired: two shaders for
+one pipeline are two things to keep in step, and the way that fails is not a
+crash but a panel that looks slightly wrong in one of them, months later.</p>
+</section>
+<section id="pyodide-browser">
+<h2>Pyodide / browser<a class="headerlink" href="#pyodide-browser" title="Link to this heading"></a></h2>
+<p>The same widget code runs in a browser under Pyodide. A browser host
+targets a canvas, implements the painter in JavaScript, and feeds pointer
+and key events from the DOM.</p>
+<section id="cmtk-testing-pixelpainter">
+<h3><code class="docutils literal notranslate"><span class="pre">cmtk.testing.PixelPainter</span></code><a class="headerlink" href="#cmtk-testing-pixelpainter" title="Link to this heading"></a></h3>
+<p>Pure Python, no window, no toolkit, no display.</p>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">PixelPainter</span></code> rasterises the six required operations
+onto an RGBA buffer, using the baked glyph atlas for text. Screenshots
+rendered through it are identical on every machine that runs the same
+commit, which is what makes golden-image tests possible.</p>
+<img alt="A screenshot rendered by PixelPainter — identical on every machine" src="_images/hello_world.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">PixelPainter</span><span class="p">,</span> <span class="n">render</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">gui</span><span class="p">():</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;OK&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="n">painter</span> <span class="o">=</span> <span class="n">render</span><span class="p">(</span><span class="n">gui</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">width</span> <span class="o">==</span> <span class="mi">100</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">height</span> <span class="o">==</span> <span class="mi">60</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="widgets.html" class="btn btn-neutral float-left" title="Widget guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="testing.html" class="btn btn-neutral float-right" title="Testing your UI" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Thomas-Otavio Peulen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

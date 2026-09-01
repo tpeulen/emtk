@@ -1,0 +1,217 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Testing your UI &mdash; cmtk 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="API reference" href="api.html" />
+    <link rel="prev" title="Painter backends" href="backends.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cmtk
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Immediate mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-frame-lifecycle">The frame lifecycle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#ids">IDs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#hit-testing-is-a-by-product-of-drawing">Hit-testing is a by-product of drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-six-operation-painter-contract">The six-operation painter contract</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">Porting from Dear ImGui</a></li>
+<li class="toctree-l1"><a class="reference internal" href="widgets.html">Widget guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="backends.html">Painter backends</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Testing your UI</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#recordingpainter">RecordingPainter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simulating-clicks">Simulating clicks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#pixelpainter-and-screenshots">PixelPainter and screenshots</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cmtk</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Testing your UI</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/testing.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="testing-your-ui">
+<h1>Testing your UI<a class="headerlink" href="#testing-your-ui" title="Link to this heading"></a></h1>
+<p>cmtk ships <code class="xref py py-mod docutils literal notranslate"><span class="pre">cmtk.testing</span></code>, which is why a widget test needs no window,
+no toolkit and no event loop.</p>
+<section id="recordingpainter">
+<h2>RecordingPainter<a class="headerlink" href="#recordingpainter" title="Link to this heading"></a></h2>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">RecordingPainter</span></code> implements the painter contract by
+recording every call. Its metrics are deliberately round — seven pixels
+per character, sixteen per line — so an expected position in a test is
+arithmetic a reader can do in their head:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">GLYPH_W</span> <span class="o">==</span> <span class="mf">7.0</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">LINE_H</span> <span class="o">==</span> <span class="mf">16.0</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">text_width</span><span class="p">(</span><span class="s2">&quot;hello&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">5</span> <span class="o">*</span> <span class="mf">7.0</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">line_height</span><span class="p">()</span> <span class="o">==</span> <span class="mf">16.0</span>
+</pre></div>
+</div>
+<p>The per-kind lists (<code class="docutils literal notranslate"><span class="pre">fills</span></code>, <code class="docutils literal notranslate"><span class="pre">strokes</span></code>, <code class="docutils literal notranslate"><span class="pre">strings</span></code>, <code class="docutils literal notranslate"><span class="pre">texts</span></code>,
+<code class="docutils literal notranslate"><span class="pre">clips</span></code>, <code class="docutils literal notranslate"><span class="pre">triangles</span></code>) and the flat <code class="docutils literal notranslate"><span class="pre">calls</span></code> list cover both “how
+many of this kind” and “is X drawn over Y”:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;T&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;A&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;B&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">painter</span><span class="o">.</span><span class="n">fills</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span> <span class="o">==</span> <span class="p">[</span><span class="s2">&quot;T&quot;</span><span class="p">,</span> <span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="s2">&quot;B&quot;</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="simulating-clicks">
+<h2>Simulating clicks<a class="headerlink" href="#simulating-clicks" title="Link to this heading"></a></h2>
+<p>A button fires on <em>release</em> inside, matching Dear ImGui’s
+<code class="docutils literal notranslate"><span class="pre">ButtonBehavior</span></code> default. Simulate it by setting the pointer position,
+pressing, and releasing:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="n">io</span><span class="p">,</span> <span class="n">storage</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">IO</span><span class="p">(),</span> <span class="p">{}</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">),</span> <span class="n">io</span><span class="o">=</span><span class="n">io</span><span class="p">,</span> <span class="n">storage</span><span class="o">=</span><span class="n">storage</span><span class="p">)</span> <span class="k">as</span> <span class="n">ctx</span><span class="p">:</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Click&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">))</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Press me&quot;</span><span class="p">)</span>
+    <span class="n">box</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_item_rect</span><span class="p">()</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="c1"># move pointer inside the button</span>
+<span class="n">io</span><span class="o">.</span><span class="n">mouse_pos</span> <span class="o">=</span> <span class="p">(</span><span class="n">box</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">4</span><span class="p">,</span> <span class="n">box</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">io</span><span class="o">.</span><span class="n">mouse_clicked</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">io</span><span class="o">.</span><span class="n">mouse_down</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="n">io</span><span class="o">.</span><span class="n">mouse_clicked_pos</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">mouse_pos</span>
+
+<span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">),</span> <span class="n">io</span><span class="o">=</span><span class="n">io</span><span class="p">,</span> <span class="n">storage</span><span class="o">=</span><span class="n">storage</span><span class="p">):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Click&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">))</span>
+    <span class="n">clicked</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Press me&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="ow">not</span> <span class="n">clicked</span>  <span class="c1"># fires on release</span>
+
+<span class="n">io</span><span class="o">.</span><span class="n">mouse_down</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="n">io</span><span class="o">.</span><span class="n">mouse_released</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+
+<span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">),</span> <span class="n">io</span><span class="o">=</span><span class="n">io</span><span class="p">,</span> <span class="n">storage</span><span class="o">=</span><span class="n">storage</span><span class="p">):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Click&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">))</span>
+    <span class="n">clicked</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Press me&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="n">clicked</span>
+</pre></div>
+</div>
+</section>
+<section id="pixelpainter-and-screenshots">
+<h2>PixelPainter and screenshots<a class="headerlink" href="#pixelpainter-and-screenshots" title="Link to this heading"></a></h2>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">PixelPainter</span></code> rasterises into an RGBA buffer.
+<code class="xref py py-func docutils literal notranslate"><span class="pre">render()</span></code> drives two frames through it (the first
+settles layout; the second draws the settled interface).
+<code class="xref py py-func docutils literal notranslate"><span class="pre">screenshot()</span></code> returns PNG bytes.
+<code class="xref py py-func docutils literal notranslate"><span class="pre">assert_images_equal()</span></code> compares two PNGs pixel for
+pixel:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">render</span><span class="p">,</span> <span class="n">screenshot</span><span class="p">,</span> <span class="n">assert_images_equal</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">gui</span><span class="p">():</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;hi&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="n">png</span> <span class="o">=</span> <span class="n">screenshot</span><span class="p">(</span><span class="n">gui</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">png</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span> <span class="o">==</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x89</span><span class="s1">PNG&#39;</span>  <span class="c1"># valid PNG header</span>
+</pre></div>
+</div>
+<p>Deterministic output = doctestable output. The metrics are round, the
+atlas is committed, and a screenshot is identical on every machine that
+runs the same commit.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="backends.html" class="btn btn-neutral float-left" title="Painter backends" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="api.html" class="btn btn-neutral float-right" title="API reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Thomas-Otavio Peulen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

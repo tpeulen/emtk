@@ -1,0 +1,178 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quickstart &mdash; cmtk 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Immediate mode" href="concepts.html" />
+    <link rel="prev" title="Installation" href="install.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cmtk
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-one-place-python-must-differ-from-c">The one place Python must differ from C++</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-the-painter-drew">What the painter drew</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Immediate mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-frame-lifecycle">The frame lifecycle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#ids">IDs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#hit-testing-is-a-by-product-of-drawing">Hit-testing is a by-product of drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-six-operation-painter-contract">The six-operation painter contract</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">Porting from Dear ImGui</a></li>
+<li class="toctree-l1"><a class="reference internal" href="widgets.html">Widget guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="backends.html">Painter backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing your UI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cmtk</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Quickstart</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/quickstart.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="quickstart">
+<h1>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading"></a></h1>
+<p>A frame is a context manager. Inside it, calls to <code class="docutils literal notranslate"><span class="pre">im</span></code> draw widgets onto
+whatever painter you gave it:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk</span><span class="w"> </span><span class="kn">import</span> <span class="n">im</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingPainter</span>
+
+<span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Save&quot;</span><span class="p">):</span>
+        <span class="k">pass</span>  <span class="c1"># save things here</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">RecordingPainter</span></code> records every operation instead of performing them, so
+this runs with no window and no toolkit. The same widget code, unchanged, runs
+against a Qt painter on the desktop, the quad painter on a wgpu surface, or
+the Pyodide build in a browser.</p>
+<img alt="A cmtk window with text, a button and a counter" src="_images/hello_world.png" />
+<section id="the-one-place-python-must-differ-from-c">
+<h2>The one place Python must differ from C++<a class="headerlink" href="#the-one-place-python-must-differ-from-c" title="Link to this heading"></a></h2>
+<p>C++ writes results through <code class="docutils literal notranslate"><span class="pre">bool*</span></code> and <code class="docutils literal notranslate"><span class="pre">float*</span></code>. Python has no pointers, so
+the value comes back beside the changed flag:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Sliders&quot;</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_float</span><span class="p">(</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">changed</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is what pyimgui and imgui-bundle do, so a port from C++ <em>or</em> from either
+Python binding lands unchanged.</p>
+</section>
+<section id="what-the-painter-drew">
+<h2>What the painter drew<a class="headerlink" href="#what-the-painter-drew" title="Link to this heading"></a></h2>
+<p>Every painter records calls in order. <code class="docutils literal notranslate"><span class="pre">RecordingPainter</span></code> keeps per-kind
+lists and a flat <code class="docutils literal notranslate"><span class="pre">calls</span></code> list for cross-kind ordering:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;hi&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;OK&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="c1"># seven pixels per character, sixteen per line -- the metrics are</span>
+<span class="c1"># deliberately round so a reader can do the arithmetic in their head</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">text_width</span><span class="p">(</span><span class="s2">&quot;hi&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="o">*</span> <span class="mf">7.0</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">line_height</span><span class="p">()</span> <span class="o">==</span> <span class="mf">16.0</span>
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">painter</span><span class="o">.</span><span class="n">strings</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span>  <span class="c1"># &quot;Demo&quot; title, &quot;hi&quot;, &quot;OK&quot;</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="install.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="concepts.html" class="btn btn-neutral float-right" title="Immediate mode" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Thomas-Otavio Peulen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

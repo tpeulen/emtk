@@ -4,7 +4,7 @@
 
 An immediate-mode GUI toolkit that draws through a *painter*: six operations, no
 toolkit, no native extension, no build step. It runs wherever Python runs — on
-a desktop OpenGL context, in a browser under Pyodide, or in a test with no
+a desktop wgpu surface, in a browser under Pyodide, or in a test with no
 window at all — and the same widget code runs on all three.
 
 ```python
@@ -25,6 +25,124 @@ MIT licensed. No dependencies — not numpy, not a toolkit, not a compiler.
 It is a re-implementation, and [CREDITS.md](CREDITS.md) names what it was
 written by reading — Dear ImGui above all — with the upstream MIT texts in
 `licenses/`.
+
+## Quick start
+
+```
+pip install cmtk
+```
+
+That is the whole install. No compiler, no toolkit, no wheel to wait for.
+
+### 1. A frame you can run right now
+
+cmtk never opens a window itself. It draws through a *painter*, and you choose
+which one — that is what lets the same widget code run on a GPU context, in a
+browser, and in a test. The painter that needs nothing at all is
+`PixelPainter`: it rasterises into memory, so this runs on a headless machine
+and leaves a PNG behind.
+
+```python
+import cmtk
+from cmtk.testing import PixelPainter, save_png
+
+state = {"io": cmtk.IO(), "storage": {}, "show": True, "f": 0.35, "counter": 0}
+
+def gui():
+    cmtk.begin("Hello, world!")
+    cmtk.text("This is some useful text.")
+    _, state["show"] = cmtk.checkbox("Show demo", state["show"])
+    _, state["f"] = cmtk.slider_float("float", state["f"], 0.0, 1.0)
+    if cmtk.button("Button"):
+        state["counter"] += 1
+    cmtk.same_line()
+    cmtk.text("counter = %d" % state["counter"])
+    cmtk.end()
+
+painter = PixelPainter(320, 140, background=(30, 32, 38, 255))
+# The box is inset by eight pixels so the first widget is not flush to the edge.
+with cmtk.frame(painter, (8, 8, 304, 124), io=state["io"], storage=state["storage"]):
+    gui()
+
+save_png("frame.png", painter.width, painter.height, painter.px)
+```
+
+![the frame that program draws](docs/_screenshots/first_frame.png)
+
+Three things to notice, because they are the three that surprise people:
+
+- **`io` and `storage` are yours to keep.** `cmtk.frame` builds a fresh context
+  every call; those two dicts are the only things carried across, so a widget
+  that remembers anything — an open menu, a selected tab — needs the *same*
+  ones each frame.
+- **There is no `alpha` variable inside cmtk.** `_, state["f"] = slider_float(...)`
+  is the pointer rule: C++ writes through `float*`, Python has no pointers, so
+  the value comes back.
+- **Nothing is retained.** Delete the `cmtk.button` line and the button is gone.
+  There is no widget tree to keep in sync with your data.
+
+### 2. The same frame, in a window
+
+`cmtk.qt_host.ControlHost` is a `QWidget` that paints anything with a
+`draw(painter, x, y, w, h)` method and forwards pointer and key events to it.
+It was written for cmtk's *retained* controls, so an immediate-mode gui needs a
+dozen-line adapter — which is also the clearest statement of what a host owes
+cmtk:
+
+```python
+import cmtk
+
+class App:
+    """Adapts an immediate-mode gui to the host's control contract."""
+
+    def __init__(self, gui):
+        self.gui, self.io, self.storage = gui, cmtk.IO(), {}
+
+    def draw(self, painter, x, y, w, h):
+        with cmtk.frame(painter, (x, y, w, h), io=self.io, storage=self.storage):
+            self.gui()
+
+    def hover(self, px, py, *_box):
+        self.io.mouse_pos = (px, py)
+
+    drag = hover
+
+    def press(self, px, py, *_box, **_kw):
+        self.io.mouse_pos = self.io.mouse_clicked_pos[0] = (px, py)
+        self.io.mouse_clicked[0] = self.io.mouse_down[0] = True
+
+    def release(self):
+        self.io.mouse_down[0] = False
+        self.io.mouse_released[0] = True
+```
+
+The adapter only ever *sets* the one-shot edges (`mouse_clicked`,
+`mouse_released`, the wheel, the key). It never clears them: `end_frame` does
+that, which is why a button fires once on release and not again on the next
+repaint.
+
+Then the usual Qt three lines — this part needs a Qt binding
+(`pip install qtpy PySide6`), which cmtk itself does not:
+
+```python
+from qtpy import QtWidgets
+from cmtk.qt_host import ControlHost
+
+app = QtWidgets.QApplication([])
+host = ControlHost(App(gui))       # `gui` from step 1
+host.resize(320, 140)
+host.show()
+app.exec()
+```
+
+### Where to go next
+
+- `examples/hello_world.py` — Dear ImGui's own "Hello, world!", with the C++ it
+  was transliterated from beside each line.
+- `examples/clicking.py` — driving a click with no window, end to end.
+- `docs/` — the full guide (`pip install cmtk[docs]`, then `make -C docs html`):
+  concepts, a widget-by-widget tour, the painter contract, and porting rules.
+  Every example in it is a doctest, so none of it can quietly rot.
 
 ## Why
 
@@ -84,6 +202,65 @@ buttons beside it were dead, `IsItemDeactivated` firing for widgets nobody had
 touched, `TableNextColumn` one column out of step, `ImVec2(120, 0)` taken
 literally so a button was zero pixels tall. A port that runs is the only
 evidence that a re-implementation matches.
+
+## Porting other people's ImGui code, by script
+
+`tools/autoport.py` ports Dear ImGui C++ to cmtk mechanically -- the same
+rules a person applies, written down so they apply the same way every time::
+
+    python tools/autoport/__main__.py ext.h ext.cpp --module ext --out somewhere
+
+`ImGui::Button("Save")` becomes `im.button("Save")`; `&value` out-params
+become returned tuples; `ImGuiCol_Button` becomes `im.Col.BUTTON`; `ImVec2`
+becomes a tuple and `.x`/`.y` become `[0]`/`[1]`; printf varargs become `%`
+formatting. What the rules cannot translate is flagged `# TODO(autoport):`
+and the output is guaranteed to import either way -- a port that stops at an
+`AttributeError` helps nobody.
+
+The test cases are extensions from the
+[Useful Extensions wiki page](https://github.com/ocornut/imgui/wiki/Useful-Extensions),
+whose C++ ships in `tests/fixtures/extensions/` and whose ports land in
+`tests/fixtures/ported/`: imgui-knobs, imgui_toggle, imgui-notify and the
+imgui_club memory editor port cleanly (knobs with zero TODOs), and imspinner
+-- 3,500 lines of function-like macros -- starts out as the documented
+boundary where the tool flags hundreds of TODOs rather than pretending.
+`tests/test_autoport.py`
+ports the fixtures, renders them through a pure-Python rasterizing painter
+(`cmtk.testing.PixelPainter`, screenshots as PNGs with real glyphs from the
+baked atlas) and asserts the pixels against committed goldens, so the auto
+port provably draws what the hand-checked port draws.
+
+A second batch of fixtures covers one category each from the same wiki page:
+ImGradient (gradient editors), ImCurveEdit (curve editors), imgui_markdown
+(markdown), L2DFileDialog (file dialogs), imgui_hex (hex editors) and
+ImGui_Arc_ProgressBar (progress widgets). They forced the porter to grow
+honest rules -- C++ character literals, ternaries nested in parentheses,
+`T* out_...`/`T& v` out-parameters, `operator+` on vectors (component-wise
+tuples), destructors, pointer and `size_t` casts, named `enum class`es,
+`IM_ASSERT`, `ImGui::Dummy`'s ImVec2 and cmtk's box-shaped `begin_child` --
+and each rule is pinned by a test. Two of the batch are clean enough to
+prove end-to-end: the arc progress bar renders through the porter and is
+asserted pixel-exact against a committed golden; ImCurveEdit's
+delegate-driven editor and imgui_markdown's parser are the boundary the
+tool flags (`TODO(autoport)`) instead of faking.
+
+A third batch takes the wiki page's heavier internal-tooling side, one
+category each: ImSequencer (sequencer/timeline), ImZoomSlider (zoom
+slider), GraphEditor (graph editor), imnodes (node editor), TextEditor
+(text editor) and imspinner (spinner animations). The batch is honest
+about weight: imnodes' editor-context internals and the TextEditor's
+regex lexer are flagged regions, and nothing here renders without a
+hand-built delegate -- so there is no golden this time. What the batch
+proves is breadth under pressure: function-like macro definitions are
+stripped and every invocation becomes a visible `expand by hand` debt
+(which retires the imspinner boundary -- 60+ real spinner functions port
+beside the flags), casts on qualified calls are no-ops instead of torn
+receivers, named-type casts vanish, C++11 brace initialisation becomes a
+ctor call, default-constructed `ImVec2`/`std::string`/vectors get their
+Python defaults, `static` locals carry a semantics note, typed loop
+variables untype, and file-level `static const ImColor white{...}`
+constants land in the module prelude. imnodes alone still exposes 124
+callable entry points; every rule above is pinned by a test.
 
 ## What a host provides
 
@@ -187,8 +364,11 @@ io.mouse_down[0] = io.mouse_clicked[0] = True
 # ...draw again, then release, and the button reports its click.
 ```
 
-`examples/clicking.py` is that, end to end. `pytest` runs the suite — 952
-tests, under four seconds, no display required.
+`examples/clicking.py` is that, end to end. `pytest` runs the suite — 1,108
+tests, in about a minute, no display required and **no toolkit installed**.
+The one test that exercises the optional Qt painter skips when Qt is absent;
+everything else runs on an interpreter where importing Qt raises, which is
+what `tests/test_cmtk_is_its_own_library.py` checks rather than assumes.
 
 ## Status
 

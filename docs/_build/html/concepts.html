@@ -1,0 +1,213 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Immediate mode &mdash; cmtk 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Porting from Dear ImGui" href="porting.html" />
+    <link rel="prev" title="Quickstart" href="quickstart.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cmtk
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Immediate mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#the-frame-lifecycle">The frame lifecycle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#ids">IDs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#hit-testing-is-a-by-product-of-drawing">Hit-testing is a by-product of drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#the-six-operation-painter-contract">The six-operation painter contract</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">Porting from Dear ImGui</a></li>
+<li class="toctree-l1"><a class="reference internal" href="widgets.html">Widget guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="backends.html">Painter backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing your UI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cmtk</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Immediate mode</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/concepts.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="immediate-mode">
+<h1>Immediate mode<a class="headerlink" href="#immediate-mode" title="Link to this heading"></a></h1>
+<p>An immediate-mode GUI does not keep a widget tree. The interface is the
+function call that draws it: a panel is a function you can delete, and there
+is no retained state to keep in sync with your data.</p>
+<p>The contrast is a <em>retained</em> GUI (Qt Widgets, tkinter, GTK), where you
+construct a <code class="docutils literal notranslate"><span class="pre">QPushButton</span></code> once and connect its <code class="docutils literal notranslate"><span class="pre">clicked</span></code> signal. The
+cost of retained mode is a two-way binding between your data and the
+widget tree. The cost of immediate mode is that the whole UI is redrawn
+every frame.</p>
+<p>cmtk chose immediate mode because the reference (Dear ImGui) chose it for
+the same reason: the UI is a tool, and a tool that <em>is</em> the code that draws
+it is a tool you can delete.</p>
+<img alt="Checkboxes, a float slider and an integer slider" src="_images/sliders.png" />
+</section>
+<section id="the-frame-lifecycle">
+<h1>The frame lifecycle<a class="headerlink" href="#the-frame-lifecycle" title="Link to this heading"></a></h1>
+<p>A frame is one call to the widget function, inside a context manager that
+manages the Dear ImGui <code class="docutils literal notranslate"><span class="pre">NewFrame</span> <span class="pre">…</span> <span class="pre">Render</span></code> pair:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">))</span> <span class="k">as</span> <span class="n">ctx</span><span class="p">:</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Window&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;drawn&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>On entry, the context ages the previous frame’s state (last frame’s hovered
+item becomes <code class="docutils literal notranslate"><span class="pre">hovered_id_previous_frame</span></code>), finds the window under the
+pointer, and resets the layout cursor. On exit, it moves keyboard focus
+according to any <code class="docutils literal notranslate"><span class="pre">Tab</span></code> pressed during the frame and clears per-delivery
+input edges (<code class="docutils literal notranslate"><span class="pre">mouse_clicked</span></code>, <code class="docutils literal notranslate"><span class="pre">mouse_released</span></code>).</p>
+<p>The host provides three things, and that is the whole contract:</p>
+<ol class="arabic simple">
+<li><p><strong>A painter.</strong> <code class="docutils literal notranslate"><span class="pre">cmtk.painter.REQUIRED_OPERATIONS</span></code> is the list of methods
+a surface must implement: <code class="docutils literal notranslate"><span class="pre">fill_rect</span></code>, <code class="docutils literal notranslate"><span class="pre">stroke_rect</span></code>, <code class="docutils literal notranslate"><span class="pre">gradient_rect</span></code>,
+<code class="docutils literal notranslate"><span class="pre">text</span></code>, <code class="docutils literal notranslate"><span class="pre">push_clip</span></code>/<code class="docutils literal notranslate"><span class="pre">pop_clip</span></code>, <code class="docutils literal notranslate"><span class="pre">fill_triangle</span></code>, plus <code class="docutils literal notranslate"><span class="pre">text_width</span></code>
+and <code class="docutils literal notranslate"><span class="pre">line_height</span></code> to measure with.</p></li>
+<li><p><strong>Pointer and key state</strong>, in <code class="docutils literal notranslate"><span class="pre">im.IO</span></code>: where the pointer is, which
+buttons went down or up this delivery, the modifiers, the wheel.</p></li>
+<li><p><strong>Time.</strong> Dear ImGui reads no clock — the backend sets
+<code class="docutils literal notranslate"><span class="pre">io.delta_time</span></code>. cmtk reads the wall clock by default; set
+<code class="docutils literal notranslate"><span class="pre">io.wall_clock</span> <span class="pre">=</span> <span class="pre">False</span></code> and drive <code class="docutils literal notranslate"><span class="pre">delta_time</span></code> yourself for a test.</p></li>
+</ol>
+</section>
+<section id="ids">
+<h1>IDs<a class="headerlink" href="#ids" title="Link to this heading"></a></h1>
+<p>Every widget needs an identity: the hit test has to know which rectangle
+the pointer just landed on, and two buttons called “Save” in different
+windows have to be told apart. The ID stack provides this.</p>
+<p>By default the label <em>is</em> the ID. Two widgets with the same label in the
+same scope collide, which is why the reference’s <code class="docutils literal notranslate"><span class="pre">##</span></code> suffix exists:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Save&quot;</span><span class="p">)</span>       <span class="c1"># id = (&quot;Demo&quot;, &quot;Save&quot;)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Save##2&quot;</span><span class="p">)</span>    <span class="c1"># id = (&quot;Demo&quot;, &quot;Save##2&quot;) — different widget</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">###</span></code> <em>replaces</em> the ID entirely while hiding the suffix from the label,
+so a title that changes every frame keeps one identity:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Frame </span><span class="si">%d</span><span class="s2">###anim&quot;</span> <span class="o">%</span> <span class="n">n</span><span class="p">)</span>  <span class="c1"># label changes, id stays (&quot;anim&quot;)</span>
+</pre></div>
+</div>
+<p>Nesting scopes with <code class="docutils literal notranslate"><span class="pre">push_id</span></code> / <code class="docutils literal notranslate"><span class="pre">pop_id</span></code> gives each subtree its own
+namespace, so a loop body produces distinct widgets without manual
+suffixes.</p>
+</section>
+<section id="hit-testing-is-a-by-product-of-drawing">
+<h1>Hit-testing is a by-product of drawing<a class="headerlink" href="#hit-testing-is-a-by-product-of-drawing" title="Link to this heading"></a></h1>
+<p>There is no second list of where things are. Every widget calls
+<code class="docutils literal notranslate"><span class="pre">ItemAdd(box,</span> <span class="pre">id)</span></code> <strong>as it draws</strong>, so a widget cannot be clickable where
+it is not visible. The context keeps one display list, painted forward and
+hit-tested backward, so what is drawn last is what takes the click.</p>
+<p>A window that is drawn but takes no input says so with a flag on its entry
+(<code class="docutils literal notranslate"><span class="pre">no_mouse_inputs</span></code>) rather than by being absent from a second list —
+because a second list is the thing that drifts out of step with the first.</p>
+</section>
+<section id="the-six-operation-painter-contract">
+<h1>The six-operation painter contract<a class="headerlink" href="#the-six-operation-painter-contract" title="Link to this heading"></a></h1>
+<p>A painter implements the methods in <code class="docutils literal notranslate"><span class="pre">REQUIRED_OPERATIONS</span></code>. Every widget
+cmtk ships is built on those and nothing else. The optional operations
+(<code class="docutils literal notranslate"><span class="pre">image</span></code>, <code class="docutils literal notranslate"><span class="pre">set_font</span></code>, <code class="docutils literal notranslate"><span class="pre">text_rotated</span></code>) add what cannot be decomposed.</p>
+<p>The helper functions in <code class="docutils literal notranslate"><span class="pre">cmtk.painter</span></code> — <code class="docutils literal notranslate"><span class="pre">line</span></code>, <code class="docutils literal notranslate"><span class="pre">polyline</span></code>,
+<code class="docutils literal notranslate"><span class="pre">fill_triangles</span></code>, <code class="docutils literal notranslate"><span class="pre">fill_convex</span></code>, <code class="docutils literal notranslate"><span class="pre">fill_circle</span></code> — are built from the
+required operations. A painter that provides native spellings of these
+(accelerations) gets faster drawing; one that does not gets the same picture
+through the fallback.</p>
+<p><code class="docutils literal notranslate"><span class="pre">cmtk.testing.RecordingPainter</span></code> implements the required operations by
+recording them. It is what makes every example on these pages run with no
+window:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">text_width</span><span class="p">(</span><span class="s2">&quot;abc&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="o">*</span> <span class="mf">7.0</span>   <span class="c1"># 7 px per glyph</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">line_height</span><span class="p">()</span> <span class="o">==</span> <span class="mf">16.0</span>            <span class="c1"># 16 px per line</span>
+</pre></div>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="quickstart.html" class="btn btn-neutral float-left" title="Quickstart" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="porting.html" class="btn btn-neutral float-right" title="Porting from Dear ImGui" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Thomas-Otavio Peulen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

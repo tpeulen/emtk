@@ -45,9 +45,43 @@ __all__ = ["IO", "BackendFlags", "Col", "ConfigFlags", "Context", "ImWidget",
            "ButtonFlags", "create_context", "set_current_context",
            "get_current_context", "frame", "get_io", "get_style",
            "get_window_draw_list", "get_foreground_draw_list",
-           "get_background_draw_list"]
+           "get_background_draw_list", "PLACE_FRAME", "PLACE_CASCADE",
+           "CASCADE_SIZE", "CASCADE_STEP", "CASCADE_FRACTION"]
 
 Rect = tuple[float, float, float, float]
+
+#: Placement for a window opened with no box: it *is* the frame, and keeps
+#: being the frame when the host is resized. The default, and what a single
+#: full-window application wants -- one window, filling its host, following
+#: it.
+PLACE_FRAME = "frame"
+
+#: Placement for a window opened with no box: it is placed **once**, at a
+#: stepped offset inside the frame, and then keeps that box. What an
+#: application with floating sub-windows wants: without it every one of them
+#: takes the whole frame and they draw on top of each other and of the main
+#: window, which is exactly one window's worth of visible interface no
+#: matter how many were opened.
+PLACE_CASCADE = "cascade"
+
+#: The size a cascaded window is first given, in the frame's units. Big
+#: enough to hold a handful of rows and a plot, small enough that several
+#: fit on a modest frame; a window that wanted more says so with
+#: ``set_next_window_size`` or ``auto_resize``.
+CASCADE_SIZE = (360.0, 260.0)
+
+#: The most of the frame a cascaded window takes on each axis.
+#: :data:`CASCADE_SIZE` is a ceiling and this is the other bound: on a small
+#: frame a fixed size leaves room for exactly one window, every window lands
+#: in the only place that fits, and the cascade is back to the pile it
+#: exists to avoid.
+CASCADE_FRACTION = 0.6
+
+#: How far each cascaded window is offset from the one before, and the
+#: margin the first one starts at. Cascading rather than stacking is what
+#: makes the window *underneath* reachable: identical boxes hide each other
+#: completely, and a title bar's worth of offset is enough to grab.
+CASCADE_STEP = 28.0
 
 
 class ButtonFlags:
@@ -74,6 +108,10 @@ class IO:
     mouse_released: list[bool] = field(default_factory=lambda: [False, False, False])
     mouse_double_clicked: list[bool] = field(default_factory=lambda: [False, False, False])
     mouse_clicked_pos: list[tuple[float, float]] = field(default_factory=lambda: [(-1.0, -1.0)] * 3)
+    #: ``io.MousePos`` last frame -- what makes ``MouseDelta`` a delta.
+    mouse_pos_prev: tuple[float, float] = (-1.0, -1.0)
+    #: ``io.FontGlobalScale``: the atlas is one bitmap face, so this stays 1.
+    font_global_scale: float = 1.0
     mouse_wheel: float = 0.0
     mouse_wheel_h: float = 0.0
     key_ctrl: bool = False
@@ -103,6 +141,7 @@ class IO:
     want_capture_keyboard: bool = False
 
     def begin_frame(self, now: Optional[float] = None) -> None:
+        self.mouse_pos_prev = tuple(self.mouse_pos)
         if now is not None:
             self.delta_time = max(1e-6, float(now) - self.now) if self.now else 1.0 / 60.0
             self.now = float(now)
@@ -113,6 +152,12 @@ class IO:
         else:
             self.now += self.delta_time
         self.frame_count += 1
+
+    @property
+    def mouse_delta(self) -> tuple[float, float]:
+        """``io.MouseDelta``: this frame's pointer move, since last frame."""
+        return (self.mouse_pos[0] - self.mouse_pos_prev[0],
+                self.mouse_pos[1] - self.mouse_pos_prev[1])
 
     def end_event(self) -> None:
         """Clear the per-delivery edges once the widget has seen them."""
@@ -161,11 +206,13 @@ class Col:
     HEADER_HOVERED = 20
     HEADER_ACTIVE = 21
     SEPARATOR = 22
-    TAB = 23
-    TAB_SELECTED = 24
-    PLOT_LINES = 25
-    PLOT_HISTOGRAM = 26
-    COUNT = 27
+    SEPARATOR_HOVERED = 23
+    SEPARATOR_ACTIVE = 24
+    TAB = 25
+    TAB_SELECTED = 26
+    PLOT_LINES = 27
+    PLOT_HISTOGRAM = 28
+    COUNT = 29
 
 
 def _default_colors() -> dict[int, tuple]:
@@ -195,6 +242,8 @@ def _default_colors() -> dict[int, tuple]:
         Col.HEADER_HOVERED: _style.HEADER_HOVERED,
         Col.HEADER_ACTIVE: _style.HEADER_ACTIVE,
         Col.SEPARATOR: _style.BORDER,
+        Col.SEPARATOR_HOVERED: _style.SEPARATOR_HOVERED,
+        Col.SEPARATOR_ACTIVE: _style.SEPARATOR_ACTIVE,
         Col.TAB: _style.TAB,
         Col.TAB_SELECTED: _style.TAB_SELECTED,
         Col.PLOT_LINES: _style.PLOT_LINES,
@@ -316,6 +365,24 @@ class _Window:
 
     name: str
     box: Rect
+    #: True when the window was never given a box of its own, and so takes
+    #: the frame's. Such a window has to *keep* taking it: the box is stored
+    #: across frames, and a stored box does not follow a host that resized.
+    #: Without this the first frame's size is the size forever -- the content
+    #: stops at the old edge and the rest of a widened window is blank.
+    follows_frame: bool = False
+    #: True when the box was decided **once** and is the window's to keep --
+    #: by a cascade placement, or by a ``SetNextWindowPos``/``Size`` under
+    #: any condition but ``Always``.
+    #:
+    #: This sits *beside* :attr:`follows_frame` rather than replacing it,
+    #: and the two are not each other's opposite. A window handed an
+    #: explicit box on every ``begin`` follows neither the frame nor its own
+    #: memory: the caller drives it, and it is not sticky. A single
+    #: full-window application still wants the frame-following case, which is
+    #: why that is the default and this is opt-in -- see
+    #: :meth:`Context.set_window_placement`.
+    sticky: bool = False
     #: What is *drawn* in the title bar. ``Begin("Animated title 3###Anim")``
     #: shows the left part and keeps its identity in the right, so a title that
     #: changes every frame does not make a new window every frame; and
@@ -409,6 +476,11 @@ class Context:
         #: backward (`FindHoveredWindowEx`), so what is drawn last is what
         #: takes the click, and no second ordering can drift from it.
         self.windows: list[_Window] = self.storage.setdefault("__windows__", [])
+        #: How a window with no box of its own is first placed -- see
+        #: :meth:`set_window_placement`. In the storage rather than on the
+        #: context because a context lives one frame and this has to outlive
+        #: the frame that set it.
+        self.storage.setdefault("__window_placement__", PLACE_FRAME)
         self.hovered_window: Optional[_Window] = None
         self._window_stack: list[_Window] = []
         self.current_window: Optional[_Window] = None
@@ -717,7 +789,188 @@ class Context:
         return hovered, held, pressed
 
     # -- windows --------------------------------------------------------------- #
-    def begin(self, name: str, box: Optional[Rect] = None, *,
+    @property
+    def window_placement(self) -> str:
+        """Where a window opened with **no box** goes: the frame, or a cascade.
+
+        Returns
+        -------
+        str
+            :data:`PLACE_FRAME` (the default) or :data:`PLACE_CASCADE`.
+
+        See Also
+        --------
+        set_window_placement
+        """
+        return self.storage.get("__window_placement__", PLACE_FRAME)
+
+    def set_window_placement(self, placement: str) -> None:
+        """Choose how a box-less window is first placed.
+
+        Parameters
+        ----------
+        placement : str
+            :data:`PLACE_FRAME` -- the window *is* the frame and keeps being
+            the frame when the host resizes. One window filling its host.
+
+            :data:`PLACE_CASCADE` -- the window is placed once, at a stepped
+            offset inside the frame, and then keeps that box across frames.
+
+        Raises
+        ------
+        ValueError
+            On anything else. A misspelt mode that silently meant "frame"
+            would look exactly like the bug this setting exists to fix.
+
+        Notes
+        -----
+        cmtk has no window manager and no ``.ini``, so nothing outside this
+        remembers where a window was. With the default, an application with
+        several floating sub-windows draws every one of them over the whole
+        frame and over each other: what is on screen is the last one
+        submitted, and the rest are invisible under it. That reads as
+        "the other windows do not open".
+
+        This is a **mode**, not a per-window flag, because it is a property
+        of the application: either it is one full-window interface or it is a
+        desktop of small ones. A window that wants something else still says
+        so directly, with a box or with ``set_next_window_pos``.
+
+        Set once, before the first frame or in it; it lives in the storage,
+        so it outlives the context that set it.
+
+        Examples
+        --------
+        >>> import cmtk.im as im
+        >>> from cmtk.testing import PixelPainter
+        >>> painter = PixelPainter(400, 300)
+        >>> storage = {}
+        >>> for _ in range(2):
+        ...     with im.frame(painter, (0, 0, 400, 300), storage=storage) as ctx:
+        ...         ctx.set_window_placement(im.PLACE_CASCADE)
+        ...         _ = im.begin("first"); im.text("a"); im.end()
+        ...         _ = im.begin("second"); im.text("b"); im.end()
+        >>> [w.box[:2] for w in storage["__windows__"]]
+        [(28.0, 28.0), (56.0, 56.0)]
+        """
+        if placement not in (PLACE_FRAME, PLACE_CASCADE):
+            raise ValueError(
+                f"window placement is {PLACE_FRAME!r} or {PLACE_CASCADE!r}, "
+                f"not {placement!r}")
+        self.storage["__window_placement__"] = placement
+
+    def _first_box(self, claim: bool = True) -> Rect:
+        """Where a window opened with no box of its own goes, once.
+
+        Parameters
+        ----------
+        claim : bool, optional
+            Whether to take the next step of the cascade. ``False`` for a
+            window that is about to be placed outright anyway.
+
+        Returns
+        -------
+        tuple
+            The frame under :data:`PLACE_FRAME`, and a cascaded
+            :data:`CASCADE_SIZE` box under :data:`PLACE_CASCADE`.
+
+        Notes
+        -----
+        The cascade counts *placements*, not windows, and lives in the
+        storage beside them -- so the second window of a session is offset
+        from the first even though it was created a hundred frames later.
+        It wraps rather than marching off the edge: past the point where a
+        whole window would no longer fit, it starts again at the margin,
+        which is what every window manager does and for the same reason.
+        """
+        x, y, width, height = self.box
+        if self.window_placement == PLACE_FRAME:
+            return self.box
+        # :data:`CASCADE_SIZE` is a *ceiling*, and the frame is the other
+        # bound. Without the fraction a small frame gets one window's worth
+        # of room, every window lands in the only spot that fits, and the
+        # cascade is back to the pile it exists to avoid.
+        w = max(min(CASCADE_SIZE[0], width * CASCADE_FRACTION), 1.0)
+        h = max(min(CASCADE_SIZE[1], height * CASCADE_FRACTION), 1.0)
+        index = int(self.storage.get("__cascade__", 0))
+        if claim:
+            self.storage["__cascade__"] = index + 1
+        # Positions are `margin + k * step` for as many k as leave the whole
+        # window inside the frame -- a window placed past the edge is a
+        # window the user cannot reach.
+        across = int((width - w - CASCADE_STEP) // CASCADE_STEP) + 1
+        down = int((height - h - CASCADE_STEP) // CASCADE_STEP) + 1
+        step = index % max(min(across, down), 1)
+        offset = CASCADE_STEP * (step + 1)
+        return (x + offset, y + offset, w, h)
+
+    def _place_next(self, window: _Window, pending: dict, created: bool) -> None:
+        """Apply a pending ``SetNextWindowPos`` / ``SetNextWindowSize``.
+
+        Parameters
+        ----------
+        window : _Window
+        pending : dict
+            The ``next_window`` state; the keys used here are consumed.
+        created : bool
+            Whether *window* was made on this call.
+
+        Notes
+        -----
+        These were accepted and **discarded** before this, which is the
+        quiet half of the same bug as the placement above: a port that says
+        ``SetNextWindowPos`` -- the way ImGui code places a floating window
+        -- had its instruction dropped and got the whole frame instead.
+
+        The condition is ImGui's. ``Always`` (and no condition at all)
+        re-places every frame; ``Once`` and ``FirstUseEver`` place on the
+        frame the window is created, and are the same thing here because
+        there is no ``.ini`` for "ever" to mean anything against;
+        ``Appearing`` places whenever the window was absent last frame,
+        which is what a window closed and reopened wants.
+
+        A placement under any condition but ``Always`` makes the window
+        :attr:`~_Window.sticky`: it was told where to go once, and keeping it
+        there is the whole request.
+        """
+        pos = pending.pop("pos", None)
+        size = pending.pop("size", None)
+        pos_cond = int(pending.pop("pos_cond", 0) or 0)
+        size_cond = int(pending.pop("size_cond", 0) or 0)
+        if pos is None and size is None:
+            return
+
+        from .flags import Cond as _Cond  # noqa: PLC0415
+
+        def wanted(cond: int) -> bool:
+            if cond in (0, _Cond.ALWAYS):
+                return True
+            if cond & _Cond.APPEARING:
+                return not window.was_active
+            return created           # Once, FirstUseEver
+
+        x, y, w, h = window.box
+        applied: list[bool] = []          # was each applied placement one-time?
+        if pos is not None and wanted(pos_cond):
+            x, y = float(pos[0]), float(pos[1])
+            applied.append(pos_cond not in (0, _Cond.ALWAYS))
+        if size is not None and wanted(size_cond):
+            w, h = float(size[0]), float(size[1])
+            applied.append(size_cond not in (0, _Cond.ALWAYS))
+        if applied:
+            window.box = (x, y, w, h)
+            # It has a box of its own now, so it must stop taking the
+            # frame's -- otherwise the assignment in `begin` silently undoes
+            # this.
+            window.follows_frame = False
+            # Sticky only if the placement was one-time. A window re-placed
+            # every frame -- a main window pinned to the viewport is the
+            # usual one -- is not remembering anything: its owner restates
+            # it, and recording it as sticky would have a future `.ini` save
+            # a box nobody asked to keep.
+            window.sticky = any(applied)
+
+    def begin(self, name: str, box: Optional[Rect] = None, flags: int = 0, *,
               no_mouse_inputs: bool = False, auto_resize: bool = False) -> bool:
         """``ImGui::Begin``: push a window and lay out inside it.
 
@@ -725,25 +978,59 @@ class Context:
         as ImGui's ``g.Windows`` does -- creation order, moved to the end by
         focus -- and that one list is what both the drawing and the hit test
         walk.
+
+        *flags* is an ``ImGuiWindowFlags`` mask. cmtk windows have no title
+        bar, no scrollbars and no chrome to suppress, so most of the mask is
+        already true of every window here and is accepted and ignored -- the
+        two that *say* something about behaviour, ``AlwaysAutoResize`` and
+        ``NoMouseInputs``, are honoured. Accepting the whole mask is the
+        point: a port writes ``Begin(name, nullptr, NoTitleBar | NoResize)``
+        and it should not have to be edited to say the same thing about a
+        window that never had a title bar to begin with.
         """
+        from .flags import WindowFlags as _WF
+
+        if flags & _WF.ALWAYS_AUTO_RESIZE:
+            auto_resize = True
+        if flags & (_WF.NO_MOUSE_INPUTS | _WF.NO_INPUTS):
+            no_mouse_inputs = True
         title, key = split_label(name)
         window = next((w for w in self.windows if w.name == key), None)
-        if window is None:
-            window = _Window(name=key, title=title,
-                             box=box if box is not None else self.box)
+        created = window is None
+        pending = self.state(("next_window",))
+        if created:
+            # A window about to be placed outright takes no slot in the
+            # cascade: a full-frame main window says `SetNextWindowPos` and
+            # `SetNextWindowSize`, and letting it consume a step would leave
+            # a gap in the offsets that reads as a placement bug.
+            told = pending.get("pos") is not None and pending.get("size") is not None
+            placed = box if box is not None else self._first_box(claim=not told)
+            window = _Window(
+                name=key, title=title, box=placed,
+                follows_frame=box is None and self.window_placement == PLACE_FRAME,
+                sticky=box is None and self.window_placement != PLACE_FRAME,
+            )
             self.windows.append(window)
         window.title = title
         if box is not None:
             window.box = box
+            window.follows_frame = False
+            # Not sticky: the caller hands it a box every frame and so owns
+            # the placement. Sticky means *cmtk* is remembering one.
+            window.sticky = False
         window.active = True
         window.no_mouse_inputs = no_mouse_inputs
-        pending = self.state(("next_window",))
-        if pending.pop("pos", None) is not None or pending.pop("size", None) is not None:
-            pass
+        self._place_next(window, pending, created)
         constraints = pending.pop("constraints", None)
         if constraints is not None:
             window.size_min, window.size_max = constraints
         window.auto_resize = bool(auto_resize or pending.pop("auto_resize", False))
+        # A window with no box of its own is the frame, so it follows the
+        # frame -- including when the host resized between this call and the
+        # last one. An auto-resizing window sizes itself in `end()` instead,
+        # and must not be overwritten here.
+        if window.follows_frame and not window.auto_resize:
+            window.box = self.box
         dock_id = pending.pop("dock_id", None)
         if dock_id is not None:
             window.dock_id = int(dock_id)
@@ -810,7 +1097,24 @@ class Context:
 
     # -- child regions ------------------------------------------------------------- #
     def begin_child(self, box: Rect, clip: bool = True) -> Layout:
-        """Lay out inside *box* until :meth:`end_child`; the parent's cursor is restored after."""
+        """Lay out inside *box* until :meth:`end_child`; the parent's cursor is
+        restored after.
+
+        A non-positive width or height means *fill the available content
+        region*, as it does in the reference and as ``implot.begin_plot``
+        already does for its size -- and ``-1`` means "all but one pixel".
+        The reference's own idiom is ``BeginChild(id, ImVec2(w, 0))`` for a
+        column that should run the full height, so reading the zero
+        literally gave a child of no height: every panel inside it drew into
+        nothing, the call still succeeded, and cmc's main window came out as
+        a four-pixel splitter bar with the whole interface missing beside it.
+        """
+        x, y, w, h = box
+        if w <= 0.0 or h <= 0.0:
+            avail_w, avail_h = self.layout.avail()
+            w = avail_w + w if w <= 0.0 else w
+            h = avail_h + h if h <= 0.0 else h
+            box = (x, y, max(w, 0.0), max(h, 0.0))
         self._child.append((self.layout, box))
         if clip:
             self.p.push_clip(*box)
@@ -818,10 +1122,21 @@ class Context:
         return self.layout
 
     def end_child(self, clip: bool = True) -> Rect:
+        """Close a child and advance the parent past it.
+
+        ``EndChild`` is an *item* in the reference: it calls ``ItemSize`` on
+        the parent, so the next thing submitted goes below (or beside, after
+        ``SameLine``) the child rather than on top of it. Restoring the
+        parent's layout without advancing it left every child starting at
+        the same cursor -- cmc's main window drew its device panel, its
+        acquisition panel, its statistics and its plots all stacked on the
+        same few rows, each overwriting the last.
+        """
         layout, box = self._child.pop()
         if clip:
             self.p.pop_clip()
         self.layout = layout
+        self.layout.advance(box[2], box[3])
         return box
 
     # -- popups and tooltips ------------------------------------------------------- #

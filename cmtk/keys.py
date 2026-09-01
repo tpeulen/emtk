@@ -30,6 +30,19 @@ __all__ = [
     "KEY_HOME",
     "KEY_LEFT",
     "KEY_PAGE_DOWN",
+    "KEY_INSERT",
+    "KEY_F1",
+    "KEY_F2",
+    "KEY_F3",
+    "KEY_F4",
+    "KEY_F5",
+    "KEY_F6",
+    "KEY_F7",
+    "KEY_F8",
+    "KEY_F9",
+    "KEY_F10",
+    "KEY_F11",
+    "KEY_F12",
     "KEY_PAGE_UP",
     "KEY_RETURN",
     "KEY_RIGHT",
@@ -58,6 +71,24 @@ KEY_DOWN = 0x01000015
 #: is a distinct idea from "move a line".
 KEY_PAGE_UP = 0x01000016
 KEY_PAGE_DOWN = 0x01000017
+KEY_INSERT = 0x01000006
+
+#: The function keys, ``Qt.Key_F1`` upward and contiguous. An application
+#: binds its shortcuts to these -- cmc starts and stops an acquisition on
+#: F2 -- and without them `im.Key.F2` was `None`, so the test against it
+#: could never be true and the shortcut silently did nothing.
+KEY_F1 = 0x01000030
+KEY_F2 = 0x01000031
+KEY_F3 = 0x01000032
+KEY_F4 = 0x01000033
+KEY_F5 = 0x01000034
+KEY_F6 = 0x01000035
+KEY_F7 = 0x01000036
+KEY_F8 = 0x01000037
+KEY_F9 = 0x01000038
+KEY_F10 = 0x01000039
+KEY_F11 = 0x0100003A
+KEY_F12 = 0x0100003B
 
 # --------------------------------------------------------------------------- #
 # The printable keys

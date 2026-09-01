@@ -550,7 +550,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {path}")
     if _register(args.module):
         print(f"registered {args.module!r} in CONTROL_MODULES")
-    subprocess.run([sys.executable, str(ROOT / "tools" / "gen_cmtk_names.py")], check=False)
+    subprocess.run([sys.executable, str(ROOT / "tools" / "gen_names.py")], check=False)
     print()
     print(checklist)
     print("\nstill to do, in source order:")

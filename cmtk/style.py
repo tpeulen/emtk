@@ -21,7 +21,7 @@ with the prefix dropped, so a port can be checked against the source it came
 from by reading down the column.
 
 The three that are **not** the reference's
------------------------------------------
+----------------------------------------------
 :data:`TEXT`, :data:`DIM` and :data:`GOLD` predate this file and are what the
 chrome already reads as. The reference's ``Text`` is pure white and its
 ``TextDisabled`` a flat mid-grey; these are slightly blue-cool and lighter
@@ -69,6 +69,8 @@ __all__ = [
     "HEADER_HOVERED",
     "HEADER_ACTIVE",
     "SEPARATOR",
+    "SEPARATOR_HOVERED",
+    "SEPARATOR_ACTIVE",
     "TAB",
     "TAB_SELECTED",
     "TAB_HOVERED",
@@ -152,8 +154,14 @@ BUTTON_ACTIVE = (15, 135, 250, 255)
 HEADER = (66, 150, 250, 79)
 HEADER_HOVERED = (66, 150, 250, 204)
 HEADER_ACTIVE = (66, 150, 250, 255)
-# ImGuiCol_Separator (the reference aliases this to Border)
+# ImGuiCol_Separator (the reference aliases this to Border) and the two
+# states a *draggable* separator has. A plain rule never leaves the first,
+# but a splitter is a control: without somewhere to say "you are on it" and
+# "you have hold of it", the one widget whose whole job is to be grabbed
+# gives no sign that it can be.
 SEPARATOR = BORDER
+SEPARATOR_HOVERED = (26, 102, 191, 199)
+SEPARATOR_ACTIVE = (26, 102, 250, 255)
 # ImGuiCol_Tab / TabSelected / TabHovered
 TAB = (37, 63, 100, 255)
 TAB_SELECTED = (51, 105, 173, 255)

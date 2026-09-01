@@ -39,6 +39,22 @@ __all__ = list(_CORE) + list(_WIDGETS)
 # names where `CamelCase` -> `snake_case` and a readable Python name disagree
 # (`ColorConvertHSVtoRGB`) or where C needed a second `va_list` entry point
 # Python does not (`TextV`). See `im_compat`.
+from .flags import *  # noqa: F401,F403
+from .flags import __all__ as _FLAGS
+
+__all__ += list(_FLAGS)
+
+
+def col32(r, g, b, a=255):
+    """``IM_COL32``: an RGBA tuple, cmtk's colour spelling."""
+    return (int(r) & 255, int(g) & 255, int(b) & 255, int(a) & 255)
+
+
+#: the mechanical spelling of the macro name, for transliterated ports
+im_col32 = col32
+
+__all__ += ["col32", "im_col32"]
+
 from . import im_compat as _compat  # noqa: E402
 import pathlib as _pathlib  # noqa: E402
 import sys as _sys  # noqa: E402
@@ -54,6 +70,17 @@ def _published_names():
                     if line.strip()]
     return list(_compat.MECHANICAL_ALIASES) + list(_compat.VARIADIC)
 
+
+# The two colour conversions live with the colour widgets, but they are an
+# *ImGui-facing* concern: the reference spells a colour as four floats 0..1
+# and cmtk's painters take bytes 0..255, so any program transliterated from
+# C++ needs the conversion, and needs it under the name it imported -- ``im``.
+# Without this a ported ``TextColored`` reaches for ``im.floats_to_rgba`` and
+# gets an AttributeError, or worse, passes the floats through and draws
+# invisible black text.
+from .widgets.color import floats_to_rgba, rgba_to_floats  # noqa: E402,F401
+
+__all__ += ["floats_to_rgba", "rgba_to_floats"]
 
 _ALIASED = _compat.install(_sys.modules[__name__], _published_names())
 

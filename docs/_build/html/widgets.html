@@ -1,0 +1,479 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Widget guide &mdash; cmtk 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=01f34227"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Painter backends" href="backends.html" />
+    <link rel="prev" title="Porting from Dear ImGui" href="porting.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            cmtk
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html">Immediate mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-frame-lifecycle">The frame lifecycle</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#ids">IDs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#hit-testing-is-a-by-product-of-drawing">Hit-testing is a by-product of drawing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="concepts.html#the-six-operation-painter-contract">The six-operation painter contract</a></li>
+<li class="toctree-l1"><a class="reference internal" href="porting.html">Porting from Dear ImGui</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Widget guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#text">Text</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#basic">Basic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#buttons">Buttons</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sliders">Sliders</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#drag">Drag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#inputs">Inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#colour">Colour</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#selection">Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#list-view">List view</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#menus">Menus</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tabs">Tabs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tables">Tables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#drag-and-drop">Drag and drop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#text-editor">Text editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#memory-editor">Memory editor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#layout">Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#splitter">Splitter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#control">Control</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#axis-and-markers">Axis and markers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#plot">Plot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#circle-plot">Circle plot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#drawlist">DrawList</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="backends.html">Painter backends</a></li>
+<li class="toctree-l1"><a class="reference internal" href="testing.html">Testing your UI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">API reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">cmtk</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Widget guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/widgets.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="widget-guide">
+<h1><a class="toc-backref" href="#id1" role="doc-backlink">Widget guide</a><a class="headerlink" href="#widget-guide" title="Link to this heading"></a></h1>
+<p>The families below are the ones <code class="docutils literal notranslate"><span class="pre">cmtk.CONTROL_MODULES</span></code> enumerates. Each
+module is documented in the API reference (generated from its docstrings);
+this page gives the shape of each family and a runnable example.</p>
+<nav class="contents" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#widget-guide" id="id1">Widget guide</a></p>
+<ul>
+<li><p><a class="reference internal" href="#text" id="id2">Text</a></p></li>
+<li><p><a class="reference internal" href="#basic" id="id3">Basic</a></p></li>
+<li><p><a class="reference internal" href="#buttons" id="id4">Buttons</a></p></li>
+<li><p><a class="reference internal" href="#sliders" id="id5">Sliders</a></p></li>
+<li><p><a class="reference internal" href="#drag" id="id6">Drag</a></p></li>
+<li><p><a class="reference internal" href="#inputs" id="id7">Inputs</a></p></li>
+<li><p><a class="reference internal" href="#colour" id="id8">Colour</a></p></li>
+<li><p><a class="reference internal" href="#selection" id="id9">Selection</a></p></li>
+<li><p><a class="reference internal" href="#list-view" id="id10">List view</a></p></li>
+<li><p><a class="reference internal" href="#menus" id="id11">Menus</a></p></li>
+<li><p><a class="reference internal" href="#tabs" id="id12">Tabs</a></p></li>
+<li><p><a class="reference internal" href="#tables" id="id13">Tables</a></p></li>
+<li><p><a class="reference internal" href="#drag-and-drop" id="id14">Drag and drop</a></p></li>
+<li><p><a class="reference internal" href="#text-editor" id="id15">Text editor</a></p></li>
+<li><p><a class="reference internal" href="#memory-editor" id="id16">Memory editor</a></p></li>
+<li><p><a class="reference internal" href="#layout" id="id17">Layout</a></p></li>
+<li><p><a class="reference internal" href="#splitter" id="id18">Splitter</a></p></li>
+<li><p><a class="reference internal" href="#control" id="id19">Control</a></p></li>
+<li><p><a class="reference internal" href="#axis-and-markers" id="id20">Axis and markers</a></p></li>
+<li><p><a class="reference internal" href="#plot" id="id21">Plot</a></p></li>
+<li><p><a class="reference internal" href="#circle-plot" id="id22">Circle plot</a></p></li>
+<li><p><a class="reference internal" href="#drawlist" id="id23">DrawList</a></p></li>
+</ul>
+</li>
+</ul>
+</nav>
+<section id="text">
+<h2><a class="toc-backref" href="#id2" role="doc-backlink">Text</a><a class="headerlink" href="#text" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.text</span></code> draws strings in the seven layouts the reference
+distinguishes: plain text, coloured, disabled, wrapped, bulleted, labelled
+and separated.</p>
+<img alt="Plain, coloured, disabled text and a bullet item" src="_images/text.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Text&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;plain&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text_colored</span><span class="p">((</span><span class="mi">255</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">50</span><span class="p">),</span> <span class="s2">&quot;coloured&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text_disabled</span><span class="p">(</span><span class="s2">&quot;dimmed&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">bullet_text</span><span class="p">(</span><span class="s2">&quot;bulleted&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">separator</span><span class="p">()</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="s2">&quot;plain&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">&quot;coloured&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+</pre></div>
+</div>
+</section>
+<section id="basic">
+<h2><a class="toc-backref" href="#id3" role="doc-backlink">Basic</a><a class="headerlink" href="#basic" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.basic</span></code> carries the foundational controls: <code class="xref py py-class docutils literal notranslate"><span class="pre">Button</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Checkbox</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">SliderFloat</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ProgressBar</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">TreeNode</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Separator</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Toggle</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">RadioGroup</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">InputInt</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Combo</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ListBox</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Table</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Tabs</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">TextInput</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Tooltip</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ColorEdit4</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">PlotLines</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">Histogram</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ScrollBar</span></code>, and the layout helper
+<code class="xref py py-func docutils literal notranslate"><span class="pre">fit_text()</span></code>.</p>
+<p>These are retained controls: they own their state and draw into a box.
+The immediate-mode functions in <code class="docutils literal notranslate"><span class="pre">im</span></code> are the other shape.</p>
+<img alt="A checkbox, three kinds of button and a progress bar" src="_images/basic.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Basic&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">checkbox</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">progress_bar</span><span class="p">(</span><span class="mf">0.7</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">painter</span><span class="o">.</span><span class="n">fills</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
+</pre></div>
+</div>
+</section>
+<section id="buttons">
+<h2><a class="toc-backref" href="#id4" role="doc-backlink">Buttons</a><a class="headerlink" href="#buttons" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.buttons</span></code> adds <code class="xref py py-class docutils literal notranslate"><span class="pre">SmallButton</span></code> (no vertical frame padding,
+sits inside a line of text), <code class="xref py py-class docutils literal notranslate"><span class="pre">InvisibleButton</span></code> (a hit box that
+paints nothing), <code class="xref py py-class docutils literal notranslate"><span class="pre">ArrowButton</span></code> (a framed button with a triangular
+arrow), <code class="xref py py-class docutils literal notranslate"><span class="pre">CheckboxFlags</span></code> (a checkbox over a bitmask, with the
+reference’s <em>mixed</em> state), and <code class="xref py py-class docutils literal notranslate"><span class="pre">RadioButton</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Buttons&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Normal&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">small_button</span><span class="p">(</span><span class="s2">&quot;Small&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">arrow_button</span><span class="p">(</span><span class="s2">&quot;arrow&quot;</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">Dir</span><span class="o">.</span><span class="n">LEFT</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="s2">&quot;Normal&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">&quot;Small&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+</pre></div>
+</div>
+</section>
+<section id="sliders">
+<h2><a class="toc-backref" href="#id5" role="doc-backlink">Sliders</a><a class="headerlink" href="#sliders" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.sliders</span></code> ports the full slider family: horizontal and vertical,
+float and integer, linear and logarithmic, single and multi-component, and
+<code class="xref py py-func docutils literal notranslate"><span class="pre">slider_angle()</span></code> (radians stored, degrees shown). The reference’s
+<code class="docutils literal notranslate"><span class="pre">ScaleRatioFromValueT</span></code> / <code class="docutils literal notranslate"><span class="pre">ScaleValueFromRatioT</span></code> pair is ported
+faithfully, including the awkward half: a logarithmic slider cannot take
+<code class="docutils literal notranslate"><span class="pre">log(0)</span></code>, so the bounds are fudged away from zero by an epsilon derived
+from the format string’s precision.</p>
+<img alt="Float, integer and angle sliders" src="_images/sliders.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Sliders&quot;</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">f</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_float</span><span class="p">(</span><span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_int</span><span class="p">(</span><span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="drag">
+<h2><a class="toc-backref" href="#id6" role="doc-backlink">Drag</a><a class="headerlink" href="#drag" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.drag</span></code> provides scrubbing controls: a number you scrub rather
+than a slider you aim. The box is only where the gesture <em>starts</em>; from
+then on the value moves by the mouse’s delta, scaled by <code class="docutils literal notranslate"><span class="pre">v_speed</span></code>. An
+integer drag at a tenth of a unit per pixel would round every single event
+to zero and never move at all — the reference fixes this with an
+accumulator (<code class="docutils literal notranslate"><span class="pre">g.DragCurrentAccum</span></code>), ported faithfully here.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Drag&quot;</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">drag_float</span><span class="p">(</span><span class="s2">&quot;drag&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="inputs">
+<h2><a class="toc-backref" href="#id7" role="doc-backlink">Inputs</a><a class="headerlink" href="#inputs" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.inputs</span></code> ports the reference’s scalar editor: a field you type a
+number into, with optional <code class="docutils literal notranslate"><span class="pre">-</span></code>/<code class="docutils literal notranslate"><span class="pre">+</span></code> buttons and a printf format that
+decides both how the value is shown and how the typed string is read back.
+Also carries <code class="docutils literal notranslate"><span class="pre">InputTextMultiline</span></code> and <code class="docutils literal notranslate"><span class="pre">InputTextWithHint</span></code>.</p>
+</section>
+<section id="colour">
+<h2><a class="toc-backref" href="#id8" role="doc-backlink">Colour</a><a class="headerlink" href="#colour" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.color</span></code> ports the reference’s colour family: a swatch
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">ColorButton</span></code>), a numeric editor (<code class="xref py py-class docutils literal notranslate"><span class="pre">ColorEdit4</span></code> and
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ColorEditRGB</span></code>), and a saturation/value picker with a hue bar
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">ColorPicker4</span></code>). The hue-state bug is avoided structurally:
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ColorState</span></code> holds H, S, V and the byte triple side by side, so a
+drag on the hue bar cannot snap to red at the white or black edge.</p>
+</section>
+<section id="selection">
+<h2><a class="toc-backref" href="#id9" role="doc-backlink">Selection</a><a class="headerlink" href="#selection" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.selection</span></code> ports <code class="xref py py-class docutils literal notranslate"><span class="pre">Selectable</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">CollapsingHeader</span></code>, and the multi-select model
+(<code class="xref py py-class docutils literal notranslate"><span class="pre">MultiSelectState</span></code>) that turns clicks plus modifiers into
+selection requests.</p>
+<img alt="Collapsing headers and selectable rows" src="_images/selection.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Selection&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">selectable</span><span class="p">(</span><span class="s2">&quot;option A&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">selectable</span><span class="p">(</span><span class="s2">&quot;option B&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">collapsing_header</span><span class="p">(</span><span class="s2">&quot;Section&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="s2">&quot;option A&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+</pre></div>
+</div>
+</section>
+<section id="list-view">
+<h2><a class="toc-backref" href="#id10" role="doc-backlink">List view</a><a class="headerlink" href="#list-view" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.list_view</span></code> provides virtualised lists: the view asks the model
+for the rows it is about to draw and no others, so a list of a hundred
+thousand rows costs the same as a list of twenty.</p>
+</section>
+<section id="menus">
+<h2><a class="toc-backref" href="#id11" role="doc-backlink">Menus</a><a class="headerlink" href="#menus" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.menus</span></code> ports <code class="xref py py-class docutils literal notranslate"><span class="pre">MenuBar</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Menu</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">MenuItem</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Popup</span></code>, and <code class="xref py py-class docutils literal notranslate"><span class="pre">PopupModal</span></code>.</p>
+<img alt="A menu bar with the View menu open, its items showing shortcuts" src="_images/menus.png" />
+</section>
+<section id="tabs">
+<h2><a class="toc-backref" href="#id12" role="doc-backlink">Tabs</a><a class="headerlink" href="#tabs" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.tabs</span></code> ports the reference’s full tab bar: measured per-tab
+widths, shrinking (the widest tab pays first), scrolling (with the
+selected tab kept visible), and reordering by drag.</p>
+<img alt="A tab bar with three tabs, the first selected" src="_images/tabs.png" />
+</section>
+<section id="tables">
+<h2><a class="toc-backref" href="#id13" role="doc-backlink">Tables</a><a class="headerlink" href="#tables" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.tables</span></code> ports the reference’s data table: sized, resized,
+reordered, multi-sorted, frozen, clipped.</p>
+<img alt="A data table with three columns and four rows" src="_images/table.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Table&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin_table</span><span class="p">(</span><span class="s2">&quot;t&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">table_setup_column</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Col </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">table_headers_row</span><span class="p">()</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">table_next_row</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">table_next_column</span><span class="p">()</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end_table</span><span class="p">()</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="drag-and-drop">
+<h2><a class="toc-backref" href="#id14" role="doc-backlink">Drag and drop</a><a class="headerlink" href="#drag-and-drop" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.dragdrop</span></code> ports the reference’s drag-and-drop: <code class="xref py py-class docutils literal notranslate"><span class="pre">Payload</span></code>,
+<code class="xref py py-class docutils literal notranslate"><span class="pre">DragDropSource</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">DragDropTarget</span></code>, and the
+<code class="xref py py-class docutils literal notranslate"><span class="pre">DragDropContext</span></code> state machine.</p>
+</section>
+<section id="text-editor">
+<h2><a class="toc-backref" href="#id15" role="doc-backlink">Text editor</a><a class="headerlink" href="#text-editor" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.text_editor</span></code> is the port of ImGuiColorTextEdit: a colourising
+text editor with syntax highlighting, bracket matching, undo/redo, and
+multiple cursors.</p>
+</section>
+<section id="memory-editor">
+<h2><a class="toc-backref" href="#id16" role="doc-backlink">Memory editor</a><a class="headerlink" href="#memory-editor" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.memory_editor</span></code> ports the imgui_club memory editor: a hex viewer
+and editor for any buffer the host provides.</p>
+</section>
+<section id="layout">
+<h2><a class="toc-backref" href="#id17" role="doc-backlink">Layout</a><a class="headerlink" href="#layout" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">layout</span></code> carries the layout cursor: the arithmetic that decides where the
+next widget goes.</p>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">splitter()</span></code> is the draggable divider between two
+resizable panes, and <code class="xref py py-func docutils literal notranslate"><span class="pre">splitter_behavior()</span></code> is the drag
+on its own for a window that draws its own bar. The sizes come back rather
+than being written through pointers, as everywhere else in <code class="docutils literal notranslate"><span class="pre">im</span></code>:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">cmtk</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingPainter</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">state</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;left&quot;</span><span class="p">:</span> <span class="mf">150.0</span><span class="p">,</span> <span class="s2">&quot;right&quot;</span><span class="p">:</span> <span class="mf">242.0</span><span class="p">}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">two_panes</span><span class="p">():</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;panes&quot;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">get_cursor_screen_pos</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">begin_child</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="mf">200.0</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;controls&quot;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">end_child</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">same_line</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">moved</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;right&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">splitter</span><span class="p">(</span>
+<span class="gp">... </span>        <span class="s2">&quot;##v&quot;</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mf">200.0</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;right&quot;</span><span class="p">],</span> <span class="mf">60.0</span><span class="p">,</span> <span class="mf">80.0</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">same_line</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+<span class="gp">... </span>    <span class="k">return</span> <span class="n">moved</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">cmtk</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">RecordingPainter</span><span class="p">(),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">300</span><span class="p">)):</span>
+<span class="gp">... </span>    <span class="n">moved</span> <span class="o">=</span> <span class="n">two_panes</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">moved</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;right&quot;</span><span class="p">]</span>
+<span class="go">(False, 150.0, 242.0)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">thickness</span></code> is the space the divider takes and the size of the grab
+target; <code class="docutils literal notranslate"><span class="pre">bar_margin</span></code> insets what is actually drawn, so a bar that is easy
+to hit does not have to look like a slab. <code class="docutils literal notranslate"><span class="pre">min_size1</span></code> and <code class="docutils literal notranslate"><span class="pre">min_size2</span></code>
+both hold at once, so a drag stops at whichever limit it reaches first
+instead of collapsing the other pane.</p>
+</section>
+<section id="splitter">
+<h2><a class="toc-backref" href="#id18" role="doc-backlink">Splitter</a><a class="headerlink" href="#splitter" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.splitter</span></code> is the same control retained: it owns the boundary, and
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">split()</span></code> hands back the three rectangles
+a two-pane layout is made of, already clamped.</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.widgets.splitter</span><span class="w"> </span><span class="kn">import</span> <span class="n">Splitter</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sp</span> <span class="o">=</span> <span class="n">Splitter</span><span class="p">(</span><span class="mf">150.0</span><span class="p">,</span> <span class="n">thickness</span><span class="o">=</span><span class="mf">12.0</span><span class="p">,</span> <span class="n">min_size1</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span> <span class="n">min_size2</span><span class="o">=</span><span class="mf">80.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pane1</span><span class="p">,</span> <span class="n">bar</span><span class="p">,</span> <span class="n">pane2</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">400.0</span><span class="p">,</span> <span class="mf">300.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pane1</span><span class="p">,</span> <span class="n">bar</span><span class="p">,</span> <span class="n">pane2</span>
+<span class="go">((0.0, 0.0, 150.0, 300.0), (150.0, 0.0, 12.0, 300.0), (162.0, 0.0, 238.0, 300.0))</span>
+</pre></div>
+</div>
+<p>They tile the region exactly. A resize too small for the starting sizes
+clamps rather than inverting a pane – and when the region cannot hold both
+minimums at once, the first pane keeps its own and the second is squeezed
+below it, which is arbitrary but stable. The alternative is a boundary that
+jumps between the two limits as the window resizes:</p>
+<div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">pane1</span><span class="p">,</span> <span class="n">bar</span><span class="p">,</span> <span class="n">pane2</span> <span class="o">=</span> <span class="n">sp</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">150.0</span><span class="p">,</span> <span class="mf">300.0</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">sp</span><span class="o">.</span><span class="n">size1</span><span class="p">,</span> <span class="n">sp</span><span class="o">.</span><span class="n">size2</span>
+<span class="go">(60.0, 78.0)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">pane1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">bar</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="n">pane2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+<span class="go">150.0</span>
+</pre></div>
+</div>
+</section>
+<section id="control">
+<h2><a class="toc-backref" href="#id19" role="doc-backlink">Control</a><a class="headerlink" href="#control" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">control</span></code> defines the <code class="xref py py-class docutils literal notranslate"><span class="pre">Control</span></code> base class: the
+contract every retained control follows.</p>
+</section>
+<section id="axis-and-markers">
+<h2><a class="toc-backref" href="#id20" role="doc-backlink">Axis and markers</a><a class="headerlink" href="#axis-and-markers" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.axis</span></code> ports the implot linear axis.
+<code class="docutils literal notranslate"><span class="pre">widgets.markers</span></code> provides scatter-plot marker shapes.</p>
+</section>
+<section id="plot">
+<h2><a class="toc-backref" href="#id21" role="doc-backlink">Plot</a><a class="headerlink" href="#plot" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.plot</span></code> ports the implot <code class="docutils literal notranslate"><span class="pre">BeginPlot</span></code> / <code class="docutils literal notranslate"><span class="pre">PlotLine</span></code> /
+<code class="docutils literal notranslate"><span class="pre">EndPlot</span></code> pattern as a context manager.</p>
+<img alt="A line plot with two series, gridlines and a legend" src="_images/plot.png" />
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Plot&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="n">painter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+</pre></div>
+</div>
+</section>
+<section id="circle-plot">
+<h2><a class="toc-backref" href="#id22" role="doc-backlink">Circle plot</a><a class="headerlink" href="#circle-plot" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">widgets.circle</span></code> is a Circos-style circular layout, ported from
+pyCirclize.</p>
+</section>
+<section id="drawlist">
+<h2><a class="toc-backref" href="#id23" role="doc-backlink">DrawList</a><a class="headerlink" href="#drawlist" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">drawlist</span></code> provides <code class="docutils literal notranslate"><span class="pre">ImDrawList</span></code> names over any <code class="xref py py-class docutils literal notranslate"><span class="pre">Painter</span></code>:
+<code class="docutils literal notranslate"><span class="pre">add_line</span></code>, <code class="docutils literal notranslate"><span class="pre">add_rect_filled</span></code>, <code class="docutils literal notranslate"><span class="pre">add_circle_filled</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
+<span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;DrawList&quot;</span><span class="p">)</span>
+    <span class="n">dl</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">get_window_draw_list</span><span class="p">()</span>
+    <span class="n">dl</span><span class="o">.</span><span class="n">add_rect_filled</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">255</span><span class="p">))</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">fills</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="porting.html" class="btn btn-neutral float-left" title="Porting from Dear ImGui" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="backends.html" class="btn btn-neutral float-right" title="Painter backends" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Thomas-Otavio Peulen.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

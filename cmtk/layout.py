@@ -260,7 +260,11 @@ class Layout:
         self._prev_line_h = 0.0
         self._same_line = False
         self._last_item: Rect = (self.x, self.y, 0.0, 0.0)
-        self._groups.clear()
+        # Groups survive a cursor re-home: Dear ImGui code moves the cursor
+        # inside an open group all the time (a centred title, a nudged row),
+        # and wiping the group stack here made every such port lose its
+        # balance. begin_child builds a fresh Layout, which is the real
+        # "new region" boundary.
         self._columns = None
 
     @property
