@@ -598,14 +598,43 @@ class Context:
         self._next_item_width = float(width)
 
     def take_next_item_width(self, default: Optional[float] = None) -> Optional[float]:
-        """The width `set_next_item_width` asked for, and forget it.
+        """The width the next framed widget should get, and forget the one-shot.
 
-        ``None`` for either is "as wide as there is room for", which is what
-        the layout means by a row with no width -- so it is a value here, not a
-        missing one.
+        Parameters
+        ----------
+        default : float, optional
+            What to use when nothing has asked for a width.
+
+        Returns
+        -------
+        float or None
+            ``None`` for either is "as wide as there is room for", which is
+            what the layout means by a row with no width -- so it is a value
+            here, not a missing one.
+
+        Notes
+        -----
+        Two things ask, and only one of them is a one-shot.
+        ``SetNextItemWidth`` applies to the **next** item and is consumed;
+        ``PushItemWidth`` applies to **every** item until the matching pop.
+        Treating the push as a one-shot -- which is what happened, because the
+        push implemented itself by calling the setter -- means the first
+        control in a group gets the width and every control after it falls back
+        to "fill the row".
+
+        In a panel that is invisible, because filling the row is what those
+        controls would do anyway. In a **node**, where the row is the whole
+        editor, the second control stretches the node across the viewport, the
+        graph's fit-to-content then zooms out to frame it, and every node piles
+        up in the corner. That is one missing fallback, and it presents as the
+        editor being broken.
         """
         width = self._next_item_width
         self._next_item_width = None
+        if width is None:
+            stack = self.state(("item_width",)).get("stack") or []
+            if stack:
+                width = stack[-1]
         return default if width is None else width
 
     def align_text_to_frame_padding(self) -> None:

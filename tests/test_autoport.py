@@ -391,6 +391,17 @@ def _gui_notify(im, mod):
 
 
 def test_the_autoported_knob_draws_the_same_picture_every_time():
+    """The knobs demo, rendered through the auto port, against a golden.
+
+    The golden was **rebaked** when ``PushItemWidth`` was made to persist the
+    way the reference's does. It had been behaving as a one-shot, so only the
+    first control in a group got the pushed width and every one after it filled
+    the row -- which in this demo swallowed the whole second knob: ``temp``'s
+    label and knob were off the image and its value field stretched the full
+    width underneath. The golden had baked that in, so the test was pinning the
+    defect rather than the picture. The current image shows both knobs, side by
+    side, with fields of equal width.
+    """
     mod = _load("imgui_knobs")
     painter = render(_gui_knobs(__import__("cmtk.im", fromlist=["im"]), mod),
                      (0, 0, 340, 140))

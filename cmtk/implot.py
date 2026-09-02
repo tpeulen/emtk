@@ -279,7 +279,13 @@ def begin_plot(title: str, size=(-1.0, -1.0), flags: int = 0) -> bool:
     _cur.flags = flags
     _cur.outer = (x, y, w, h)
     _cur.box = _inner(x, y, w, h, _cur.gutter)
-    _cur.plot = _CellPlot(*_cur.box, show_ticks=True)
+    _cur.plot = _CellPlot(*_cur.box, show_ticks=True,
+                          # FLAGS_NO_LEGEND was accepted and ignored: Plot drew
+                          # a key whenever any series had a label, so a caller
+                          # that asked for a bare canvas got a key over its
+                          # curves anyway. A flag that is taken and does nothing
+                          # is worse than one that is refused.
+                          show_legend=not (_cur.flags & FLAGS_NO_LEGEND))
     _cur.plot.format_tick = lambda v: _tick_text(v, _cur.y_log)
     _cur.x_label = _cur.y_label = None
     _cur.x_log = _cur.y_log = False

@@ -68,9 +68,15 @@ class Plot:
         x_range: tuple[float, float] | None = None,
         y_range: tuple[float, float] | None = None,
         show_ticks: bool = False,
+        show_legend: bool = True,
     ) -> None:
         self.x, self.y, self.w, self.h = x, y, w, h
         self.show_ticks = show_ticks
+        #: Draw the key for the labelled series. On by default, because a plot
+        #: with several series and no key is unreadable -- but a plot two
+        #: inches wide has no room for one, and the key then covers the curves
+        #: it is naming. Callers that small turn it off.
+        self.show_legend = show_legend
         self._x_axis = Axis(*(x_range or (None, None)))
         self._y_axis = Axis(*(y_range or (None, None)))
         self._lines: list[dict] = []
@@ -201,6 +207,9 @@ class Plot:
             draw_marker(p, marker, px, py, radius, colour)
 
     def _draw_legend(self, p) -> None:
+        """Draw the key, unless this plot was asked not to have one."""
+        if not self.show_legend:
+            return
         entries = [(s["label"], s["colour"]) for s in self._lines if s["label"]]
         entries += [(s["label"], s["colour"]) for s in self._scatters if s["label"]]
         if not entries:
