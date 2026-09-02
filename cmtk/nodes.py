@@ -511,6 +511,9 @@ class _Link:
         self.id: int = link_id
         self.start_pin: int = start_pin
         self.end_pin: int = end_pin
+        #: Per-link overrides, or ``None`` to take the palette's.
+        self.colour: typing.Optional[tuple] = None
+        self.thickness: typing.Optional[float] = None
 
 
 class EditorContext:
@@ -1521,7 +1524,13 @@ def _draw_pin(ctx: EditorContext, draw, pin: _Pin) -> None:
 # --------------------------------------------------------------------------
 
 
-def link(link_id: int, start_pin: int, end_pin: int) -> None:
+def link(
+    link_id: int,
+    start_pin: int,
+    end_pin: int,
+    colour: typing.Optional[tuple] = None,
+    thickness: typing.Optional[float] = None,
+) -> None:
     """Submit a link between two pins.
 
     Parameters
@@ -1533,15 +1542,31 @@ def link(link_id: int, start_pin: int, end_pin: int) -> None:
         The pin the link leaves.
     end_pin : int
         The pin it arrives at.
+    colour : tuple, optional
+        ``(r, g, b, a)`` for this link alone; the palette's when omitted.
+    thickness : float, optional
+        Width in pixels *before* the zoom is applied; the style's when omitted.
 
     Notes
     -----
     Links are pure per-frame: submit them every frame from your own model.
     There is no pool, because a link has no state a user can change -- unlike a
     node, which has a position.
+
+    The reference has no per-link colour, and for a dataflow graph it does not
+    need one: every edge means the same thing. A graph whose edges mean
+    *different* things -- this parameter is owned by that fit, this one follows
+    that one -- cannot say so with one colour, and drawing them alike is not a
+    cosmetic loss but a claim the picture makes and the model does not. A
+    hovered or selected link still takes the palette's colour, so the feedback
+    that says "this is the one you are pointing at" is not overridden by a
+    caller's styling.
     """
     ctx = _require("editor", "link")
-    ctx._links.append(_Link(link_id, start_pin, end_pin))
+    entry = _Link(link_id, start_pin, end_pin)
+    entry.colour = colour
+    entry.thickness = thickness
+    ctx._links.append(entry)
 
 
 def _cubic_bezier(start: tuple, end: tuple, start_kind: str, segments_per_length: float) -> tuple:
@@ -1601,16 +1626,20 @@ def _draw_links(draw, ctx: EditorContext) -> None:
             # would do -- a curve to the top-left corner reads as a bug in the
             # graph rather than as a node that is not on screen.
             continue
+        # Selection and hover win over the caller's colour: they are feedback
+        # about *this* pointer, and a caller that styled its edges must not be
+        # able to make "you are pointing at this one" invisible.
         if entry.id in ctx.selected_links:
             colour = style.colors[Col.LINK_SELECTED]
         elif ctx._hovered_link == entry.id:
             colour = style.colors[Col.LINK_HOVERED]
         else:
-            colour = style.colors[Col.LINK]
+            colour = entry.colour if entry.colour is not None else style.colors[Col.LINK]
+        width = thickness if entry.thickness is None else entry.thickness * ctx.canvas.zoom
         p0, p1, p2, p3, segments = _cubic_bezier(
             start.pos, end.pos, start.kind, style.link_line_segments_per_length
         )
-        draw.add_bezier_cubic(p0, p1, p2, p3, colour, thickness, segments)
+        draw.add_bezier_cubic(p0, p1, p2, p3, colour, width, segments)
 
     if ctx._interaction == "link" and ctx._link_from_pin is not None:
         start = ctx._pins.get(ctx._link_from_pin)
