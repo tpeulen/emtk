@@ -714,3 +714,246 @@ def test_a_node_body_is_painted_behind_its_contents():
     assert len(set(title_band)) > 1, (
         "the title bar is one flat colour: the body was painted over the text"
     )
+
+
+# ---------------------------------------------------------------------------
+# The title bar, and the two ways a drag lands
+# ---------------------------------------------------------------------------
+
+
+def test_the_title_bar_does_not_cover_the_first_body_row():
+    """The body starts below the title bar, not underneath it.
+
+    The bar is the title text expanded by the node padding, so its bottom edge
+    is one padding below the text; the layout cursor, left alone, puts the next
+    row one *item spacing* below the text, and spacing is smaller. The first
+    control is then drawn half-buried under the bar -- the node still looks
+    like a node, which is why nothing caught it.
+    """
+    ctx = nodes.EditorContext()
+    first_row = {}
+
+    def build():
+        nodes.begin_node_editor(ctx, box=BOX)
+        nodes.begin_node(1)
+        nodes.begin_node_title_bar()
+        im.text("Title")
+        nodes.end_node_title_bar()
+        nodes.begin_input_attribute(10)
+        im.text("first row")
+        nodes.end_input_attribute()
+        nodes.end_node()
+        nodes.end_node_editor()
+
+    _frame(build)
+    node = ctx._nodes[1]
+    bar_bottom = node.title_rect[3] + ctx.style.node_padding[1] * ctx.canvas.zoom
+    row_top = ctx._pins[10].rect[1]
+    assert row_top >= bar_bottom, (
+        f"the first body row starts at {row_top} but the title bar ends at "
+        f"{bar_bottom}: it is drawn under the bar"
+    )
+
+
+def test_a_dragged_node_sticks_flush_against_its_neighbour():
+    """Released near another node's edge, a node lands exactly against it."""
+    ctx = nodes.EditorContext()
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 40.0))
+    nodes.set_node_grid_space_pos(ctx, 2, (300.0, 40.0))
+    io, storage = im.IO(), {}
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    left, right = ctx._nodes[1], ctx._nodes[2]
+    width = (left.rect[2] - left.rect[0]) / ctx.canvas.zoom
+
+    x0, y0, x1, y1 = left.rect
+    grab = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+    _press(io, grab)
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+    # Aim four pixels short of flush -- inside the stick distance, not on it.
+    target_x = right.origin[0] - width - 4.0
+    _move(io, (grab[0] + (target_x - 40.0), grab[1]))
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    assert abs(nodes.get_node_grid_space_pos(ctx, 1)[0]
+               - (right.origin[0] - width)) < 1e-6
+    assert ctx._stuck_to == {2}
+
+
+def test_sticking_can_be_switched_off():
+    """With ``stick_to_nodes`` off the node lands where it was dropped."""
+    ctx = nodes.EditorContext()
+    ctx.stick_to_nodes = False
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 40.0))
+    nodes.set_node_grid_space_pos(ctx, 2, (300.0, 40.0))
+    io, storage = im.IO(), {}
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    left, right = ctx._nodes[1], ctx._nodes[2]
+    width = (left.rect[2] - left.rect[0]) / ctx.canvas.zoom
+    x0, y0, x1, y1 = left.rect
+    grab = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+    _press(io, grab)
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+    target_x = right.origin[0] - width - 4.0
+    _move(io, (grab[0] + (target_x - 40.0), grab[1]))
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    assert abs(nodes.get_node_grid_space_pos(ctx, 1)[0] - target_x) < 1e-6
+    assert ctx._stuck_to == set()
+
+
+def test_a_distant_node_does_not_stick():
+    """Sticking needs overlap along the other axis, or nothing would line up.
+
+    Without the overlap test a node in a distant row snaps to a column it is
+    nowhere near, which is the jumpiness that makes people turn the feature
+    off.
+    """
+    ctx = nodes.EditorContext()
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 40.0))
+    nodes.set_node_grid_space_pos(ctx, 2, (300.0, 600.0))
+    io, storage = im.IO(), {}
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    left, right = ctx._nodes[1], ctx._nodes[2]
+    width = (left.rect[2] - left.rect[0]) / ctx.canvas.zoom
+    x0, y0, x1, y1 = left.rect
+    grab = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+    _press(io, grab)
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+    target_x = right.origin[0] - width - 4.0
+    _move(io, (grab[0] + (target_x - 40.0), grab[1]))
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    assert abs(nodes.get_node_grid_space_pos(ctx, 1)[0] - target_x) < 1e-6
+
+
+def test_grid_snapping_rounds_to_the_grid():
+    """With ``snap_to_grid`` on, a dropped node lands on a grid intersection."""
+    ctx = nodes.EditorContext()
+    ctx.snap_to_grid = True
+    ctx.stick_to_nodes = False
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 40.0))
+    io, storage = im.IO(), {}
+    _frame(lambda: _simple_graph(ctx, (1,)), io=io, storage=storage)
+
+    x0, y0, x1, y1 = ctx._nodes[1].rect
+    grab = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+    _press(io, grab)
+    _frame(lambda: _simple_graph(ctx, (1,)), io=io, storage=storage)
+    _move(io, (grab[0] + 37.0, grab[1] + 19.0))
+    _frame(lambda: _simple_graph(ctx, (1,)), io=io, storage=storage)
+
+    spacing = ctx.style.grid_spacing
+    x, y = nodes.get_node_grid_space_pos(ctx, 1)
+    assert abs(x / spacing - round(x / spacing)) < 1e-6
+    assert abs(y / spacing - round(y / spacing)) < 1e-6
+
+
+def test_the_stick_distance_is_measured_in_screen_pixels():
+    """Zooming out must not make everything stick to everything.
+
+    A tolerance held in grid units reaches further across the screen the more
+    you zoom out; at 0.2x a 8-pixel stick would span 40 grid units and every
+    node in the graph would catch on its neighbours.
+    """
+    ctx = nodes.EditorContext()
+    ctx.set_zoom(0.25)
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 40.0))
+    nodes.set_node_grid_space_pos(ctx, 2, (300.0, 40.0))
+    io, storage = im.IO(), {}
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    left, right = ctx._nodes[1], ctx._nodes[2]
+    width = (left.rect[2] - left.rect[0]) / ctx.canvas.zoom
+    x0, y0, x1, y1 = left.rect
+    grab = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+    _press(io, grab)
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+    # 20 grid units short: 5 screen pixels at this zoom, so it sticks; the
+    # same 20 units at zoom 1 would be 20 pixels and would not.
+    target_x = right.origin[0] - width - 20.0
+    _move(io, (grab[0] + (target_x - 40.0) * ctx.canvas.zoom, grab[1]))
+    _frame(lambda: _simple_graph(ctx, (1, 2)), io=io, storage=storage)
+
+    assert ctx._stuck_to == {2}
+
+
+def test_a_multi_node_drag_keeps_its_shape():
+    """Sticking one node of a group must not tear the group apart.
+
+    Snapping each node separately makes two nodes that were level catch on
+    different neighbours and end at different offsets -- the feature meant to
+    tidy an arrangement destroying it instead.
+    """
+    ctx = nodes.EditorContext()
+    for node_id, pos in ((1, (40.0, 40.0)), (2, (40.0, 200.0)), (3, (400.0, 40.0))):
+        nodes.set_node_grid_space_pos(ctx, node_id, pos)
+    io, storage = im.IO(), {}
+    _frame(lambda: _simple_graph(ctx, (1, 2, 3)), io=io, storage=storage)
+
+    nodes.select_node(ctx, 1)
+    nodes.select_node(ctx, 2)
+    before = (nodes.get_node_grid_space_pos(ctx, 1),
+              nodes.get_node_grid_space_pos(ctx, 2))
+    offset = (before[1][0] - before[0][0], before[1][1] - before[0][1])
+
+    x0, y0, x1, y1 = ctx._nodes[1].rect
+    grab = ((x0 + x1) * 0.5, (y0 + y1) * 0.5)
+    _press(io, grab)
+    _frame(lambda: _simple_graph(ctx, (1, 2, 3)), io=io, storage=storage)
+    _move(io, (grab[0] + 250.0, grab[1] + 3.0))
+    _frame(lambda: _simple_graph(ctx, (1, 2, 3)), io=io, storage=storage)
+
+    after = (nodes.get_node_grid_space_pos(ctx, 1),
+             nodes.get_node_grid_space_pos(ctx, 2))
+    assert (after[1][0] - after[0][0], after[1][1] - after[0][1]) == offset
+
+
+def test_a_plot_inside_a_node_is_not_painted_over_by_the_node():
+    """An embedded plot survives the node body drawn after it.
+
+    ``implot`` used to paint through ``ctx.p`` -- the real painter -- while
+    every ``im_widgets`` control paints through the drawlist. The two are the
+    same object until something splits the drawlist to draw out of order, which
+    is exactly what a node editor does: the plot painted immediately, the node
+    body replayed on top of it afterwards, and the plot was simply gone. No
+    exception, no missing item, an empty rectangle where a curve should be.
+    """
+    from cmtk import implot
+
+    ctx = nodes.EditorContext()
+    xs = [float(i) for i in range(32)]
+    ys = [float(i % 7) for i in range(32)]
+
+    def build():
+        nodes.begin_node_editor(ctx, box=BOX)
+        nodes.set_node_grid_space_pos(ctx, 1, (20.0, 20.0))
+        nodes.begin_node(1)
+        nodes.begin_node_title_bar()
+        im.text("Filter")
+        nodes.end_node_title_bar()
+        nodes.begin_static_attribute(99)
+        if implot.begin_plot("##t", (160.0, 90.0), implot.ImPlotFlags_CanvasOnly):
+            implot.plot_line("t", xs, ys)
+            implot.end_plot()
+        nodes.end_static_attribute()
+        nodes.end_node()
+        nodes.end_node_editor()
+
+    painter = PixelPainter(BOX[2], BOX[3], background=(0, 0, 0, 255))
+    _frame(build, painter=painter)
+
+    def pixel(x: int, y: int) -> tuple:
+        """Read one RGB triple out of the painter's flat RGBA buffer."""
+        offset = (y * painter.width + x) * 4
+        return tuple(painter.px[offset:offset + 3])
+
+    x0, y0, x1, y1 = ctx._nodes[1].rect
+    body = [
+        pixel(x, y)
+        for y in range(int(y0) + 30, int(y1) - 6)
+        for x in range(int(x0) + 6, int(x1) - 6)
+    ]
+    assert len(set(body)) > 2, "the node body is flat: the plot was painted over"

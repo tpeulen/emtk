@@ -479,8 +479,29 @@ def get_cursor_screen_pos():
 
 
 def set_cursor_screen_pos(pos) -> None:
-    layout = get_current_context().layout
-    layout.reset(pos[0], pos[1], layout.w, layout.h)
+    """``ImGui::SetCursorScreenPos``: move the cursor, and nothing else.
+
+    Parameters
+    ----------
+    pos : tuple
+        ``(x, y)`` in screen space.
+
+    Notes
+    -----
+    This used to call :meth:`Layout.reset`, which is the *frame* reset: it puts
+    the cursor back **and** throws away the extents laid out so far. The
+    reference does neither -- ``SetCursorScreenPos`` writes
+    ``window->DC.CursorPos`` and leaves ``CurrLineSize`` and the group stack
+    alone.
+
+    The difference is invisible until something measures a group that contains
+    a cursor move. Then the group's bounding box starts at the move rather than
+    at the group, so it comes back too small -- and a caller drawing a frame
+    around that box draws a frame around the tail of its own content. That is
+    how a node whose title bar repositions the cursor for its body ended up
+    narrower than its own title.
+    """
+    get_current_context().layout.move_cursor_to(pos[0], pos[1])
 
 
 # --------------------------------------------------------------------------- #

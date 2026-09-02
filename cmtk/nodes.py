@@ -182,6 +182,7 @@ class Col:
     PIN_HOVERED = "pin_hovered"
     BOX_SELECTOR = "box_selector"
     BOX_SELECTOR_OUTLINE = "box_selector_outline"
+    STICK_HINT = "stick_hint"
     GRID_BACKGROUND = "grid_background"
     GRID_LINE = "grid_line"
     GRID_LINE_PRIMARY = "grid_line_primary"
@@ -244,6 +245,9 @@ _DARK: dict = {
     Col.PIN_HOVERED: (53, 150, 250, 255),
     Col.BOX_SELECTOR: (61, 133, 224, 30),
     Col.BOX_SELECTOR_OUTLINE: (61, 133, 224, 150),
+    # The accent, at full strength: this is drawn for a few frames during a
+    # drag and has to read instantly, not blend into the node under it.
+    Col.STICK_HINT: (66, 150, 250, 220),
     Col.GRID_BACKGROUND: (40, 40, 50, 200),
     Col.GRID_LINE: (200, 200, 200, 40),
     Col.GRID_LINE_PRIMARY: (240, 240, 240, 60),
@@ -309,6 +313,9 @@ class Style:
         pin, deliberately -- a 4-pixel target is not clickable.
     pin_offset : float
         How far outside the node edge a pin sits.
+    stick_distance : float
+        How near, in screen pixels, a dragged node's edge must come to another
+        node's before it sticks flush against it.
     mini_map_padding, mini_map_offset : tuple
         The minimap's inner padding and its inset from the editor corner.
     flags : int
@@ -331,6 +338,7 @@ class Style:
         self.pin_line_thickness: float = 1.0
         self.pin_hover_radius: float = 10.0
         self.pin_offset: float = 0.0
+        self.stick_distance: float = 8.0
         self.mini_map_padding: tuple = (8.0, 8.0)
         self.mini_map_offset: tuple = (4.0, 4.0)
         self.flags: int = StyleFlags.NODE_OUTLINE | StyleFlags.GRID_LINES
@@ -523,6 +531,22 @@ class EditorContext:
         Node ids, in no order.
     selected_links : set
         Link ids, in no order.
+    snap_to_grid : bool
+        Round a dragged node's position to the grid. Off by default.
+    stick_to_nodes : bool
+        Let a dragged node stick flush against the nodes it is dragged near,
+        the way a window sticks to another window. On by default, because the
+        alternative -- a graph of nodes each two pixels out of line -- is what
+        people spend their time correcting by hand.
+
+    Notes
+    -----
+    The two snapping modes are separate switches rather than one setting with
+    three values, because they answer different questions and a user wants
+    different combinations of them: the grid is about a *tidy layout*, sticking
+    is about *these two nodes touching*. Sticking wins where both would apply,
+    since the grid is a background convenience and sticking is a thing the user
+    aimed at.
     """
 
     def __init__(self, style: typing.Optional["Style"] = None) -> None:
@@ -530,6 +554,8 @@ class EditorContext:
         self.canvas: Canvas = Canvas()
         self.selected_nodes: set = set()
         self.selected_links: set = set()
+        self.snap_to_grid: bool = False
+        self.stick_to_nodes: bool = True
 
         #: ``node_id -> _Node``, surviving frames.
         self._nodes: dict = {}
@@ -546,6 +572,11 @@ class EditorContext:
         self._link_from_pin: typing.Optional[int] = None
         self._link_detached: typing.Optional[int] = None
         self._box_anchor: tuple = (0.0, 0.0)
+        #: Ids the dragged node is currently stuck against, for the hint. A
+        #: stick with no hint is a small unexplained jump: the user sees the
+        #: node move somewhere they did not put it and has no way to tell that
+        #: was the feature working.
+        self._stuck_to: set = set()
 
         # --- what the queries below report, all cleared each frame -----
         self._hovered_node: typing.Optional[int] = None
@@ -900,6 +931,7 @@ def begin_node_editor(ctx: EditorContext, box: typing.Optional[tuple] = None) ->
     ctx._link_destroyed = None
     ctx._active_attribute = None
     ctx._minimap = None
+    ctx._stuck_to = set()
     for node in ctx._nodes.values():
         node.alive = False
         node.pins = []
@@ -1035,6 +1067,7 @@ def end_node_editor() -> None:
     _update_content_bounds(ctx)
     _draw_mini_map(ctx)
     _update_interaction(ctx, draw)
+    _draw_stick_hint(ctx, draw)
 
     im.end_child(clip=True)
     ctx._draw = None
@@ -1256,12 +1289,36 @@ def begin_node_title_bar() -> None:
 
 
 def end_node_title_bar() -> None:
-    """Finish the title bar and move the cursor to the node's body."""
+    """Finish the title bar and move the cursor clear of it.
+
+    Notes
+    -----
+    The move is the whole job, and leaving it out is a defect you can see: the
+    title *bar* is the title text expanded by the node padding on all four
+    sides, so its bottom edge sits one padding below the text. The layout
+    cursor, left to itself, puts the next row one **item spacing** below the
+    text instead -- and item spacing is smaller than the padding, so the first
+    row of the body is drawn underneath the bar. The node still looks like a
+    node; the first control in it is just half-buried.
+
+    So the cursor is set explicitly to the content origin, which is the node's
+    origin plus the title bar's full height plus one more padding. That is
+    ``GetNodeContentOrigin`` in the reference, and it is called from exactly
+    here for exactly this reason.
+    """
     ctx = _require("node", "end_node_title_bar")
     im.end_group()
     node = _node
     r_min, r_max = im.get_item_rect_min(), im.get_item_rect_max()
     node.title_rect = (r_min[0], r_min[1], r_max[0], r_max[1])
+
+    pad_x, pad_y = ctx.style.node_padding
+    zoom = ctx.canvas.zoom
+    origin_x, origin_y = ctx.canvas.to_screen(node.origin)
+    title_height = (r_max[1] - r_min[1]) + 2.0 * pad_y * zoom
+    im.set_cursor_screen_pos(
+        (origin_x + pad_x * zoom, origin_y + title_height + pad_y * zoom)
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1850,17 +1907,146 @@ def _drag_nodes(ctx: EditorContext, mouse: tuple) -> None:
     zoom = ctx.canvas.zoom or 1.0
     dx = (mouse[0] - ctx._box_anchor[0]) / zoom
     dy = (mouse[1] - ctx._box_anchor[1]) / zoom
-    snap = bool(ctx.style.flags & StyleFlags.GRID_SNAPPING)
+
+    # The snap is computed for the node actually under the pointer and then
+    # applied to the whole selection as one extra offset. Snapping each node
+    # of a multi-node drag on its own would tear the group apart: two nodes
+    # that were level would stick to different neighbours and end up at
+    # different offsets, and the user's arrangement is destroyed by the
+    # feature meant to preserve it.
+    primary = ctx._drag_node if ctx._drag_node in ctx._drag_offsets else None
+    ctx._stuck_to = set()
+    if primary is not None:
+        origin = ctx._drag_offsets[primary]
+        want = (origin[0] + dx, origin[1] + dy)
+        got = _snapped_position(ctx, primary, want)
+        dx += got[0] - want[0]
+        dy += got[1] - want[1]
+
     for node_id, origin in ctx._drag_offsets.items():
         node = ctx._nodes.get(node_id)
         if node is None:
             continue
-        x, y = origin[0] + dx, origin[1] + dy
-        if snap:
-            spacing = ctx.style.grid_spacing
-            x = round(x / spacing) * spacing
-            y = round(y / spacing) * spacing
-        node.origin = (x, y)
+        node.origin = (origin[0] + dx, origin[1] + dy)
+
+
+def _snapped_position(ctx: EditorContext, node_id: int, want: tuple) -> tuple:
+    """Adjust a dragged node's position for grid snapping and sticking.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor. Its :attr:`~EditorContext.snap_to_grid` and
+        :attr:`~EditorContext.stick_to_nodes` decide what applies, and
+        :attr:`EditorContext._stuck_to` is filled with the ids stuck against.
+    node_id : int
+        The node under the pointer.
+    want : tuple
+        Where the raw drag would put it, in grid space.
+
+    Returns
+    -------
+    tuple
+        Where it should actually go, in grid space.
+
+    Notes
+    -----
+    Sticking wins over the grid where both would apply: the grid is a
+    background convenience and sticking is something the user aimed at, so a
+    node dropped against its neighbour must end up *flush* rather than on the
+    nearest grid line a few pixels away.
+    """
+    node = ctx._nodes.get(node_id)
+    if node is None:
+        return want
+
+    if ctx.stick_to_nodes:
+        stuck = _stick_to_neighbours(ctx, node, want)
+        if stuck is not None:
+            return stuck
+
+    if ctx.snap_to_grid or (ctx.style.flags & StyleFlags.GRID_SNAPPING):
+        spacing = ctx.style.grid_spacing
+        return (round(want[0] / spacing) * spacing,
+                round(want[1] / spacing) * spacing)
+    return want
+
+
+def _stick_to_neighbours(
+    ctx: EditorContext, node: _Node, want: tuple
+) -> typing.Optional[tuple]:
+    """Stick a node's edges flush against the other nodes it is dragged near.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor. :attr:`EditorContext._stuck_to` is filled with the ids of
+        the nodes stuck against, for the hint drawn while dragging.
+    node : _Node
+        The node under the pointer.
+    want : tuple
+        Where the raw drag would put it, in grid space.
+
+    Returns
+    -------
+    tuple or None
+        The stuck position, or ``None`` when nothing was near enough.
+
+    Notes
+    -----
+    This is a window manager's rule, not a graph's: an edge sticks to the
+    facing edge of a neighbour it *overlaps along the other axis*, which is
+    what stops a node in a distant row snapping to a column it is nowhere near.
+    The overlap test is the whole reason it feels right rather than jumpy.
+
+    A stick also levels the perpendicular edges when they are nearly aligned,
+    because two nodes joined with a two-pixel step read as a mistake rather
+    than as a pair.
+
+    Distances are compared in **screen** pixels and the result is converted
+    back to grid space: a fixed grid-space tolerance means the stick reaches
+    further and further across the screen the more you zoom out, until at low
+    zoom everything sticks to everything.
+    """
+    zoom = ctx.canvas.zoom or 1.0
+    tolerance = ctx.style.stick_distance / zoom
+
+    x0, y0, x1, y1 = node.rect
+    width, height = (x1 - x0) / zoom, (y1 - y0) / zoom
+    x, y = want
+    stuck: set = set()
+
+    for other in ctx._nodes.values():
+        if other is node or not other.alive or other.id in ctx._drag_offsets:
+            continue
+        ox0, oy0, ox1, oy1 = other.rect
+        ox, oy = other.origin
+        ow, oh = (ox1 - ox0) / zoom, (oy1 - oy0) / zoom
+
+        vertical_overlap = min(y + height, oy + oh) - max(y, oy)
+        horizontal_overlap = min(x + width, ox + ow) - max(x, ox)
+        hit = False
+
+        if vertical_overlap > 0.0:
+            if abs((x + width) - ox) <= tolerance:
+                x, hit = ox - width, True
+            elif abs((ox + ow) - x) <= tolerance:
+                x, hit = ox + ow, True
+        if horizontal_overlap > 0.0:
+            if abs((y + height) - oy) <= tolerance:
+                y, hit = oy - height, True
+            elif abs((oy + oh) - y) <= tolerance:
+                y, hit = oy + oh, True
+
+        if hit:
+            if abs(y - oy) <= tolerance:
+                y = oy
+            if abs(x - ox) <= tolerance:
+                x = ox
+            stuck.add(other.id)
+
+    ctx._stuck_to = stuck
+    return (x, y) if stuck else None
 
 
 def _finish_link(ctx: EditorContext) -> None:
@@ -1895,6 +2081,35 @@ def _finish_link(ctx: EditorContext) -> None:
     ctx._interaction = None
     ctx._link_from_pin = None
     ctx._link_detached = None
+
+
+def _draw_stick_hint(ctx: EditorContext, draw) -> None:
+    """Outline the nodes a dragged node is currently stuck against.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor being finished.
+    draw : object
+        The drawlist, after the channels have merged, so the hint is on top.
+
+    Notes
+    -----
+    This is the visible half of sticking, and without it the feature is a
+    defect: the node lands a few pixels from where the pointer left it, and
+    nothing on screen says that was deliberate. Drawn on the *neighbour*
+    rather than on the dragged node, because what the user needs to know is
+    which thing it caught on.
+    """
+    if not ctx._stuck_to or ctx._interaction != "node":
+        return
+    colour = ctx.style.colors[Col.STICK_HINT]
+    for node_id in ctx._stuck_to:
+        node = ctx._nodes.get(node_id)
+        if node is None or not node.alive:
+            continue
+        x0, y0, x1, y1 = node.rect
+        draw.add_rect((x0, y0), (x1, y1), colour, 0.0, 0, 2.0)
 
 
 def _draw_box_selector(ctx: EditorContext, draw, mouse: tuple) -> None:
@@ -2460,11 +2675,28 @@ def _draw_mini_map(ctx: EditorContext) -> None:
             if node.id in ctx.selected_nodes
             else Col.MINI_MAP_NODE_BACKGROUND
         ]
-        draw.add_rect_filled(p0, p1, colour, 1.0)
-        draw.add_rect(p0, p1, style.colors[Col.MINI_MAP_NODE_OUTLINE], 1.0)
+        # Square corners, not rounded. A minimap node is a handful of pixels
+        # across, and a rounded rect is drawn as a filled convex polygon whose
+        # corner arcs, at that size, cross each other -- so every node in the
+        # map gets a diagonal slash through it. Rounding this small buys
+        # nothing anyway.
+        draw.add_rect_filled(p0, p1, colour)
+        draw.add_rect(p0, p1, style.colors[Col.MINI_MAP_NODE_OUTLINE])
 
     # The viewport rectangle: which part of the graph the editor is showing.
+    #
+    # Clamped into the map, and normalised. The viewport routinely extends past
+    # the graph's bounds -- that is what panning to an empty corner *is* -- and
+    # projecting it unclamped puts corners outside the map, where the outline
+    # is drawn over the editor. Worse, a corner far enough out swaps the two
+    # points, and a rect with negative width rasterises as a diagonal streak
+    # across the map rather than as nothing.
     view0 = project(ctx.canvas.to_grid((box[0], box[1])))
     view1 = project(ctx.canvas.to_grid((box[0] + box[2], box[1] + box[3])))
-    draw.add_rect_filled(view0, view1, style.colors[Col.MINI_MAP_CANVAS])
-    draw.add_rect(view0, view1, style.colors[Col.MINI_MAP_CANVAS_OUTLINE])
+    lo = (min(max(min(view0[0], view1[0]), x), x + width),
+          min(max(min(view0[1], view1[1]), y), y + height))
+    hi = (min(max(max(view0[0], view1[0]), x), x + width),
+          min(max(max(view0[1], view1[1]), y), y + height))
+    if hi[0] - lo[0] >= 1.0 and hi[1] - lo[1] >= 1.0:
+        draw.add_rect_filled(lo, hi, style.colors[Col.MINI_MAP_CANVAS])
+        draw.add_rect(lo, hi, style.colors[Col.MINI_MAP_CANVAS_OUTLINE])

@@ -221,6 +221,34 @@ class Layout:
     # ------------------------------------------------------------------ #
     # The cursor
     # ------------------------------------------------------------------ #
+    def move_cursor_to(self, x: float, y: float) -> None:
+        """Move the cursor without discarding what has been laid out.
+
+        Parameters
+        ----------
+        x, y : float
+            Where the next item goes, in screen space.
+
+        Notes
+        -----
+        This is ``SetCursorScreenPos``, and it is deliberately *not*
+        :meth:`reset`. Reset is what a host calls at the top of a frame: it
+        re-homes the cursor and clears the accumulated extents, which is right
+        when the frame is starting over and wrong in the middle of one. A
+        cursor move inside a group that cleared ``_max_x``/``_max_y`` would
+        make :meth:`end_group` measure only what came *after* the move.
+
+        The box origin does move with the cursor, because that is what makes
+        the rows after the move line up under it rather than under the panel --
+        which is the reason callers reach for this in the first place.
+        """
+        max_x, max_y = self._max_x, self._max_y
+        last_item = self._last_item
+        self.reset(x, y, self.w, self.h)
+        self._max_x = max(max_x, self._max_x)
+        self._max_y = max(max_y, self._max_y)
+        self._last_item = last_item
+
     def reset(
         self,
         x: float | None = None,

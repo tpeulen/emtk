@@ -292,7 +292,19 @@ def end_plot() -> None:
     if _cur.plot is None:
         raise RuntimeError("implot.end_plot() without a matching begin_plot()")
     ctx = _core.get_current_context()
-    p = ctx.p
+    # The drawlist's current target, **not** ``ctx.p``. The two are the same
+    # object right up until something splits the drawlist into channels to
+    # draw out of order -- and then ``ctx.p`` is the real painter, which paints
+    # *now*, while every other widget is queueing into a channel that is
+    # replayed later. A plot drawn to ``ctx.p`` therefore lands underneath
+    # everything the channels replay on top of it: inside a node editor it is
+    # painted first and the node's own body is then painted over it, so the
+    # plot is simply absent and nothing reports a problem.
+    #
+    # Going through the drawlist puts the plot wherever its caller is drawing.
+    # With no split in force ``draw.p`` *is* ``ctx.p``, so this changes nothing
+    # for every existing caller.
+    p = ctx.draw.p
     x, y, w, h = _cur.box
     ox, oy, ow, oh = _cur.outer
     row = p.line_height()
