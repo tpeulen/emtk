@@ -413,6 +413,8 @@ class Style:
         self.pin_offset: float = 0.0
         self.stick_distance: float = 8.0
         self.node_disc_radius: float = 13.0
+        #: Circles in a disc's shading ramp. Three reads as three hard rings.
+        self.node_shade_steps: int = 16
         #: How far below a disc its label sits, and the inset of the plate
         #: drawn behind it.
         self.node_label_gap: float = 7.0
@@ -1456,11 +1458,11 @@ def _draw_disc(ctx: EditorContext, draw, node: _Node, colour: tuple) -> None:
 
     Notes
     -----
-    The shading is three concentric circles rather than a radial gradient,
-    because the painter's only gradient runs left to right across a rectangle.
-    Three steps, offset up and left, is enough to read as a lit sphere at the
-    sizes a graph uses, and it decomposes into the required operations on every
-    backend -- which a real radial gradient would not.
+    The shading is a stack of circles rather than a radial gradient, because
+    the painter's only gradient runs left to right across a rectangle. How
+    *many* is the whole quality question: three read as three hard rings, not
+    as a sphere, which is what "the marbles look low colour resolution" is.
+    See :func:`_draw_shaded_disc`.
     """
     style = ctx.style
     zoom = ctx.canvas.zoom
@@ -1468,14 +1470,7 @@ def _draw_disc(ctx: EditorContext, draw, node: _Node, colour: tuple) -> None:
     radius = (x1 - x0) * 0.5
     centre = (x0 + radius, y0 + radius)
 
-    draw.add_circle_filled(centre, radius, _shade(colour, 0.65))
-    highlight = (centre[0] - radius * 0.22, centre[1] - radius * 0.22)
-    draw.add_circle_filled(highlight, radius * 0.78, colour)
-    draw.add_circle_filled(
-        (centre[0] - radius * 0.34, centre[1] - radius * 0.34),
-        radius * 0.42,
-        _shade(colour, 1.35),
-    )
+    _draw_shaded_disc(draw, centre, radius, colour, style.node_shade_steps)
 
     rim = style.colors[Col.NODE_OUTLINE]
     width = style.node_border_thickness
@@ -1487,6 +1482,84 @@ def _draw_disc(ctx: EditorContext, draw, node: _Node, colour: tuple) -> None:
 
     if node.label:
         _draw_node_label(ctx, draw, node, centre, radius)
+
+
+def _draw_shaded_disc(draw, centre: tuple, radius: float,
+                      colour: tuple, steps: int) -> None:
+    """Paint a lit sphere as a stack of circles, dark rim to light highlight.
+
+    Parameters
+    ----------
+    draw : object
+        The drawlist.
+    centre : tuple
+        The disc's centre in screen space.
+    radius : float
+        Its radius in screen space.
+    colour : tuple
+        The base colour; the ramp runs either side of it.
+    steps : int
+        How many circles. Below about eight the steps are visible as rings.
+
+    Notes
+    -----
+    Two things vary together, and doing only the first is what makes a disc
+    look like a target rather than a sphere: each circle is **smaller** than
+    the last *and* its centre walks toward the light. A concentric stack shades
+    but does not model a highlight, so it reads as banding.
+
+    The step count is a style var because the right number depends on the
+    radius -- a 10-pixel mark needs far fewer than a 40-pixel one -- but the
+    default is chosen for the large end, since over-drawing a small disc costs
+    a few circles and under-drawing a large one is visible.
+
+    The radius shrinks by a *fixed fraction per step* rather than linearly, so
+    the outer band -- which is most of the visible area -- gets most of the
+    steps. Linear spacing spends them in the middle where nothing changes.
+    """
+    steps = max(int(steps), 2)
+    # Where the light comes from: up and to the left, the convention every
+    # other shaded mark in the application uses.
+    toward = (-radius * 0.42, -radius * 0.42)
+    dark, light = _shade(colour, 0.55), _shade(colour, 1.45)
+
+    for index in range(steps):
+        fraction = index / float(steps - 1)
+        # Eased so the bands bunch toward the rim, where the eye is.
+        eased = fraction * fraction
+        r = radius * (1.0 - 0.70 * eased)
+        if r <= 0.5:
+            break
+        draw.add_circle_filled(
+            (centre[0] + toward[0] * eased, centre[1] + toward[1] * eased),
+            r,
+            _lerp_colour(dark, light, fraction),
+        )
+
+
+def _lerp_colour(start: tuple, end: tuple, fraction: float) -> tuple:
+    """Blend two colours.
+
+    Parameters
+    ----------
+    start, end : tuple
+        ``(r, g, b, a)``.
+    fraction : float
+        ``0`` gives `start`, ``1`` gives `end`.
+
+    Returns
+    -------
+    tuple
+        The blend, with `start`'s alpha -- the ramp shades a solid mark, and
+        letting alpha ride along would make its middle translucent.
+    """
+    f = min(1.0, max(0.0, fraction))
+    return (
+        int(round(start[0] + (end[0] - start[0]) * f)),
+        int(round(start[1] + (end[1] - start[1]) * f)),
+        int(round(start[2] + (end[2] - start[2]) * f)),
+        start[3] if len(start) > 3 else 255,
+    )
 
 
 def _draw_node_label(ctx: EditorContext, draw, node: _Node,
