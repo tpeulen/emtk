@@ -134,6 +134,28 @@ CONTROL_MODULES = (
     "testing",
 )
 
+#: Modules that belong to the library but are **not** flattened into the
+#: package namespace: you reach them as ``from cmtk import nodes`` and call
+#: ``nodes.begin_node()``.
+#:
+#: The distinction is not about collisions, though there are some. A node
+#: editor has its own colour enum, its own style struct and its own canvas,
+#: and they are *parallel* to the toolkit's rather than part of it -- which is
+#: why the reference spells them ``ImNodesCol_`` beside ``ImGuiCol_`` instead
+#: of adding entries to one. Lifting ``nodes.Col`` to ``cmtk.Col`` would put
+#: the node editor's palette where every widget's palette already lives, and
+#: the name that lost would do so silently.
+#:
+#: They are enumerated here rather than left out entirely because the
+#: documentation build and the atlas guard walk the library by module, and a
+#: module in neither list is one nothing checks.
+NAMESPACED_MODULES = (
+    # A graph, as an editor rather than a picture of one: nodes, pins, links
+    # and a pannable grid. Modelled on Nelarius/imnodes -- ``nodes.py``'s
+    # docstring records the five candidates that were measured first.
+    "nodes",
+)
+
 #: Every lazily-exported name and the family module that owns it. Generated
 #: by ``tools/gen_names.py`` (``--check`` in the tests, so it cannot go
 #: stale). Looked up in O(1) instead of importing every family until one

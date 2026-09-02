@@ -387,7 +387,7 @@ class DrawList:
     def channels_split(self, count: int) -> None:
         """``ChannelsSplit``: draw out of order, merge back in order."""
         self._channel_target = self.p
-        self._channels = [_Deferred() for _ in range(max(int(count), 1))]
+        self._channels = [_Deferred(self.p) for _ in range(max(int(count), 1))]
         self.channels_set_current(0)
 
     def channels_set_current(self, index: int) -> None:
@@ -501,19 +501,60 @@ def _ellipse_points(centre, radius, rot, a_min, a_max, segments):
 
 
 class _Deferred:
-    """A painter that writes calls down instead of making them."""
+    """A painter that writes calls down instead of making them.
 
-    def __init__(self) -> None:
+    Two of the painter's operations are **questions**, not commands:
+    ``text_width`` and ``line_height`` return a measurement the caller lays out
+    with. Recording those the way the drawing calls are recorded returns
+    ``None``, and ``None`` does not raise where it is produced -- it raises
+    further along, inside whatever arithmetic the layout was doing, or worse it
+    is compared and silently makes every row zero-height. So they are forwarded
+    to the real painter and answered now.
+
+    Parameters
+    ----------
+    painter : object
+        The painter the channel will eventually replay onto, and the one that
+        answers measurements in the meantime.
+    """
+
+    #: Painter operations that return an answer rather than drawing something.
+    #: :data:`cmtk.painter.REQUIRED_OPERATIONS` lists them last for the same
+    #: reason. ``set_font`` is here too: it is a command, but a channel that
+    #: swallowed it would measure the following text in the wrong font.
+    _QUERIES: frozenset = frozenset({"text_width", "line_height", "set_font"})
+
+    def __init__(self, painter=None) -> None:
         self.calls: list[tuple] = []
+        self._painter = painter
 
     def __getattr__(self, name: str):
         if name.startswith("_"):
             raise AttributeError(name)
+        if self._painter is not None:
+            if name in self._QUERIES:
+                return getattr(self._painter, name)
+            # Only claim what the real painter has. A bare "record anything"
+            # __getattr__ makes ``hasattr`` answer True for every name, and the
+            # helpers in painter.py ask exactly that to decide whether to use a
+            # host's fast path (``polyline``, ``fill_convex``, ``fill_triangles``)
+            # or decompose into the required operations. Claiming a fast path the
+            # host does not have records a call that cannot be replayed, and the
+            # AttributeError surfaces at *merge* time -- nowhere near the widget
+            # that drew it.
+            getattr(self._painter, name)
 
         def record(*args, **kwargs):
             self.calls.append((name, args, kwargs))
         return record
 
     def replay(self, painter) -> None:
+        """Make every recorded call, in order, on `painter`.
+
+        Parameters
+        ----------
+        painter : object
+            The painter to draw onto.
+        """
         for name, args, kwargs in self.calls:
             getattr(painter, name)(*args, **kwargs)

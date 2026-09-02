@@ -48,6 +48,12 @@ Draw list: ``cmtk.drawlist``
 .. automodule:: cmtk.drawlist
    :noindex:
 
+Node graphs: ``cmtk.nodes``
+---------------------------
+
+.. automodule:: cmtk.nodes
+   :noindex:
+
 Images: ``cmtk.texture``
 ---------------------------
 

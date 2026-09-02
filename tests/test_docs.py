@@ -132,21 +132,25 @@ def _api_rst_modules() -> set[str]:
 
 
 def test_staleness_guard_control_modules():
-    """Every module in CONTROL_MODULES has an automodule entry in api.rst.
+    """Every module the library enumerates has an automodule entry in api.rst.
 
     This is the staleness guard: adding a new widget family without
     updating the docs fails this test. The guard checks the module
     name as it would appear in an ``automodule`` directive
     ("cmtk.widgets.basic", not "widgets.basic").
+
+    Both lists are walked. ``NAMESPACED_MODULES`` holds the modules that are
+    deliberately *not* flattened into the package namespace, and a module in
+    neither list is one nothing checks -- which is the hole this closes.
     """
     documented = _api_rst_modules()
     missing = []
-    for mod_name in cmtk.CONTROL_MODULES:
+    for mod_name in tuple(cmtk.CONTROL_MODULES) + tuple(cmtk.NAMESPACED_MODULES):
         full = f"cmtk.{mod_name}"
         if full not in documented:
             missing.append(full)
     assert not missing, (
-        f"CONTROL_MODULES entries missing from docs/api.rst: {missing}. "
+        f"Enumerated modules missing from docs/api.rst: {missing}. "
         f"Add an '.. automodule::' directive for each."
     )
 

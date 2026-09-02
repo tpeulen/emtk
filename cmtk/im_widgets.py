@@ -130,11 +130,33 @@ def unindent(width: float = 0.0) -> None:
 
 
 def begin_group() -> None:
+    """``ImGui::BeginGroup``: measure a run of items as one."""
     get_current_context().layout.begin_group()
 
 
 def end_group():
-    return get_current_context().layout.end_group()
+    """``ImGui::EndGroup``: close the group and make it *the* last item.
+
+    Returns
+    -------
+    tuple of float
+        The group's bounding box, ``(x, y, w, h)``.
+
+    Notes
+    -----
+    The second line is the one that matters. `ImGui::EndGroup` writes the
+    group's bounding box into ``g.LastItemData``, which is what makes
+    ``GetItemRectMin``/``GetItemRectMax``/``IsItemHovered`` describe *the
+    group* after it closes -- the whole reason to draw a frame around one.
+    cmtk recorded it only on the layout, so those three kept answering about
+    the last widget inside the group instead, and a caller measuring a group
+    got the size of whatever it happened to end with. Nothing raised; the box
+    just came out too small.
+    """
+    ctx = get_current_context()
+    box = ctx.layout.end_group()
+    ctx._last_item = box
+    return box
 
 
 def columns(count: int = 1, id: str | None = None, border: bool = True) -> None:
