@@ -11,6 +11,8 @@ counting draw calls proves only that it did not crash.
 """
 from __future__ import annotations
 
+import math
+
 import cmtk
 from cmtk import im, nodes
 from cmtk.testing import PixelPainter, RecordingPainter
@@ -957,3 +959,148 @@ def test_a_plot_inside_a_node_is_not_painted_over_by_the_node():
         for x in range(int(x0) + 6, int(x1) - 6)
     ]
     assert len(set(body)) > 2, "the node body is flat: the plot was painted over"
+
+
+# ---------------------------------------------------------------------------
+# Arc routing: what a diagram's edges do
+# ---------------------------------------------------------------------------
+
+
+def _two_discs(ctx, positions=((40.0, 40.0), (300.0, 240.0)), link_it=True):
+    """Submit two disc nodes, optionally joined."""
+    nodes.begin_node_editor(ctx, box=BOX)
+    for index, pos in enumerate(positions, start=1):
+        nodes.set_node_grid_space_pos(ctx, index, pos)
+        nodes.begin_node(index, shape=nodes.NodeShape.DISC,
+                         label=f"n{index}", radius=12.0)
+        nodes.begin_input_attribute(index * 10, nodes.PinShape.NONE)
+        nodes.end_input_attribute()
+        nodes.begin_output_attribute(index * 10 + 1, nodes.PinShape.NONE)
+        nodes.end_output_attribute()
+        nodes.end_node()
+    if link_it:
+        nodes.link(1, 11, 20, arrow=True)
+    nodes.end_node_editor()
+
+
+def test_an_arc_starts_and_ends_on_the_node_rims():
+    """Rim to rim, not pin to pin.
+
+    A pin-routed edge always leaves sideways, so a node directly above another
+    is joined by a curve that goes out to the right, turns around and comes
+    back. An arc runs along the line joining the two centres.
+    """
+    ctx = nodes.EditorContext()
+    ctx.style.link_routing = nodes.LinkRouting.ARC
+    _frame(lambda: _two_discs(ctx))
+
+    curve = nodes._link_curve(ctx, ctx._pins[11], ctx._pins[20])
+    p0, _p1, _p2, p3, _segments = curve
+    for point, node_id in ((p0, 1), (p3, 2)):
+        x0, y0, x1, y1 = ctx._nodes[node_id].rect
+        centre = (0.5 * (x0 + x1), 0.5 * (y0 + y1))
+        radius = 0.5 * (x1 - x0)
+        distance = math.hypot(point[0] - centre[0], point[1] - centre[1])
+        assert abs(distance - radius) < 1e-6, "an arc end is not on the rim"
+
+
+def test_an_arc_bows_and_the_bow_is_clamped():
+    """A bow proportional to the chord, held between a floor and a ceiling.
+
+    A constant offset makes a short edge a semicircle and leaves a long one
+    looking straight; an unclamped proportional one makes a long edge a wild
+    loop.
+    """
+    ctx = nodes.EditorContext()
+    ctx.style.link_routing = nodes.LinkRouting.ARC
+    _, low, high = ctx.style.link_bow
+
+    offsets = []
+    for far in (140.0, 2000.0):
+        _frame(lambda: _two_discs(ctx, ((40.0, 40.0), (40.0 + far, 40.0))))
+        p0, p1, p2, p3, _segments = nodes._link_curve(
+            ctx, ctx._pins[11], ctx._pins[20]
+        )
+        # The control points are off the chord, which is what bows the curve.
+        mid = (0.5 * (p0[0] + p3[0]), 0.5 * (p0[1] + p3[1]))
+        peak = (0.5 * (p1[0] + p2[0]), 0.5 * (p1[1] + p2[1]))
+        offsets.append(math.hypot(peak[0] - mid[0], peak[1] - mid[1]))
+
+    assert offsets[0] > 0.0, "the arc is straight"
+    assert offsets[1] > offsets[0], "the bow does not follow the distance"
+    # 0.6 of the way to the mid-point, so the measured offset is 0.6 * bow.
+    assert offsets[1] <= high * 0.6 + 1e-6, "the bow is not clamped"
+
+
+def test_the_arrow_head_follows_the_curve_not_the_chord():
+    """The head is aimed from the last control point.
+
+    On a bowed link the tangent at the tip and the straight line between the
+    two nodes differ by enough to look wrong -- a head that points at the
+    centre while the line arrives at an angle reads as a mistake.
+    """
+    ctx = nodes.EditorContext()
+    ctx.style.link_routing = nodes.LinkRouting.ARC
+    _frame(lambda: _two_discs(ctx))
+
+    p0, _p1, p2, p3, _segments = nodes._link_curve(
+        ctx, ctx._pins[11], ctx._pins[20]
+    )
+    tangent = math.atan2(p3[1] - p2[1], p3[0] - p2[0])
+    chord = math.atan2(p3[1] - p0[1], p3[0] - p0[0])
+    assert abs(tangent - chord) > 1e-3, "the curve does not bow, so this proves nothing"
+
+
+def test_a_mutual_pair_is_pushed_apart():
+    """A->B and B->A must not be drawn on top of each other.
+
+    Two arcs on the same chord read as one edge, and the graph then says the
+    relation runs one way when it runs both.
+    """
+    ctx = nodes.EditorContext()
+    ctx.style.link_routing = nodes.LinkRouting.ARC
+
+    def build():
+        nodes.begin_node_editor(ctx, box=BOX)
+        for index, pos in ((1, (40.0, 40.0)), (2, (300.0, 40.0))):
+            nodes.set_node_grid_space_pos(ctx, index, pos)
+            nodes.begin_node(index, shape=nodes.NodeShape.DISC, radius=12.0)
+            nodes.begin_input_attribute(index * 10, nodes.PinShape.NONE)
+            nodes.end_input_attribute()
+            nodes.begin_output_attribute(index * 10 + 1, nodes.PinShape.NONE)
+            nodes.end_output_attribute()
+            nodes.end_node()
+        nodes.link(1, 11, 20)
+        nodes.link(2, 21, 10)
+        nodes.end_node_editor()
+
+    _frame(build)
+    mutual = nodes._mutual_pairs(ctx)
+    assert mutual == {frozenset((1, 2))}
+
+    forward = nodes._link_curve(ctx, ctx._pins[11], ctx._pins[20], True)
+    plain = nodes._link_curve(ctx, ctx._pins[11], ctx._pins[20], False)
+    assert forward[0] != plain[0], "a mutual pair was not offset"
+
+
+def test_hover_follows_the_arc_and_not_the_pins():
+    """A link must be hoverable where it is drawn.
+
+    Three descriptions of where a link is -- one to draw, one to hit-test, one
+    to aim the arrow -- are three things to keep in step, and the one that
+    drifts makes a link clickable somewhere it is not.
+    """
+    ctx = nodes.EditorContext()
+    ctx.style.link_routing = nodes.LinkRouting.ARC
+    io, storage = im.IO(), {}
+    _frame(lambda: _two_discs(ctx), io=io, storage=storage)
+
+    p0, p1, p2, p3, _segments = nodes._link_curve(
+        ctx, ctx._pins[11], ctx._pins[20]
+    )
+    # The curve's own mid-point, which for a bowed arc is off the chord.
+    mid = (0.125 * p0[0] + 0.375 * p1[0] + 0.375 * p2[0] + 0.125 * p3[0],
+           0.125 * p0[1] + 0.375 * p1[1] + 0.375 * p2[1] + 0.125 * p3[1])
+    io.mouse_pos = mid
+    _frame(lambda: _two_discs(ctx), io=io, storage=storage)
+    assert nodes.is_link_hovered(ctx) == 1

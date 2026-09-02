@@ -199,6 +199,31 @@ class Col:
     MINI_MAP_CANVAS_OUTLINE = "mini_map_canvas_outline"
 
 
+class LinkRouting:
+    """How a link finds its way from one node to another.
+
+    ``PIN`` is imnodes': the curve leaves a pin rightwards and arrives at one
+    leftwards, which reads well when a graph flows left to right and every node
+    is a box with its ports down the sides.
+
+    ``ARC`` is what a diagram wants. It ignores the pins and runs **rim to
+    rim** between the two nodes -- along the line joining their centres,
+    stopping at each node's edge -- with a slight bow. Three things follow from
+    that and each is why the pin routing looks wrong on a network:
+
+    * no horizontal stub. A pin-routed edge always leaves sideways, so a node
+      directly *above* another is joined by a curve that goes out to the right,
+      turns around and comes back.
+    * the arrow lands on the rim, pointing at the node's centre, wherever the
+      node happens to be.
+    * the bow separates edges that would otherwise be drawn on top of each
+      other, and gives the eye something to follow between two distant marks.
+    """
+
+    PIN = "pin"
+    ARC = "arc"
+
+
 class NodeShape:
     """How a node is drawn.
 
@@ -338,14 +363,17 @@ class Style:
         How finely a bezier is flattened: segments per pixel of chord length.
     link_hover_distance : float
         How near the pointer must come to a link to hover it.
-    link_straight : bool
-        Draw links as straight lines rather than as curves. A dataflow graph
-        reads better curved -- the curve says which way the signal runs before
-        you have read anything. A graph laid out by an algorithm, where a node
-        sits wherever the layout put it, reads better straight: a curve that
-        always leaves rightwards and arrives leftwards has to loop back on
-        itself whenever the target is to the *left*, and a screen of those
-        loops hides the shape the layout was computing.
+    link_routing : str
+        A :class:`LinkRouting`. ``PIN`` is the node editor's; ``ARC`` is the
+        diagram's rim-to-rim curve.
+    link_bow : tuple
+        ``(fraction, minimum, maximum)`` for an arc's curvature: the mid-point
+        is pushed off the chord by ``fraction`` of the chord's length, clamped
+        into the range. A constant offset instead would make a short edge a
+        semicircle and leave a long one looking straight.
+    link_two_way_offset : float
+        How far apart the two arcs of a mutual pair are pushed, so that A→B
+        and B→A do not land on each other and read as one edge.
     pin_circle_radius, pin_quad_side_length, pin_triangle_side_length : float
         The three pin shapes' sizes.
     pin_line_thickness : float
@@ -374,7 +402,9 @@ class Style:
         self.link_thickness: float = 3.0
         self.link_line_segments_per_length: float = 0.1
         self.link_hover_distance: float = 10.0
-        self.link_straight: bool = False
+        self.link_routing: str = LinkRouting.PIN
+        self.link_bow: tuple = (0.12, 10.0, 22.0)
+        self.link_two_way_offset: float = 7.0
         self.pin_circle_radius: float = 4.0
         self.pin_quad_side_length: float = 7.0
         self.pin_triangle_side_length: float = 9.5
@@ -1833,7 +1863,7 @@ def link(
 
 
 def _cubic_bezier(start: tuple, end: tuple, start_kind: str,
-                  segments_per_length: float, straight: bool = False) -> tuple:
+                  segments_per_length: float) -> tuple:
     """Compute a link's four control points and how finely to flatten it.
 
     Parameters
@@ -1849,12 +1879,6 @@ def _cubic_bezier(start: tuple, end: tuple, start_kind: str,
         different shapes depending on the direction it was made in.
     segments_per_length : float
         Flattening density, segments per pixel of chord.
-    straight : bool
-        Put the control points on the chord, which makes the cubic a straight
-        line. Expressed this way rather than as a separate line primitive so
-        that hover-testing, the arrowhead's tangent and the drawing all keep
-        reading one description of where the link is.
-
     Returns
     -------
     tuple
@@ -1864,12 +1888,6 @@ def _cubic_bezier(start: tuple, end: tuple, start_kind: str,
         start, end = end, start
     dx, dy = end[0] - start[0], end[1] - start[1]
     length = math.sqrt(dx * dx + dy * dy)
-    if straight:
-        return (start,
-                (start[0] + dx / 3.0, start[1] + dy / 3.0),
-                (start[0] + 2.0 * dx / 3.0, start[1] + 2.0 * dy / 3.0),
-                end,
-                max(int(length * segments_per_length), 1))
     offset = 0.25 * length
     return (
         start,
@@ -1878,6 +1896,154 @@ def _cubic_bezier(start: tuple, end: tuple, start_kind: str,
         end,
         max(int(length * segments_per_length), 1),
     )
+
+
+def _node_anchor(ctx: EditorContext, pin: _Pin) -> typing.Optional[tuple]:
+    """The centre and rim radius of the node a pin belongs to.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor.
+    pin : _Pin
+        The pin whose node is wanted.
+
+    Returns
+    -------
+    tuple or None
+        ``(centre, radius)`` in screen space, or ``None`` when the node was not
+        submitted this frame and therefore has no measured rect.
+
+    Notes
+    -----
+    A disc's radius is exactly its own; a box has no single radius, so it uses
+    half its *shorter* side. That keeps the anchor inside the box on every
+    approach -- half the diagonal would leave the edge starting in mid-air
+    beside a wide node.
+    """
+    node = ctx._nodes.get(pin.node_id)
+    if node is None or not node.alive:
+        return None
+    x0, y0, x1, y1 = node.rect
+    centre = (0.5 * (x0 + x1), 0.5 * (y0 + y1))
+    if node.shape == NodeShape.DISC:
+        return (centre, 0.5 * (x1 - x0))
+    return (centre, 0.5 * min(x1 - x0, y1 - y0))
+
+
+def _arc_curve(ctx: EditorContext, start: _Pin, end: _Pin,
+               two_way: bool) -> typing.Optional[tuple]:
+    """A rim-to-rim curve between two nodes, with a slight bow.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor, for the style and the zoom.
+    start, end : _Pin
+        The pins the link was submitted between. Only their *nodes* are used --
+        an arc joins marks, not ports.
+    two_way : bool
+        Whether the reverse link is also drawn, in which case both are pushed
+        aside so they do not land on each other.
+
+    Returns
+    -------
+    tuple or None
+        ``(p0, p1, p2, p3, segments)``, or ``None`` when either node is absent
+        or the two coincide.
+
+    Notes
+    -----
+    The control points sit **60% of the way** from each end toward the bowed
+    mid-point rather than on the chord. That is what makes the curve leave and
+    arrive along its own tangent, so an arrowhead aimed from the last control
+    point points where the curve is actually going -- and it is why the head is
+    aimed at ``p2`` rather than at the other node's centre.
+    """
+    start_anchor = _node_anchor(ctx, start)
+    end_anchor = _node_anchor(ctx, end)
+    if start_anchor is None or end_anchor is None:
+        return None
+    (cx0, cy0), r_from = start_anchor
+    (cx1, cy1), r_to = end_anchor
+
+    dx, dy = cx1 - cx0, cy1 - cy0
+    distance = math.hypot(dx, dy)
+    if distance < 1e-4:
+        return None
+    ux, uy = dx / distance, dy / distance
+    px, py = -uy, ux
+
+    zoom = ctx.canvas.zoom
+    fraction, low, high = ctx.style.link_bow
+    bow = min(high, max(low, distance / max(zoom, 1e-6) * fraction)) * zoom
+    aside = ctx.style.link_two_way_offset * zoom if two_way else 0.0
+    if two_way:
+        # A mutual pair needs a wider bow as well as the sideways offset, or
+        # the two arcs stay close enough to read as one thick edge.
+        bow = max(bow, min(50.0 * zoom, distance * 0.26))
+
+    p0 = (cx0 + ux * r_from + px * aside, cy0 + uy * r_from + py * aside)
+    p3 = (cx1 - ux * r_to + px * aside, cy1 - uy * r_to + py * aside)
+    mid = (0.5 * (p0[0] + p3[0]) + px * bow, 0.5 * (p0[1] + p3[1]) + py * bow)
+    p1 = (p0[0] + (mid[0] - p0[0]) * 0.6, p0[1] + (mid[1] - p0[1]) * 0.6)
+    p2 = (p3[0] + (mid[0] - p3[0]) * 0.6, p3[1] + (mid[1] - p3[1]) * 0.6)
+    segments = max(int(distance * ctx.style.link_line_segments_per_length), 8)
+    return (p0, p1, p2, p3, segments)
+
+
+def _link_curve(ctx: EditorContext, start: _Pin, end: _Pin,
+                two_way: bool = False) -> typing.Optional[tuple]:
+    """The curve for one link, by whichever routing the style asks for.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor.
+    start, end : _Pin
+        The link's two pins.
+    two_way : bool
+        Whether the reverse link is drawn too.
+
+    Returns
+    -------
+    tuple or None
+        ``(p0, p1, p2, p3, segments)``.
+
+    Notes
+    -----
+    One function, used by the drawing, the hover test and the arrowhead alike.
+    Three descriptions of where a link is would be three things to keep in
+    step, and the one that drifts makes a link hoverable somewhere it is not
+    drawn.
+    """
+    if ctx.style.link_routing == LinkRouting.ARC:
+        curve = _arc_curve(ctx, start, end, two_way)
+        if curve is not None:
+            return curve
+    return _cubic_bezier(start.pos, end.pos, start.kind,
+                         ctx.style.link_line_segments_per_length)
+
+
+def _mutual_pairs(ctx: EditorContext) -> set:
+    """Node-id pairs that have a link in both directions this frame.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor.
+
+    Returns
+    -------
+    set
+        Frozensets of two node ids.
+    """
+    seen = set()
+    for entry in ctx._links:
+        start, end = ctx._pins.get(entry.start_pin), ctx._pins.get(entry.end_pin)
+        if start is not None and end is not None:
+            seen.add((start.node_id, end.node_id))
+    return {frozenset(pair) for pair in seen if (pair[1], pair[0]) in seen}
 
 
 def _draw_links(draw, ctx: EditorContext) -> None:
@@ -1892,6 +2058,7 @@ def _draw_links(draw, ctx: EditorContext) -> None:
     """
     style = ctx.style
     thickness = style.link_thickness * ctx.canvas.zoom
+    mutual = _mutual_pairs(ctx) if style.link_routing == LinkRouting.ARC else set()
     for entry in ctx._links:
         start = ctx._pins.get(entry.start_pin)
         end = ctx._pins.get(entry.end_pin)
@@ -1911,13 +2078,14 @@ def _draw_links(draw, ctx: EditorContext) -> None:
         else:
             colour = entry.colour if entry.colour is not None else style.colors[Col.LINK]
         width = thickness if entry.thickness is None else entry.thickness * ctx.canvas.zoom
-        p0, p1, p2, p3, segments = _cubic_bezier(
-            start.pos, end.pos, start.kind, style.link_line_segments_per_length,
-            style.link_straight,
-        )
+        curve = _link_curve(ctx, start, end,
+                            frozenset((start.node_id, end.node_id)) in mutual)
+        if curve is None:
+            continue
+        p0, p1, p2, p3, segments = curve
         draw.add_bezier_cubic(p0, p1, p2, p3, colour, width, segments)
         if entry.arrow:
-            _draw_arrow_head(ctx, draw, p2, p3, colour)
+            _draw_arrow_head(ctx, draw, p2, p3, colour, width)
 
     if ctx._interaction == "link" and ctx._link_from_pin is not None:
         start = ctx._pins.get(ctx._link_from_pin)
@@ -1926,45 +2094,53 @@ def _draw_links(draw, ctx: EditorContext) -> None:
             hovered = ctx._hovered_pin
             if hovered is not None and hovered != ctx._link_from_pin:
                 end_pos = ctx._pins[hovered].pos
+            # Always pin-routed: the loose end is the pointer, which has no
+            # node to run rim to rim with.
             p0, p1, p2, p3, segments = _cubic_bezier(
                 start.pos, end_pos, start.kind,
-                style.link_line_segments_per_length, style.link_straight,
+                style.link_line_segments_per_length,
             )
             draw.add_bezier_cubic(p0, p1, p2, p3, style.colors[Col.LINK_HOVERED],
                                   thickness, segments)
 
 
-def _draw_arrow_head(ctx: EditorContext, draw, before: tuple,
-                     tip: tuple, colour: tuple) -> None:
+def _draw_arrow_head(ctx: EditorContext, draw, before: tuple, tip: tuple,
+                     colour: tuple, width: float = 1.0) -> None:
     """Draw a filled head at a link's arriving end.
 
     Parameters
     ----------
     ctx : EditorContext
-        The editor, for the zoom and the head's size.
+        The editor, for the zoom.
     before : tuple
-        The bezier's third control point, which is where the curve is coming
-        *from* as it arrives -- so the head points along the curve's own
-        tangent rather than along the straight line between the two pins. On a
-        link that bows, those differ by enough to look wrong.
+        The curve's last control point. The head is aimed *from* it, so it
+        follows the curve's own tangent rather than the straight line between
+        the two nodes -- on a bowed link those differ by enough to look wrong,
+        which is the whole reason the control point is the thing passed.
     tip : tuple
-        The arriving end.
+        Where the curve arrives.
     colour : tuple
-        The link's colour, so the head cannot be a different colour from its
-        own line.
+        The link's colour, so a head cannot differ from its own line.
+    width : float
+        The line's width; a thicker line gets a slightly larger head, or the
+        head disappears into the stroke.
+
+    Notes
+    -----
+    A 30-degree half-angle and a length of ``10 + width/2``, both taken from
+    the diagram this replaces. A narrower head reads as a kink in the line and
+    a wider one as a triangle that happens to touch it.
     """
     zoom = ctx.canvas.zoom
-    length, half = (v * zoom for v in ctx.style.link_arrow_size)
-    dx, dy = tip[0] - before[0], tip[1] - before[1]
-    span = math.hypot(dx, dy)
-    if span < 1e-6:
-        return
-    ux, uy = dx / span, dy / span
-    base = (tip[0] - ux * length, tip[1] - uy * length)
+    angle = math.atan2(tip[1] - before[1], tip[0] - before[0])
+    size = (10.0 + width * 0.5) * zoom
+    spread = math.pi / 6.0
     draw.add_triangle_filled(
         tip,
-        (base[0] - uy * half, base[1] + ux * half),
-        (base[0] + uy * half, base[1] - ux * half),
+        (tip[0] - size * math.cos(angle - spread),
+         tip[1] - size * math.sin(angle - spread)),
+        (tip[0] - size * math.cos(angle + spread),
+         tip[1] - size * math.sin(angle + spread)),
         colour,
     )
 
@@ -2089,10 +2265,8 @@ def _update_hover(ctx: EditorContext) -> None:
         end = ctx._pins.get(entry.end_pin)
         if start is None or end is None:
             continue
-        curve = _cubic_bezier(start.pos, end.pos, start.kind,
-                              style.link_line_segments_per_length,
-                              style.link_straight)
-        if _bezier_distance(mouse, curve) <= threshold:
+        curve = _link_curve(ctx, start, end)
+        if curve is not None and _bezier_distance(mouse, curve) <= threshold:
             ctx._hovered_link = entry.id
 
 
