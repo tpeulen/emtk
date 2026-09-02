@@ -177,6 +177,8 @@ class Col:
     TITLE_BAR_SELECTED = "title_bar_selected"
     LINK = "link"
     LINK_HOVERED = "link_hovered"
+    NODE_LABEL = "node_label"
+    NODE_LABEL_PLATE = "node_label_plate"
     LINK_SELECTED = "link_selected"
     PIN = "pin"
     PIN_HOVERED = "pin_hovered"
@@ -197,9 +199,34 @@ class Col:
     MINI_MAP_CANVAS_OUTLINE = "mini_map_canvas_outline"
 
 
-class PinShape:
-    """How a pin is drawn. imnodes' ``ImNodesPinShape_``, same five shapes."""
+class NodeShape:
+    """How a node is drawn.
 
+    ``BOX`` is imnodes' node: a titled rectangle sized by its contents, which
+    is what a dataflow graph wants -- the node *is* its controls.
+
+    ``DISC`` is a mark: a shaded circle of a fixed radius with its label on a
+    plate underneath. A graph of two hundred parameters has nothing to put
+    inside a node and everything to gain from being small enough to read, and
+    a box per parameter is mostly padding. Both are node-link diagrams; they
+    differ in whether the node has an interior worth showing.
+    """
+
+    BOX = "box"
+    DISC = "disc"
+
+
+class PinShape:
+    """How a pin is drawn. imnodes' ``ImNodesPinShape_``, plus one.
+
+    ``NONE`` is the addition: the pin is still there -- it is hit-tested, links
+    land on it, it reports hover -- it is simply not drawn. A graph of discs
+    wants that: the mark *is* the connector, and a second dot stuck on its edge
+    is clutter that says nothing. Leaving the pin out entirely instead would
+    mean the node could not be linked at all.
+    """
+
+    NONE = "none"
     CIRCLE = "circle"
     CIRCLE_FILLED = "circle_filled"
     TRIANGLE = "triangle"
@@ -238,6 +265,11 @@ _DARK: dict = {
     Col.TITLE_BAR: (41, 74, 122, 255),
     Col.TITLE_BAR_HOVERED: (66, 150, 250, 255),
     Col.TITLE_BAR_SELECTED: (66, 150, 250, 255),
+    Col.NODE_LABEL: (236, 239, 244, 255),
+    # Translucent, and dark rather than tinted: in a dense graph neighbouring
+    # labels overlap each other and the edges between them, and the plate is
+    # what keeps the topmost one readable instead of both becoming a smear.
+    Col.NODE_LABEL_PLATE: (18, 20, 24, 190),
     Col.LINK: (61, 133, 224, 200),
     Col.LINK_HOVERED: (66, 150, 250, 255),
     Col.LINK_SELECTED: (66, 150, 250, 255),
@@ -278,6 +310,8 @@ _LIGHT: dict = dict(
         Col.LINK_SELECTED: (66, 150, 250, 242),
         Col.PIN: (66, 150, 250, 160),
         Col.PIN_HOVERED: (66, 150, 250, 255),
+        Col.NODE_LABEL: (24, 26, 30, 255),
+        Col.NODE_LABEL_PLATE: (250, 250, 250, 190),
         Col.GRID_BACKGROUND: (225, 225, 225, 255),
         Col.GRID_LINE: (180, 180, 180, 100),
         Col.GRID_LINE_PRIMARY: (120, 120, 120, 100),
@@ -304,6 +338,14 @@ class Style:
         How finely a bezier is flattened: segments per pixel of chord length.
     link_hover_distance : float
         How near the pointer must come to a link to hover it.
+    link_straight : bool
+        Draw links as straight lines rather than as curves. A dataflow graph
+        reads better curved -- the curve says which way the signal runs before
+        you have read anything. A graph laid out by an algorithm, where a node
+        sits wherever the layout put it, reads better straight: a curve that
+        always leaves rightwards and arrives leftwards has to loop back on
+        itself whenever the target is to the *left*, and a screen of those
+        loops hides the shape the layout was computing.
     pin_circle_radius, pin_quad_side_length, pin_triangle_side_length : float
         The three pin shapes' sizes.
     pin_line_thickness : float
@@ -332,6 +374,7 @@ class Style:
         self.link_thickness: float = 3.0
         self.link_line_segments_per_length: float = 0.1
         self.link_hover_distance: float = 10.0
+        self.link_straight: bool = False
         self.pin_circle_radius: float = 4.0
         self.pin_quad_side_length: float = 7.0
         self.pin_triangle_side_length: float = 9.5
@@ -339,6 +382,16 @@ class Style:
         self.pin_hover_radius: float = 10.0
         self.pin_offset: float = 0.0
         self.stick_distance: float = 8.0
+        self.node_disc_radius: float = 13.0
+        #: How far below a disc its label sits, and the inset of the plate
+        #: drawn behind it.
+        self.node_label_gap: float = 7.0
+        self.node_label_padding: tuple = (4.0, 1.0)
+        #: Labels longer than this are elided, so one long parameter name
+        #: cannot blanket its neighbours.
+        self.node_label_max_width: float = 96.0
+        #: Length and half-width of a link's arrowhead, in pixels before zoom.
+        self.link_arrow_size: tuple = (9.0, 4.5)
         self.mini_map_padding: tuple = (8.0, 8.0)
         self.mini_map_offset: tuple = (4.0, 4.0)
         self.flags: int = StyleFlags.NODE_OUTLINE | StyleFlags.GRID_LINES
@@ -480,6 +533,11 @@ class _Node:
         #: Screen-space rect of whatever the title bar drew, or ``None``.
         self.title_rect: typing.Optional[tuple] = None
         self.draggable: bool = True
+        #: How this node draws. See :class:`NodeShape`.
+        self.shape: str = NodeShape.BOX
+        self.radius: float = 0.0
+        #: The text under a disc. Boxes label themselves with a title bar.
+        self.label: str = ""
         #: Pin ids belonging to this node, rebuilt every frame in draw order.
         self.pins: list = []
         #: Set while the node was submitted this frame. A node that stops being
@@ -514,6 +572,7 @@ class _Link:
         #: Per-link overrides, or ``None`` to take the palette's.
         self.colour: typing.Optional[tuple] = None
         self.thickness: typing.Optional[float] = None
+        self.arrow: bool = False
 
 
 class EditorContext:
@@ -1133,7 +1192,12 @@ def _update_content_bounds(ctx: EditorContext) -> None:
 # --------------------------------------------------------------------------
 
 
-def begin_node(node_id: int) -> None:
+def begin_node(
+    node_id: int,
+    shape: str = NodeShape.BOX,
+    label: str = "",
+    radius: typing.Optional[float] = None,
+) -> None:
     """Start a node. Everything drawn until :func:`end_node` is inside it.
 
     Parameters
@@ -1141,6 +1205,21 @@ def begin_node(node_id: int) -> None:
     node_id : int
         Unique among nodes. The editor's only handle on this node, so reusing
         one moves the old node's stored position onto the new node.
+    shape : str
+        A :class:`NodeShape`. ``BOX`` is sized by its contents and titles
+        itself with :func:`begin_node_title_bar`; ``DISC`` is a fixed-radius
+        mark that labels itself underneath.
+    label : str
+        The text under a disc. Ignored for a box, which has a title bar.
+    radius : float, optional
+        A disc's radius; the style's when omitted. Ignored for a box.
+
+    Notes
+    -----
+    A disc reserves its own space with a ``dummy`` and expects **nothing**
+    between begin and end -- there is no interior to draw into. Anything
+    submitted anyway is measured into the node's rect, which is how a disc
+    silently stops being round.
     """
     global _scope, _node
     ctx = _require("editor", "begin_node")
@@ -1153,7 +1232,21 @@ def begin_node(node_id: int) -> None:
     node.alive = True
     node.pins = []
     node.title_rect = None
+    node.shape = shape
+    node.label = str(label)
+    node.radius = float(ctx.style.node_disc_radius if radius is None else radius)
     _node = node
+
+    if shape == NodeShape.DISC:
+        # A disc's origin is its top-left, as a box's is, so a node keeps the
+        # same stored position whichever shape it is drawn as. Anything else
+        # would move every node the moment a view switched shape.
+        im.set_cursor_screen_pos(ctx.canvas.to_screen(node.origin))
+        im.push_id(str(node_id))
+        im.begin_group()
+        size = 2.0 * node.radius * ctx.canvas.zoom
+        im.dummy(size, size)
+        return
 
     im.set_cursor_screen_pos(_title_bar_origin(ctx, node))
     im.push_id(str(node_id))
@@ -1201,15 +1294,23 @@ def end_node() -> None:
     im.end_group()
     im.pop_id()
 
-    pad_x, pad_y = ctx.style.node_padding
     zoom = ctx.canvas.zoom
-    r_min, r_max = im.get_item_rect_min(), im.get_item_rect_max()
-    node.rect = (
-        r_min[0] - pad_x * zoom,
-        r_min[1] - pad_y * zoom,
-        r_max[0] + pad_x * zoom,
-        r_max[1] + pad_y * zoom,
-    )
+    if node.shape == NodeShape.DISC:
+        # Exactly the disc: no padding. A disc that reserved padding would
+        # hit-test and stick as a square larger than the mark the user sees,
+        # which reads as clicks landing on nothing.
+        x, y = ctx.canvas.to_screen(node.origin)
+        size = 2.0 * node.radius * zoom
+        node.rect = (x, y, x + size, y + size)
+    else:
+        pad_x, pad_y = ctx.style.node_padding
+        r_min, r_max = im.get_item_rect_min(), im.get_item_rect_max()
+        node.rect = (
+            r_min[0] - pad_x * zoom,
+            r_min[1] - pad_y * zoom,
+            r_max[0] + pad_x * zoom,
+            r_max[1] + pad_y * zoom,
+        )
     _draw_node_body(ctx, node)
 
 
@@ -1266,6 +1367,10 @@ def _draw_node_body(ctx: EditorContext, node: _Node) -> None:
     rounding = style.node_corner_rounding * ctx.canvas.zoom
 
     draw.channels_set_current(_CHANNEL_NODE)
+    if node.shape == NodeShape.DISC:
+        _draw_disc(ctx, draw, node, title_bar)
+        draw.channels_set_current(_CHANNEL_CONTENT)
+        return
     draw.add_rect_filled((x0, y0), (x1, y1), background, rounding)
     if node.title_rect is not None:
         # The title bar spans the node's full width and ends where the title
@@ -1283,6 +1388,144 @@ def _draw_node_body(ctx: EditorContext, node: _Node) -> None:
     # closed. Drawing them here paints last frame's positions, which on the
     # first frame is (0, 0): the pins are simply absent, and nothing says so.
     draw.channels_set_current(_CHANNEL_CONTENT)
+
+
+def _shade(colour: tuple, factor: float) -> tuple:
+    """Lighten or darken a colour, keeping its alpha.
+
+    Parameters
+    ----------
+    colour : tuple
+        ``(r, g, b, a)``.
+    factor : float
+        Above 1 lightens, below 1 darkens.
+
+    Returns
+    -------
+    tuple
+        The shaded colour, clamped to the byte range.
+    """
+    r, g, b = (min(255, max(0, int(round(c * factor)))) for c in colour[:3])
+    return (r, g, b, colour[3] if len(colour) > 3 else 255)
+
+
+def _draw_disc(ctx: EditorContext, draw, node: _Node, colour: tuple) -> None:
+    """Paint a disc node: a shaded circle, a rim, and its label underneath.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor.
+    draw : object
+        The drawlist, already on the node channel.
+    node : _Node
+        The node, with its rect measured.
+    colour : tuple
+        Its base colour -- the same slot a box's title bar takes, so the two
+        shapes are coloured by one palette rather than two.
+
+    Notes
+    -----
+    The shading is three concentric circles rather than a radial gradient,
+    because the painter's only gradient runs left to right across a rectangle.
+    Three steps, offset up and left, is enough to read as a lit sphere at the
+    sizes a graph uses, and it decomposes into the required operations on every
+    backend -- which a real radial gradient would not.
+    """
+    style = ctx.style
+    zoom = ctx.canvas.zoom
+    x0, y0, x1, y1 = node.rect
+    radius = (x1 - x0) * 0.5
+    centre = (x0 + radius, y0 + radius)
+
+    draw.add_circle_filled(centre, radius, _shade(colour, 0.65))
+    highlight = (centre[0] - radius * 0.22, centre[1] - radius * 0.22)
+    draw.add_circle_filled(highlight, radius * 0.78, colour)
+    draw.add_circle_filled(
+        (centre[0] - radius * 0.34, centre[1] - radius * 0.34),
+        radius * 0.42,
+        _shade(colour, 1.35),
+    )
+
+    rim = style.colors[Col.NODE_OUTLINE]
+    width = style.node_border_thickness
+    if node.id in ctx.selected_nodes:
+        rim, width = style.colors[Col.TITLE_BAR_SELECTED], 3.0
+    elif ctx._hovered_node == node.id:
+        rim, width = style.colors[Col.TITLE_BAR_HOVERED], 2.0
+    draw.add_circle(centre, radius, rim, 0, width * zoom)
+
+    if node.label:
+        _draw_node_label(ctx, draw, node, centre, radius)
+
+
+def _draw_node_label(ctx: EditorContext, draw, node: _Node,
+                     centre: tuple, radius: float) -> None:
+    """Draw a disc's label on a plate below it.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor.
+    draw : object
+        The drawlist.
+    node : _Node
+        The node being labelled.
+    centre : tuple
+        The disc's centre in screen space.
+    radius : float
+        Its radius in screen space.
+
+    Notes
+    -----
+    Below rather than inside: a parameter name is routinely longer than a
+    thirteen-pixel disc is wide, and text scaled to fit inside one is
+    unreadable at any zoom. Elided past a limit so one long name cannot
+    blanket its neighbours, and backed by a plate so that where two do
+    overlap the top one stays readable instead of both becoming a smear.
+    """
+    style = ctx.style
+    zoom = ctx.canvas.zoom
+    text = _elide(draw, node.label, style.node_label_max_width * zoom)
+    width = draw.calc_text_size(text)[0]
+    height = draw.calc_text_size("X")[1]
+    pad_x, pad_y = style.node_label_padding
+
+    x = centre[0] - width * 0.5
+    y = centre[1] + radius + style.node_label_gap * zoom
+    draw.add_rect_filled(
+        (x - pad_x, y - pad_y), (x + width + pad_x, y + height + pad_y),
+        style.colors[Col.NODE_LABEL_PLATE], 2.0,
+    )
+    draw.add_text((x, y), style.colors[Col.NODE_LABEL], text)
+
+
+def _elide(draw, text: str, limit: float) -> str:
+    """Shorten `text` with an ellipsis until it fits `limit`.
+
+    Parameters
+    ----------
+    draw : object
+        The drawlist, for measuring.
+    text : str
+        The label.
+    limit : float
+        Maximum width in pixels.
+
+    Returns
+    -------
+    str
+        The text, or a prefix of it followed by an ellipsis. The character is
+        the baked atlas's own -- a glyph the atlas lacks draws as nothing in
+        the application while looking perfect in a screenshot.
+    """
+    if limit <= 0.0 or draw.calc_text_size(text)[0] <= limit:
+        return text
+    for cut in range(len(text) - 1, 0, -1):
+        candidate = text[:cut] + "\u2026"
+        if draw.calc_text_size(candidate)[0] <= limit:
+            return candidate
+    return "\u2026"
 
 
 def begin_node_title_bar() -> None:
@@ -1451,7 +1694,18 @@ def _resolve_pin_positions(ctx: EditorContext) -> None:
     for node in ctx._nodes.values():
         if not node.alive:
             continue
-        x0, _, x1, _ = node.rect
+        x0, y0, x1, y1 = node.rect
+        if node.shape == NodeShape.DISC:
+            # On the circle's own left and right, at its middle. Using the
+            # attribute's vertical centre -- correct for a box, where each
+            # attribute is its own row -- would put every one of a disc's pins
+            # at the same place *and* off the mark, because a disc has no rows.
+            middle = 0.5 * (y0 + y1)
+            for pin_id in node.pins:
+                pin = ctx._pins[pin_id]
+                x = (x0 - offset) if pin.kind == "input" else (x1 + offset)
+                pin.pos = (x, middle)
+            continue
         for pin_id in node.pins:
             pin = ctx._pins[pin_id]
             x = (x0 - offset) if pin.kind == "input" else (x1 + offset)
@@ -1487,6 +1741,8 @@ def _draw_pin(ctx: EditorContext, draw, pin: _Pin) -> None:
     pin : _Pin
         The pin, already positioned.
     """
+    if pin.shape == PinShape.NONE:
+        return
     style = ctx.style
     zoom = ctx.canvas.zoom
     colour = style.colors[Col.PIN_HOVERED if ctx._hovered_pin == pin.id else Col.PIN]
@@ -1530,6 +1786,7 @@ def link(
     end_pin: int,
     colour: typing.Optional[tuple] = None,
     thickness: typing.Optional[float] = None,
+    arrow: bool = False,
 ) -> None:
     """Submit a link between two pins.
 
@@ -1546,6 +1803,11 @@ def link(
         ``(r, g, b, a)`` for this link alone; the palette's when omitted.
     thickness : float, optional
         Width in pixels *before* the zoom is applied; the style's when omitted.
+    arrow : bool
+        Draw a head at the arriving end. Off by default, because in a dataflow
+        graph every edge runs the same way and a head on all of them is noise;
+        on where the direction is the *information*, as it is for "this
+        parameter follows that one".
 
     Notes
     -----
@@ -1566,10 +1828,12 @@ def link(
     entry = _Link(link_id, start_pin, end_pin)
     entry.colour = colour
     entry.thickness = thickness
+    entry.arrow = bool(arrow)
     ctx._links.append(entry)
 
 
-def _cubic_bezier(start: tuple, end: tuple, start_kind: str, segments_per_length: float) -> tuple:
+def _cubic_bezier(start: tuple, end: tuple, start_kind: str,
+                  segments_per_length: float, straight: bool = False) -> tuple:
     """Compute a link's four control points and how finely to flatten it.
 
     Parameters
@@ -1585,6 +1849,11 @@ def _cubic_bezier(start: tuple, end: tuple, start_kind: str, segments_per_length
         different shapes depending on the direction it was made in.
     segments_per_length : float
         Flattening density, segments per pixel of chord.
+    straight : bool
+        Put the control points on the chord, which makes the cubic a straight
+        line. Expressed this way rather than as a separate line primitive so
+        that hover-testing, the arrowhead's tangent and the drawing all keep
+        reading one description of where the link is.
 
     Returns
     -------
@@ -1595,6 +1864,12 @@ def _cubic_bezier(start: tuple, end: tuple, start_kind: str, segments_per_length
         start, end = end, start
     dx, dy = end[0] - start[0], end[1] - start[1]
     length = math.sqrt(dx * dx + dy * dy)
+    if straight:
+        return (start,
+                (start[0] + dx / 3.0, start[1] + dy / 3.0),
+                (start[0] + 2.0 * dx / 3.0, start[1] + 2.0 * dy / 3.0),
+                end,
+                max(int(length * segments_per_length), 1))
     offset = 0.25 * length
     return (
         start,
@@ -1637,9 +1912,12 @@ def _draw_links(draw, ctx: EditorContext) -> None:
             colour = entry.colour if entry.colour is not None else style.colors[Col.LINK]
         width = thickness if entry.thickness is None else entry.thickness * ctx.canvas.zoom
         p0, p1, p2, p3, segments = _cubic_bezier(
-            start.pos, end.pos, start.kind, style.link_line_segments_per_length
+            start.pos, end.pos, start.kind, style.link_line_segments_per_length,
+            style.link_straight,
         )
         draw.add_bezier_cubic(p0, p1, p2, p3, colour, width, segments)
+        if entry.arrow:
+            _draw_arrow_head(ctx, draw, p2, p3, colour)
 
     if ctx._interaction == "link" and ctx._link_from_pin is not None:
         start = ctx._pins.get(ctx._link_from_pin)
@@ -1649,10 +1927,46 @@ def _draw_links(draw, ctx: EditorContext) -> None:
             if hovered is not None and hovered != ctx._link_from_pin:
                 end_pos = ctx._pins[hovered].pos
             p0, p1, p2, p3, segments = _cubic_bezier(
-                start.pos, end_pos, start.kind, style.link_line_segments_per_length
+                start.pos, end_pos, start.kind,
+                style.link_line_segments_per_length, style.link_straight,
             )
             draw.add_bezier_cubic(p0, p1, p2, p3, style.colors[Col.LINK_HOVERED],
                                   thickness, segments)
+
+
+def _draw_arrow_head(ctx: EditorContext, draw, before: tuple,
+                     tip: tuple, colour: tuple) -> None:
+    """Draw a filled head at a link's arriving end.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor, for the zoom and the head's size.
+    before : tuple
+        The bezier's third control point, which is where the curve is coming
+        *from* as it arrives -- so the head points along the curve's own
+        tangent rather than along the straight line between the two pins. On a
+        link that bows, those differ by enough to look wrong.
+    tip : tuple
+        The arriving end.
+    colour : tuple
+        The link's colour, so the head cannot be a different colour from its
+        own line.
+    """
+    zoom = ctx.canvas.zoom
+    length, half = (v * zoom for v in ctx.style.link_arrow_size)
+    dx, dy = tip[0] - before[0], tip[1] - before[1]
+    span = math.hypot(dx, dy)
+    if span < 1e-6:
+        return
+    ux, uy = dx / span, dy / span
+    base = (tip[0] - ux * length, tip[1] - uy * length)
+    draw.add_triangle_filled(
+        tip,
+        (base[0] - uy * half, base[1] + ux * half),
+        (base[0] + uy * half, base[1] - ux * half),
+        colour,
+    )
 
 
 def _bezier_distance(point: tuple, curve: tuple) -> float:
@@ -1776,7 +2090,8 @@ def _update_hover(ctx: EditorContext) -> None:
         if start is None or end is None:
             continue
         curve = _cubic_bezier(start.pos, end.pos, start.kind,
-                              style.link_line_segments_per_length)
+                              style.link_line_segments_per_length,
+                              style.link_straight)
         if _bezier_distance(mouse, curve) <= threshold:
             ctx._hovered_link = entry.id
 
