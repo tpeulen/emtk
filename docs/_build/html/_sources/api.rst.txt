@@ -48,6 +48,12 @@ Draw list: ``emtk.drawlist``
 .. automodule:: emtk.drawlist
    :noindex:
 
+Node graphs: ``emtk.nodes``
+---------------------------
+
+.. automodule:: emtk.nodes
+   :noindex:
+
 Images: ``emtk.texture``
 ---------------------------
 

@@ -8,14 +8,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Widget guide &mdash; emtk 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=01f34227"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -149,16 +149,16 @@ and separated.</p>
 <img alt="Plain, coloured, disabled text and a bullet item" src="_images/text.png" />
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Text&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;plain&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">text_colored</span><span class="p">((</span><span class="mi">255</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">50</span><span class="p">),</span> <span class="s2">&quot;coloured&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">text_disabled</span><span class="p">(</span><span class="s2">&quot;dimmed&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">bullet_text</span><span class="p">(</span><span class="s2">&quot;bulleted&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Text"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">"plain"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text_colored</span><span class="p">((</span><span class="mi">255</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">50</span><span class="p">),</span> <span class="s2">"coloured"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text_disabled</span><span class="p">(</span><span class="s2">"dimmed"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">bullet_text</span><span class="p">(</span><span class="s2">"bulleted"</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">separator</span><span class="p">()</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
-<span class="k">assert</span> <span class="s2">&quot;plain&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
-<span class="k">assert</span> <span class="s2">&quot;coloured&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">"plain"</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">"coloured"</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
 </pre></div>
 </div>
 </section>
@@ -177,8 +177,8 @@ The immediate-mode functions in <code class="docutils literal notranslate"><span
 <img alt="A checkbox, three kinds of button and a progress bar" src="_images/basic.png" />
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Basic&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">checkbox</span><span class="p">(</span><span class="s2">&quot;enabled&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Basic"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">checkbox</span><span class="p">(</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">progress_bar</span><span class="p">(</span><span class="mf">0.7</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
@@ -195,14 +195,14 @@ arrow), <code class="xref py py-class docutils literal notranslate"><span class=
 reference’s <em>mixed</em> state), and <code class="xref py py-class docutils literal notranslate"><span class="pre">RadioButton</span></code>.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Buttons&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Normal&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">small_button</span><span class="p">(</span><span class="s2">&quot;Small&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">arrow_button</span><span class="p">(</span><span class="s2">&quot;arrow&quot;</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">Dir</span><span class="o">.</span><span class="n">LEFT</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Buttons"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">"Normal"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">small_button</span><span class="p">(</span><span class="s2">"Small"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">arrow_button</span><span class="p">(</span><span class="s2">"arrow"</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">Dir</span><span class="o">.</span><span class="n">LEFT</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
-<span class="k">assert</span> <span class="s2">&quot;Normal&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
-<span class="k">assert</span> <span class="s2">&quot;Small&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">"Normal"</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">"Small"</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
 </pre></div>
 </div>
 </section>
@@ -218,9 +218,9 @@ from the format string’s precision.</p>
 <img alt="Float, integer and angle sliders" src="_images/sliders.png" />
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Sliders&quot;</span><span class="p">)</span>
-    <span class="n">changed</span><span class="p">,</span> <span class="n">f</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_float</span><span class="p">(</span><span class="s2">&quot;float&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
-    <span class="n">changed</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_int</span><span class="p">(</span><span class="s2">&quot;int&quot;</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Sliders"</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">f</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_float</span><span class="p">(</span><span class="s2">"float"</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">i</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_int</span><span class="p">(</span><span class="s2">"int"</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
 <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
@@ -238,8 +238,8 @@ to zero and never move at all — the reference fixes this with an
 accumulator (<code class="docutils literal notranslate"><span class="pre">g.DragCurrentAccum</span></code>), ported faithfully here.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Drag&quot;</span><span class="p">)</span>
-    <span class="n">changed</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">drag_float</span><span class="p">(</span><span class="s2">&quot;drag&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Drag"</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">drag_float</span><span class="p">(</span><span class="s2">"drag"</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
 <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">float</span><span class="p">)</span>
@@ -271,13 +271,13 @@ selection requests.</p>
 <img alt="Collapsing headers and selectable rows" src="_images/selection.png" />
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Selection&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">selectable</span><span class="p">(</span><span class="s2">&quot;option A&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">selectable</span><span class="p">(</span><span class="s2">&quot;option B&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">collapsing_header</span><span class="p">(</span><span class="s2">&quot;Section&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Selection"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">selectable</span><span class="p">(</span><span class="s2">"option A"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">selectable</span><span class="p">(</span><span class="s2">"option B"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">collapsing_header</span><span class="p">(</span><span class="s2">"Section"</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
-<span class="k">assert</span> <span class="s2">&quot;option A&quot;</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
+<span class="k">assert</span> <span class="s2">"option A"</span> <span class="ow">in</span> <span class="n">painter</span><span class="o">.</span><span class="n">strings</span>
 </pre></div>
 </div>
 </section>
@@ -307,15 +307,15 @@ reordered, multi-sorted, frozen, clipped.</p>
 <img alt="A data table with three columns and four rows" src="_images/table.png" />
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Table&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin_table</span><span class="p">(</span><span class="s2">&quot;t&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Table"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin_table</span><span class="p">(</span><span class="s2">"t"</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
-        <span class="n">im</span><span class="o">.</span><span class="n">table_setup_column</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Col </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">table_setup_column</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Col </span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">table_headers_row</span><span class="p">()</span>
     <span class="n">im</span><span class="o">.</span><span class="n">table_next_row</span><span class="p">()</span>
     <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
         <span class="n">im</span><span class="o">.</span><span class="n">table_next_column</span><span class="p">()</span>
-        <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">col</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end_table</span><span class="p">()</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 </pre></div>
@@ -348,23 +348,23 @@ on its own for a window that draws its own bar. The sizes come back rather
 than being written through pointers, as everywhere else in <code class="docutils literal notranslate"><span class="pre">im</span></code>:</p>
 <div class="highlight-pycon notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">emtk</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">emtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingPainter</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">state</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;left&quot;</span><span class="p">:</span> <span class="mf">150.0</span><span class="p">,</span> <span class="s2">&quot;right&quot;</span><span class="p">:</span> <span class="mf">242.0</span><span class="p">}</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">state</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"left"</span><span class="p">:</span> <span class="mf">150.0</span><span class="p">,</span> <span class="s2">"right"</span><span class="p">:</span> <span class="mf">242.0</span><span class="p">}</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">def</span><span class="w"> </span><span class="nf">two_panes</span><span class="p">():</span>
-<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;panes&quot;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"panes"</span><span class="p">)</span>
 <span class="gp">... </span>    <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">get_cursor_screen_pos</span><span class="p">()</span>
-<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">begin_child</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="mf">200.0</span><span class="p">))</span>
-<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;controls&quot;</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">begin_child</span><span class="p">((</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">"left"</span><span class="p">],</span> <span class="mf">200.0</span><span class="p">))</span>
+<span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">"controls"</span><span class="p">)</span>
 <span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">end_child</span><span class="p">()</span>
 <span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">same_line</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<span class="gp">... </span>    <span class="n">moved</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;right&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">splitter</span><span class="p">(</span>
-<span class="gp">... </span>        <span class="s2">&quot;##v&quot;</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mf">200.0</span><span class="p">,</span>
-<span class="gp">... </span>        <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;right&quot;</span><span class="p">],</span> <span class="mf">60.0</span><span class="p">,</span> <span class="mf">80.0</span><span class="p">)</span>
+<span class="gp">... </span>    <span class="n">moved</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">"left"</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">"right"</span><span class="p">]</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">splitter</span><span class="p">(</span>
+<span class="gp">... </span>        <span class="s2">"##v"</span><span class="p">,</span> <span class="n">im</span><span class="o">.</span><span class="n">Axis</span><span class="o">.</span><span class="n">X</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">,</span> <span class="mf">200.0</span><span class="p">,</span>
+<span class="gp">... </span>        <span class="n">state</span><span class="p">[</span><span class="s2">"left"</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">"right"</span><span class="p">],</span> <span class="mf">60.0</span><span class="p">,</span> <span class="mf">80.0</span><span class="p">)</span>
 <span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">same_line</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
 <span class="gp">... </span>    <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 <span class="gp">... </span>    <span class="k">return</span> <span class="n">moved</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">emtk</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">RecordingPainter</span><span class="p">(),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">300</span><span class="p">)):</span>
 <span class="gp">... </span>    <span class="n">moved</span> <span class="o">=</span> <span class="n">two_panes</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">moved</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;left&quot;</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">&quot;right&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">moved</span><span class="p">,</span> <span class="n">state</span><span class="p">[</span><span class="s2">"left"</span><span class="p">],</span> <span class="n">state</span><span class="p">[</span><span class="s2">"right"</span><span class="p">]</span>
 <span class="go">(False, 150.0, 242.0)</span>
 </pre></div>
 </div>
@@ -416,7 +416,7 @@ contract every retained control follows.</p>
 <img alt="A line plot with two series, gridlines and a legend" src="_images/plot.png" />
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Plot&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Plot"</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
 <span class="k">assert</span> <span class="n">painter</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -434,7 +434,7 @@ pyCirclize.</p>
 <code class="docutils literal notranslate"><span class="pre">add_line</span></code>, <code class="docutils literal notranslate"><span class="pre">add_rect_filled</span></code>, <code class="docutils literal notranslate"><span class="pre">add_circle_filled</span></code>.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;DrawList&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"DrawList"</span><span class="p">)</span>
     <span class="n">dl</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">get_window_draw_list</span><span class="p">()</span>
     <span class="n">dl</span><span class="o">.</span><span class="n">add_rect_filled</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">40</span><span class="p">,</span> <span class="p">(</span><span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">255</span><span class="p">))</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>

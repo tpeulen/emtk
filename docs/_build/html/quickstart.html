@@ -8,14 +8,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Quickstart &mdash; emtk 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
-      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
 
   
       <script src="_static/jquery.js?v=5d32c60e"></script>
       <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
       <script src="_static/documentation_options.js?v=01f34227"></script>
-      <script src="_static/doctools.js?v=9bcbadda"></script>
-      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
@@ -94,9 +94,9 @@ whatever painter you gave it:</p>
 
 <span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;Hello, world!&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;Save&quot;</span><span class="p">):</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Demo"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">"Hello, world!"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">"Save"</span><span class="p">):</span>
         <span class="k">pass</span>  <span class="c1"># save things here</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 </pre></div>
@@ -112,8 +112,8 @@ the Pyodide build in a browser.</p>
 the value comes back beside the changed flag:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Sliders&quot;</span><span class="p">)</span>
-    <span class="n">changed</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_float</span><span class="p">(</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Sliders"</span><span class="p">)</span>
+    <span class="n">changed</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">im</span><span class="o">.</span><span class="n">slider_float</span><span class="p">(</span><span class="s2">"alpha"</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
 <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">changed</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
@@ -129,16 +129,16 @@ Python binding lands unchanged.</p>
 lists and a flat <code class="docutils literal notranslate"><span class="pre">calls</span></code> list for cross-kind ordering:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="mi">80</span><span class="p">)):</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">&quot;hi&quot;</span><span class="p">)</span>
-    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">&quot;OK&quot;</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">"Demo"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">text</span><span class="p">(</span><span class="s2">"hi"</span><span class="p">)</span>
+    <span class="n">im</span><span class="o">.</span><span class="n">button</span><span class="p">(</span><span class="s2">"OK"</span><span class="p">)</span>
     <span class="n">im</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 
 <span class="c1"># seven pixels per character, sixteen per line -- the metrics are</span>
 <span class="c1"># deliberately round so a reader can do the arithmetic in their head</span>
-<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">text_width</span><span class="p">(</span><span class="s2">&quot;hi&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="o">*</span> <span class="mf">7.0</span>
+<span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">text_width</span><span class="p">(</span><span class="s2">"hi"</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="o">*</span> <span class="mf">7.0</span>
 <span class="k">assert</span> <span class="n">painter</span><span class="o">.</span><span class="n">line_height</span><span class="p">()</span> <span class="o">==</span> <span class="mf">16.0</span>
-<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">painter</span><span class="o">.</span><span class="n">strings</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span>  <span class="c1"># &quot;Demo&quot; title, &quot;hi&quot;, &quot;OK&quot;</span>
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">painter</span><span class="o">.</span><span class="n">strings</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span>  <span class="c1"># "Demo" title, "hi", "OK"</span>
 </pre></div>
 </div>
 </section>
