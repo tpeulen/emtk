@@ -123,15 +123,37 @@ class QtPainter:
     """
 
     def __init__(self, painter, font_pt: float = DEFAULT_FONT_PT) -> None:
+        self._p = painter
+        #: The size everything is measured and drawn at when no font scale is
+        #: in force. :meth:`set_font_scale` multiplies it; it never changes.
+        self.font_pt = float(font_pt)
+        self._apply_font(self.font_pt)
+        self._clips: list = []
+
+    def _apply_font(self, font_pt: float) -> None:
+        """Build the monospaced face at `font_pt` and hand it to the painter."""
         from qtpy import QtGui
 
-        self._p = painter
         font = QtGui.QFont("Menlo")
         font.setStyleHint(QtGui.QFont.Monospace)
         font.setPointSizeF(float(font_pt))
-        painter.setFont(font)
-        self._metrics = QtGui.QFontMetrics(font)
-        self._clips: list = []
+        self._p.setFont(font)
+        # The *float* metrics, deliberately. The integer flavour rounds every
+        # advance down, and the error is per character: a node title measured
+        # at a scaled-down size loses a fraction of a pixel per glyph and the
+        # accumulated shortfall crops the last characters off -- visible only
+        # under the node editor's zoom, and unreadable as anything but a bug.
+        self._metrics = QtGui.QFontMetricsF(font)
+
+    def set_font_scale(self, scale: float) -> None:
+        """Draw and measure subsequent text `scale` times :attr:`font_pt`.
+
+        Qt re-shapes the glyphs at the new size, so text scaled by the node
+        editor's zoom is rendered crisp rather than blown up from a bitmap.
+        Fractional sizes are kept fractional -- rounding here would draw text
+        of a size the layout did not budget for.
+        """
+        self._apply_font(self.font_pt * float(scale))
 
     # -- helpers -----------------------------------------------------------
 

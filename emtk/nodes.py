@@ -43,26 +43,24 @@ all its, transliterated under the rules in ``README.md``.
 
 What this adds that imnodes does not have
 -----------------------------------------
-**Zoom -- of the canvas, not of the glyphs.** imnodes has none at all, and a
-graph of forty nodes is unreadable without something. The transform is
-:class:`Canvas`, one scale and one translation, taken in shape from
-imgui-node-editor's ``imgui_canvas.cpp`` -- the one thing worth having out of
-the candidate that lost.
+**Zoom.** imnodes has none at all, and a graph of forty nodes is unreadable
+without something. The transform is :class:`Canvas`, one scale and one
+translation, taken in shape from imgui-node-editor's ``imgui_canvas.cpp`` --
+the one thing worth having out of the candidate that lost.
 
-Be exact about what it scales, because the difference is visible and the wrong
-expectation produces bug reports: **node positions, padding, pin sizes, corner
-rounding, link thickness and the grid** follow the zoom; **text and the widgets
-inside a node do not**. That is not a shortcut, it is what emtk can currently
-do -- both shipped painters report a fixed glyph cell, so ``push_font(font,
-size)`` changes no measurement, and a node's pixel size is the same at every
-zoom. Zooming out therefore *spreads the nodes apart* and shrinks nothing
-inside them, which is what you want for finding your way around a large graph
-and is not what you want for reading a thumbnail of one. Scaling glyphs needs a
-size-aware atlas in emtk, which is its own piece of work.
-
-Everything that consumes the zoom knows this. :meth:`EditorContext.fit_to_content`
-in particular solves for it rather than assuming node size scales -- assuming it
-overshoots badly at small zooms and pushes half the graph off screen.
+What the zoom scales has a history, and the current answer is: **everything**.
+Node positions, padding, pin sizes, corner rounding, link thickness and the
+grid always followed the zoom. Node *contents* -- the text and widgets a body
+is laid out from -- used not to: a node kept one pixel size at every zoom, so
+zooming out spread the nodes apart and shrank nothing inside them, and a fit
+to the panel could only shrink the gaps. Since content scaling that is gone:
+while a node submits, the painter's glyphs are re-shaped at the zoom
+(:meth:`Painter.set_font_scale` -- Qt re-renders the face crisp; the bitmap
+atlas scales its quads, which softens above 1.0) and the few layout metrics
+that are not font-derived are scaled with it. Because a node's body *is* its
+laid-out content, that one change is what makes the node itself scale.
+Editors that preferred the old behaviour set
+:attr:`EditorContext.scale_content` to ``False``.
 
 Zoom is opt-in per editor (:meth:`EditorContext.set_zoom`), and off by default,
 so an editor that never sets it behaves exactly as imnodes does.
@@ -700,6 +698,19 @@ class EditorContext:
         #: ``(size_fraction, location)`` when :func:`mini_map` asked for one
         #: this frame, else ``None``.
         self._minimap: typing.Optional[tuple] = None
+        #: Whether node *contents* follow the zoom. On -- the default -- the
+        #: glyphs and the style metrics a node's body is laid out from are
+        #: scaled by :attr:`Canvas.zoom` while that node submits, so a node's
+        #: pixel size shrinks and grows with the view. Off, the contents keep
+        #: a fixed pixel size and zooming only moves the nodes, which is what
+        #: emtk did before content scaling existed.
+        self.scale_content: bool = True
+        #: The style-metric overrides in force for one node's submission, as
+        #: ``{name: original}``. ``None`` outside a scaled node; the font
+        #: half is tracked separately because it outlives the node -- see
+        #: :func:`_begin_node_scale`.
+        self._content_scaled_style: typing.Optional[dict] = None
+        self._content_font_scaled: bool = False
 
     # -- geometry the host asks for --------------------------------------
 
@@ -753,18 +764,26 @@ class EditorContext:
         that renders a graph as a four-pixel speck, so it is refused rather
         than approximated.
 
-        The arithmetic is not the obvious one, because a node's **pixel size
-        does not change with the zoom** (see the module docstring). The graph's
-        screen extent is therefore
+        The equation depends on whether node *contents* follow the zoom
+        (:attr:`scale_content`). When they do, a node's pixel size at zoom
+        ``z`` is its base size times ``z``, and the graph's screen extent is
 
         .. code-block:: text
 
-            extent = zoom x origin_span + node_size
+            extent = z x (origin_span + base_node_size)
 
-        -- part scaling, part constant. Solving that for ``zoom`` is what makes
-        the fit land; dividing the available width by the whole extent, as a
-        fit normally would, treats the constant term as if it shrank too and
-        chooses a zoom that leaves the outermost nodes hanging off the edge.
+        -- everything scales, so the fit is the ordinary one: divide the
+        available box by the whole grid-space extent. When they do not, the
+        node size is a constant term,
+
+        .. code-block:: text
+
+            extent = z x origin_span + node_size
+
+        and solving *that* is what makes the fit land; dividing the available
+        width by the whole extent, as a fit normally would, treats the
+        constant term as if it shrank too and chooses a zoom that leaves the
+        outermost nodes hanging off the edge.
         """
         bounds = self._origin_bounds
         if bounds is None:
@@ -772,22 +791,39 @@ class EditorContext:
         x0, y0, x1, y1 = bounds
         node_w, node_h = self._max_node_pixels
         span_x, span_y = x1 - x0, y1 - y0
-        avail_w = max(box[2] - 2 * margin - node_w, 1.0)
-        avail_h = max(box[3] - 2 * margin - node_h, 1.0)
 
         lo, hi = Canvas.ZOOM_RANGE
         zoom = hi
-        if span_x > 1e-6:
-            zoom = min(zoom, avail_w / span_x)
-        if span_y > 1e-6:
-            zoom = min(zoom, avail_h / span_y)
-        zoom = min(hi, max(lo, zoom))
-        self.canvas.zoom = zoom
+        if self.scale_content:
+            # The rects in _max_node_pixels were measured at the zoom the last
+            # frame drew at, so dividing them back out gives the base size.
+            # A frame re-measures every submitted node, so a zoom change
+            # between the measure and this call self-corrects one frame later.
+            applied = self.canvas.zoom or 1.0
+            base_w, base_h = node_w / applied, node_h / applied
+            avail_w = max(box[2] - 2 * margin, 1.0)
+            avail_h = max(box[3] - 2 * margin, 1.0)
+            if span_x + base_w > 1e-6:
+                zoom = min(zoom, avail_w / (span_x + base_w))
+            if span_y + base_h > 1e-6:
+                zoom = min(zoom, avail_h / (span_y + base_h))
+            zoom = min(hi, max(lo, zoom))
+            self.canvas.zoom = zoom
+            extent_x = (span_x + base_w) * zoom
+            extent_y = (span_y + base_h) * zoom
+        else:
+            avail_w = max(box[2] - 2 * margin - node_w, 1.0)
+            avail_h = max(box[3] - 2 * margin - node_h, 1.0)
+            if span_x > 1e-6:
+                zoom = min(zoom, avail_w / span_x)
+            if span_y > 1e-6:
+                zoom = min(zoom, avail_h / span_y)
+            zoom = min(hi, max(lo, zoom))
+            self.canvas.zoom = zoom
+            extent_x = span_x * zoom + node_w
+            extent_y = span_y * zoom + node_h
 
-        # Centre what will actually be on screen: the origins scaled by the new
-        # zoom, plus the node that hangs furthest past the last origin.
-        extent_x = span_x * zoom + node_w
-        extent_y = span_y * zoom + node_h
+        # Centre what will actually be on screen.
         self.canvas.panning = (
             (box[2] - extent_x) * 0.5 - x0 * zoom,
             (box[3] - extent_y) * 0.5 - y0 * zoom,
@@ -984,6 +1020,98 @@ def pop_style_var(count: int = 1) -> None:
 # The editor
 # --------------------------------------------------------------------------
 
+#: The ``im`` style metrics a node body is laid out from that are **not**
+#: derived from the font. The font takes the zoom through the painter's
+#: ``set_font_scale``; these take it here, and both are restored when the
+#: node closes.
+_CONTENT_STYLE_VARS: typing.Tuple[str, ...] = (
+    "frame_padding", "item_spacing", "item_inner_spacing",
+    "frame_rounding", "grab_min_size",
+)
+
+
+def _begin_node_scale(ctx: "EditorContext") -> None:
+    """Scale what one node's body is measured with to the current zoom.
+
+    A node's pixel size *is* its laid-out content: rows are a line of text
+    tall, controls are a frame padding tall and an item spacing apart. Scale
+    the metrics and the layout lands in true screen coordinates at this
+    zoom -- which is why this is all the content scaling there is, and why
+    the drawn glyphs must be re-shaped to match (:meth:`set_font_scale`),
+    or the boxes measure one size and the text in them draws at another.
+
+    A painter without :meth:`set_font_scale` still scales the metrics, so
+    nodes shrink and grow; only their text stays at its base size.
+
+    Notes
+    -----
+    The **font** half deliberately outlives the node: node content is queued
+    into the drawlist's channel buffers and only replays onto the painter at
+    :func:`end_node_editor`'s ``channels_merge`` -- restoring the font here
+    would replay every node's text at the base size into boxes measured at
+    the zoom, cropping each line to two-thirds. The style metrics affect
+    only layout, which is finished by ``end_node``, so *they* restore here.
+    """
+    zoom = ctx.canvas.zoom
+    if not ctx.scale_content or abs(zoom - 1.0) < 1e-9:
+        return
+
+    painter = im.get_current_context().p
+    set_font_scale = getattr(painter, "set_font_scale", None)
+    if callable(set_font_scale):
+        set_font_scale(zoom)
+        ctx._content_font_scaled = True
+
+    style = im.get_style()
+    backup = {name: getattr(style, name) for name in _CONTENT_STYLE_VARS}
+    for name, value in backup.items():
+        if isinstance(value, tuple):
+            setattr(style, name, tuple(v * zoom for v in value))
+        else:
+            setattr(style, name, value * zoom)
+    ctx._content_scaled_style = backup
+
+
+def _end_node_scale(ctx: "EditorContext") -> None:
+    """Undo the style half of :func:`_begin_node_scale`.
+
+    The font half is restored after the channel merge -- see the Notes above.
+    """
+    if ctx._content_scaled_style is None:
+        return
+    style = im.get_style()
+    for name, value in ctx._content_scaled_style.items():
+        setattr(style, name, value)
+    ctx._content_scaled_style = None
+
+
+def _restore_node_font(ctx: "EditorContext") -> None:
+    """Put the painter's font back to its base size after the channel merge."""
+    if not ctx._content_font_scaled:
+        return
+    painter = im.get_current_context().p
+    set_font_scale = getattr(painter, "set_font_scale", None)
+    if callable(set_font_scale):
+        set_font_scale(1.0)
+    ctx._content_font_scaled = False
+
+
+def content_scale() -> float:
+    """Report the scale node *contents* are being submitted at this frame.
+
+    Returns
+    -------
+    float
+        The editor's zoom while a node submits under content scaling, else
+        ``1.0``. A host multiplies the pixel sizes it passes *into* the
+        layout -- an item width, a plot size -- by this, so they follow the
+        same zoom the metrics already do.
+    """
+    ctx = _current
+    if ctx is None or not ctx.scale_content:
+        return 1.0
+    return ctx.canvas.zoom
+
 
 def begin_node_editor(ctx: EditorContext, box: typing.Optional[tuple] = None) -> None:
     """Start drawing an editor: the grid, and the scope nodes go in.
@@ -1003,6 +1131,12 @@ def begin_node_editor(ctx: EditorContext, box: typing.Optional[tuple] = None) ->
     _current, _scope, _node, _pin = ctx, "editor", None, None
     _color_stack.clear()
     _style_stack.clear()
+
+    # A host that raised inside the previous frame left the painter's font
+    # scaled -- this frame's first node would then scale an already-scaled
+    # face. Put it back before anything draws.
+    ctx._content_font_scaled = False
+    ctx._content_scaled_style = None
 
     if box is None:
         origin = im.get_cursor_screen_pos()
@@ -1156,8 +1290,11 @@ def end_node_editor() -> None:
     _draw_links(draw, ctx)
     draw.channels_merge()
 
-    # After the merge, so the rubber band and the minimap sit above every node
-    # rather than being stacked among them.
+    # After the merge, so the minimap sits above every node rather than being
+    # stacked among them -- and so the *font* comes back at its base size only
+    # once the buffered node text has replayed at the scaled one.
+    _restore_node_font(ctx)
+
     _update_content_bounds(ctx)
     _draw_mini_map(ctx)
     _update_interaction(ctx, draw)
@@ -1280,6 +1417,7 @@ def begin_node(
         im.dummy(size, size)
         return
 
+    _begin_node_scale(ctx)
     im.set_cursor_screen_pos(_title_bar_origin(ctx, node))
     im.push_id(str(node_id))
     im.begin_group()
@@ -1325,6 +1463,7 @@ def end_node() -> None:
 
     im.end_group()
     im.pop_id()
+    _end_node_scale(ctx)
 
     zoom = ctx.canvas.zoom
     if node.shape == NodeShape.DISC:

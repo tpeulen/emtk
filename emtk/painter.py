@@ -114,7 +114,8 @@ REQUIRED_OPERATIONS: tuple[str, ...] = (
 #: `painter_capabilities` what the painter in hand can do, fills
 #: `io.backend_flags` from the answer, and falls back visibly where one is
 #: missing -- an image becomes its frame, a font push is ignored.
-OPTIONAL_OPERATIONS: tuple[str, ...] = ("image", "set_font", "text_rotated")
+OPTIONAL_OPERATIONS: tuple[str, ...] = ("image", "set_font", "set_font_scale",
+                                        "text_rotated")
 
 #: Faster spellings of what the helpers below already do with the required
 #: operations. A host that has a vectorised path offers one of these and the
@@ -233,6 +234,22 @@ class Painter(Protocol):
 
     def set_font(self, font) -> None:
         """Draw subsequent text in *font*. **Optional** -- see :func:`set_font`."""
+
+    def set_font_scale(self, scale: float) -> None:
+        """Draw subsequent text `scale` times the painter's base size.
+
+        **Optional.** ``1.0`` restores the base size, which is the whole
+        contract: the caller scales, draws, and hands back ``1.0``. A painter
+        whose glyphs cannot change size simply does not define this, and
+        callers probe for it rather than assume it --
+        :func:`painter_capabilities` reports ``RENDERER_HAS_FONTS`` for a
+        painter that can at least swap faces.
+
+        The node editor's zoom is the user here: a node's content is laid out
+        from the font metrics, so scaling the metrics scales the node, and
+        re-shaping the glyphs at the scaled size keeps the text crisp instead
+        of blowing up a bitmap.
+        """
 
     def text_rotated(
         self,

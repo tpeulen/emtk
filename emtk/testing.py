@@ -92,6 +92,15 @@ class RecordingPainter:
         """Height of one line."""
         return self.LINE_H
 
+    def set_font_scale(self, scale: float) -> None:
+        """Scale the glyph cell, so tests can exercise scaled text.
+
+        Instance attributes shadow the class constants, so one painter's
+        metrics change without touching every other test's.
+        """
+        self.GLYPH_W = type(self).GLYPH_W * float(scale)
+        self.LINE_H = type(self).LINE_H * float(scale)
+
 
 # --------------------------------------------------------------------------- #
 # The screenshot painter: the six operations, rasterised in pure Python
@@ -237,6 +246,8 @@ class PixelPainter:
             for i in range(3, len(self.px), 4):
                 self.px[i] = background[3]
         self._atlas = _load_atlas()
+        #: Text size, as a multiple of the baked one. See :meth:`set_font_scale`.
+        self._font_scale = 1.0
 
     # -- plumbing ---------------------------------------------------------- #
 
@@ -450,10 +461,14 @@ class PixelPainter:
                     self.px[o + 3] = max(self.px[o + 3], int(a * alpha / 255))
 
     def text_width(self, string) -> float:
-        return self._atlas.advance(string) * self.scale
+        return self._atlas.advance(string) * self.scale * self._font_scale
 
     def line_height(self) -> float:
-        return self._atlas.line_height * self.scale
+        return self._atlas.line_height * self.scale * self._font_scale
+
+    def set_font_scale(self, scale: float) -> None:
+        """Scale the glyph cell on top of the device scale."""
+        self._font_scale = float(scale)
 
     # -- optional operations ----------------------------------------------- #
 

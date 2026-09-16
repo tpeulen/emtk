@@ -247,6 +247,22 @@ class QuadPainter:
         self._half_cell_h = atlas.cell[1] * 0.5
         self._pad = atlas.pad
 
+    def set_font_scale(self, scale: float) -> None:
+        """Draw and measure text `scale` times the baked size.
+
+        The atlas is a bitmap face, so the glyph *quads* and their advance
+        scale together -- text above 1.0 softens the way any scaled bitmap
+        does, while text below it stays clean. The resolved metrics are
+        recomputed here rather than per call: the quad loop reads them once
+        per glyph, and a property in that loop was measurable.
+        """
+        self._font_scale = float(scale)
+        atlas = self._atlas
+        self._advance = atlas.advance() * self._font_scale
+        self._shrink = atlas.render_scale * self._font_scale
+        self._glyph_w = atlas.cell[0] * self._shrink
+        self._glyph_h = atlas.cell[1] * self._shrink
+
     # -- output ------------------------------------------------------------
 
     @property

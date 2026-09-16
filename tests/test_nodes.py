@@ -254,6 +254,88 @@ def test_fit_to_content_frames_every_node():
         assert BOX[1] <= y0 and y1 <= BOX[1] + BOX[3] + 1.0
 
 
+def test_zoom_scales_the_node_not_just_the_gaps():
+    """The same node drawn at zoom 0.5 measures about half the node at 1.0.
+
+    The body is its laid-out content, and the content is laid out from the
+    font metrics -- so scaling the metrics (and the glyphs drawn into them)
+    is what makes the *node* shrink, not merely the space around it. This is
+    the property a "zoom out to read a thumbnail" view needs and the one the
+    canvas-only zoom could not give.
+    """
+    ctx = nodes.EditorContext()
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 30.0))
+    io, storage = im.IO(), {}
+
+    _frame(lambda: _simple_graph(ctx, (1,), title="A long enough title"),
+           io=io, storage=storage)
+    full = ctx._nodes[1].rect
+
+    ctx.canvas.zoom = 0.5
+    _frame(lambda: _simple_graph(ctx, (1,), title="A long enough title"),
+           io=io, storage=storage)
+    half = ctx._nodes[1].rect
+
+    full_w, half_w = full[2] - full[0], half[2] - half[0]
+    full_h, half_h = full[3] - full[1], half[3] - half[1]
+    assert half_w < full_w * 0.75, "the node barely shrank; only the gaps did"
+    assert half_h < full_h * 0.75
+    assert half_w > full_w * 0.25, "the node vanished; nothing was laid out"
+
+
+def test_zoom_scales_the_drawn_glyphs():
+    """Text drawn inside a zoomed node is drawn at the scaled metrics."""
+    ctx = nodes.EditorContext()
+    io, storage = im.IO(), {}
+    painter = RecordingPainter()
+    _frame(lambda: _simple_graph(ctx, (1,), title="Title"),
+           io=io, storage=storage, painter=painter)
+    full_texts = list(painter.texts)
+
+    ctx.canvas.zoom = 0.5
+    _frame(lambda: _simple_graph(ctx, (1,), title="Title"),
+           io=io, storage=storage, painter=painter)
+    half_texts = painter.texts[len(full_texts):]
+
+    def widths(entries):
+        return [entry[2] for entry in entries if entry[2] > 0]
+
+    full_w = widths(full_texts)
+    half_w = widths(half_texts)
+    assert full_w and half_w
+    assert max(half_w) < max(full_w), "glyphs did not shrink with the zoom"
+
+
+def test_content_scaling_restores_the_style_and_the_font():
+    """After a scaled node closes, the metrics and the font are back at 1.0.
+
+    A scale that leaks past the node would grow every later node, widget and
+    plot in the frame -- the failure reads as "the editor inflates the
+    window", and nothing points back at the restore.
+    """
+    ctx = nodes.EditorContext()
+    nodes.set_node_grid_space_pos(ctx, 1, (40.0, 30.0))
+    io, storage = im.IO(), {}
+    painter = RecordingPainter()
+    seen: list = []
+
+    def build():
+        _simple_graph(ctx, (1,))
+        # Read inside the frame but after the editor closed: what a widget
+        # drawn after the editor would measure with.
+        seen.append((im.get_style().frame_padding, im.get_style().item_spacing,
+                     painter.line_height(), nodes.content_scale()))
+
+    ctx.canvas.zoom = 0.5
+    _frame(build, io=io, storage=storage, painter=painter)
+
+    frame_padding, item_spacing, line_height, scale = seen[-1]
+    assert frame_padding == (4.0, 3.0), "im style vars leaked past the node"
+    assert item_spacing == (8.0, 4.0)
+    assert line_height == RecordingPainter.LINE_H, "font scale leaked"
+    assert scale == 1.0, "content scale reported outside scope"
+
+
 # ---------------------------------------------------------------------------
 # Links
 # ---------------------------------------------------------------------------
