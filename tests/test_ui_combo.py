@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import combo
+from emtk.widgets import combo
 
 
 class RecordingPainter:
@@ -80,7 +80,7 @@ def _make(options=("alpha", "beta", "gamma"), **kwargs):
     options : sequence of str
         The choices.
     **kwargs
-        Passed to :class:`~cmtk.widgets.combo.ComboBox`.
+        Passed to :class:`~emtk.widgets.combo.ComboBox`.
 
     Returns
     -------

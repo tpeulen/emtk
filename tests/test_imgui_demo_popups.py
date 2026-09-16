@@ -10,22 +10,22 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk import keys
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk import keys
+from emtk.testing import RecordingPainter
 
 
 class Frames:
     def __init__(self, gui, size=(0.0, 0.0, 400.0, 400.0)) -> None:
         self.gui, self.size = gui, size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
         self.result = None
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.result = self.gui()
         return self.painter
 
@@ -59,16 +59,16 @@ class Frames:
 #   }
 def _modal_gui(state):
     def gui():
-        if cmtk.button("Delete.."):
-            cmtk.open_popup("Delete?")
-        state["open_button"] = cmtk.get_item_rect()
-        if cmtk.begin_popup_modal("Delete?"):
-            cmtk.text("All those beautiful files will be deleted.")
-            if cmtk.button("OK", (120.0, 0.0)):
-                cmtk.close_current_popup()
+        if emtk.button("Delete.."):
+            emtk.open_popup("Delete?")
+        state["open_button"] = emtk.get_item_rect()
+        if emtk.begin_popup_modal("Delete?"):
+            emtk.text("All those beautiful files will be deleted.")
+            if emtk.button("OK", (120.0, 0.0)):
+                emtk.close_current_popup()
                 state["confirmed"] = True
-            state["ok"] = cmtk.get_item_rect()
-            cmtk.end_popup()
+            state["ok"] = emtk.get_item_rect()
+            emtk.end_popup()
     return gui
 
 
@@ -100,13 +100,13 @@ def test_closing_a_modal_from_inside_it_closes_it():
 #   if (ImGui::BeginPopupContextItem("item context menu")) { ... }
 def _context_gui(state):
     def gui():
-        cmtk.text("Value = %.3f" % state.get("value", 0.5))
-        state["text"] = cmtk.get_item_rect()
-        if cmtk.begin_popup_context_item("item context menu"):
-            if cmtk.selectable("Set to zero"):
+        emtk.text("Value = %.3f" % state.get("value", 0.5))
+        state["text"] = emtk.get_item_rect()
+        if emtk.begin_popup_context_item("item context menu"):
+            if emtk.selectable("Set to zero"):
                 state["value"] = 0.0
-            state["zero"] = cmtk.get_item_rect()
-            cmtk.end_popup()
+            state["zero"] = emtk.get_item_rect()
+            emtk.end_popup()
     return gui
 
 
@@ -142,15 +142,15 @@ def test_a_nested_menu_only_yields_while_its_parent_is_open():
     state: dict = {}
 
     def gui():
-        if cmtk.begin_menu_bar():
-            if cmtk.begin_menu("File"):
-                if cmtk.begin_menu("Options"):
-                    cmtk.menu_item("Enabled", "", True)
-                    cmtk.end_menu()
-                state["options"] = cmtk.get_item_rect()
-                cmtk.end_menu()
-            state["file"] = cmtk.get_item_rect()
-            cmtk.end_menu_bar()
+        if emtk.begin_menu_bar():
+            if emtk.begin_menu("File"):
+                if emtk.begin_menu("Options"):
+                    emtk.menu_item("Enabled", "", True)
+                    emtk.end_menu()
+                state["options"] = emtk.get_item_rect()
+                emtk.end_menu()
+            state["file"] = emtk.get_item_rect()
+            emtk.end_menu_bar()
 
     frames = Frames(gui)
     frames.draw()
@@ -166,9 +166,9 @@ def test_a_disabled_menu_item_does_not_report_a_click():
     state = {"fired": False}
 
     def gui():
-        if cmtk.menu_item("Quit", "Alt+F4", False, False):
+        if emtk.menu_item("Quit", "Alt+F4", False, False):
             state["fired"] = True
-        return cmtk.get_item_rect()
+        return emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -178,7 +178,7 @@ def test_a_disabled_menu_item_does_not_report_a_click():
 
 def test_a_checked_menu_item_is_marked():
     def gui():
-        cmtk.menu_item("Checked", "", True)
+        emtk.menu_item("Checked", "", True)
 
     frames = Frames(gui)
     frames.draw()
@@ -198,13 +198,13 @@ def test_the_mouse_queries_report_what_the_host_put_in_io():
     answers: dict = {}
 
     def gui():
-        answers["pos"] = cmtk.get_mouse_pos()
-        answers["down0"] = cmtk.is_mouse_down(0)
-        answers["down1"] = cmtk.is_mouse_down(1)
-        answers["clicked"] = cmtk.is_mouse_clicked(0)
-        answers["released"] = cmtk.is_mouse_released(0)
-        answers["any"] = cmtk.is_any_mouse_down()
-        answers["valid"] = cmtk.is_mouse_pos_valid()
+        answers["pos"] = emtk.get_mouse_pos()
+        answers["down0"] = emtk.is_mouse_down(0)
+        answers["down1"] = emtk.is_mouse_down(1)
+        answers["clicked"] = emtk.is_mouse_clicked(0)
+        answers["released"] = emtk.is_mouse_released(0)
+        answers["any"] = emtk.is_any_mouse_down()
+        answers["valid"] = emtk.is_mouse_pos_valid()
 
     frames = Frames(gui)
     frames.io.mouse_pos = (12.0, 34.0)
@@ -220,7 +220,7 @@ def test_an_absent_pointer_is_not_a_valid_position():
     answers: dict = {}
 
     def gui():
-        answers["valid"] = cmtk.is_mouse_pos_valid()
+        answers["valid"] = emtk.is_mouse_pos_valid()
 
     frames = Frames(gui)
     frames.draw()                       # IO's default is (-1, -1)
@@ -231,8 +231,8 @@ def test_the_drag_delta_is_measured_from_where_the_press_landed():
     answers: dict = {}
 
     def gui():
-        answers["delta"] = cmtk.get_mouse_drag_delta(0)
-        answers["dragging"] = cmtk.is_mouse_dragging(0)
+        answers["delta"] = emtk.get_mouse_drag_delta(0)
+        answers["dragging"] = emtk.is_mouse_dragging(0)
 
     frames = Frames(gui)
     frames.io.mouse_pos = (10.0, 10.0)
@@ -252,9 +252,9 @@ def test_resetting_the_drag_delta_moves_the_origin():
     answers: dict = {}
 
     def gui():
-        answers["before"] = cmtk.get_mouse_drag_delta(0)
-        cmtk.reset_mouse_drag_delta(0)
-        answers["after"] = cmtk.get_mouse_drag_delta(0)
+        answers["before"] = emtk.get_mouse_drag_delta(0)
+        emtk.reset_mouse_drag_delta(0)
+        answers["after"] = emtk.get_mouse_drag_delta(0)
 
     frames = Frames(gui)
     frames.io.mouse_pos = (40.0, 60.0)
@@ -269,10 +269,10 @@ def test_the_key_queries_report_the_key_the_host_delivered():
     answers: dict = {}
 
     def gui():
-        answers["a"] = cmtk.is_key_down(keys.KEY_A)
-        answers["b"] = cmtk.is_key_down(keys.KEY_B)
-        answers["pressed"] = cmtk.is_key_pressed(keys.KEY_A)
-        answers["name"] = cmtk.get_key_name(keys.KEY_A)
+        answers["a"] = emtk.is_key_down(keys.KEY_A)
+        answers["b"] = emtk.is_key_down(keys.KEY_B)
+        answers["pressed"] = emtk.is_key_pressed(keys.KEY_A)
+        answers["name"] = emtk.get_key_name(keys.KEY_A)
 
     frames = Frames(gui)
     frames.io.key = keys.KEY_A
@@ -286,8 +286,8 @@ def test_a_mouse_cursor_can_be_asked_for_and_read_back():
     answers: dict = {}
 
     def gui():
-        cmtk.set_mouse_cursor(3)
-        answers["cursor"] = cmtk.get_mouse_cursor()
+        emtk.set_mouse_cursor(3)
+        answers["cursor"] = emtk.get_mouse_cursor()
 
     frames = Frames(gui)
     frames.draw()
@@ -303,11 +303,11 @@ def test_keyboard_focus_can_be_placed_from_code():
     state = {"text": "", "other": "", "first": True}
 
     def gui():
-        _c, state["other"] = cmtk.input_text("other", state["other"])
+        _c, state["other"] = emtk.input_text("other", state["other"])
         if state["first"]:
-            cmtk.set_keyboard_focus_here()      # ...the next one
+            emtk.set_keyboard_focus_here()      # ...the next one
             state["first"] = False
-        _c, state["text"] = cmtk.input_text("field", state["text"])
+        _c, state["text"] = emtk.input_text("field", state["text"])
 
     frames = Frames(gui)
     frames.draw()
@@ -321,9 +321,9 @@ def test_keyboard_focus_can_be_placed_on_the_item_just_submitted():
     state = {"text": "", "first": True}
 
     def gui():
-        _c, state["text"] = cmtk.input_text("field", state["text"])
+        _c, state["text"] = emtk.input_text("field", state["text"])
         if state["first"]:
-            cmtk.set_keyboard_focus_here(-1)    # ...the one just submitted
+            emtk.set_keyboard_focus_here(-1)    # ...the one just submitted
             state["first"] = False
 
     frames = Frames(gui)

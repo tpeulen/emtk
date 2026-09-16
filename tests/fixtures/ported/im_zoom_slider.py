@@ -1,13 +1,13 @@
 """im_zoom_slider: auto-ported from ImZoomSlider.h
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 
 from enum import IntFlag
 

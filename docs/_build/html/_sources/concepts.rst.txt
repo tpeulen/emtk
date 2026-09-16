@@ -11,7 +11,7 @@ cost of retained mode is a two-way binding between your data and the
 widget tree. The cost of immediate mode is that the whole UI is redrawn
 every frame.
 
-cmtk chose immediate mode because the reference (Dear ImGui) chose it for
+emtk chose immediate mode because the reference (Dear ImGui) chose it for
 the same reason: the UI is a tool, and a tool that *is* the code that draws
 it is a tool you can delete.
 
@@ -38,7 +38,7 @@ input edges (``mouse_clicked``, ``mouse_released``).
 
 The host provides three things, and that is the whole contract:
 
-1. **A painter.** ``cmtk.painter.REQUIRED_OPERATIONS`` is the list of methods
+1. **A painter.** ``emtk.painter.REQUIRED_OPERATIONS`` is the list of methods
    a surface must implement: ``fill_rect``, ``stroke_rect``, ``gradient_rect``,
    ``text``, ``push_clip``/``pop_clip``, ``fill_triangle``, plus ``text_width``
    and ``line_height`` to measure with.
@@ -47,7 +47,7 @@ The host provides three things, and that is the whole contract:
    buttons went down or up this delivery, the modifiers, the wheel.
 
 3. **Time.** Dear ImGui reads no clock — the backend sets
-   ``io.delta_time``. cmtk reads the wall clock by default; set
+   ``io.delta_time``. emtk reads the wall clock by default; set
    ``io.wall_clock = False`` and drive ``delta_time`` yourself for a test.
 
 IDs
@@ -92,16 +92,16 @@ The six-operation painter contract
 ===================================
 
 A painter implements the methods in ``REQUIRED_OPERATIONS``. Every widget
-cmtk ships is built on those and nothing else. The optional operations
+emtk ships is built on those and nothing else. The optional operations
 (``image``, ``set_font``, ``text_rotated``) add what cannot be decomposed.
 
-The helper functions in ``cmtk.painter`` — ``line``, ``polyline``,
+The helper functions in ``emtk.painter`` — ``line``, ``polyline``,
 ``fill_triangles``, ``fill_convex``, ``fill_circle`` — are built from the
 required operations. A painter that provides native spellings of these
 (accelerations) gets faster drawing; one that does not gets the same picture
 through the fallback.
 
-``cmtk.testing.RecordingPainter`` implements the required operations by
+``emtk.testing.RecordingPainter`` implements the required operations by
 recording them. It is what makes every example on these pages run with no
 window::
 

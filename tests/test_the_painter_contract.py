@@ -1,6 +1,6 @@
 """Six operations really are enough, and the contract says which six.
 
-This is cmtk's whole claim to portability: a surface that can fill a rectangle,
+This is emtk's whole claim to portability: a surface that can fill a rectangle,
 outline one, gradient one, draw a string, clip, and fill a triangle can draw
 every widget here -- so a new platform is a class with those methods on it
 rather than a port. The README says so, `painter_capabilities` behaves as if it
@@ -24,8 +24,8 @@ import inspect
 
 import pytest
 
-import cmtk
-from cmtk.painter import (
+import emtk
+from emtk.painter import (
     ACCELERATIONS,
     OPTIONAL_OPERATIONS,
     REQUIRED_OPERATIONS,
@@ -76,35 +76,35 @@ class SixOperations:
 
 def _draw_a_bit_of_everything(painter, io=None):
     """One frame touching a widget from each family."""
-    io = io or cmtk.IO()
-    with cmtk.frame(painter, (0.0, 0.0, 600.0, 500.0), io=io, storage={}):
-        cmtk.begin("Everything")
-        cmtk.text("a label")
-        cmtk.button("Press")
-        cmtk.checkbox("check", True)
-        cmtk.slider_float("alpha", 0.5, 0.0, 1.0)
-        cmtk.input_text("name", "abc")
-        cmtk.combo("pick", 0, ["a", "b"])
-        cmtk.color_edit4("col", (1.0, 0.0, 0.0, 1.0))
-        cmtk.progress_bar(0.4)
-        cmtk.separator()
-        if cmtk.begin_table("t", 2):
-            cmtk.table_next_column()
-            cmtk.text("x")
-            cmtk.table_next_column()
-            cmtk.text("y")
-            cmtk.end_table()
-        if cmtk.begin_tab_bar("tabs"):
-            if cmtk.begin_tab_item("one"):
-                cmtk.end_tab_item()
-            cmtk.end_tab_bar()
-        cmtk.plot_lines("plot", [0.0, 1.0, 0.5])
+    io = io or emtk.IO()
+    with emtk.frame(painter, (0.0, 0.0, 600.0, 500.0), io=io, storage={}):
+        emtk.begin("Everything")
+        emtk.text("a label")
+        emtk.button("Press")
+        emtk.checkbox("check", True)
+        emtk.slider_float("alpha", 0.5, 0.0, 1.0)
+        emtk.input_text("name", "abc")
+        emtk.combo("pick", 0, ["a", "b"])
+        emtk.color_edit4("col", (1.0, 0.0, 0.0, 1.0))
+        emtk.progress_bar(0.4)
+        emtk.separator()
+        if emtk.begin_table("t", 2):
+            emtk.table_next_column()
+            emtk.text("x")
+            emtk.table_next_column()
+            emtk.text("y")
+            emtk.end_table()
+        if emtk.begin_tab_bar("tabs"):
+            if emtk.begin_tab_item("one"):
+                emtk.end_tab_item()
+            emtk.end_tab_bar()
+        emtk.plot_lines("plot", [0.0, 1.0, 0.5])
         # The optional operations, exercised through the API that uses them:
         # a host without `set_font` must ignore the push rather than raise.
-        cmtk.push_font(object())
-        cmtk.text("with a font pushed")
-        cmtk.pop_font()
-        cmtk.end()
+        emtk.push_font(object())
+        emtk.text("with a font pushed")
+        emtk.pop_font()
+        emtk.end()
     return io
 
 
@@ -135,9 +135,9 @@ def test_a_minimal_host_reports_no_optional_capabilities():
     """`io.backend_flags` is how a widget decides whether to fall back."""
     io = _draw_a_bit_of_everything(SixOperations())
     flags = io.backend_flags
-    assert not flags & cmtk.BackendFlags.RENDERER_HAS_IMAGES
-    assert not flags & cmtk.BackendFlags.RENDERER_HAS_FONTS
-    assert not flags & cmtk.BackendFlags.RENDERER_HAS_ROTATED_TEXT
+    assert not flags & emtk.BackendFlags.RENDERER_HAS_IMAGES
+    assert not flags & emtk.BackendFlags.RENDERER_HAS_FONTS
+    assert not flags & emtk.BackendFlags.RENDERER_HAS_ROTATED_TEXT
 
 
 @pytest.mark.parametrize(
@@ -154,14 +154,14 @@ def test_an_optional_operation_lights_its_own_flag(operation, flag):
     setattr(type(painter), operation, lambda self, *a, **k: None)
     try:
         io = _draw_a_bit_of_everything(painter)
-        assert io.backend_flags & getattr(cmtk.BackendFlags, flag)
+        assert io.backend_flags & getattr(emtk.BackendFlags, flag)
     finally:
         delattr(type(painter), operation)
 
 
 def test_the_helpers_decompose_onto_the_required_operations():
     """A polyline, a filled circle and an arc on a host that has none of them."""
-    from cmtk import painter as painter_module
+    from emtk import painter as painter_module
 
     painter = SixOperations()
     painter_module.polyline(

@@ -1,4 +1,4 @@
-"""tests for tools/autoport.py -- the mechanical C++ -> cmtk porter.
+"""tests for tools/autoport.py -- the mechanical C++ -> emtk porter.
 
 Two layers:
 
@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import autoport  # noqa: E402
 
-from cmtk.testing import (  # noqa: E402
+from emtk.testing import (  # noqa: E402
     PixelPainter, assert_images_equal, png_decode, png_encode, render,
 )
 
@@ -72,7 +72,7 @@ def _tmp_cpp(text: str) -> pathlib.Path:
     fh.close()
     return pathlib.Path(fh.name)
 
-def test_the_naming_rule_is_shared_with_cmtk():
+def test_the_naming_rule_is_shared_with_emtk():
     assert autoport.mechanical_name("SliderFloat") == "slider_float"
     assert autoport.mechanical_name("BeginPopupModal") == "begin_popup_modal"
 
@@ -331,7 +331,7 @@ def test_every_ported_extension_imports_and_flags_what_a_hand_owes(name):
     """The output always imports; the hand's debts are explicit, counted."""
     mod = _load(name)
     text = (PORTED / f"{name}.py").read_text()
-    assert "import cmtk.im as im" in text
+    assert "import emtk.im as im" in text
     # the hand-pass debts are visible, never silent
     real = sum(1 for l in text.splitlines()
                if "TODO(autoport):" in l and "need a hand" not in l)
@@ -403,7 +403,7 @@ def test_the_autoported_knob_draws_the_same_picture_every_time():
     side, with fields of equal width.
     """
     mod = _load("imgui_knobs")
-    painter = render(_gui_knobs(__import__("cmtk.im", fromlist=["im"]), mod),
+    painter = render(_gui_knobs(__import__("emtk.im", fromlist=["im"]), mod),
                      (0, 0, 340, 140))
     png = png_encode(painter.width, painter.height, painter.px)
     golden = GOLDEN / "imgui_knobs.png"
@@ -435,9 +435,9 @@ def test_the_autoported_arc_progress_bar_draws_the_same_picture_every_time():
 
 def test_the_autoported_knob_reports_the_value_it_was_given():
     mod = _load("imgui_knobs")
-    import cmtk.im as im
-    from cmtk.testing import PixelPainter
-    import cmtk as cmtk_pkg
+    import emtk.im as im
+    from emtk.testing import PixelPainter
+    import emtk as emtk_pkg
     seen = {}
 
     def gui():
@@ -450,7 +450,7 @@ def test_the_autoported_knob_reports_the_value_it_was_given():
         im.end()
 
     painter = PixelPainter(340, 140)
-    with cmtk_pkg.im.frame(painter, (0, 0, 340, 140)):
+    with emtk_pkg.im.frame(painter, (0, 0, 340, 140)):
         gui()
     assert seen["changed"] is False
     assert seen["value"] == pytest.approx(0.7)
@@ -828,8 +828,8 @@ def test_a_non_type_template_argument_still_evaporates():
         "counts = backend_.counts()"]
 
 
-def test_a_float_colour_becomes_the_bytes_cmtk_paints_in():
-    """Dear ImGui spells a colour as four floats 0..1, cmtk's painters take
+def test_a_float_colour_becomes_the_bytes_emtk_paints_in():
+    """Dear ImGui spells a colour as four floats 0..1, emtk's painters take
     bytes 0..255. The floats do not raise -- they draw (0, 0, 0), so the text
     is invisible, which is the worst kind of difference between the two."""
     pr = autoport.Porter()
@@ -847,7 +847,7 @@ def test_a_colour_that_is_not_a_literal_is_converted_at_runtime():
 
 def test_the_format_is_not_always_the_first_argument():
     """``TextColored(col, fmt, ...)``. Folding from argument 0 left the
-    varargs unfolded, and cmtk's ``text_colored(col, s)`` takes two."""
+    varargs unfolded, and emtk's ``text_colored(col, s)`` takes two."""
     assert autoport.Porter().expr(
         'ImGui::TextColored(ImVec4(1,0,0,1), "%d/%d", a, b)') == \
         'im.text_colored((255, 0, 0, 255), "%d/%d" % (a, b))'

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk import implot
-from cmtk.testing import PixelPainter, RecordingPainter
+import emtk
+from emtk import implot
+from emtk.testing import PixelPainter, RecordingPainter
 
 
 @pytest.fixture(autouse=True)
@@ -26,10 +26,10 @@ def _no_module_state_left_over():
 
 def _frame(fn, painter=None, w=400, h=300):
     p = painter or PixelPainter(w, h, background=(30, 32, 38, 255))
-    with cmtk.frame(p, (8, 8, w - 16, h - 16), io=cmtk.IO(), storage={}):
-        cmtk.begin("w")
+    with emtk.frame(p, (8, 8, w - 16, h - 16), io=emtk.IO(), storage={}):
+        emtk.begin("w")
         fn()
-        cmtk.end()
+        emtk.end()
     return p
 
 

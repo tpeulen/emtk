@@ -7,8 +7,8 @@ docstring for the session that lost a playback panel to it.
 """
 from __future__ import annotations
 
-import cmtk
-from cmtk import redraw
+import emtk
+from emtk import redraw
 
 
 class Transport:
@@ -85,8 +85,8 @@ def test_none_is_a_key_and_not_a_refusal():
 
 
 def test_it_is_reachable_from_the_package():
-    """A host reaches for `cmtk.redraw`; it must be there without an import dance."""
-    assert cmtk.redraw.content_key(Transport()) == (1, 464, False)
+    """A host reaches for `emtk.redraw`; it must be there without an import dance."""
+    assert emtk.redraw.content_key(Transport()) == (1, 464, False)
 
 
 class TestBlockCache:

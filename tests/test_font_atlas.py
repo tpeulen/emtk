@@ -16,7 +16,7 @@ import json
 
 import pytest
 
-from cmtk import font
+from emtk import font
 
 
 def test_the_atlas_ships_beside_the_code():

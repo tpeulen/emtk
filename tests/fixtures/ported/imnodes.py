@@ -1,13 +1,13 @@
 """imnodes: auto-ported from imnodes.h, imnodes.cpp
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 
 MINIMUM_COMPATIBLE_IMGUI_VERSION = 17400
 
@@ -724,7 +724,7 @@ def mini_map_draw_node(editor, node_idx):
 pass
 def mini_map_update():
     """MiniMapUpdate()."""
-    # TODO(autoport): BeginChild: cmtk takes a box anchored at the cursor; the id/border/flags are dropped
+    # TODO(autoport): BeginChild: emtk takes a box anchored at the cursor; the id/border/flags are dropped
 # TODO(autoport): hand-translate (the rules mangled this line):     ImNodesEditorContext& editor = editor_context_get()
     pass  # TODO(autoport): body of the line above
     mini_map_background = None  # TODO(autoport): uninitialized ImU32

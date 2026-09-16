@@ -11,21 +11,21 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 class Frames:
     def __init__(self, gui, size=(0.0, 0.0, 500.0, 500.0)) -> None:
         self.gui, self.size = gui, size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
         self.result = None
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.result = self.gui()
         return self.painter
 
@@ -49,7 +49,7 @@ class Frames:
 
 def _run(gui, size=(0.0, 0.0, 500.0, 500.0)):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size):
+    with emtk.frame(painter, size):
         gui()
     return painter
 
@@ -63,12 +63,12 @@ def test_a_label_before_a_framed_item_sits_on_its_line():
     boxes: dict = {}
 
     def gui():
-        cmtk.align_text_to_frame_padding()
-        cmtk.text("OK Blahblah")
-        boxes["label"] = cmtk.get_item_rect()
-        cmtk.same_line()
-        cmtk.button("Some framed item")
-        boxes["button"] = cmtk.get_item_rect()
+        emtk.align_text_to_frame_padding()
+        emtk.text("OK Blahblah")
+        boxes["label"] = emtk.get_item_rect()
+        emtk.same_line()
+        emtk.button("Some framed item")
+        boxes["button"] = emtk.get_item_rect()
 
     _run(gui)
     label, button = boxes["label"], boxes["button"]
@@ -88,19 +88,19 @@ def test_manual_wrapping_starts_a_new_line_when_the_next_button_would_not_fit():
     rows: dict = {}
 
     def gui():
-        style = cmtk.get_style()
-        right = cmtk.get_window_pos()[0] + cmtk.get_window_size()[0]
+        style = emtk.get_style()
+        right = emtk.get_window_pos()[0] + emtk.get_window_size()[0]
         button_size = (60.0, 20.0)
         for n in range(12):
-            cmtk.push_id(n)
-            cmtk.button("Box", button_size)
-            box = cmtk.get_item_rect()
+            emtk.push_id(n)
+            emtk.button("Box", button_size)
+            box = emtk.get_item_rect()
             rows[n] = box
-            cmtk.pop_id()
-            last_x2 = cmtk.get_item_rect_max()[0]
+            emtk.pop_id()
+            last_x2 = emtk.get_item_rect_max()[0]
             next_x2 = last_x2 + style.item_spacing[0] + button_size[0]
             if n + 1 < 12 and next_x2 < right:
-                cmtk.same_line()
+                emtk.same_line()
 
     _run(gui, size=(0.0, 0.0, 260.0, 400.0))
     lines = sorted({round(b[1]) for b in rows.values()})
@@ -120,14 +120,14 @@ def test_overlap_mode_lets_the_upper_item_take_the_pointer():
     boxes: dict = {}
 
     def gui():
-        cmtk.set_next_item_allow_overlap()
-        if cmtk.selectable("Some Selectable", False, (200.0, 0.0)):
+        emtk.set_next_item_allow_overlap()
+        if emtk.selectable("Some Selectable", False, (200.0, 0.0)):
             hits["selectable"] += 1
-        boxes["selectable"] = cmtk.get_item_rect()
-        cmtk.same_line()
-        if cmtk.small_button("Button"):
+        boxes["selectable"] = emtk.get_item_rect()
+        emtk.same_line()
+        if emtk.small_button("Button"):
             hits["button"] += 1
-        boxes["button"] = cmtk.get_item_rect()
+        boxes["button"] = emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -144,14 +144,14 @@ def test_horizontal_scroll_is_remembered_and_clamped():
     answers: dict = {}
 
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("scroller", (0.0, 0.0, 200.0, 100.0))
         ctx.current_window.content_size = (500.0, 100.0)
-        answers["max"] = cmtk.get_scroll_max_x()
-        cmtk.set_scroll_x(50.0)
-        answers["set"] = cmtk.get_scroll_x()
-        cmtk.set_scroll_here_x(1.0)
-        answers["here"] = cmtk.get_scroll_x()
+        answers["max"] = emtk.get_scroll_max_x()
+        emtk.set_scroll_x(50.0)
+        answers["set"] = emtk.get_scroll_x()
+        emtk.set_scroll_here_x(1.0)
+        answers["here"] = emtk.get_scroll_x()
         ctx.end()
 
     assert answers["max"] == 300.0
@@ -169,12 +169,12 @@ def test_sibling_nodes_open_independently():
 
     def gui():
         for index in range(3):
-            cmtk.push_id(index)
-            if cmtk.tree_node("Child %d" % index):
-                cmtk.text("blah blah %d" % index)
-                cmtk.tree_pop()
-            boxes[index] = cmtk.get_item_rect()
-            cmtk.pop_id()
+            emtk.push_id(index)
+            if emtk.tree_node("Child %d" % index):
+                emtk.text("blah blah %d" % index)
+                emtk.tree_pop()
+            boxes[index] = emtk.get_item_rect()
+            emtk.pop_id()
 
     frames = Frames(gui)
     frames.draw()
@@ -189,15 +189,15 @@ def test_a_selectable_node_can_be_both_open_and_chosen():
 
     def gui():
         for index in range(3):
-            cmtk.push_id(index)
-            opened = cmtk.tree_node("Node %d" % index)
-            state["boxes"][index] = cmtk.get_item_rect()
+            emtk.push_id(index)
+            opened = emtk.tree_node("Node %d" % index)
+            state["boxes"][index] = emtk.get_item_rect()
             if opened:
-                if cmtk.selectable("leaf %d" % index, state["selected"] == index):
+                if emtk.selectable("leaf %d" % index, state["selected"] == index):
                     state["selected"] = index
-                state["boxes"][("leaf", index)] = cmtk.get_item_rect()
-                cmtk.tree_pop()
-            cmtk.pop_id()
+                state["boxes"][("leaf", index)] = emtk.get_item_rect()
+                emtk.tree_pop()
+            emtk.pop_id()
 
     frames = Frames(gui)
     frames.draw()
@@ -214,19 +214,19 @@ def test_a_table_row_is_as_tall_as_its_tallest_cell():
     cells: dict = {}
 
     def gui():
-        if cmtk.begin_table("t", 2):
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.text("short")
-            cells["short"] = cmtk.get_item_rect()
-            cmtk.table_set_column_index(1)
-            cmtk.button("tall", (60.0, 60.0))
-            cells["tall"] = cmtk.get_item_rect()
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.text("next row")
-            cells["next"] = cmtk.get_item_rect()
-            cmtk.end_table()
+        if emtk.begin_table("t", 2):
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.text("short")
+            cells["short"] = emtk.get_item_rect()
+            emtk.table_set_column_index(1)
+            emtk.button("tall", (60.0, 60.0))
+            cells["tall"] = emtk.get_item_rect()
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.text("next row")
+            cells["next"] = emtk.get_item_rect()
+            emtk.end_table()
 
     _run(gui)
     assert cells["next"][1] >= cells["tall"][1] + cells["tall"][3] - 1.0, (
@@ -241,10 +241,10 @@ def test_two_tables_with_the_same_id_do_not_share_state():
 
     def gui():
         for which in ("a", "b"):
-            if cmtk.begin_table("same_id", 2 if which == "a" else 3):
-                cmtk.table_next_column()
-                counts[which] = cmtk.table_get_column_count()
-                cmtk.end_table()
+            if emtk.begin_table("same_id", 2 if which == "a" else 3):
+                emtk.table_next_column()
+                counts[which] = emtk.table_get_column_count()
+                emtk.end_table()
 
     _run(gui)
     assert counts == {"a": 2, "b": 3}, counts
@@ -262,15 +262,15 @@ def test_a_closed_tab_is_not_submitted_and_the_rest_carry_on():
     boxes: dict = {}
 
     def gui():
-        if cmtk.begin_tab_bar("MyTabBar"):
+        if emtk.begin_tab_bar("MyTabBar"):
             for name in names:
                 if not opened[name]:
                     continue
-                if cmtk.begin_tab_item(name):
-                    cmtk.text("This is the %s tab!" % name)
-                    cmtk.end_tab_item()
-                boxes[name] = cmtk.get_item_rect()
-            cmtk.end_tab_bar()
+                if emtk.begin_tab_item(name):
+                    emtk.text("This is the %s tab!" % name)
+                    emtk.end_tab_item()
+                boxes[name] = emtk.get_item_rect()
+            emtk.end_tab_bar()
 
     frames = Frames(gui)
     frames.draw()

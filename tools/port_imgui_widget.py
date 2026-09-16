@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-r"""Scaffold a cmtk port of a Dear ImGui widget -- in the shape that ports easily.
+r"""Scaffold a emtk port of a Dear ImGui widget -- in the shape that ports easily.
 
 Two thirds of a port is transcribing the C++ body; the third that is data
 (enums, palettes, options structs, word lists) this script does exactly. What
@@ -7,7 +7,7 @@ changed from the first scaffolder is the *shape* it emits, because the shape
 decides how much of the body can be transliterated line by line:
 
 * an **im-style function** ``def <module>(ctx, ...)`` written against
-  :mod:`chimol.cmtk.im` -- ``ctx.draw`` (the ``ImDrawList`` names),
+  :mod:`chimol.emtk.im` -- ``ctx.draw`` (the ``ImDrawList`` names),
   ``ctx.io`` (``ImGuiIO``), ``ctx.layout`` (``ItemSize/SameLine/Indent``),
   ``ctx.style``, ``ctx.push_id/get_id``, ``ctx.get_storage``,
   ``ctx.button_behavior`` -- with the C++ body of every public method pasted
@@ -16,7 +16,7 @@ decides how much of the body can be transliterated line by line:
   under each comment rather than a search;
 * a **retained control** ``class <Cls>(ImWidget)`` wrapping it, which is what
   the chrome, the gallery and the tests use;
-* a test on ``chimol.cmtk.testing.RecordingPainter`` that draws it and presses it;
+* a test on ``chimol.emtk.testing.RecordingPainter`` that draws it and presses it;
 * the module registered in ``CONTROL_MODULES`` and the lazy name map regenerated;
 * a **porting checklist** printed at the end: which draw primitives, IO
   fields, ID/storage calls, style vars and popups the source uses -- detected
@@ -39,10 +39,10 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-UI_DIR = ROOT / "chimol" / "cmtk"
+UI_DIR = ROOT / "chimol" / "emtk"
 DEFAULT_TEST_DIR = pathlib.Path.home() / "dev" / "chisurf" / "chisurf" / "plugins" / "chimol" / "test"
 
-#: ImGui spellings -> the cmtk.im spelling, for the comment prefixes and the checklist.
+#: ImGui spellings -> the emtk.im spelling, for the comment prefixes and the checklist.
 IM_NAMES: dict[str, str] = {
     "GetWindowDrawList": "ctx.draw", "GetForegroundDrawList": "ctx.draw", "GetBackgroundDrawList": "ctx.draw",
     "AddLine": "ctx.draw.add_line", "AddRect": "ctx.draw.add_rect", "AddRectFilled": "ctx.draw.add_rect_filled",
@@ -347,7 +347,7 @@ def extract_bodies(text: str, class_name: str, methods: list[tuple[str, str]]) -
 
 
 def _annotate(line: str) -> str:
-    """Prefix a C++ line with the cmtk.im spellings of the ImGui names it uses."""
+    """Prefix a C++ line with the emtk.im spellings of the ImGui names it uses."""
     names = [n for n in IM_NAMES if re.search(r"\b%s\b" % re.escape(n), line)]
     hint = "; ".join(f"{n} -> {IM_NAMES[n]}" for n in names[:3])
     return f"    #   {line.rstrip()}" + (f"    # {hint}" if hint else "")
@@ -381,7 +381,7 @@ TODO: the features left out, and what has no caller for them.
 Shape
 -----
 ``{fn}(ctx, ...)`` is the immediate-mode function, transliterated from the C++
-against :class:`chimol.cmtk.im.Context` (``ctx.draw`` is the ``ImDrawList``,
+against :class:`chimol.emtk.im.Context` (``ctx.draw`` is the ``ImDrawList``,
 ``ctx.io`` the ``ImGuiIO``, ``ctx.layout`` the cursor). :class:`{cls}` wraps
 it as a retained control for the chrome, the gallery and the tests.
 """
@@ -420,8 +420,8 @@ from __future__ import annotations
 
 import pytest
 
-from chimol.cmtk import {module}
-from chimol.cmtk.testing import RecordingPainter
+from chimol.emtk import {module}
+from chimol.emtk.testing import RecordingPainter
 
 
 @pytest.mark.xfail(raises=NotImplementedError, reason="scaffolded; port the body", strict=False)
@@ -501,7 +501,7 @@ def _register(module: str) -> bool:
         return False
     marker = '    "keys",\n)'
     if marker not in text:
-        raise SystemExit("CONTROL_MODULES marker not found in cmtk/__init__.py")
+        raise SystemExit("CONTROL_MODULES marker not found in emtk/__init__.py")
     path.write_text(text.replace(marker, f'    "{module}",\n{marker}', 1))
     return True
 

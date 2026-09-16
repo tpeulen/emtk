@@ -13,16 +13,16 @@ execute the library it documents -- Read the Docs builds this repository with
 nothing but Sphinx installed. Regenerating them is therefore a deliberate step,
 taken when a widget changes what it draws.
 
-Every picture comes out of :class:`cmtk.testing.PixelPainter`, which is the
+Every picture comes out of :class:`emtk.testing.PixelPainter`, which is the
 same pure-Python rasteriser the golden-image tests use: no window, no toolkit,
 no display, and byte-identical output on every machine at a given commit.
 
-The one thing added on top of what cmtk itself draws is the frame -- a backdrop
-and a titled panel around the widgets. cmtk's :func:`~cmtk.im.begin` draws no
+The one thing added on top of what emtk itself draws is the frame -- a backdrop
+and a titled panel around the widgets. emtk's :func:`~emtk.im.begin` draws no
 window chrome (a window is a *box*, and decorating it is the host's job), so a
 screenshot of the raw output is widgets floating on nothing. The frame here is
 this script's, not the library's; it is drawn with the library's own style
-colours so the picture still shows what cmtk looks like in a host that draws
+colours so the picture still shows what emtk looks like in a host that draws
 one.
 """
 from __future__ import annotations
@@ -32,11 +32,11 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-import cmtk                                    # noqa: E402
-import cmtk.im as im                           # noqa: E402
-from cmtk import style                         # noqa: E402
-from cmtk.painter import ALIGN_LEFT, ALIGN_VCENTER  # noqa: E402
-from cmtk.testing import PixelPainter, save_png  # noqa: E402
+import emtk                                    # noqa: E402
+import emtk.im as im                           # noqa: E402
+from emtk import style                         # noqa: E402
+from emtk.painter import ALIGN_LEFT, ALIGN_VCENTER  # noqa: E402
+from emtk.testing import PixelPainter, save_png  # noqa: E402
 
 OUT = pathlib.Path(__file__).resolve().parent / "_screenshots"
 
@@ -67,7 +67,7 @@ def shot(name: str, title: str, gui, size=(320, 200),
     Notes
     -----
     One ``storage`` dict spans every frame. That is what makes a widget's
-    state survive: :func:`cmtk.im.frame` builds a fresh context each time and
+    state survive: :func:`emtk.im.frame` builds a fresh context each time and
     the storage is the only thing carried across, so without it a menu opened
     by frame two is shut again by frame three.
     """
@@ -88,7 +88,7 @@ def shot(name: str, title: str, gui, size=(320, 200),
         painter.text(MARGIN + PAD, MARGIN, 200.0, TITLE_H,
                      ALIGN_LEFT | ALIGN_VCENTER, title, style.TEXT)
         painter.fill_rect(*body, style.WINDOW_BG)
-        with cmtk.im.frame(painter, inner, io=io, storage=storage):
+        with emtk.im.frame(painter, inner, io=io, storage=storage):
             gui(painter, inner)
         return painter
 
@@ -241,7 +241,7 @@ def plot(painter, box):
     """``widgets.plot`` draws against a painter directly, not through ``im``."""
     import math
 
-    from cmtk.widgets.plot import begin_plot
+    from emtk.widgets.plot import begin_plot
 
     xs = [i * 0.1 for i in range(96)]
     with begin_plot(painter, *box, show_ticks=True) as p:
@@ -288,7 +288,7 @@ def readme_first_frame() -> pathlib.Path:
         im.end()
 
     painter = PixelPainter(320, 140, background=(30, 32, 38, 255))
-    with cmtk.frame(painter, (8, 8, 304, 124), io=state["io"],
+    with emtk.frame(painter, (8, 8, 304, 124), io=state["io"],
                     storage=state["storage"]):
         gui()
     path = OUT / "first_frame.png"

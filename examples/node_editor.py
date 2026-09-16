@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import pathlib
 
-import cmtk
-from cmtk import im, nodes
-from cmtk.testing import PixelPainter, save_png
+import emtk
+from emtk import im, nodes
+from emtk.testing import PixelPainter, save_png
 
 #: The graph this example draws. Ids are the editor's only handle on a node, so
 #: they live with the data rather than being invented at draw time.
@@ -105,7 +105,7 @@ def main() -> None:
     nodes.select_node(state["editor"], 2)
 
     painter = PixelPainter(820, 400, background=(30, 32, 38, 255))
-    with cmtk.frame(painter, (0, 0, 820, 400), io=state["io"], storage=state["storage"]):
+    with emtk.frame(painter, (0, 0, 820, 400), io=state["io"], storage=state["storage"]):
         draw(state)
 
     out = pathlib.Path(__file__).with_name("node_editor.png")

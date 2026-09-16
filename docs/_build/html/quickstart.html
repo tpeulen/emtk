@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Quickstart &mdash; cmtk 0.1.0 documentation</title>
+  <title>Quickstart &mdash; emtk 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
@@ -32,7 +32,7 @@
           
           
           <a href="index.html" class="icon icon-home">
-            cmtk
+            emtk
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -67,7 +67,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">cmtk</a>
+          <a href="index.html">emtk</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -89,8 +89,8 @@
 <h1>Quickstart<a class="headerlink" href="#quickstart" title="Link to this heading"></a></h1>
 <p>A frame is a context manager. Inside it, calls to <code class="docutils literal notranslate"><span class="pre">im</span></code> draw widgets onto
 whatever painter you gave it:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk</span><span class="w"> </span><span class="kn">import</span> <span class="n">im</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingPainter</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">emtk</span><span class="w"> </span><span class="kn">import</span> <span class="n">im</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">emtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">RecordingPainter</span>
 
 <span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>
 <span class="k">with</span> <span class="n">im</span><span class="o">.</span><span class="n">frame</span><span class="p">(</span><span class="n">painter</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">320</span><span class="p">,</span> <span class="mi">200</span><span class="p">)):</span>
@@ -105,7 +105,7 @@ whatever painter you gave it:</p>
 this runs with no window and no toolkit. The same widget code, unchanged, runs
 against a Qt painter on the desktop, the quad painter on a wgpu surface, or
 the Pyodide build in a browser.</p>
-<img alt="A cmtk window with text, a button and a counter" src="_images/hello_world.png" />
+<img alt="A emtk window with text, a button and a counter" src="_images/hello_world.png" />
 <section id="the-one-place-python-must-differ-from-c">
 <h2>The one place Python must differ from C++<a class="headerlink" href="#the-one-place-python-must-differ-from-c" title="Link to this heading"></a></h2>
 <p>C++ writes results through <code class="docutils literal notranslate"><span class="pre">bool*</span></code> and <code class="docutils literal notranslate"><span class="pre">float*</span></code>. Python has no pointers, so

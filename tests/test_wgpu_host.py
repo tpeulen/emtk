@@ -4,9 +4,9 @@ Three layers, and each runs where it can:
 
 * the **shader** -- ``ui.wgsl`` itself -- is text, and is read here with no
   adapter and no toolkit at all. The conventions it decodes live in
-  :mod:`cmtk.gpu_atlas` and are tested there, for the same reason;
+  :mod:`emtk.gpu_atlas` and are tested there, for the same reason;
 * the **renderer** needs a device, which it gets from
-  :func:`cmtk.wgpu_host.default_device`. It does **not** need a window: it
+  :func:`emtk.wgpu_host.default_device`. It does **not** need a window: it
   renders into an offscreen texture and hands the pixels back, which is why
   the interesting assertions here are about pixels rather than about calls
   made;
@@ -31,13 +31,13 @@ import pytest
 np = pytest.importorskip("numpy", reason="the GPU path builds its vertices "
                                          "with NumPy")
 
-import cmtk.im as im
-from cmtk.font import load_atlas
-from cmtk.gpu_atlas import ImageAtlas
-from cmtk.quad_painter import FLOATS_PER_VERTEX, QuadPainter
-from cmtk.testing import PixelPainter
-from cmtk.texture import Texture
-from cmtk.wgsl import UI_SHADER, load_wgsl, wgsl_path
+import emtk.im as im
+from emtk.font import load_atlas
+from emtk.gpu_atlas import ImageAtlas
+from emtk.quad_painter import FLOATS_PER_VERTEX, QuadPainter
+from emtk.testing import PixelPainter
+from emtk.texture import Texture
+from emtk.wgsl import UI_SHADER, load_wgsl, wgsl_path
 
 #: The interface both hosts are asked to draw. Small, but it exercises a
 #: panel, a filled widget, a stroked one, a line and text -- which between
@@ -80,7 +80,7 @@ def _luminance(rgba):
 # --------------------------------------------------------------------------- #
 # The shader
 # --------------------------------------------------------------------------- #
-def test_the_shader_lives_in_cmtk_and_says_what_it_must():
+def test_the_shader_lives_in_emtk_and_says_what_it_must():
     """A string check, and worth having anyway: each line below is a bug
     that has been shipped by someone. Straight alpha out darkens every
     antialiased edge against a light background -- invisible on the dark
@@ -108,20 +108,20 @@ def test_the_shader_is_packaged_and_not_only_on_this_disk():
     """A shader read with ``__file__`` and never declared as package data is
     present in a checkout and absent from an install, which is a failure
     that only ever happens to somebody else."""
-    from cmtk.wgsl import WGSL_DIR  # noqa: PLC0415
+    from emtk.wgsl import WGSL_DIR  # noqa: PLC0415
 
-    # Read as text rather than parsed: `tomllib` is 3.11 and cmtk supports
+    # Read as text rather than parsed: `tomllib` is 3.11 and emtk supports
     # older, and the thing being asserted is one line either way.
     config = (WGSL_DIR.parents[1] / "pyproject.toml").read_text()
     declared = [line for line in config.splitlines()
-                if line.startswith("cmtk = [")]
+                if line.startswith("emtk = [")]
     assert declared and ".wgsl" in declared[0], declared
 
 
 def test_the_vertex_layout_is_the_painters_and_not_a_second_opinion():
     """A stride that disagrees with the painter does not fail: it draws a
     plausible-looking panel out of the wrong bytes."""
-    from cmtk.gpu_atlas import ATTRIBUTES, VERTEX_BYTES  # noqa: PLC0415
+    from emtk.gpu_atlas import ATTRIBUTES, VERTEX_BYTES  # noqa: PLC0415
 
     assert VERTEX_BYTES == FLOATS_PER_VERTEX * 4
     location, count, offset = ATTRIBUTES[-1]
@@ -144,7 +144,7 @@ def renderer():
     """
     pytest.importorskip("wgpu", reason="the GPU host needs the wgpu binding")
 
-    from cmtk.wgpu_host import WgpuRenderer  # noqa: PLC0415
+    from emtk.wgpu_host import WgpuRenderer  # noqa: PLC0415
 
     try:
         return WgpuRenderer()
@@ -235,7 +235,7 @@ def test_it_looks_like_the_qpainter_host(renderer, qt_app):
     """
     from qtpy import QtGui  # noqa: PLC0415
 
-    from cmtk.qt_painter import QtPainter, image_bytes  # noqa: PLC0415
+    from emtk.qt_painter import QtPainter, image_bytes  # noqa: PLC0415
 
     frame = _Frame(renderer, font_scale=9.0 / load_atlas().font_pt)
     draw_frame(frame.painter)
@@ -459,7 +459,7 @@ def host(qt_app):
     pytest.importorskip(
         "rendercanvas", reason="the GPU host gets its surface from rendercanvas")
 
-    from cmtk.wgpu_host import WgpuControlHost  # noqa: PLC0415
+    from emtk.wgpu_host import WgpuControlHost  # noqa: PLC0415
 
     control = _Recorder()
     widget = WgpuControlHost(control)

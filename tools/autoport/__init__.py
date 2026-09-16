@@ -1,6 +1,6 @@
-r"""Port Dear ImGui C++ to cmtk Python -- mechanically, and say where it can't.
+r"""Port Dear ImGui C++ to emtk Python -- mechanically, and say where it can't.
 
-The claim this tool exists to test: cmtk's API is close enough to Dear ImGui's
+The claim this tool exists to test: emtk's API is close enough to Dear ImGui's
 that a *script*, with no understanding of the code it is moving, produces a
 port that runs and draws the same picture. Every rule below is mechanical --
 the same one a person applies, written down so it applies the same way every
@@ -36,7 +36,7 @@ _ROOT = pathlib.Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from cmtk.im_compat import mechanical_name
+from emtk.im_compat import mechanical_name
 from autoport.expressions import Porter
 from autoport.statements import StatementPorter
 from autoport.port_file import port_file

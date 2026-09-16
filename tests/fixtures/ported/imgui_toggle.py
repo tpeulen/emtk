@@ -1,13 +1,13 @@
 """imgui_toggle: auto-ported from imgui_toggle.h, imgui_toggle.cpp
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 
 Phi = 1.6180339887498948482045
 DiameterToRadiusRatio = 0.5

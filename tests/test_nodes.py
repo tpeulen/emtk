@@ -1,8 +1,8 @@
 """The node editor: layout, links, interaction and the transform.
 
 Every test drives the editor with no window and no toolkit -- a
-:class:`~cmtk.testing.RecordingPainter` where only the geometry matters, and
-:class:`~cmtk.testing.PixelPainter` where the picture does.
+:class:`~emtk.testing.RecordingPainter` where only the geometry matters, and
+:class:`~emtk.testing.PixelPainter` where the picture does.
 
 The assertions are about behaviour, not about "it drew something". "A node's
 rect encloses its contents" and "a drag of the same distance from two different
@@ -13,22 +13,22 @@ from __future__ import annotations
 
 import math
 
-import cmtk
-from cmtk import im, nodes
-from cmtk.testing import PixelPainter, RecordingPainter
+import emtk
+from emtk import im, nodes
+from emtk.testing import PixelPainter, RecordingPainter
 
 #: The editor box every test draws into, unless it says otherwise.
 BOX: tuple = (0, 0, 400, 300)
 
 
 def _frame(build, io=None, storage=None, box=BOX, painter=None):
-    """Run `build` inside one cmtk frame and hand back the painter.
+    """Run `build` inside one emtk frame and hand back the painter.
 
     Parameters
     ----------
     build : callable
         Called with no arguments inside the frame.
-    io : cmtk.IO, optional
+    io : emtk.IO, optional
         Carried across frames by the caller when a test needs two.
     storage : dict, optional
         Likewise.
@@ -43,7 +43,7 @@ def _frame(build, io=None, storage=None, box=BOX, painter=None):
         The painter that was drawn into.
     """
     painter = painter if painter is not None else RecordingPainter()
-    with cmtk.frame(painter, box, io=io if io is not None else im.IO(),
+    with emtk.frame(painter, box, io=io if io is not None else im.IO(),
                     storage=storage if storage is not None else {}):
         build()
     return painter
@@ -327,7 +327,7 @@ def _press(io, pos):
 
     Parameters
     ----------
-    io : cmtk.IO
+    io : emtk.IO
         The io the frame is driven with.
     pos : tuple
         Screen-space position.
@@ -923,7 +923,7 @@ def test_a_plot_inside_a_node_is_not_painted_over_by_the_node():
     body replayed on top of it afterwards, and the plot was simply gone. No
     exception, no missing item, an empty rectangle where a curve should be.
     """
-    from cmtk import implot
+    from emtk import implot
 
     ctx = nodes.EditorContext()
     xs = [float(i) for i in range(32)]

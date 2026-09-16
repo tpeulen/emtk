@@ -9,21 +9,21 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 class Frames:
     def __init__(self, gui, size=(0.0, 0.0, 500.0, 500.0)) -> None:
         self.gui, self.size = gui, size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
         self.result = None
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.result = self.gui()
         return self.painter
 
@@ -61,9 +61,9 @@ def test_single_select_moves_the_selection():
 
     def gui():
         for n in range(5):
-            if cmtk.selectable("Object %d" % n, state["selected"] == n):
+            if emtk.selectable("Object %d" % n, state["selected"] == n):
                 state["selected"] = n
-            state["boxes"][n] = cmtk.get_item_rect()
+            state["boxes"][n] = emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -84,20 +84,20 @@ def test_multi_select_hands_back_the_requests_it_gathered():
     boxes: dict = {}
 
     def gui():
-        io_in = cmtk.begin_multi_select(0, len(chosen), 5)
+        io_in = emtk.begin_multi_select(0, len(chosen), 5)
         for n in range(5):
-            cmtk.set_next_item_selection_user_data(n)
-            if cmtk.selectable("Object %d" % n, n in chosen):
-                if not cmtk.io_key_ctrl_shim():
+            emtk.set_next_item_selection_user_data(n)
+            if emtk.selectable("Object %d" % n, n in chosen):
+                if not emtk.io_key_ctrl_shim():
                     chosen.clear()
                 chosen.symmetric_difference_update({n})
-            boxes[n] = cmtk.get_item_rect()
-        io_out = cmtk.end_multi_select()
+            boxes[n] = emtk.get_item_rect()
+        io_out = emtk.end_multi_select()
         return io_in, io_out
 
     # A tiny shim so the port can ask "was ctrl held" the way the demo's
     # storage-backed helper does.
-    cmtk.io_key_ctrl_shim = lambda: cmtk.get_io().key_ctrl
+    emtk.io_key_ctrl_shim = lambda: emtk.get_io().key_ctrl
 
     frames = Frames(gui)
     frames.draw()
@@ -110,13 +110,13 @@ def test_multi_select_hands_back_the_requests_it_gathered():
 
     io_in, io_out = frames.result
     assert io_in is io_out, "EndMultiSelect returned a different io than Begin"
-    del cmtk.io_key_ctrl_shim
+    del emtk.io_key_ctrl_shim
 
 
 def test_a_ctrl_click_is_reported_as_a_toggle():
     def gui():
-        cmtk.selectable("row", False)
-        return cmtk.get_item_rect(), cmtk.is_item_toggled_selection()
+        emtk.selectable("row", False)
+        return emtk.get_item_rect(), emtk.is_item_toggled_selection()
 
     frames = Frames(gui)
     frames.draw()
@@ -140,16 +140,16 @@ def test_a_tooltip_appears_on_hover_and_not_otherwise():
     boxes: dict = {}
 
     def gui():
-        cmtk.button("Basic")
-        boxes["basic"] = cmtk.get_item_rect()
-        cmtk.set_item_tooltip("I am a tooltip")
-        cmtk.button("Fancy")
-        boxes["fancy"] = cmtk.get_item_rect()
-        if cmtk.begin_item_tooltip():
-            cmtk.text("I am a fancy tooltip")
+        emtk.button("Basic")
+        boxes["basic"] = emtk.get_item_rect()
+        emtk.set_item_tooltip("I am a tooltip")
+        emtk.button("Fancy")
+        boxes["fancy"] = emtk.get_item_rect()
+        if emtk.begin_item_tooltip():
+            emtk.text("I am a fancy tooltip")
             seen["fancy"] = True
-            cmtk.end_tooltip()
-        seen["tooltip"] = cmtk.get_current_context().tooltip
+            emtk.end_tooltip()
+        seen["tooltip"] = emtk.get_current_context().tooltip
 
     frames = Frames(gui)
     frames.draw()
@@ -177,10 +177,10 @@ def test_a_text_filter_keeps_only_what_matches():
     state = {"filter": ""}
 
     def gui():
-        _c, state["filter"] = cmtk.input_text("Filter", state["filter"])
+        _c, state["filter"] = emtk.input_text("Filter", state["filter"])
         for line in lines:
             if state["filter"] in line:
-                cmtk.bullet_text(line)
+                emtk.bullet_text(line)
 
     frames = Frames(gui)
     painter = frames.draw()
@@ -204,13 +204,13 @@ def test_a_grid_of_selectables_lays_out_as_a_grid():
     def gui():
         for y in range(4):
             for x in range(4):
-                cmtk.push_id(y * 4 + x)
-                if cmtk.selectable("Sailor", selected[y][x] != 0, (50.0, 50.0)):
+                emtk.push_id(y * 4 + x)
+                if emtk.selectable("Sailor", selected[y][x] != 0, (50.0, 50.0)):
                     selected[y][x] ^= 1
-                cells[(y, x)] = cmtk.get_item_rect()
-                cmtk.pop_id()
+                cells[(y, x)] = emtk.get_item_rect()
+                emtk.pop_id()
                 if x < 3:
-                    cmtk.same_line()
+                    emtk.same_line()
 
     frames = Frames(gui)
     frames.draw()
@@ -228,16 +228,16 @@ def test_selectables_inside_a_table_stay_in_their_cells():
     cells: dict = {}
 
     def gui():
-        if cmtk.begin_table("grid", 3):
+        if emtk.begin_table("grid", 3):
             for row in range(2):
-                cmtk.table_next_row()
+                emtk.table_next_row()
                 for column in range(3):
-                    cmtk.table_set_column_index(column)
-                    cmtk.push_id(row * 3 + column)
-                    cmtk.selectable("Sailor", False)
-                    cells[(row, column)] = cmtk.get_item_rect()
-                    cmtk.pop_id()
-            cmtk.end_table()
+                    emtk.table_set_column_index(column)
+                    emtk.push_id(row * 3 + column)
+                    emtk.selectable("Sailor", False)
+                    cells[(row, column)] = emtk.get_item_rect()
+                    emtk.pop_id()
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()
@@ -254,13 +254,13 @@ def test_a_tab_item_button_reports_its_click():
     state = {"added": 0}
 
     def gui():
-        if cmtk.begin_tab_bar("MyTabBar"):
-            if cmtk.begin_tab_item("Tab 0"):
-                cmtk.end_tab_item()
-            if cmtk.tab_item_button("+"):
+        if emtk.begin_tab_bar("MyTabBar"):
+            if emtk.begin_tab_item("Tab 0"):
+                emtk.end_tab_item()
+            if emtk.tab_item_button("+"):
                 state["added"] += 1
-            state["plus"] = cmtk.get_item_rect()
-            cmtk.end_tab_bar()
+            state["plus"] = emtk.get_item_rect()
+            emtk.end_tab_bar()
 
     frames = Frames(gui)
     frames.draw()
@@ -285,16 +285,16 @@ def test_an_image_button_reports_its_click_and_shows_its_picture():
             self.images.append(handle)
 
     painter = Blitting()
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
 
     def draw():
         nonlocal painter
         painter = Blitting()
-        with cmtk.frame(painter, (0.0, 0.0, 300.0, 200.0), io=io, storage=storage):
-            cmtk.image("my_tex", (64.0, 64.0))
-            if cmtk.image_button("##tex", "my_tex", (32.0, 32.0)):
+        with emtk.frame(painter, (0.0, 0.0, 300.0, 200.0), io=io, storage=storage):
+            emtk.image("my_tex", (64.0, 64.0))
+            if emtk.image_button("##tex", "my_tex", (32.0, 32.0)):
                 state["pressed"] += 1
-            state["box"] = cmtk.get_item_rect()
+            state["box"] = emtk.get_item_rect()
 
     draw()
     assert painter.images == ["my_tex", "my_tex"]
@@ -317,14 +317,14 @@ def test_the_window_status_queries_answer_for_the_window_they_are_in():
     answers: dict = {}
 
     def gui():
-        cmtk.begin("under", (0.0, 0.0, 100.0, 100.0))
-        answers["under_hovered"] = cmtk.is_window_hovered()
-        answers["under_focused"] = cmtk.is_window_focused()
-        cmtk.end()
-        cmtk.begin("over", (0.0, 0.0, 100.0, 100.0))
-        answers["over_hovered"] = cmtk.is_window_hovered()
-        answers["over_focused"] = cmtk.is_window_focused()
-        cmtk.end()
+        emtk.begin("under", (0.0, 0.0, 100.0, 100.0))
+        answers["under_hovered"] = emtk.is_window_hovered()
+        answers["under_focused"] = emtk.is_window_focused()
+        emtk.end()
+        emtk.begin("over", (0.0, 0.0, 100.0, 100.0))
+        answers["over_hovered"] = emtk.is_window_hovered()
+        answers["over_focused"] = emtk.is_window_focused()
+        emtk.end()
 
     frames = Frames(gui)
     frames.draw()

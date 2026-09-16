@@ -1,13 +1,13 @@
 """im_gradient: auto-ported from ImGradient.h, ImGradient.cpp
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 
 def im_clamp(v, mn, mx):
     """ImClamp."""
@@ -39,7 +39,7 @@ def draw_point(draw_list, color, size, editing, pos):
 
 def edit(delegate, size, value):
     """Edit()."""
-    # TODO(autoport): BeginChild: cmtk takes a box anchored at the cursor; the id/border/flags are dropped
+    # TODO(autoport): BeginChild: emtk takes a box anchored at the cursor; the id/border/flags are dropped
     ret = False
     io = im.get_io()
     im.push_style_var(im.StyleVar.FRAME_PADDING, (0, 0))

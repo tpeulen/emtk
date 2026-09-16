@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import selection
+from emtk.widgets import selection
 
 
 class RecordingPainter:

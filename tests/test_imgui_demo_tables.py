@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 def _run(gui, size=(0.0, 0.0, 600.0, 400.0)):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size):
+    with emtk.frame(painter, size):
         gui()
     return painter
 
@@ -31,14 +31,14 @@ def test_the_cells_of_a_row_share_a_top_edge():
     cells: dict = {}
 
     def gui():
-        if cmtk.begin_table("table1", 3):
+        if emtk.begin_table("table1", 3):
             for row in range(3):
-                cmtk.table_next_row()
+                emtk.table_next_row()
                 for column in range(3):
-                    cmtk.table_set_column_index(column)
-                    cmtk.text("Row %d Column %d" % (row, column))
-                    cells[(row, column)] = cmtk.get_item_rect()
-            cmtk.end_table()
+                    emtk.table_set_column_index(column)
+                    emtk.text("Row %d Column %d" % (row, column))
+                    cells[(row, column)] = emtk.get_item_rect()
+            emtk.end_table()
 
     _run(gui)
     for row in range(3):
@@ -50,14 +50,14 @@ def test_the_rows_of_a_table_go_downwards():
     cells: dict = {}
 
     def gui():
-        if cmtk.begin_table("t", 2):
+        if emtk.begin_table("t", 2):
             for row in range(4):
-                cmtk.table_next_row()
+                emtk.table_next_row()
                 for column in range(2):
-                    cmtk.table_set_column_index(column)
-                    cmtk.text("r%dc%d" % (row, column))
-                    cells[(row, column)] = cmtk.get_item_rect()
-            cmtk.end_table()
+                    emtk.table_set_column_index(column)
+                    emtk.text("r%dc%d" % (row, column))
+                    cells[(row, column)] = emtk.get_item_rect()
+            emtk.end_table()
 
     _run(gui)
     ys = [cells[(r, 0)][1] for r in range(4)]
@@ -69,12 +69,12 @@ def test_table_next_column_walks_across_and_wraps():
     seen = []
 
     def gui():
-        if cmtk.begin_table("t", 3):
+        if emtk.begin_table("t", 3):
             for index in range(6):
-                cmtk.table_next_column()
-                cmtk.text("cell %d" % index)
-                seen.append((cmtk.table_get_column_index(), cmtk.get_item_rect()))
-            cmtk.end_table()
+                emtk.table_next_column()
+                emtk.text("cell %d" % index)
+                seen.append((emtk.table_get_column_index(), emtk.get_item_rect()))
+            emtk.end_table()
 
     _run(gui)
     columns = [c for c, _box in seen]
@@ -88,13 +88,13 @@ def test_table_next_column_walks_across_and_wraps():
 # --------------------------------------------------------------------------- #
 def test_the_headers_row_uses_the_names_that_were_set_up():
     def gui():
-        if cmtk.begin_table("t", 3):
+        if emtk.begin_table("t", 3):
             for name in ("One", "Two", "Three"):
-                cmtk.table_setup_column(name)
-            cmtk.table_headers_row()
-            assert cmtk.table_get_column_name(0) == "One"
-            assert cmtk.table_get_column_count() == 3
-            cmtk.end_table()
+                emtk.table_setup_column(name)
+            emtk.table_headers_row()
+            assert emtk.table_get_column_name(0) == "One"
+            assert emtk.table_get_column_count() == 3
+            emtk.end_table()
 
     painter = _run(gui)
     for name in ("One", "Two", "Three"):
@@ -110,32 +110,32 @@ def test_a_table_nested_in_a_cell_does_not_disturb_the_outer_one():
     inner: dict = {}
 
     def gui():
-        if cmtk.begin_table("table_nested1", 2):
-            cmtk.table_setup_column("A0")
-            cmtk.table_setup_column("A1")
-            cmtk.table_headers_row()
+        if emtk.begin_table("table_nested1", 2):
+            emtk.table_setup_column("A0")
+            emtk.table_setup_column("A1")
+            emtk.table_headers_row()
 
-            cmtk.table_next_column()
-            cmtk.text("A0 Row 0")
-            outer["A0R0"] = cmtk.get_item_rect()
+            emtk.table_next_column()
+            emtk.text("A0 Row 0")
+            outer["A0R0"] = emtk.get_item_rect()
 
-            if cmtk.begin_table("table_nested2", 2):
-                cmtk.table_setup_column("B0")
-                cmtk.table_setup_column("B1")
-                cmtk.table_headers_row()
+            if emtk.begin_table("table_nested2", 2):
+                emtk.table_setup_column("B0")
+                emtk.table_setup_column("B1")
+                emtk.table_headers_row()
                 for row in range(2):
-                    cmtk.table_next_row()
+                    emtk.table_next_row()
                     for column in range(2):
-                        cmtk.table_set_column_index(column)
-                        cmtk.text("B%d Row %d" % (column, row))
-                        inner[(row, column)] = cmtk.get_item_rect()
-                cmtk.end_table()
+                        emtk.table_set_column_index(column)
+                        emtk.text("B%d Row %d" % (column, row))
+                        inner[(row, column)] = emtk.get_item_rect()
+                emtk.end_table()
 
-            cmtk.table_next_column()
-            cmtk.text("A1 Row 0")
-            outer["A1R0"] = cmtk.get_item_rect()
-            outer["columns_after"] = cmtk.table_get_column_count()
-            cmtk.end_table()
+            emtk.table_next_column()
+            emtk.text("A1 Row 0")
+            outer["A1R0"] = emtk.get_item_rect()
+            outer["columns_after"] = emtk.table_get_column_count()
+            emtk.end_table()
 
     _run(gui)
     assert len(inner) == 4, "the inner table lost cells"
@@ -151,17 +151,17 @@ def test_the_cursor_comes_back_out_of_a_nested_table():
     boxes: dict = {}
 
     def gui():
-        if cmtk.begin_table("outer", 1):
-            cmtk.table_next_column()
-            if cmtk.begin_table("inner", 3):
+        if emtk.begin_table("outer", 1):
+            emtk.table_next_column()
+            if emtk.begin_table("inner", 3):
                 for _ in range(3):
-                    cmtk.table_next_column()
-                    cmtk.text("x")
-                cmtk.end_table()
-            cmtk.end_table()
-        boxes["avail"] = cmtk.get_content_region_avail()[0]
-        cmtk.text("after")
-        boxes["columns"] = cmtk.get_columns_count()
+                    emtk.table_next_column()
+                    emtk.text("x")
+                emtk.end_table()
+            emtk.end_table()
+        boxes["avail"] = emtk.get_content_region_avail()[0]
+        emtk.text("after")
+        boxes["columns"] = emtk.get_columns_count()
 
     _run(gui)
     assert boxes["columns"] == 1, "columns were left switched on after the tables"
@@ -177,12 +177,12 @@ def test_a_widget_in_a_cell_is_no_wider_than_its_column():
     boxes: dict = {}
 
     def gui():
-        if cmtk.begin_table("t", 3):
-            cmtk.table_next_column()
-            cmtk.slider_float("##s", 0.5, 0.0, 1.0)
-            boxes["slider"] = cmtk.get_item_rect()
-            boxes["column"] = cmtk.get_column_width()
-            cmtk.end_table()
+        if emtk.begin_table("t", 3):
+            emtk.table_next_column()
+            emtk.slider_float("##s", 0.5, 0.0, 1.0)
+            boxes["slider"] = emtk.get_item_rect()
+            boxes["column"] = emtk.get_column_width()
+            emtk.end_table()
 
     _run(gui, size=(0.0, 0.0, 600.0, 400.0))
     assert boxes["slider"][2] <= boxes["column"] + 1.0, boxes
@@ -195,19 +195,19 @@ def test_the_table_queries_answer_inside_a_table():
     answers: dict = {}
 
     def gui():
-        if cmtk.begin_table("t", 2):
-            cmtk.table_setup_column("first")
-            cmtk.table_setup_column("second")
-            cmtk.table_next_column()
-            answers["index"] = cmtk.table_get_column_index()
-            answers["count"] = cmtk.table_get_column_count()
-            answers["name"] = cmtk.table_get_column_name()
-            answers["flags"] = cmtk.table_get_column_flags()
-            answers["sort"] = cmtk.table_get_sort_specs()
-            cmtk.table_set_bg_color(0, (10, 20, 30, 255))
-            cmtk.table_set_column_enabled(1, False)
-            cmtk.table_setup_scroll_freeze(1, 1)
-            cmtk.end_table()
+        if emtk.begin_table("t", 2):
+            emtk.table_setup_column("first")
+            emtk.table_setup_column("second")
+            emtk.table_next_column()
+            answers["index"] = emtk.table_get_column_index()
+            answers["count"] = emtk.table_get_column_count()
+            answers["name"] = emtk.table_get_column_name()
+            answers["flags"] = emtk.table_get_column_flags()
+            answers["sort"] = emtk.table_get_sort_specs()
+            emtk.table_set_bg_color(0, (10, 20, 30, 255))
+            emtk.table_set_column_enabled(1, False)
+            emtk.table_setup_scroll_freeze(1, 1)
+            emtk.end_table()
 
     _run(gui)
     assert answers["count"] == 2
@@ -225,13 +225,13 @@ def test_the_legacy_columns_api_lays_out_in_columns():
     cells: dict = {}
 
     def gui():
-        cmtk.columns(4)
+        emtk.columns(4)
         for index in range(8):
-            cmtk.text("cell %d" % index)
-            cells[index] = (cmtk.get_column_index(), cmtk.get_item_rect())
-            cmtk.next_column()
-        cmtk.columns(1)
-        cells["avail_after"] = cmtk.get_content_region_avail()[0]
+            emtk.text("cell %d" % index)
+            cells[index] = (emtk.get_column_index(), emtk.get_item_rect())
+            emtk.next_column()
+        emtk.columns(1)
+        cells["avail_after"] = emtk.get_content_region_avail()[0]
 
     _run(gui)
     assert [cells[i][0] for i in range(8)] == [0, 1, 2, 3, 0, 1, 2, 3]
@@ -245,15 +245,15 @@ def test_columns_report_their_geometry():
     answers: dict = {}
 
     def gui():
-        cmtk.columns(3)
-        answers["count"] = cmtk.get_columns_count()
-        answers["index"] = cmtk.get_column_index()
-        answers["width"] = cmtk.get_column_width()
-        answers["offset"] = cmtk.get_column_offset()
-        cmtk.next_column()
-        answers["index_after"] = cmtk.get_column_index()
-        answers["offset_after"] = cmtk.get_column_offset()
-        cmtk.columns(1)
+        emtk.columns(3)
+        answers["count"] = emtk.get_columns_count()
+        answers["index"] = emtk.get_column_index()
+        answers["width"] = emtk.get_column_width()
+        answers["offset"] = emtk.get_column_offset()
+        emtk.next_column()
+        answers["index_after"] = emtk.get_column_index()
+        answers["offset_after"] = emtk.get_column_offset()
+        emtk.columns(1)
 
     _run(gui)
     assert answers["count"] == 3

@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk import implot
-from cmtk.testing import PixelPainter
+import emtk
+from emtk import implot
+from emtk.testing import PixelPainter
 
 
 @pytest.fixture(autouse=True)
@@ -32,13 +32,13 @@ def _bars(*args, **kw):
     """Draw one ``plot_bars`` call and hand back its step series."""
     seen = {}
     p = PixelPainter(400, 260, background=(30, 32, 38, 255))
-    with cmtk.frame(p, (8, 8, 384, 244), io=cmtk.IO(), storage={}):
-        cmtk.begin("w")
+    with emtk.frame(p, (8, 8, 384, 244), io=emtk.IO(), storage={}):
+        emtk.begin("w")
         implot.begin_plot("##t", (-1, 160))
         implot.plot_bars(*args, **kw)
         seen["series"] = implot._cur.plot._lines[0]
         implot.end_plot()
-        cmtk.end()
+        emtk.end()
     return seen["series"]
 
 
@@ -110,7 +110,7 @@ def test_a_scalar_third_argument_never_reads_as_a_series():
 
 
 def test_the_keyword_spellings_survive():
-    """``plot_histogram`` and any cmtk caller that named its arguments must
+    """``plot_histogram`` and any emtk caller that named its arguments must
     keep working: the dispatch is for positional calls, not a rename."""
     centre, size, _h = _first_bar(
         _bars("a", [0.0, 1.0], ys=[4.0, 5.0], bar_size=0.25, shift=1.0))

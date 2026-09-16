@@ -17,8 +17,8 @@ import pathlib
 
 import pytest
 
-from cmtk.events import ALT_MODIFIER, CONTROL_MODIFIER, SHIFT_MODIFIER
-from cmtk.keys import (
+from emtk.events import ALT_MODIFIER, CONTROL_MODIFIER, SHIFT_MODIFIER
+from emtk.keys import (
     KEY_BACKSPACE,
     KEY_DOWN,
     KEY_END,
@@ -28,8 +28,8 @@ from cmtk.keys import (
     KEY_TAB,
     KEY_UP,
 )
-from cmtk.widgets import text_editor as te
-from cmtk.testing import RecordingPainter
+from emtk.widgets import text_editor as te
+from emtk.testing import RecordingPainter
 
 #: The reference checkout. Gitignored and re-clonable, so the tests that read
 #: it skip rather than fail when it is absent.
@@ -503,7 +503,7 @@ def test_the_picker_offers_every_language_the_class_can_build():
 
 
 def test_a_command_language_is_built_from_the_applications_own_words():
-    """cmtk holds no verb list of its own -- the application supplies both.
+    """emtk holds no verb list of its own -- the application supplies both.
 
     The toolkit knows the *shape* of a command script (verbs, `#` comments,
     strings, numbers); which verbs and which argument words exist belongs to

@@ -7,7 +7,7 @@ import pathlib
 from autoport.port_file import port_file
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Port Dear ImGui C++ to cmtk Python.")
+    ap = argparse.ArgumentParser(description="Port Dear ImGui C++ to emtk Python.")
     ap.add_argument("source", type=pathlib.Path, nargs="+",
                     help="one or more C++ sources: a header with its .cpp")
     ap.add_argument("--module", default=None)

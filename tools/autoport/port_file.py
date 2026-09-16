@@ -15,7 +15,7 @@ from autoport.decls import (FUNC_RE, CLASS_RE, extension_enum_families,
                             params_to_py, out_value_param, out_param_index,
                             out_params,
                             _rewrite_ctor_init_lists, port_class_fields)
-from cmtk.im_compat import mechanical_name
+from emtk.im_compat import mechanical_name
 
 #: How an embedded C++ line is marked. A distinctive prefix, so the block can
 #: be found again by eye and by grep once a hand starts working through it.
@@ -559,7 +559,7 @@ def port_file(sources: list, module: str, origin: str,
         f'"""{module}: auto-ported from {", ".join(s.name for s in sources)}',
         f"({origin}) by tools/autoport.py.",
         "",
-        "A mechanical port of Dear ImGui C++ to cmtk. Lines flagged",
+        "A mechanical port of Dear ImGui C++ to emtk. Lines flagged",
         "TODO(autoport) need a hand; everything else is the C++ under the",
         "naming rules in tools/autoport.py.",
         "",
@@ -571,7 +571,7 @@ def port_file(sources: list, module: str, origin: str,
         '"""',
         "import math",
         "",
-        "import cmtk.im as im",
+        "import emtk.im as im",
     ]
 
     # An ImGui *extension* needs `im` and little else. An *application* is
@@ -579,11 +579,11 @@ def port_file(sources: list, module: str, origin: str,
     # on nearly every screen. Emitted only when the source names them, so a
     # widget file stays as small as it was.
     if re.search(r"\bImPlot\s*::", text) or re.search(r"\bImPlot\w*_", text):
-        out += ["import cmtk.implot as ImPlot",
-                "from cmtk.implot import *  # the ImPlotFlags_/ImAxis_ spellings"]
+        out += ["import emtk.implot as ImPlot",
+                "from emtk.implot import *  # the ImPlotFlags_/ImAxis_ spellings"]
     if re.search(r"\bstd\s*::|\bstatic_cast\b|\bsizeof\b|\bprintf\b"
                  r"|\bmem(?:set|cpy)\b|\bstrn?cpy\b|\bFLT_(?:MIN|MAX)\b", text):
-        out += ["from cmtk.cpp_compat import *  # std::, the casts, printf"]
+        out += ["from emtk.cpp_compat import *  # std::, the casts, printf"]
 
     if re.search(r"\bIM_PI\b", text):
         # imgui_internal.h ships this constant; the port carries it, named

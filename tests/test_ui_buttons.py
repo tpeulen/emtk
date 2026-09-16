@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import buttons
+from emtk.widgets import buttons
 
 
 class RecordingPainter:

@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Immediate mode &mdash; cmtk 0.1.0 documentation</title>
+  <title>Immediate mode &mdash; emtk 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
@@ -32,7 +32,7 @@
           
           
           <a href="index.html" class="icon icon-home">
-            cmtk
+            emtk
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -63,7 +63,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">cmtk</a>
+          <a href="index.html">emtk</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -91,7 +91,7 @@ construct a <code class="docutils literal notranslate"><span class="pre">QPushBu
 cost of retained mode is a two-way binding between your data and the
 widget tree. The cost of immediate mode is that the whole UI is redrawn
 every frame.</p>
-<p>cmtk chose immediate mode because the reference (Dear ImGui) chose it for
+<p>emtk chose immediate mode because the reference (Dear ImGui) chose it for
 the same reason: the UI is a tool, and a tool that <em>is</em> the code that draws
 it is a tool you can delete.</p>
 <img alt="Checkboxes, a float slider and an integer slider" src="_images/sliders.png" />
@@ -114,14 +114,14 @@ according to any <code class="docutils literal notranslate"><span class="pre">Ta
 input edges (<code class="docutils literal notranslate"><span class="pre">mouse_clicked</span></code>, <code class="docutils literal notranslate"><span class="pre">mouse_released</span></code>).</p>
 <p>The host provides three things, and that is the whole contract:</p>
 <ol class="arabic simple">
-<li><p><strong>A painter.</strong> <code class="docutils literal notranslate"><span class="pre">cmtk.painter.REQUIRED_OPERATIONS</span></code> is the list of methods
+<li><p><strong>A painter.</strong> <code class="docutils literal notranslate"><span class="pre">emtk.painter.REQUIRED_OPERATIONS</span></code> is the list of methods
 a surface must implement: <code class="docutils literal notranslate"><span class="pre">fill_rect</span></code>, <code class="docutils literal notranslate"><span class="pre">stroke_rect</span></code>, <code class="docutils literal notranslate"><span class="pre">gradient_rect</span></code>,
 <code class="docutils literal notranslate"><span class="pre">text</span></code>, <code class="docutils literal notranslate"><span class="pre">push_clip</span></code>/<code class="docutils literal notranslate"><span class="pre">pop_clip</span></code>, <code class="docutils literal notranslate"><span class="pre">fill_triangle</span></code>, plus <code class="docutils literal notranslate"><span class="pre">text_width</span></code>
 and <code class="docutils literal notranslate"><span class="pre">line_height</span></code> to measure with.</p></li>
 <li><p><strong>Pointer and key state</strong>, in <code class="docutils literal notranslate"><span class="pre">im.IO</span></code>: where the pointer is, which
 buttons went down or up this delivery, the modifiers, the wheel.</p></li>
 <li><p><strong>Time.</strong> Dear ImGui reads no clock — the backend sets
-<code class="docutils literal notranslate"><span class="pre">io.delta_time</span></code>. cmtk reads the wall clock by default; set
+<code class="docutils literal notranslate"><span class="pre">io.delta_time</span></code>. emtk reads the wall clock by default; set
 <code class="docutils literal notranslate"><span class="pre">io.wall_clock</span> <span class="pre">=</span> <span class="pre">False</span></code> and drive <code class="docutils literal notranslate"><span class="pre">delta_time</span></code> yourself for a test.</p></li>
 </ol>
 </section>
@@ -162,14 +162,14 @@ because a second list is the thing that drifts out of step with the first.</p>
 <section id="the-six-operation-painter-contract">
 <h1>The six-operation painter contract<a class="headerlink" href="#the-six-operation-painter-contract" title="Link to this heading"></a></h1>
 <p>A painter implements the methods in <code class="docutils literal notranslate"><span class="pre">REQUIRED_OPERATIONS</span></code>. Every widget
-cmtk ships is built on those and nothing else. The optional operations
+emtk ships is built on those and nothing else. The optional operations
 (<code class="docutils literal notranslate"><span class="pre">image</span></code>, <code class="docutils literal notranslate"><span class="pre">set_font</span></code>, <code class="docutils literal notranslate"><span class="pre">text_rotated</span></code>) add what cannot be decomposed.</p>
-<p>The helper functions in <code class="docutils literal notranslate"><span class="pre">cmtk.painter</span></code> — <code class="docutils literal notranslate"><span class="pre">line</span></code>, <code class="docutils literal notranslate"><span class="pre">polyline</span></code>,
+<p>The helper functions in <code class="docutils literal notranslate"><span class="pre">emtk.painter</span></code> — <code class="docutils literal notranslate"><span class="pre">line</span></code>, <code class="docutils literal notranslate"><span class="pre">polyline</span></code>,
 <code class="docutils literal notranslate"><span class="pre">fill_triangles</span></code>, <code class="docutils literal notranslate"><span class="pre">fill_convex</span></code>, <code class="docutils literal notranslate"><span class="pre">fill_circle</span></code> — are built from the
 required operations. A painter that provides native spellings of these
 (accelerations) gets faster drawing; one that does not gets the same picture
 through the fallback.</p>
-<p><code class="docutils literal notranslate"><span class="pre">cmtk.testing.RecordingPainter</span></code> implements the required operations by
+<p><code class="docutils literal notranslate"><span class="pre">emtk.testing.RecordingPainter</span></code> implements the required operations by
 recording them. It is what makes every example on these pages run with no
 window:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">painter</span> <span class="o">=</span> <span class="n">RecordingPainter</span><span class="p">()</span>

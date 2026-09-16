@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 class Frames:
@@ -20,14 +20,14 @@ class Frames:
     def __init__(self, gui, size=(0.0, 0.0, 400.0, 500.0)) -> None:
         self.gui = gui
         self.size = size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
         self.result = None
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.result = self.gui()
         return self.painter
 
@@ -75,14 +75,14 @@ ITEMS = ("AAAA", "BBBB", "CCCC", "DDDD", "EEEE")
 
 def _combo_gui(state):
     def gui():
-        if cmtk.begin_combo("combo 1", ITEMS[state["index"]]):
+        if emtk.begin_combo("combo 1", ITEMS[state["index"]]):
             for n, item in enumerate(ITEMS):
-                if cmtk.selectable(item, n == state["index"]):
+                if emtk.selectable(item, n == state["index"]):
                     state["index"] = n
-                state.setdefault("items", {})[item] = cmtk.get_item_rect()
-            cmtk.end_combo()
+                state.setdefault("items", {})[item] = emtk.get_item_rect()
+            emtk.end_combo()
         else:
-            state["closed_at"] = cmtk.get_item_rect()
+            state["closed_at"] = emtk.get_item_rect()
         state["combo"] = state.get("closed_at", state.get("combo"))
     return gui
 
@@ -121,7 +121,7 @@ def test_a_list_box_lists_everything_and_reports_a_choice():
     state = {"index": 0, "boxes": {}}
 
     def gui():
-        changed, state["index"] = cmtk.list_box("listbox 1", state["index"], ITEMS)
+        changed, state["index"] = emtk.list_box("listbox 1", state["index"], ITEMS)
         return changed
 
     frames = Frames(gui)
@@ -139,8 +139,8 @@ def test_typing_into_a_focused_field_reaches_the_value():
     state = {"text": "Hello", "box": None}
 
     def gui():
-        changed, state["text"] = cmtk.input_text("input text", state["text"])
-        state["box"] = cmtk.get_item_rect()
+        changed, state["text"] = emtk.input_text("input text", state["text"])
+        state["box"] = emtk.get_item_rect()
         return changed
 
     frames = Frames(gui)
@@ -155,8 +155,8 @@ def test_typing_into_an_unfocused_field_is_ignored():
     state = {"text": "Hello", "box": None}
 
     def gui():
-        _c, state["text"] = cmtk.input_text("input text", state["text"])
-        state["box"] = cmtk.get_item_rect()
+        _c, state["text"] = emtk.input_text("input text", state["text"])
+        state["box"] = emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -167,14 +167,14 @@ def test_typing_into_an_unfocused_field_is_ignored():
 
 def test_a_hint_shows_only_while_the_field_is_empty():
     def gui():
-        cmtk.input_text_with_hint("with hint", "enter text here", "")
+        emtk.input_text_with_hint("with hint", "enter text here", "")
 
     frames = Frames(gui)
     frames.draw()
     assert "enter text here" in frames.strings
 
     def filled():
-        cmtk.input_text_with_hint("with hint", "enter text here", "typed")
+        emtk.input_text_with_hint("with hint", "enter text here", "typed")
 
     frames = Frames(filled)
     frames.draw()
@@ -184,7 +184,7 @@ def test_a_hint_shows_only_while_the_field_is_empty():
 
 def test_a_multiline_field_draws_one_row_per_line():
     def gui():
-        cmtk.input_text_multiline("##ml", "one\ntwo\nthree", size=(200.0, 80.0))
+        emtk.input_text_multiline("##ml", "one\ntwo\nthree", size=(200.0, 80.0))
 
     frames = Frames(gui)
     painter = frames.draw()
@@ -202,10 +202,10 @@ def test_a_tree_node_remembers_being_opened():
     state = {"box": None}
 
     def gui():
-        if cmtk.tree_node("Root"):
-            cmtk.text("child")
-            cmtk.tree_pop()
-        return cmtk.get_item_rect()
+        if emtk.tree_node("Root"):
+            emtk.text("child")
+            emtk.tree_pop()
+        return emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -219,10 +219,10 @@ def test_a_tree_node_remembers_being_opened():
 
 def test_set_next_item_open_forces_a_node_open():
     def gui():
-        cmtk.set_next_item_open(True)
-        if cmtk.tree_node_ex("Forced"):
-            cmtk.text("visible")
-            cmtk.tree_pop()
+        emtk.set_next_item_open(True)
+        if emtk.tree_node_ex("Forced"):
+            emtk.text("visible")
+            emtk.tree_pop()
 
     frames = Frames(gui)
     frames.draw()
@@ -233,16 +233,16 @@ def test_nested_nodes_indent():
     boxes: dict = {}
 
     def gui():
-        cmtk.set_next_item_open(True)
-        if cmtk.tree_node_ex("Outer"):
-            cmtk.text("first")
-            boxes["first"] = cmtk.get_item_rect()
-            cmtk.set_next_item_open(True)
-            if cmtk.tree_node_ex("Inner"):
-                cmtk.text("second")
-                boxes["second"] = cmtk.get_item_rect()
-                cmtk.tree_pop()
-            cmtk.tree_pop()
+        emtk.set_next_item_open(True)
+        if emtk.tree_node_ex("Outer"):
+            emtk.text("first")
+            boxes["first"] = emtk.get_item_rect()
+            emtk.set_next_item_open(True)
+            if emtk.tree_node_ex("Inner"):
+                emtk.text("second")
+                boxes["second"] = emtk.get_item_rect()
+                emtk.tree_pop()
+            emtk.tree_pop()
 
     frames = Frames(gui)
     frames.draw()
@@ -268,19 +268,19 @@ def test_dragging_one_cell_on_to_another_swaps_them():
 
     def gui():
         for n, name in enumerate(list(names)):
-            cmtk.push_id(n)
-            cmtk.button(name, (60.0, 60.0))
-            boxes[n] = cmtk.get_item_rect()
-            if cmtk.begin_drag_drop_source():
-                cmtk.set_drag_drop_payload("DND_DEMO_CELL", n)
-                cmtk.text("Move %s" % name)
-                cmtk.end_drag_drop_source()
-            if cmtk.begin_drag_drop_target():
-                source = cmtk.accept_drag_drop_payload("DND_DEMO_CELL")
+            emtk.push_id(n)
+            emtk.button(name, (60.0, 60.0))
+            boxes[n] = emtk.get_item_rect()
+            if emtk.begin_drag_drop_source():
+                emtk.set_drag_drop_payload("DND_DEMO_CELL", n)
+                emtk.text("Move %s" % name)
+                emtk.end_drag_drop_source()
+            if emtk.begin_drag_drop_target():
+                source = emtk.accept_drag_drop_payload("DND_DEMO_CELL")
                 if source is not None:
                     names[n], names[source] = names[source], names[n]
-                cmtk.end_drag_drop_target()
-            cmtk.pop_id()
+                emtk.end_drag_drop_target()
+            emtk.pop_id()
 
     frames = Frames(gui)
     frames.draw()
@@ -299,18 +299,18 @@ def test_a_payload_of_the_wrong_kind_is_not_accepted():
     boxes: dict = {}
 
     def gui():
-        cmtk.button("source", (60.0, 30.0))
-        boxes["source"] = cmtk.get_item_rect()
-        if cmtk.begin_drag_drop_source():
-            cmtk.set_drag_drop_payload("KIND_A", "cargo")
-            cmtk.end_drag_drop_source()
-        cmtk.button("target", (60.0, 30.0))
-        boxes["target"] = cmtk.get_item_rect()
-        if cmtk.begin_drag_drop_target():
-            got = cmtk.accept_drag_drop_payload("KIND_B")
+        emtk.button("source", (60.0, 30.0))
+        boxes["source"] = emtk.get_item_rect()
+        if emtk.begin_drag_drop_source():
+            emtk.set_drag_drop_payload("KIND_A", "cargo")
+            emtk.end_drag_drop_source()
+        emtk.button("target", (60.0, 30.0))
+        boxes["target"] = emtk.get_item_rect()
+        if emtk.begin_drag_drop_target():
+            got = emtk.accept_drag_drop_payload("KIND_B")
             if got is not None:
                 taken["value"] = got
-            cmtk.end_drag_drop_target()
+            emtk.end_drag_drop_target()
 
     frames = Frames(gui)
     frames.draw()
@@ -330,8 +330,8 @@ def test_a_plot_scales_its_values_into_its_box():
     values = [0.6, 0.1, 1.0, 0.5, 0.92, 0.1, 0.2]
 
     def gui():
-        cmtk.plot_lines("Frame Times", values, size=(200.0, 80.0))
-        return cmtk.get_item_rect()
+        emtk.plot_lines("Frame Times", values, size=(200.0, 80.0))
+        return emtk.get_item_rect()
 
     frames = Frames(gui)
     painter = frames.draw()

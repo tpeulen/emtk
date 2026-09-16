@@ -1,15 +1,15 @@
 Painter backends
 ==================
 
-A backend is a class that implements the :class:`~cmtk.painter.Painter`
-protocol. ``cmtk.painter.REQUIRED_OPERATIONS`` lists what it must do;
+A backend is a class that implements the :class:`~emtk.painter.Painter`
+protocol. ``emtk.painter.REQUIRED_OPERATIONS`` lists what it must do;
 ``OPTIONAL_OPERATIONS`` may be left out, and ``ACCELERATIONS`` are faster
 spellings of what the helpers already decompose.
 
 Qt painter
 ------------
 
-``cmtk.qt_painter.QtPainter`` draws through a ``QPainter``. It is the
+``emtk.qt_painter.QtPainter`` draws through a ``QPainter``. It is the
 reference implementation: the images it produces were byte-identical to the
 direct ``QPainter`` calls the chrome used before the painter interface
 existed, and a test asserted it.
@@ -21,16 +21,16 @@ the import cost.
 Qt host
 ---------
 
-``cmtk.qt_host.ControlHost`` is a ``QWidget`` that knows nothing about
+``emtk.qt_host.ControlHost`` is a ``QWidget`` that knows nothing about
 any particular control. It paints whatever it was given through
-:class:`~cmtk.qt_painter.QtPainter` and forwards presses, drags, wheels
+:class:`~emtk.qt_painter.QtPainter` and forwards presses, drags, wheels
 and keys. One widget and not one per control, because each would
 re-derive the same four event translations.
 
 GPU quad painter
 ------------------
 
-``cmtk.quad_painter.QuadPainter`` builds one interleaved vertex array
+``emtk.quad_painter.QuadPainter`` builds one interleaved vertex array
 that a GPU shader turns into the whole interface in a single draw call.
 Each quad is six vertices (two triangles, no index buffer) carrying
 position, UV, colour and clip rectangle.
@@ -41,28 +41,28 @@ Why this exists is measured: the ``QPainter`` path cost 9.6 ms of a
 wgpu host
 -----------
 
-cmtk is **WGSL-native**, and this is the GPU path the toolkit is built
-around. ``cmtk/wgsl/ui.wgsl`` is the shader -- one file, in the toolkit,
-loaded by ``cmtk.wgsl.load_wgsl`` -- and an application that draws cmtk's
+emtk is **WGSL-native**, and this is the GPU path the toolkit is built
+around. ``emtk/wgsl/ui.wgsl`` is the shader -- one file, in the toolkit,
+loaded by ``emtk.wgsl.load_wgsl`` -- and an application that draws emtk's
 interface inside its own render pass loads the *same* file rather than
 keeping a second copy of it. Two copies of one pipeline's shader are two
 things to keep in step, and they do not stay in step.
 
-``cmtk.wgpu_host.WgpuControlHost`` is a Qt widget that draws a control
-through :class:`~cmtk.quad_painter.QuadPainter`. Qt's job is a window;
+``emtk.wgpu_host.WgpuControlHost`` is a Qt widget that draws a control
+through :class:`~emtk.quad_painter.QuadPainter`. Qt's job is a window;
 ``rendercanvas`` turns that into a surface, and nothing is rasterised on
 the CPU. It forwards presses, drags, wheels and keys exactly as the Qt host
 does, and swaps in at a call site by changing the name::
 
-    from cmtk.wgpu_host import WgpuControlHost
+    from emtk.wgpu_host import WgpuControlHost
 
     widget = WgpuControlHost(editor, on_change=save)
 
-``cmtk.wgpu_host.WgpuRenderer`` is the half that needs **no window and no
+``emtk.wgpu_host.WgpuRenderer`` is the half that needs **no window and no
 toolkit**. Give it a texture view and it draws into it; give it nothing and
 ``grab()`` renders offscreen and hands back a NumPy array::
 
-    from cmtk.wgpu_host import WgpuRenderer
+    from emtk.wgpu_host import WgpuRenderer
 
     renderer = WgpuRenderer()
     painter = renderer.painter()
@@ -85,10 +85,10 @@ image's u is ``-(1 + texel_x / width)`` while every glyph and rectangle u
 is a texel coordinate ``>= 0``, so the fragment shader picks the texture
 from the sign alone. That keeps one draw call and keeps images in the
 interface's draw order -- text drawn after an image lands *on* it.
-``cmtk.gpu_atlas.ImageAtlas`` is where a :class:`~cmtk.texture.Texture` is
+``emtk.gpu_atlas.ImageAtlas`` is where a :class:`~emtk.texture.Texture` is
 placed, and the host installs it as the painter's ``image_uv_resolver``.
 
-What the host uploads lives in ``cmtk.gpu_atlas``: the combined glyph atlas
+What the host uploads lives in ``emtk.gpu_atlas``: the combined glyph atlas
 (baked rows on top, the runtime cache underneath -- a host that uploads only
 the baked half draws the *wrong glyph* for anything the baker never saw),
 the image atlas, and the negative-u encoding. That module names no toolkit
@@ -106,12 +106,12 @@ The same widget code runs in a browser under Pyodide. A browser host
 targets a canvas, implements the painter in JavaScript, and feeds pointer
 and key events from the DOM.
 
-``cmtk.testing.PixelPainter``
+``emtk.testing.PixelPainter``
 ````````````````````````````````
 
 Pure Python, no window, no toolkit, no display.
 
-:class:`~cmtk.testing.PixelPainter` rasterises the six required operations
+:class:`~emtk.testing.PixelPainter` rasterises the six required operations
 onto an RGBA buffer, using the baked glyph atlas for text. Screenshots
 rendered through it are identical on every machine that runs the same
 commit, which is what makes golden-image tests possible.
@@ -121,7 +121,7 @@ commit, which is what makes golden-image tests possible.
 
 ::
 
-    from cmtk.testing import PixelPainter, render
+    from emtk.testing import PixelPainter, render
 
     def gui():
         im.begin("Demo", (0, 0, 100, 60))

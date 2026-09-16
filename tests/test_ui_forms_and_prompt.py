@@ -1,6 +1,6 @@
-"""The four widgets cmtk shipped with no test of its own.
+"""The four widgets emtk shipped with no test of its own.
 
-They were all exercised, thoroughly, from the application cmtk grew inside --
+They were all exercised, thoroughly, from the application emtk grew inside --
 which is exactly the arrangement this project exists to end. A library whose
 proof lives in one caller is a library that cannot be changed without that
 caller, and cannot be trusted by the next one. So the behaviour that belongs to
@@ -12,7 +12,7 @@ present:
 * ``view_spec`` -- the ``*.view.json`` dialect read into those rows, including
   what it *cannot* draw, which must be reported rather than dropped;
 * ``command_line`` -- the model half: history, completion, and the prompt,
-  which is the application's word and not cmtk's;
+  which is the application's word and not emtk's;
 * ``icons`` -- a pixel glyph lands inside the cell it was given.
 """
 from __future__ import annotations
@@ -21,10 +21,10 @@ import json
 
 import pytest
 
-from cmtk.testing import RecordingPainter
-from cmtk.widgets import icons
-from cmtk.widgets.command_line import PROMPT, CommandLine
-from cmtk.widgets.settings_editor import (
+from emtk.testing import RecordingPainter
+from emtk.widgets import icons
+from emtk.widgets.command_line import PROMPT, CommandLine
+from emtk.widgets.settings_editor import (
     BOOL,
     CHOICE,
     FLOAT,
@@ -33,7 +33,7 @@ from cmtk.widgets.settings_editor import (
     SettingsEditor,
     SettingsModel,
 )
-from cmtk.widgets.view_spec import (
+from emtk.widgets.view_spec import (
     load_view_spec,
     model_from_view_spec,
     settings_from_view_spec,
@@ -249,7 +249,7 @@ def test_a_spec_round_trips_through_a_file(tmp_path):
 # command_line
 # --------------------------------------------------------------------------
 def test_the_default_prompt_names_no_application():
-    """cmtk cannot know whose command line it is drawing, so it does not guess.
+    """emtk cannot know whose command line it is drawing, so it does not guess.
 
     This is not cosmetic. A default reading `"ChiMOL>"` is the application
     leaking into the library through a *value*, which no import check sees.

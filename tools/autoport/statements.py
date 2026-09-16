@@ -9,7 +9,7 @@ from autoport.tables import CPP_TYPES
 from autoport.expressions import (Porter, _carry_duration_unit,
                                   drop_get_template,
                                   rewrite_static_cast)
-from cmtk.im_compat import mechanical_name
+from emtk.im_compat import mechanical_name
 
 # --------------------------------------------------------------------------- #
 # Statement translation
@@ -917,11 +917,11 @@ class StatementPorter:
     def _simple(self, s: str, pad: str) -> list[str]:
         if not s:
             return []
-        # imgui-internal window draw state (window->DC.*) has no cmtk
+        # imgui-internal window draw state (window->DC.*) has no emtk
         # counterpart: say so, and keep the module runnable
         if re.search(r"(?:\.|->)\s*DC\s*\.", s) or "GetCurrentWindow()" in s:
             return [f"{pad}pass  # TODO(autoport): internal window state, "
-                    f"no cmtk counterpart -- the C++ follows"] + \
+                    f"no emtk counterpart -- the C++ follows"] + \
                    [f"{pad}# cpp| {ln}" for ln in s.splitlines()]
         if s in ("break", "continue"):
             return [f"{pad}{s}"]

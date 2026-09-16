@@ -1,8 +1,8 @@
-"""More of ``imgui_demo.cpp``, ported. Each section is a fresh test of cmtk.
+"""More of ``imgui_demo.cpp``, ported. Each section is a fresh test of emtk.
 
 The method, and it keeps paying: take a section of Dear ImGui's own demo,
 transliterate it, run it, and let what breaks name the defect. The Basic
-section did that once already -- it found that ``cmtk.text()`` claimed a
+section did that once already -- it found that ``emtk.text()`` claimed a
 full-width item, so the arrow buttons beside a label were unclickable.
 
 Here: selectables, tabs, popups and menus. The C++ is quoted beside each so the
@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 class Frames:
@@ -24,14 +24,14 @@ class Frames:
     def __init__(self, gui, size=(0.0, 0.0, 400.0, 500.0)) -> None:
         self.gui = gui
         self.size = size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
         self.result = None
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.result = self.gui()
         return self.painter
 
@@ -68,13 +68,13 @@ def test_selectables_inside_a_tree_node():
     state = {"selection": [False, True, False, False], "boxes": {}}
 
     def gui():
-        if cmtk.tree_node("Basic"):
+        if emtk.tree_node("Basic"):
             for index in range(4):
                 label = "%d. I am selectable" % (index + 1)
-                if cmtk.selectable(label, state["selection"][index]):
+                if emtk.selectable(label, state["selection"][index]):
                     state["selection"][index] = not state["selection"][index]
-                state["boxes"][index] = cmtk.get_item_rect()
-            cmtk.tree_pop()
+                state["boxes"][index] = emtk.get_item_rect()
+            emtk.tree_pop()
 
     frames = Frames(gui)
     frames.draw()
@@ -88,9 +88,9 @@ def test_selectables_inside_a_tree_node():
 
     def find_header():
         nonlocal header
-        with cmtk.frame(RecordingPainter(), frames.size, io=frames.io,
+        with emtk.frame(RecordingPainter(), frames.size, io=frames.io,
                       storage=frames.storage) as ctx:
-            cmtk.tree_node("Basic")
+            emtk.tree_node("Basic")
             header = ctx.get_item_rect()
     find_header()
     frames.click(header)
@@ -101,9 +101,9 @@ def test_a_selectable_reports_its_click():
     state = {"selected": False}
 
     def gui():
-        if cmtk.selectable("row", state["selected"]):
+        if emtk.selectable("row", state["selected"]):
             state["selected"] = not state["selected"]
-        return cmtk.get_item_rect()
+        return emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -118,19 +118,19 @@ def test_two_selectables_on_one_line_need_allow_overlap():
         ImGui::SameLine(); ImGui::SmallButton("Link 1");
 
     Without it the selectable claims the pointer for its whole row and the
-    button beside it is dead -- the same fault `cmtk.text()` had.
+    button beside it is dead -- the same fault `emtk.text()` had.
     """
     hits = {"selectable": False, "button": False}
 
     def gui():
-        cmtk.set_next_item_allow_overlap()
-        if cmtk.selectable("main.c", False, size=(200.0, 0.0)):
+        emtk.set_next_item_allow_overlap()
+        if emtk.selectable("main.c", False, size=(200.0, 0.0)):
             hits["selectable"] = True
-        row = cmtk.get_item_rect()
-        cmtk.same_line()
-        if cmtk.small_button("Link 1"):
+        row = emtk.get_item_rect()
+        emtk.same_line()
+        if emtk.small_button("Link 1"):
             hits["button"] = True
-        return cmtk.get_item_rect(), row
+        return emtk.get_item_rect(), row
 
     frames = Frames(gui)
     frames.draw()
@@ -153,14 +153,14 @@ VEGETABLES = ("Avocado", "Broccoli", "Cucumber")
 
 def _tab_gui(boxes):
     def gui():
-        if cmtk.begin_tab_bar("MyTabBar"):
+        if emtk.begin_tab_bar("MyTabBar"):
             for name in VEGETABLES:
-                if cmtk.begin_tab_item(name):
-                    cmtk.text("This is the %s tab!" % name)
-                    cmtk.end_tab_item()
-                boxes[name] = cmtk.get_item_rect()
-            cmtk.end_tab_bar()
-        cmtk.separator()
+                if emtk.begin_tab_item(name):
+                    emtk.text("This is the %s tab!" % name)
+                    emtk.end_tab_item()
+                boxes[name] = emtk.get_item_rect()
+            emtk.end_tab_bar()
+        emtk.separator()
     return gui
 
 
@@ -207,18 +207,18 @@ FISH = ("Bream", "Haddock", "Mackerel", "Pollock", "Tilefish")
 
 def _popup_gui(state):
     def gui():
-        if cmtk.button("Select.."):
-            cmtk.open_popup("my_select_popup")
-        state["button"] = cmtk.get_item_rect()
-        cmtk.same_line()
-        cmtk.text_unformatted("<None>" if state["fish"] < 0 else FISH[state["fish"]])
-        if cmtk.begin_popup("my_select_popup"):
-            cmtk.separator_text("Aquarium")
+        if emtk.button("Select.."):
+            emtk.open_popup("my_select_popup")
+        state["button"] = emtk.get_item_rect()
+        emtk.same_line()
+        emtk.text_unformatted("<None>" if state["fish"] < 0 else FISH[state["fish"]])
+        if emtk.begin_popup("my_select_popup"):
+            emtk.separator_text("Aquarium")
             for index, name in enumerate(FISH):
-                if cmtk.selectable(name):
+                if emtk.selectable(name):
                     state["fish"] = index
-                state.setdefault("items", {})[name] = cmtk.get_item_rect()
-            cmtk.end_popup()
+                state.setdefault("items", {})[name] = emtk.get_item_rect()
+            emtk.end_popup()
     return gui
 
 
@@ -260,20 +260,20 @@ def test_choosing_from_a_popup_reaches_the_caller():
 #   }
 def _menu_gui(state):
     def gui():
-        if cmtk.begin_menu_bar():
-            if cmtk.begin_menu("File"):
-                if cmtk.menu_item("New"):
+        if emtk.begin_menu_bar():
+            if emtk.begin_menu("File"):
+                if emtk.menu_item("New"):
                     state["chose"] = "New"
-                state.setdefault("items", {})["New"] = cmtk.get_item_rect()
-                if cmtk.menu_item("Open", "Ctrl+O"):
+                state.setdefault("items", {})["New"] = emtk.get_item_rect()
+                if emtk.menu_item("Open", "Ctrl+O"):
                     state["chose"] = "Open"
-                state["items"]["Open"] = cmtk.get_item_rect()
-                cmtk.separator()
-                if cmtk.menu_item("Quit", "Alt+F4"):
+                state["items"]["Open"] = emtk.get_item_rect()
+                emtk.separator()
+                if emtk.menu_item("Quit", "Alt+F4"):
                     state["chose"] = "Quit"
-                cmtk.end_menu()
-            state["file"] = cmtk.get_item_rect()
-            cmtk.end_menu_bar()
+                emtk.end_menu()
+            state["file"] = emtk.get_item_rect()
+            emtk.end_menu_bar()
     return gui
 
 
@@ -322,21 +322,21 @@ def _status_of(kind: str):
     log = []
 
     def gui():
-        ret = cmtk.button("ITEM: Button") if kind == "button" else cmtk.checkbox(
+        ret = emtk.button("ITEM: Button") if kind == "button" else emtk.checkbox(
             "ITEM: Checkbox", False)[0]
         log.append({
             "ret": bool(ret),
-            "hovered": cmtk.is_item_hovered(),
-            "active": cmtk.is_item_active(),
-            "activated": cmtk.is_item_activated(),
-            "deactivated": cmtk.is_item_deactivated(),
-            "clicked": cmtk.is_item_clicked(),
-            "visible": cmtk.is_item_visible(),
-            "rect_size": cmtk.get_item_rect_size(),
-            "rect_min": cmtk.get_item_rect_min(),
-            "rect_max": cmtk.get_item_rect_max(),
+            "hovered": emtk.is_item_hovered(),
+            "active": emtk.is_item_active(),
+            "activated": emtk.is_item_activated(),
+            "deactivated": emtk.is_item_deactivated(),
+            "clicked": emtk.is_item_clicked(),
+            "visible": emtk.is_item_visible(),
+            "rect_size": emtk.get_item_rect_size(),
+            "rect_min": emtk.get_item_rect_min(),
+            "rect_max": emtk.get_item_rect_max(),
         })
-        return cmtk.get_item_rect()
+        return emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()                                   # 0: nothing near it
@@ -415,18 +415,18 @@ def test_a_group_is_one_item_the_next_thing_lines_up_beside():
     boxes: dict = {}
 
     def gui():
-        cmtk.begin_group()
-        cmtk.button("AAA")
-        boxes["AAA"] = cmtk.get_item_rect()
-        cmtk.same_line()
-        cmtk.button("BBB")
-        boxes["BBB"] = cmtk.get_item_rect()
-        cmtk.button("CCC")                       # a second line, inside the group
-        boxes["CCC"] = cmtk.get_item_rect()
-        boxes["group"] = cmtk.end_group()
-        cmtk.same_line()
-        cmtk.button("DDD")
-        boxes["DDD"] = cmtk.get_item_rect()
+        emtk.begin_group()
+        emtk.button("AAA")
+        boxes["AAA"] = emtk.get_item_rect()
+        emtk.same_line()
+        emtk.button("BBB")
+        boxes["BBB"] = emtk.get_item_rect()
+        emtk.button("CCC")                       # a second line, inside the group
+        boxes["CCC"] = emtk.get_item_rect()
+        boxes["group"] = emtk.end_group()
+        emtk.same_line()
+        emtk.button("DDD")
+        boxes["DDD"] = emtk.get_item_rect()
 
     frames = Frames(gui)
     frames.draw()
@@ -458,14 +458,14 @@ def test_a_table_puts_its_cells_in_a_grid():
     cells: dict = {}
 
     def gui():
-        if cmtk.begin_table("table1", 3):
+        if emtk.begin_table("table1", 3):
             for row in range(4):
-                cmtk.table_next_row()
+                emtk.table_next_row()
                 for column in range(3):
-                    cmtk.table_set_column_index(column)
-                    cmtk.text("Row %d Column %d" % (row, column))
-                    cells[(row, column)] = cmtk.get_item_rect()
-            cmtk.end_table()
+                    emtk.table_set_column_index(column)
+                    emtk.text("Row %d Column %d" % (row, column))
+                    cells[(row, column)] = emtk.get_item_rect()
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()
@@ -482,13 +482,13 @@ def test_a_table_puts_its_cells_in_a_grid():
 
 def test_a_table_headers_row_names_the_columns():
     def gui():
-        if cmtk.begin_table("table2", 3):
+        if emtk.begin_table("table2", 3):
             for name in ("one", "two", "three"):
-                cmtk.table_setup_column(name)
-            cmtk.table_headers_row()
-            cmtk.table_next_column()
-            cmtk.text("cell")
-            cmtk.end_table()
+                emtk.table_setup_column(name)
+            emtk.table_headers_row()
+            emtk.table_next_column()
+            emtk.text("cell")
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()

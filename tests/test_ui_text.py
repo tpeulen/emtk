@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk import style
-from cmtk.widgets import text as uitext
+from emtk import style
+from emtk.widgets import text as uitext
 
 
 class RecordingPainter:

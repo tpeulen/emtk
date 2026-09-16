@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 def _run(gui, size=(0.0, 0.0, 500.0, 400.0), io=None, storage=None):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size, io=io or cmtk.IO(),
+    with emtk.frame(painter, size, io=io or emtk.IO(),
                     storage=storage if storage is not None else {}):
         gui()
     return painter
@@ -31,7 +31,7 @@ def _run(gui, size=(0.0, 0.0, 500.0, 400.0), io=None, storage=None):
 #   ImGui::Separator();
 #   if (ImGui::InputText("Input", InputBuf, ..., ImGuiInputTextFlags_EnterReturnsTrue)) { ExecCommand(...); }
 class Console:
-    """The demo's console, cut to what cmtk has."""
+    """The demo's console, cut to what emtk has."""
 
     def __init__(self) -> None:
         self.items: list[str] = ["Welcome to Dear ImGui!"]
@@ -46,17 +46,17 @@ class Console:
             self.items.append("Commands: HELP, HISTORY, CLEAR")
 
     def draw(self) -> None:
-        cmtk.text_wrapped("Enter 'HELP' for help.")
-        if cmtk.small_button("Clear"):
+        emtk.text_wrapped("Enter 'HELP' for help.")
+        if emtk.small_button("Clear"):
             self.items = []
-        cmtk.separator()
-        cmtk.begin_child((0.0, 60.0, 400.0, 200.0))
+        emtk.separator()
+        emtk.begin_child((0.0, 60.0, 400.0, 200.0))
         for item in self.items:
-            cmtk.text_unformatted(item)
-        cmtk.end_child()
-        cmtk.separator()
-        _changed, self.input = cmtk.input_text("Input", self.input)
-        self.input_box = cmtk.get_item_rect()
+            emtk.text_unformatted(item)
+        emtk.end_child()
+        emtk.separator()
+        _changed, self.input = emtk.input_text("Input", self.input)
+        self.input_box = emtk.get_item_rect()
 
 
 def test_the_console_draws_its_backlog():
@@ -70,17 +70,17 @@ def test_the_console_draws_its_backlog():
 def test_the_console_clear_button_empties_it():
     console = Console()
     console.items += ["one", "two"]
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
 
     box = {}
 
     def gui():
-        cmtk.text_wrapped("Enter 'HELP' for help.")
-        if cmtk.small_button("Clear"):
+        emtk.text_wrapped("Enter 'HELP' for help.")
+        if emtk.small_button("Clear"):
             console.items = []
-        box["clear"] = cmtk.get_item_rect()
+        box["clear"] = emtk.get_item_rect()
         for item in console.items:
-            cmtk.text_unformatted(item)
+            emtk.text_unformatted(item)
 
     _run(gui, io=io, storage=storage)
     io.mouse_pos = (box["clear"][0] + 2, box["clear"][1] + 2)
@@ -113,17 +113,17 @@ def test_the_log_example_lays_out_its_toolbar_on_one_line():
     lines = ["[%05d] Hello, current time is %.1f" % (n, n * 0.1) for n in range(5)]
 
     def gui():
-        if cmtk.button("Clear"):
+        if emtk.button("Clear"):
             lines.clear()
-        boxes["clear"] = cmtk.get_item_rect()
-        cmtk.same_line()
-        cmtk.button("Copy")
-        boxes["copy"] = cmtk.get_item_rect()
-        cmtk.separator()
-        cmtk.begin_child((0.0, 40.0, 400.0, 200.0))
+        boxes["clear"] = emtk.get_item_rect()
+        emtk.same_line()
+        emtk.button("Copy")
+        boxes["copy"] = emtk.get_item_rect()
+        emtk.separator()
+        emtk.begin_child((0.0, 40.0, 400.0, 200.0))
         for line in lines:
-            cmtk.text_unformatted(line)
-        cmtk.end_child()
+            emtk.text_unformatted(line)
+        emtk.end_child()
 
     painter = _run(gui)
     assert boxes["clear"][1] == boxes["copy"][1]
@@ -134,11 +134,11 @@ def test_the_log_example_lays_out_its_toolbar_on_one_line():
 def test_the_log_can_be_captured_to_the_clipboard():
     """`LogToClipboard` / `LogText` / `LogFinish` -- the demo's Copy button."""
     def gui():
-        cmtk.log_to_clipboard()
+        emtk.log_to_clipboard()
         for n in range(3):
-            cmtk.log_text("line %d\n" % n)
-        cmtk.log_finish()
-        assert cmtk.get_clipboard_text() == "line 0\nline 1\nline 2\n"
+            emtk.log_text("line %d\n" % n)
+        emtk.log_finish()
+        assert emtk.get_clipboard_text() == "line 0\nline 1\nline 2\n"
 
     _run(gui)
 
@@ -155,19 +155,19 @@ def test_the_two_pane_layout_puts_the_panes_side_by_side():
     state = {"selected": 0, "boxes": {}}
 
     def gui():
-        cmtk.begin_child((0.0, 0.0, 150.0, 300.0))
+        emtk.begin_child((0.0, 0.0, 150.0, 300.0))
         for index in range(5):
-            if cmtk.selectable("MyObject %d" % index, state["selected"] == index):
+            if emtk.selectable("MyObject %d" % index, state["selected"] == index):
                 state["selected"] = index
-            state["boxes"][index] = cmtk.get_item_rect()
-        cmtk.end_child()
-        cmtk.same_line()
-        cmtk.begin_group()
-        cmtk.begin_child((160.0, 0.0, 300.0, 300.0))
-        cmtk.text("MyObject: %d" % state["selected"])
-        state["boxes"]["detail"] = cmtk.get_item_rect()
-        cmtk.end_child()
-        cmtk.end_group()
+            state["boxes"][index] = emtk.get_item_rect()
+        emtk.end_child()
+        emtk.same_line()
+        emtk.begin_group()
+        emtk.begin_child((160.0, 0.0, 300.0, 300.0))
+        emtk.text("MyObject: %d" % state["selected"])
+        state["boxes"]["detail"] = emtk.get_item_rect()
+        emtk.end_child()
+        emtk.end_group()
 
     _run(gui)
     left = state["boxes"][0]
@@ -187,20 +187,20 @@ def test_the_property_editor_puts_a_field_beside_each_name():
     fields = {"Position": 1.0, "Rotation": 2.0, "Scale": 3.0}
 
     def gui():
-        if cmtk.begin_table("split", 2):
+        if emtk.begin_table("split", 2):
             for uid, (name, value) in enumerate(fields.items()):
-                cmtk.push_id(uid)
-                cmtk.table_next_row()
-                cmtk.table_set_column_index(0)
-                cmtk.align_text_to_frame_padding()
-                cmtk.text(name)
-                rows[(name, "label")] = cmtk.get_item_rect()
-                cmtk.table_set_column_index(1)
-                cmtk.set_next_item_width(80.0)
-                _changed, fields[name] = cmtk.drag_float("##value", value)
-                rows[(name, "field")] = cmtk.get_item_rect()
-                cmtk.pop_id()
-            cmtk.end_table()
+                emtk.push_id(uid)
+                emtk.table_next_row()
+                emtk.table_set_column_index(0)
+                emtk.align_text_to_frame_padding()
+                emtk.text(name)
+                rows[(name, "label")] = emtk.get_item_rect()
+                emtk.table_set_column_index(1)
+                emtk.set_next_item_width(80.0)
+                _changed, fields[name] = emtk.drag_float("##value", value)
+                rows[(name, "field")] = emtk.get_item_rect()
+                emtk.pop_id()
+            emtk.end_table()
 
     _run(gui)
     for name in fields:
@@ -223,16 +223,16 @@ def test_a_gradient_drawn_by_hand_lands_where_the_cursor_is():
     boxes: dict = {}
 
     def gui():
-        cmtk.text("Gradients")
-        draw = cmtk.get_window_draw_list()
-        size = (cmtk.calc_item_width(), cmtk.get_frame_height())
-        p0 = cmtk.get_cursor_screen_pos()
+        emtk.text("Gradients")
+        draw = emtk.get_window_draw_list()
+        size = (emtk.calc_item_width(), emtk.get_frame_height())
+        p0 = emtk.get_cursor_screen_pos()
         p1 = (p0[0] + size[0], p0[1] + size[1])
         draw.add_rect_filled_multi_color(p0, p1, (0, 0, 0, 255),
                                          (255, 255, 255, 255),
                                          (255, 255, 255, 255), (0, 0, 0, 255))
-        cmtk.invisible_button("##gradient1", size)
-        boxes["button"] = cmtk.get_item_rect()
+        emtk.invisible_button("##gradient1", size)
+        boxes["button"] = emtk.get_item_rect()
         boxes["p0"] = p0
 
     painter = _run(gui)
@@ -243,7 +243,7 @@ def test_a_gradient_drawn_by_hand_lands_where_the_cursor_is():
 def test_the_primitives_the_custom_rendering_section_draws():
     """One of each, on the window's own draw list."""
     def gui():
-        draw = cmtk.get_window_draw_list()
+        draw = emtk.get_window_draw_list()
         white = (255, 255, 255, 255)
         draw.add_line((0.0, 0.0), (50.0, 50.0), white, 1.0)
         draw.add_rect((0.0, 0.0), (50.0, 50.0), white, 4.0)
@@ -282,7 +282,7 @@ def test_the_draw_channels_example_puts_the_background_behind():
     background on channel 0 -- and merging puts them back in the right order,
     which is the whole reason the splitter exists."""
     def gui():
-        draw = cmtk.get_window_draw_list()
+        draw = emtk.get_window_draw_list()
         draw.channels_split(2)
         draw.channels_set_current(1)
         draw.add_rect_filled((25.0, 25.0), (75.0, 75.0), (255, 0, 0, 255))
@@ -304,16 +304,16 @@ def test_a_window_reports_where_it_is_so_an_overlay_can_be_placed():
     answers: dict = {}
 
     def gui():
-        viewport = cmtk.get_main_viewport()
+        viewport = emtk.get_main_viewport()
         answers["work_pos"] = viewport.work_pos
         answers["work_size"] = viewport.work_size
-        cmtk.set_next_window_pos((viewport.work_pos[0] + 10.0,
+        emtk.set_next_window_pos((viewport.work_pos[0] + 10.0,
                                   viewport.work_pos[1] + 10.0))
-        cmtk.set_next_window_bg_alpha(0.35)
-        cmtk.begin("Example: Simple overlay", (10.0, 10.0, 200.0, 60.0))
-        cmtk.text("Simple overlay")
-        answers["pos"] = cmtk.get_window_pos()
-        cmtk.end()
+        emtk.set_next_window_bg_alpha(0.35)
+        emtk.begin("Example: Simple overlay", (10.0, 10.0, 200.0, 60.0))
+        emtk.text("Simple overlay")
+        answers["pos"] = emtk.get_window_pos()
+        emtk.end()
 
     _run(gui)
     assert answers["work_pos"] == (0.0, 0.0)

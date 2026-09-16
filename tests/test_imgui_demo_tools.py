@@ -5,20 +5,20 @@ windows, the id-stack tool, the about box and the user guide, window flags, and
 the settings that persist between runs.
 
 These are the reference's own *tools*, so porting them is a fair test of
-whether cmtk can build the kind of thing Dear ImGui is used for -- a window
+whether emtk can build the kind of thing Dear ImGui is used for -- a window
 made out of the widgets themselves, reading the context back.
 """
 from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 def _run(gui, size=(0.0, 0.0, 500.0, 600.0), io=None, storage=None):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size, io=io or cmtk.IO(),
+    with emtk.frame(painter, size, io=io or emtk.IO(),
                     storage=storage if storage is not None else {}):
         gui()
     return painter
@@ -28,7 +28,7 @@ def _run(gui, size=(0.0, 0.0, 500.0, 600.0), io=None, storage=None):
 # Tools/Style Editor  (imgui_demo.cpp: ShowStyleEditor)
 # --------------------------------------------------------------------------- #
 def test_the_style_editor_shows_the_metrics_and_the_palette():
-    painter = _run(cmtk.show_style_editor)
+    painter = _run(emtk.show_style_editor)
     assert "frame_rounding" in painter.strings
     assert any("Button" in s for s in painter.strings)
     # A swatch per colour: the palette is drawn, not only named.
@@ -39,11 +39,11 @@ def test_the_style_selector_switches_the_palette():
     state = {"box": None}
 
     def gui():
-        cmtk.show_style_selector("Style")
-        state["box"] = cmtk.get_item_rect()
-        state["window_bg"] = cmtk.get_style().color(cmtk.Col.WINDOW_BG)
+        emtk.show_style_selector("Style")
+        state["box"] = emtk.get_item_rect()
+        state["window_bg"] = emtk.get_style().color(emtk.Col.WINDOW_BG)
 
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
     _run(gui, io=io, storage=storage)
     dark = state["window_bg"]
 
@@ -66,8 +66,8 @@ def test_the_metrics_window_reports_the_frame_it_is_in():
     answers: dict = {}
 
     def gui():
-        cmtk.show_metrics_window()
-        answers["frame"] = cmtk.get_frame_count()
+        emtk.show_metrics_window()
+        answers["frame"] = emtk.get_frame_count()
 
     painter = _run(gui)
     assert any(("frame %d" % answers["frame"]) in s for s in painter.strings), \
@@ -78,9 +78,9 @@ def test_the_metrics_window_reports_the_frame_it_is_in():
 
 def test_the_debug_log_shows_what_was_logged():
     def gui():
-        cmtk.debug_log("first entry")
-        cmtk.debug_log("second entry")
-        cmtk.show_debug_log_window()
+        emtk.debug_log("first entry")
+        emtk.debug_log("second entry")
+        emtk.show_debug_log_window()
 
     painter = _run(gui)
     assert "first entry" in painter.strings
@@ -89,25 +89,25 @@ def test_the_debug_log_shows_what_was_logged():
 
 def test_the_id_stack_tool_reports_the_stack_it_is_inside():
     def gui():
-        cmtk.push_id("outer")
-        cmtk.push_id(7)
-        cmtk.show_id_stack_tool_window()
-        cmtk.pop_id()
-        cmtk.pop_id()
+        emtk.push_id("outer")
+        emtk.push_id(7)
+        emtk.show_id_stack_tool_window()
+        emtk.pop_id()
+        emtk.pop_id()
 
     painter = _run(gui)
     assert any("outer" in s and "7" in s for s in painter.strings), painter.strings
 
 
 def test_the_about_window_and_the_user_guide_draw():
-    about = _run(cmtk.show_about_window)
-    assert any("cmtk" in s for s in about.strings)
-    guide = _run(cmtk.show_user_guide)
+    about = _run(emtk.show_about_window)
+    assert any("emtk" in s for s in about.strings)
+    guide = _run(emtk.show_user_guide)
     assert any("collapse window" in s for s in guide.strings)
 
 
 def test_the_demo_window_runs_and_shows_its_sections():
-    painter = _run(cmtk.show_demo_window)
+    painter = _run(emtk.show_demo_window)
     for section in ("Basic", "Trees", "Plots"):
         assert any(section in s for s in painter.strings), section
 
@@ -119,10 +119,10 @@ def test_the_style_can_be_read_and_written_through_the_context():
     seen: dict = {}
 
     def gui():
-        style = cmtk.get_style()
+        style = emtk.get_style()
         seen["before"] = style.frame_rounding
         style.frame_rounding = 6.0
-        seen["after"] = cmtk.get_style().frame_rounding
+        seen["after"] = emtk.get_style().frame_rounding
 
     _run(gui)
     assert seen["after"] == 6.0 and seen["before"] != 6.0
@@ -130,16 +130,16 @@ def test_the_style_can_be_read_and_written_through_the_context():
 
 def test_the_version_is_reported():
     def gui():
-        assert cmtk.get_version()
+        assert emtk.get_version()
 
     _run(gui)
-    assert cmtk.IMGUI_VERSION.startswith("1.")
+    assert emtk.IMGUI_VERSION.startswith("1.")
 
 
 def test_a_colour_can_be_named_and_read_as_floats():
     def gui():
-        assert "Button" in cmtk.get_style_color_name(cmtk.Col.BUTTON)
-        rgba = cmtk.get_style_color_vec4(cmtk.Col.BUTTON)
+        assert "Button" in emtk.get_style_color_name(emtk.Col.BUTTON)
+        rgba = emtk.get_style_color_vec4(emtk.Col.BUTTON)
         assert len(rgba) == 4 and all(0.0 <= c <= 1.0 for c in rgba)
 
     _run(gui)
@@ -152,13 +152,13 @@ def test_a_window_can_be_placed_sized_and_focused():
     answers: dict = {}
 
     def gui():
-        cmtk.begin("first", (0.0, 0.0, 100.0, 100.0))
-        cmtk.end()
-        cmtk.begin("second", (10.0, 10.0, 120.0, 120.0))
-        answers["pos"] = cmtk.get_window_pos()
-        answers["size"] = cmtk.get_window_size()
-        answers["focused"] = cmtk.is_window_focused()
-        cmtk.end()
+        emtk.begin("first", (0.0, 0.0, 100.0, 100.0))
+        emtk.end()
+        emtk.begin("second", (10.0, 10.0, 120.0, 120.0))
+        answers["pos"] = emtk.get_window_pos()
+        answers["size"] = emtk.get_window_size()
+        answers["focused"] = emtk.is_window_focused()
+        emtk.end()
 
     _run(gui)
     assert answers["pos"] == (10.0, 10.0)
@@ -170,11 +170,11 @@ def test_a_window_is_appearing_only_on_its_first_frame():
     seen = []
 
     def gui():
-        cmtk.begin("appearing", (0.0, 0.0, 50.0, 50.0))
-        seen.append(cmtk.is_window_appearing())
-        cmtk.end()
+        emtk.begin("appearing", (0.0, 0.0, 50.0, 50.0))
+        seen.append(emtk.is_window_appearing())
+        emtk.end()
 
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
     _run(gui, io=io, storage=storage)
     _run(gui, io=io, storage=storage)
     _run(gui, io=io, storage=storage)
@@ -189,9 +189,9 @@ def test_the_settings_round_trip_through_a_file(tmp_path):
     ini = tmp_path / "imgui.ini"
 
     def save():
-        cmtk.begin("left", (10.0, 20.0, 100.0, 50.0))
-        cmtk.end()
-        cmtk.save_ini_settings_to_disk(str(ini))
+        emtk.begin("left", (10.0, 20.0, 100.0, 50.0))
+        emtk.end()
+        emtk.save_ini_settings_to_disk(str(ini))
 
     _run(save)
     assert ini.exists() and "[Window][left]" in ini.read_text()
@@ -199,11 +199,11 @@ def test_the_settings_round_trip_through_a_file(tmp_path):
     placed: dict = {}
 
     def load():
-        cmtk.load_ini_settings_from_disk(str(ini))
-        cmtk.begin("left")
-        placed["pos"] = cmtk.get_window_pos()
-        placed["size"] = cmtk.get_window_size()
-        cmtk.end()
+        emtk.load_ini_settings_from_disk(str(ini))
+        emtk.begin("left")
+        placed["pos"] = emtk.get_window_pos()
+        placed["size"] = emtk.get_window_size()
+        emtk.end()
 
     _run(load)
     assert placed["pos"] == (10.0, 20.0)
@@ -214,13 +214,13 @@ def test_a_malformed_settings_file_is_skipped_not_half_read():
     placed: dict = {}
 
     def load():
-        cmtk.load_ini_settings_from_memory(
+        emtk.load_ini_settings_from_memory(
             "[Window][bad]\nPos=1,2,3\nSize=4\n"
             "[Window][good]\nPos=5,6\nSize=7,8\n")
-        cmtk.begin("good")
-        placed["good"] = (cmtk.get_window_pos(), cmtk.get_window_size())
-        cmtk.end()
-        placed["names"] = [w.name for w in cmtk.get_current_context().windows]
+        emtk.begin("good")
+        placed["good"] = (emtk.get_window_pos(), emtk.get_window_size())
+        emtk.end()
+        placed["names"] = [w.name for w in emtk.get_current_context().windows]
 
     _run(load)
     assert placed["good"] == ((5.0, 6.0), (7.0, 8.0))

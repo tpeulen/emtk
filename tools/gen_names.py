@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Regenerate ``_NAME_TO_MODULE`` in ``cmtk/__init__.py`` from each family's ``__all__``.
+"""Regenerate ``_NAME_TO_MODULE`` in ``emtk/__init__.py`` from each family's ``__all__``.
 
     python tools/gen_names.py          # rewrite the block in place
     python tools/gen_names.py --check  # exit 1 if the block is stale
@@ -14,7 +14,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-INIT = ROOT / "cmtk" / "__init__.py"
+INIT = ROOT / "emtk" / "__init__.py"
 
 
 def family_modules() -> tuple[str, ...]:
@@ -89,12 +89,12 @@ def main(argv=None) -> int:
     block = re.search(r"_NAME_TO_MODULE: dict\[str, str\] = \{\n(?:.*?\n)?\}\n", text, re.S)
     fresh = render(name_map())
     if block is None:
-        raise SystemExit("no _NAME_TO_MODULE block in cmtk/__init__.py")
+        raise SystemExit("no _NAME_TO_MODULE block in emtk/__init__.py")
     if "--check" in argv:
         if block.group(0) == fresh:
-            print("cmtk name map is current")
+            print("emtk name map is current")
             return 0
-        print("cmtk name map is stale: run tools/gen_names.py")
+        print("emtk name map is stale: run tools/gen_names.py")
         return 1
     INIT.write_text(text[: block.start()] + fresh + text[block.end():])
     print(f"wrote {fresh.count(chr(10)) - 2} names")

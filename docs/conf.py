@@ -1,18 +1,18 @@
-# -- cmtk documentation build configuration ----------------------------------
+# -- emtk documentation build configuration ----------------------------------
 
 import os
 import sys
 
-# The source tree, so autodoc can import cmtk without installing.
+# The source tree, so autodoc can import emtk without installing.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # -- Project information -----------------------------------------------------
 
-project = "cmtk"
+project = "emtk"
 copyright = "2025, Thomas-Otavio Peulen"
 
-import cmtk  # noqa: E402
-release = cmtk.__version__
+import emtk  # noqa: E402
+release = emtk.__version__
 version = ".".join(release.split(".")[:2])
 
 # -- General configuration ---------------------------------------------------
@@ -27,11 +27,11 @@ extensions = [
 # Doctest setup: a RecordingPainter and im in scope for every example.
 # Also provides names that pre-existing module docstring examples reference.
 doctest_global_setup = """\
-from cmtk import im
-from cmtk.testing import RecordingPainter, FIXED_GLYPH_W, FIXED_LINE_H
-from cmtk.layout import Layout
-from cmtk.widgets.plot import begin_plot
-from cmtk.widgets.circle import begin_circle
+from emtk import im
+from emtk.testing import RecordingPainter, FIXED_GLYPH_W, FIXED_LINE_H
+from emtk.layout import Layout
+from emtk.widgets.plot import begin_plot
+from emtk.widgets.circle import begin_circle
 # Variables that module-level docstring examples in plot.py / circle.py use.
 painter = RecordingPainter()
 xs = [0, 1, 2, 3]
@@ -61,5 +61,5 @@ html_theme_options = {
 }
 
 rst_prolog = """
-.. |CONTROL_MODULES| replace:: ``cmtk.CONTROL_MODULES``
+.. |CONTROL_MODULES| replace:: ``emtk.CONTROL_MODULES``
 """

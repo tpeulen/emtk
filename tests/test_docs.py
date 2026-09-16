@@ -5,7 +5,7 @@ Three jobs:
 1. Doctest every ``.rst`` file in ``docs/`` through Sphinx's own doctest
    extension, wired into pytest so a plain ``pytest`` catches drift.
 2. Doctest the module docstrings that carry runnable examples.
-3. Assert that the public API surface (``cmtk.__all__``, ``cmtk.im.__all__``,
+3. Assert that the public API surface (``emtk.__all__``, ``emtk.im.__all__``,
    ``CONTROL_MODULES``) is actually covered by the docs, so a new widget
    family cannot be added without a doc entry.
 
@@ -25,9 +25,9 @@ import sys
 
 import pytest
 
-import cmtk
-import cmtk.im  # resolve the lazy attribute
-import cmtk.testing  # same
+import emtk
+import emtk.im  # resolve the lazy attribute
+import emtk.testing  # same
 
 
 DOCS_DIR = pathlib.Path(__file__).resolve().parent.parent / "docs"
@@ -35,10 +35,10 @@ API_RST = DOCS_DIR / "api.rst"
 
 
 def _missing_docs_extra() -> str:
-    """Which part of ``cmtk[docs]`` is absent, if any.
+    """Which part of ``emtk[docs]`` is absent, if any.
 
     Building the docs needs Sphinx and the theme ``conf.py`` names. Neither
-    is a cmtk dependency -- they are the ``docs`` extra -- so a checkout
+    is a emtk dependency -- they are the ``docs`` extra -- so a checkout
     without them must *skip* these two tests rather than fail them. Failing
     would make an optional extra look mandatory, which is the same trap the
     Qt painter test used to set (see tests/conftest.py).
@@ -52,7 +52,7 @@ def _missing_docs_extra() -> str:
 
 needs_docs_extra = pytest.mark.skipif(
     bool(_missing_docs_extra()),
-    reason=f"needs the docs extra (pip install cmtk[docs]); "
+    reason=f"needs the docs extra (pip install emtk[docs]); "
            f"missing {_missing_docs_extra()}")
 
 
@@ -95,14 +95,14 @@ def test_docs_doctest_module_docstrings():
     import doctest
 
     modules_with_examples = [
-        cmtk.im,
-        cmtk.testing,
-        cmtk.painter,
+        emtk.im,
+        emtk.testing,
+        emtk.painter,
     ]
     # Also check the top-level package.
-    if ">>>" in cmtk.__doc__ or ".. doctest::" in cmtk.__doc__:
-        import cmtk as _cmtk
-        modules_with_examples.append(_cmtk)
+    if ">>>" in emtk.__doc__ or ".. doctest::" in emtk.__doc__:
+        import emtk as _emtk
+        modules_with_examples.append(_emtk)
 
     total_failures = 0
     for mod in modules_with_examples:
@@ -121,7 +121,7 @@ def test_docs_doctest_module_docstrings():
 # -- 3. Staleness guard: CONTROL_MODULES covered in api.rst --------------------
 
 def _api_rst_modules() -> set[str]:
-    """Parse ``docs/api.rst`` and return the set of ``cmtk.X`` modules
+    """Parse ``docs/api.rst`` and return the set of ``emtk.X`` modules
     referenced by ``.. automodule::`` directives under 'Widget families'.
     """
     text = API_RST.read_text()
@@ -137,7 +137,7 @@ def test_staleness_guard_control_modules():
     This is the staleness guard: adding a new widget family without
     updating the docs fails this test. The guard checks the module
     name as it would appear in an ``automodule`` directive
-    ("cmtk.widgets.basic", not "widgets.basic").
+    ("emtk.widgets.basic", not "widgets.basic").
 
     Both lists are walked. ``NAMESPACED_MODULES`` holds the modules that are
     deliberately *not* flattened into the package namespace, and a module in
@@ -145,8 +145,8 @@ def test_staleness_guard_control_modules():
     """
     documented = _api_rst_modules()
     missing = []
-    for mod_name in tuple(cmtk.CONTROL_MODULES) + tuple(cmtk.NAMESPACED_MODULES):
-        full = f"cmtk.{mod_name}"
+    for mod_name in tuple(emtk.CONTROL_MODULES) + tuple(emtk.NAMESPACED_MODULES):
+        full = f"emtk.{mod_name}"
         if full not in documented:
             missing.append(full)
     assert not missing, (
@@ -155,20 +155,20 @@ def test_staleness_guard_control_modules():
     )
 
 
-def test_staleness_guard_cmtk_all():
-    """Every name in cmtk.__all__ has either an eager import or a
+def test_staleness_guard_emtk_all():
+    """Every name in emtk.__all__ has either an eager import or a
     CONTROL_MODULES family that exports it.
 
     This is a weaker check than full autodoc coverage but catches the
     case where a name is added to __all__ but nothing in the docs can
     resolve it.
     """
-    for name in cmtk.__all__:
+    for name in emtk.__all__:
         try:
-            getattr(cmtk, name)
+            getattr(emtk, name)
         except AttributeError:
             raise AssertionError(
-                f"cmtk.__all__ lists {name!r} but it is not importable"
+                f"emtk.__all__ lists {name!r} but it is not importable"
             )
 
 
@@ -240,7 +240,7 @@ def test_the_readme_quick_start_draws_the_screenshot_beside_it(tmp_path):
     committed = DOCS_DIR / "_screenshots" / "first_frame.png"
     assert committed.exists(), (
         f"{committed} is missing; run `make -C docs screenshots`")
-    cmtk.testing.assert_images_equal(
+    emtk.testing.assert_images_equal(
         (tmp_path / "frame.png").read_bytes(), committed)
 
 
@@ -262,15 +262,15 @@ def test_the_readme_window_adapter_fires_a_click_once(tmp_path):
     clicks = []
 
     def gui():
-        cmtk.begin("W")
-        if cmtk.button("Press me"):
+        emtk.begin("W")
+        if emtk.button("Press me"):
             clicks.append(1)
-        cmtk.end()
+        emtk.end()
 
     app = app_class(gui)
 
     def paint():
-        app.draw(cmtk.testing.PixelPainter(200, 80), 0.0, 0.0, 200.0, 80.0)
+        app.draw(emtk.testing.PixelPainter(200, 80), 0.0, 0.0, 200.0, 80.0)
 
     paint()                                      # settles the layout
     app.press(20.0, 10.0, 0.0, 0.0, 200.0, 80.0, 0, 1)

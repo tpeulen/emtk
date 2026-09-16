@@ -4,8 +4,8 @@ Quickstart
 A frame is a context manager. Inside it, calls to ``im`` draw widgets onto
 whatever painter you gave it::
 
-    from cmtk import im
-    from cmtk.testing import RecordingPainter
+    from emtk import im
+    from emtk.testing import RecordingPainter
 
     painter = RecordingPainter()
     with im.frame(painter, (0, 0, 320, 200)):
@@ -21,7 +21,7 @@ against a Qt painter on the desktop, the quad painter on a wgpu surface, or
 the Pyodide build in a browser.
 
 .. image:: _screenshots/hello_world.png
-   :alt: A cmtk window with text, a button and a counter
+   :alt: A emtk window with text, a button and a counter
 
 The one place Python must differ from C++
 ------------------------------------------

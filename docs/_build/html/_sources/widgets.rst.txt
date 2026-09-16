@@ -247,15 +247,15 @@ Layout
 ``layout`` carries the layout cursor: the arithmetic that decides where the
 next widget goes.
 
-:func:`~cmtk.im_widgets.splitter` is the draggable divider between two
-resizable panes, and :func:`~cmtk.im_widgets.splitter_behavior` is the drag
+:func:`~emtk.im_widgets.splitter` is the draggable divider between two
+resizable panes, and :func:`~emtk.im_widgets.splitter_behavior` is the drag
 on its own for a window that draws its own bar. The sizes come back rather
 than being written through pointers, as everywhere else in ``im``:
 
 .. doctest::
 
-    >>> import cmtk
-    >>> from cmtk.testing import RecordingPainter
+    >>> import emtk
+    >>> from emtk.testing import RecordingPainter
     >>> state = {"left": 150.0, "right": 242.0}
     >>> def two_panes():
     ...     im.begin("panes")
@@ -270,7 +270,7 @@ than being written through pointers, as everywhere else in ``im``:
     ...     im.same_line(0.0, 0.0)
     ...     im.end()
     ...     return moved
-    >>> with cmtk.frame(RecordingPainter(), (0, 0, 400, 300)):
+    >>> with emtk.frame(RecordingPainter(), (0, 0, 400, 300)):
     ...     moved = two_panes()
     >>> moved, state["left"], state["right"]
     (False, 150.0, 242.0)
@@ -285,12 +285,12 @@ Splitter
 ---------
 
 ``widgets.splitter`` is the same control retained: it owns the boundary, and
-:meth:`~cmtk.widgets.splitter.Splitter.split` hands back the three rectangles
+:meth:`~emtk.widgets.splitter.Splitter.split` hands back the three rectangles
 a two-pane layout is made of, already clamped.
 
 .. doctest::
 
-    >>> from cmtk.widgets.splitter import Splitter
+    >>> from emtk.widgets.splitter import Splitter
     >>> sp = Splitter(150.0, thickness=12.0, min_size1=60.0, min_size2=80.0)
     >>> pane1, bar, pane2 = sp.split(0.0, 0.0, 400.0, 300.0)
     >>> pane1, bar, pane2
@@ -313,7 +313,7 @@ jumps between the two limits as the window resizes:
 Control
 --------
 
-``control`` defines the :class:`~cmtk.control.Control` base class: the
+``control`` defines the :class:`~emtk.control.Control` base class: the
 contract every retained control follows.
 
 Axis and markers

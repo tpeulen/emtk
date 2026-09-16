@@ -91,7 +91,7 @@ def strip_comments(text: str) -> str:
 
 def strip_preprocessor(text: str, defines=()) -> str:
     """Drop includes/guards/pragma; keep simple ``#define`` constants; keep the
-    first branch of ``#if``/``#else``/``#endif`` (the port targets this cmtk,
+    first branch of ``#if``/``#else``/``#endif`` (the port targets this emtk,
     not the version the other branch was for).
 
     ``#ifdef X`` is different from ``#if``: it has a *right answer*, and the
@@ -289,7 +289,7 @@ def split_args(s: str) -> list[str]:
 
 
 def upper_snake(s: str) -> str:
-    """``ButtonActive`` -> ``BUTTON_ACTIVE`` -- enum members, as cmtk spells them."""
+    """``ButtonActive`` -> ``BUTTON_ACTIVE`` -- enum members, as emtk spells them."""
     out = re.sub(r"(?<=[a-z0-9])([A-Z])", r"_\1", s)
     out = re.sub(r"(?<=[A-Z])([A-Z][a-z])", r"_\1", out)
     return out.upper()

@@ -2,7 +2,7 @@
 
 A program that shows a picture has pixels. Dear ImGui's answer is a GL
 texture id, which puts a graphics API in the application and ends the
-arrangement cmtk exists for -- the same widget code on a GPU context, in a
+arrangement emtk exists for -- the same widget code on a GPU context, in a
 browser, and in a test with no window. So the pixels go in a ``Texture`` and
 the painter decides what to do with them.
 """
@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk import Texture
-from cmtk.testing import PixelPainter
+import emtk
+from emtk import Texture
+from emtk.testing import PixelPainter
 
 
 def _checker(n=4):
@@ -84,11 +84,11 @@ def test_it_scales_by_nearest_neighbour():
 
 
 def test_the_image_signature_is_the_protocol_s():
-    """``cmtk.painter.image`` calls the operation positionally as
+    """``emtk.painter.image`` calls the operation positionally as
     ``(x, y, w, h, handle, ...)``. PixelPainter took ``(handle, p_min,
     p_max, ...)``, so `handle` bound to the x coordinate and every image
     drew a tinted rectangle in the wrong place."""
-    from cmtk import painter as painter_mod
+    from emtk import painter as painter_mod
 
     p = PixelPainter(40, 40, background=(0, 0, 0, 255))
     painter_mod.image(p, 0.0, 0.0, 40.0, 40.0, _checker(2))
@@ -122,11 +122,11 @@ def test_a_transparent_pixel_leaves_the_background():
 
 def test_it_draws_through_the_immediate_mode_api():
     """The whole point: `im.image(tex, size)` in ordinary gui code."""
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
     p = PixelPainter(60, 60, background=(0, 0, 0, 255))
-    with cmtk.frame(p, (0, 0, 60, 60), io=io, storage=storage):
-        cmtk.begin("w")
-        cmtk.image(_checker(2), (40, 40))
-        cmtk.end()
+    with emtk.frame(p, (0, 0, 60, 60), io=io, storage=storage):
+        emtk.begin("w")
+        emtk.image(_checker(2), (40, 40))
+        emtk.end()
     lit = sum(1 for i in range(0, len(p.px), 4) if p.px[i] > 60)
     assert lit > 0, "im.image drew nothing"

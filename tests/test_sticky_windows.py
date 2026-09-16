@@ -1,6 +1,6 @@
 """Windows that stay where they were put.
 
-cmtk has no window manager and no ``.ini``, so nothing outside the context
+emtk has no window manager and no ``.ini``, so nothing outside the context
 remembers where a window was. Two things follow from that, and this file
 pins both:
 
@@ -22,9 +22,9 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk.im as im
-from cmtk.flags import Cond
-from cmtk.testing import PixelPainter
+import emtk.im as im
+from emtk.flags import Cond
+from emtk.testing import PixelPainter
 
 FRAME = (0.0, 0.0, 400.0, 300.0)
 
@@ -74,7 +74,7 @@ def test_a_box_less_window_still_follows_the_frame(painter):
 
 def test_an_explicit_box_is_not_sticky(painter):
     """The caller hands it a box every frame, so the caller owns the
-    placement. Sticky means *cmtk* is remembering one, and claiming it here
+    placement. Sticky means *emtk* is remembering one, and claiming it here
     would make a future ``.ini`` write back a box its owner never asked to
     have saved."""
     storage = run(painter, lambda: (im.begin("panel", (5, 6, 100, 40)),
@@ -227,7 +227,7 @@ def test_always_re_places_every_frame_and_once_does_not(painter):
 
 def test_first_use_ever_is_once_here_because_there_is_no_ini(painter):
     """``FirstUseEver`` means "unless a saved layout says otherwise", and
-    cmtk saves nothing -- so it can only mean ``Once``. Saying that out loud
+    emtk saves nothing -- so it can only mean ``Once``. Saying that out loud
     is better than a port silently getting ``Always``."""
     positions = iter([(11, 12), (77, 78), (77, 78)])
 

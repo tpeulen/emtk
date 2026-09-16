@@ -1,13 +1,13 @@
 """imgui_knobs: auto-ported from imgui_knobs.h, imgui_knobs.cpp
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 
 IMGUIKNOBS_PI = 3.14159265358979323846
 

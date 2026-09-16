@@ -1,6 +1,10 @@
-# cmtk
+# emtk
 
 **Dear ImGui for Python — with nothing to compile.**
+
+*emtk* is the **E**mbeddable i**M**mediate-mode **T**ool**K**it: it embeds into whatever
+hosts it (Qt, a wgpu surface, a browser, ChiSurf). It was called *cmtk* until
+2026-09; that name belongs to an unrelated project on PyPI.
 
 An immediate-mode GUI toolkit that draws through a *painter*: six operations, no
 toolkit, no native extension, no build step. It runs wherever Python runs — on
@@ -8,7 +12,7 @@ a desktop wgpu surface, in a browser under Pyodide, or in a test with no
 window at all — and the same widget code runs on all three.
 
 ```python
-from cmtk import im
+from emtk import im
 
 with im.frame(painter, (0, 0, 320, 200)):
     im.begin("Hello, world!")
@@ -29,39 +33,39 @@ written by reading — Dear ImGui above all — with the upstream MIT texts in
 ## Quick start
 
 ```
-pip install cmtk
+pip install emtk
 ```
 
 That is the whole install. No compiler, no toolkit, no wheel to wait for.
 
 ### 1. A frame you can run right now
 
-cmtk never opens a window itself. It draws through a *painter*, and you choose
+emtk never opens a window itself. It draws through a *painter*, and you choose
 which one — that is what lets the same widget code run on a GPU context, in a
 browser, and in a test. The painter that needs nothing at all is
 `PixelPainter`: it rasterises into memory, so this runs on a headless machine
 and leaves a PNG behind.
 
 ```python
-import cmtk
-from cmtk.testing import PixelPainter, save_png
+import emtk
+from emtk.testing import PixelPainter, save_png
 
-state = {"io": cmtk.IO(), "storage": {}, "show": True, "f": 0.35, "counter": 0}
+state = {"io": emtk.IO(), "storage": {}, "show": True, "f": 0.35, "counter": 0}
 
 def gui():
-    cmtk.begin("Hello, world!")
-    cmtk.text("This is some useful text.")
-    _, state["show"] = cmtk.checkbox("Show demo", state["show"])
-    _, state["f"] = cmtk.slider_float("float", state["f"], 0.0, 1.0)
-    if cmtk.button("Button"):
+    emtk.begin("Hello, world!")
+    emtk.text("This is some useful text.")
+    _, state["show"] = emtk.checkbox("Show demo", state["show"])
+    _, state["f"] = emtk.slider_float("float", state["f"], 0.0, 1.0)
+    if emtk.button("Button"):
         state["counter"] += 1
-    cmtk.same_line()
-    cmtk.text("counter = %d" % state["counter"])
-    cmtk.end()
+    emtk.same_line()
+    emtk.text("counter = %d" % state["counter"])
+    emtk.end()
 
 painter = PixelPainter(320, 140, background=(30, 32, 38, 255))
 # The box is inset by eight pixels so the first widget is not flush to the edge.
-with cmtk.frame(painter, (8, 8, 304, 124), io=state["io"], storage=state["storage"]):
+with emtk.frame(painter, (8, 8, 304, 124), io=state["io"], storage=state["storage"]):
     gui()
 
 save_png("frame.png", painter.width, painter.height, painter.px)
@@ -71,35 +75,35 @@ save_png("frame.png", painter.width, painter.height, painter.px)
 
 Three things to notice, because they are the three that surprise people:
 
-- **`io` and `storage` are yours to keep.** `cmtk.frame` builds a fresh context
+- **`io` and `storage` are yours to keep.** `emtk.frame` builds a fresh context
   every call; those two dicts are the only things carried across, so a widget
   that remembers anything — an open menu, a selected tab — needs the *same*
   ones each frame.
-- **There is no `alpha` variable inside cmtk.** `_, state["f"] = slider_float(...)`
+- **There is no `alpha` variable inside emtk.** `_, state["f"] = slider_float(...)`
   is the pointer rule: C++ writes through `float*`, Python has no pointers, so
   the value comes back.
-- **Nothing is retained.** Delete the `cmtk.button` line and the button is gone.
+- **Nothing is retained.** Delete the `emtk.button` line and the button is gone.
   There is no widget tree to keep in sync with your data.
 
 ### 2. The same frame, in a window
 
-`cmtk.qt_host.ControlHost` is a `QWidget` that paints anything with a
+`emtk.qt_host.ControlHost` is a `QWidget` that paints anything with a
 `draw(painter, x, y, w, h)` method and forwards pointer and key events to it.
-It was written for cmtk's *retained* controls, so an immediate-mode gui needs a
+It was written for emtk's *retained* controls, so an immediate-mode gui needs a
 dozen-line adapter — which is also the clearest statement of what a host owes
-cmtk:
+emtk:
 
 ```python
-import cmtk
+import emtk
 
 class App:
     """Adapts an immediate-mode gui to the host's control contract."""
 
     def __init__(self, gui):
-        self.gui, self.io, self.storage = gui, cmtk.IO(), {}
+        self.gui, self.io, self.storage = gui, emtk.IO(), {}
 
     def draw(self, painter, x, y, w, h):
-        with cmtk.frame(painter, (x, y, w, h), io=self.io, storage=self.storage):
+        with emtk.frame(painter, (x, y, w, h), io=self.io, storage=self.storage):
             self.gui()
 
     def hover(self, px, py, *_box):
@@ -122,11 +126,11 @@ that, which is why a button fires once on release and not again on the next
 repaint.
 
 Then the usual Qt three lines — this part needs a Qt binding
-(`pip install qtpy PySide6`), which cmtk itself does not:
+(`pip install qtpy PySide6`), which emtk itself does not:
 
 ```python
 from qtpy import QtWidgets
-from cmtk.qt_host import ControlHost
+from emtk.qt_host import ControlHost
 
 app = QtWidgets.QApplication([])
 host = ControlHost(App(gui))       # `gui` from step 1
@@ -140,7 +144,7 @@ app.exec()
 - `examples/hello_world.py` — Dear ImGui's own "Hello, world!", with the C++ it
   was transliterated from beside each line.
 - `examples/clicking.py` — driving a click with no window, end to end.
-- `docs/` — the full guide (`pip install cmtk[docs]`, then `make -C docs html`):
+- `docs/` — the full guide (`pip install emtk[docs]`, then `make -C docs html`):
   concepts, a widget-by-widget tour, the painter contract, and porting rules.
   Every example in it is a doctest, so none of it can quietly rot.
 
@@ -157,10 +161,10 @@ under Pyodide or in an environment where you cannot install binaries. For a
 scientific tool that has to run on a workstation, a cluster login node, a
 colleague's laptop and a web page, that is the whole problem.
 
-cmtk is the same design, written in Python, drawing through an interface small
+emtk is the same design, written in Python, drawing through an interface small
 enough that any surface can implement it:
 
-| | Dear ImGui | pyimgui / imgui-bundle | cmtk |
+| | Dear ImGui | pyimgui / imgui-bundle | emtk |
 |---|---|---|---|
 | immediate mode | yes | yes | yes |
 | needs a compiler | yes | pre-built wheels, else yes | **no** |
@@ -169,7 +173,7 @@ enough that any surface can implement it:
 | pure Python | no | no | **yes** |
 
 The cost is real and worth naming: Python draws a frame more slowly than C++,
-so cmtk suits tool and instrument interfaces — panels, tables, plots, editors —
+so emtk suits tool and instrument interfaces — panels, tables, plots, editors —
 rather than a game's HUD at 240 Hz.
 
 ## Compatibility with Dear ImGui
@@ -205,7 +209,7 @@ evidence that a re-implementation matches.
 
 ## Porting other people's ImGui code, by script
 
-`tools/autoport.py` ports Dear ImGui C++ to cmtk mechanically -- the same
+`tools/autoport.py` ports Dear ImGui C++ to emtk mechanically -- the same
 rules a person applies, written down so they apply the same way every time::
 
     python tools/autoport/__main__.py ext.h ext.cpp --module ext --out somewhere
@@ -226,7 +230,7 @@ imgui_club memory editor port cleanly (knobs with zero TODOs), and imspinner
 boundary where the tool flags hundreds of TODOs rather than pretending.
 `tests/test_autoport.py`
 ports the fixtures, renders them through a pure-Python rasterizing painter
-(`cmtk.testing.PixelPainter`, screenshots as PNGs with real glyphs from the
+(`emtk.testing.PixelPainter`, screenshots as PNGs with real glyphs from the
 baked atlas) and asserts the pixels against committed goldens, so the auto
 port provably draws what the hand-checked port draws.
 
@@ -237,7 +241,7 @@ ImGui_Arc_ProgressBar (progress widgets). They forced the porter to grow
 honest rules -- C++ character literals, ternaries nested in parentheses,
 `T* out_...`/`T& v` out-parameters, `operator+` on vectors (component-wise
 tuples), destructors, pointer and `size_t` casts, named `enum class`es,
-`IM_ASSERT`, `ImGui::Dummy`'s ImVec2 and cmtk's box-shaped `begin_child` --
+`IM_ASSERT`, `ImGui::Dummy`'s ImVec2 and emtk's box-shaped `begin_child` --
 and each rule is pinned by a test. Two of the batch are clean enough to
 prove end-to-end: the arc progress bar renders through the porter and is
 asserted pixel-exact against a committed golden; ImCurveEdit's
@@ -266,23 +270,23 @@ callable entry points; every rule above is pinned by a test.
 
 Three things, and that is the whole contract:
 
-1. **A painter.** `cmtk.painter.REQUIRED_OPERATIONS` is the list, and it is a
+1. **A painter.** `emtk.painter.REQUIRED_OPERATIONS` is the list, and it is a
    list in code rather than a promise in prose: `fill_rect`, `stroke_rect`,
    `gradient_rect`, `text`, `push_clip`/`pop_clip`, `fill_triangle`, plus
    `text_width` and `line_height` to measure with. `OPTIONAL_OPERATIONS`
-   (`image`, `set_font`, `text_rotated`) add what cannot be decomposed — cmtk
+   (`image`, `set_font`, `text_rotated`) add what cannot be decomposed — emtk
    asks `io.BackendFlags` what the painter in hand can do and falls back
    visibly where it cannot — and `ACCELERATIONS` are faster spellings of what
    the required ones already do, which change nothing on screen.
    `tests/test_the_painter_contract.py` drives the whole widget set through a
    host that has the required operations and *nothing* else, so the claim is
-   checked rather than asserted. `cmtk.testing.RecordingPainter`
+   checked rather than asserted. `emtk.testing.RecordingPainter`
    records instead of drawing, which is what makes a widget testable with no
    window.
 2. **Pointer and key state**, in `im.IO`: where the pointer is, which buttons
    went down or up this delivery, the modifiers, the wheel.
 3. **Time.** Dear ImGui reads no clock — the backend sets `io.delta_time` and
-   the context accumulates it. cmtk reads the wall clock by default; set
+   the context accumulates it. emtk reads the wall clock by default; set
    `io.wall_clock = False` and drive `delta_time` yourself for a fixed step, a
    recorded session, or a test of anything timing-dependent.
 
@@ -306,7 +310,7 @@ produces a correct picture of an *older moment*, which reads to a user as "the
 buttons do not work". A playback panel once read `1 / 464` through an entire
 animation that way; every press worked, and nothing on screen said so.
 
-`cmtk.redraw` is the other way. A control says what it is about to draw --
+`emtk.redraw` is the other way. A control says what it is about to draw --
 
 ```python
 def content_key(self):
@@ -329,15 +333,15 @@ stopped being drawn -- the third being the one a hand-rolled dict leaks.
 ## Layout
 
 ```
-cmtk/im_core.py       the context, windows, ItemAdd, ButtonBehavior   (imgui.cpp)
-cmtk/im_widgets.py    everything built on those                        (imgui_widgets.cpp)
-cmtk/im.py            the facade you import                            (imgui.h)
-cmtk/drawlist.py      ImDrawList over a painter
-cmtk/painter.py       the six operations, and the optional three
-cmtk/redraw.py        content keys and the block cache: when to redraw
-cmtk/widgets/         retained controls: lists, trees, tables, editors, plots
-cmtk/testing.py       RecordingPainter
-cmtk/atlas/           the baked glyph atlas -- committed, so using cmtk needs no font engine
+emtk/im_core.py       the context, windows, ItemAdd, ButtonBehavior   (imgui.cpp)
+emtk/im_widgets.py    everything built on those                        (imgui_widgets.cpp)
+emtk/im.py            the facade you import                            (imgui.h)
+emtk/drawlist.py      ImDrawList over a painter
+emtk/painter.py       the six operations, and the optional three
+emtk/redraw.py        content keys and the block cache: when to redraw
+emtk/widgets/         retained controls: lists, trees, tables, editors, plots
+emtk/testing.py       RecordingPainter
+emtk/atlas/           the baked glyph atlas -- committed, so using emtk needs no font engine
 tools/                not shipped: bake the atlas, scaffold an ImGui port, regenerate the name map
 ```
 
@@ -350,8 +354,8 @@ to import the thing importing it.
 No window, no toolkit, no event loop:
 
 ```python
-from cmtk import im
-from cmtk.testing import RecordingPainter
+from emtk import im
+from emtk.testing import RecordingPainter
 
 io, storage = im.IO(), {}
 painter = RecordingPainter()
@@ -368,11 +372,11 @@ io.mouse_down[0] = io.mouse_clicked[0] = True
 tests, in about a minute, no display required and **no toolkit installed**.
 The one test that exercises the optional Qt painter skips when Qt is absent;
 everything else runs on an interpreter where importing Qt raises, which is
-what `tests/test_cmtk_is_its_own_library.py` checks rather than assumes.
+what `tests/test_emtk_is_its_own_library.py` checks rather than assumes.
 
 ## Status
 
 Beta. The API is Dear ImGui's, so it is stable by construction; what moves is
-what has been implemented behind it. cmtk grew inside
+what has been implemented behind it. emtk grew inside
 [chimol](https://github.com/tpeulen/chimol), a molecular viewer, and was moved
 out once its own tests, examples and documentation stood on their own.

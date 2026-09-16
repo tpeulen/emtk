@@ -13,8 +13,8 @@ import math
 
 import pytest
 
-from cmtk import painter as painter_mod
-from cmtk.testing import RecordingPainter
+from emtk import painter as painter_mod
+from emtk.testing import RecordingPainter
 
 
 def test_line_is_exactly_two_triangles():
@@ -60,7 +60,7 @@ def test_a_diagonal_line_offsets_perpendicular_to_its_own_direction():
 def test_qt_painter_fills_a_triangle_at_its_three_corners(qt_app):
     """The Qt backend draws the same shape it is asked for, pixel-checked.
 
-    ``qt_app`` is cmtk's own fixture (``tests/conftest.py``), not pytest-qt's
+    ``qt_app`` is emtk's own fixture (``tests/conftest.py``), not pytest-qt's
     ``qapp``: asking for a fixture a plugin supplies makes the whole suite
     depend on that plugin, and without it this was a collection error rather
     than the skip an optional backend deserves.
@@ -68,7 +68,7 @@ def test_qt_painter_fills_a_triangle_at_its_three_corners(qt_app):
     qtgui = pytest.importorskip("qtpy.QtGui", exc_type=ImportError)
     from qtpy import QtCore
 
-    from cmtk.qt_painter import QtPainter
+    from emtk.qt_painter import QtPainter
 
     image = qtgui.QImage(20, 20, qtgui.QImage.Format_ARGB32_Premultiplied)
     image.fill(QtCore.Qt.transparent)

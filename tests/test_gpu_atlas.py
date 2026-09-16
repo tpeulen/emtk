@@ -1,6 +1,6 @@
 """The conventions a GPU host uploads by, tested with no GPU at all.
 
-:mod:`cmtk.gpu_atlas` is the layer between :class:`~cmtk.quad_painter.QuadPainter`
+:mod:`emtk.gpu_atlas` is the layer between :class:`~emtk.quad_painter.QuadPainter`
 and a device: the combined glyph atlas, the image atlas, and the negative-u
 encoding that lets an image quad and a glyph quad ride in one vertex buffer,
 one pipeline and one draw call.
@@ -11,7 +11,7 @@ host, which meant they were tested only on a machine that could make a
 context. They are arithmetic and NumPy; they should run anywhere, and here
 they do.
 
-:mod:`cmtk.wgpu_host` is where the same conventions are checked against real
+:mod:`emtk.wgpu_host` is where the same conventions are checked against real
 pixels on a real adapter -- see ``tests/test_wgpu_host.py``.
 """
 from __future__ import annotations
@@ -21,16 +21,16 @@ import pytest
 np = pytest.importorskip("numpy", reason="the GPU path builds its buffers "
                                          "with NumPy")
 
-from cmtk.font import load_atlas
-from cmtk.gpu_atlas import (
+from emtk.font import load_atlas
+from emtk.gpu_atlas import (
     DIRTY_LOG,
     ImageAtlas,
     atlas_pixels,
     image_texel,
     image_u,
 )
-from cmtk.quad_painter import QuadPainter
-from cmtk.texture import Texture
+from emtk.quad_painter import QuadPainter
+from emtk.texture import Texture
 
 #: Characters no reasonable build bakes -- the baked charset is Latin-1 and
 #: Latin Extended-A, so accented Latin is *in* it and Greek, Cyrillic and CJK
@@ -271,12 +271,12 @@ def test_the_buffer_is_rebuilt_when_the_cache_grows():
 
 def test_the_decoder_needs_no_toolkit_and_agrees_with_the_one_that_does():
     """Two decoders, one answer. The fast road is Qt's, through
-    ``qt_painter``; the slow one is :mod:`cmtk.testing`'s, and it is what
+    ``qt_painter``; the slow one is :mod:`emtk.testing`'s, and it is what
     runs on a machine with no toolkit at all. If they ever disagreed, the
     GPU path would draw differently depending on what happened to be
     installed."""
-    from cmtk.gpu_atlas import png_decode  # noqa: PLC0415
-    from cmtk.testing import png_decode as slow  # noqa: PLC0415
+    from emtk.gpu_atlas import png_decode  # noqa: PLC0415
+    from emtk.testing import png_decode as slow  # noqa: PLC0415
 
     data = load_atlas().image_path.read_bytes()
     fast_w, fast_h, fast = png_decode(data)

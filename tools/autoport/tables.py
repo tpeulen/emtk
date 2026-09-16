@@ -1,4 +1,4 @@
-"""The rule tables: C++ -> cmtk names, enums, printf formats, prelude helpers.
+"""The rule tables: C++ -> emtk names, enums, printf formats, prelude helpers.
 
 Pure data -- every translating pass reads these; nothing here runs code."""
 
@@ -7,7 +7,7 @@ Pure data -- every translating pass reads these; nothing here runs code."""
 # --------------------------------------------------------------------------- #
 
 #: ``ImGui<Family>_<Member>`` -> the Python namespace the member lives in.
-#: ``cmtk.flags`` guarantees every namespace here exists.
+#: ``emtk.flags`` guarantees every namespace here exists.
 ENUM_FAMILIES = {
     "ImGuiCol": "im.Col", "ImGuiDir": "im.Dir",
     "ImGuiWindowFlags": "im.WindowFlags", "ImGuiChildFlags": "im.ChildFlags",
@@ -55,7 +55,7 @@ CONSTANTS = {
 }
 
 #: ImGui calls whose C++ signature takes ``T*`` out-params: the value position
-#: in the cmtk Python signature (the label is position 0). The call gains an
+#: in the emtk Python signature (the label is position 0). The call gains an
 #: assignment: ``_changed, v = im.slider_float(...)``.
 OUT_PARAM_INDEX = {
     "SliderFloat": 1, "SliderInt": 1, "SliderAngle": 1,
@@ -98,7 +98,7 @@ FMT_FUNCS = {
 #: Where the printf format sits, for the functions whose format is not the
 #: first argument. ``TextColored(col, fmt, ...)`` takes a colour first, and
 #: folding from argument 0 leaves the varargs unfolded and the call arity
-#: wrong -- cmtk's ``text_colored(col, s)`` takes two.
+#: wrong -- emtk's ``text_colored(col, s)`` takes two.
 FMT_ARG_INDEX = {
     "TextColored": 1,
     "LabelText": 1,
@@ -106,8 +106,8 @@ FMT_ARG_INDEX = {
 }
 
 #: Arguments that are an ``ImVec4`` *colour*. Dear ImGui spells a colour in
-#: floats 0..1; cmtk paints in bytes 0..255, and a float tuple handed to a
-#: cmtk painter is very nearly black -- it draws, so nothing raises, and the
+#: floats 0..1; emtk paints in bytes 0..255, and a float tuple handed to a
+#: emtk painter is very nearly black -- it draws, so nothing raises, and the
 #: text is simply invisible. These are folded through ``floats_to_rgba``.
 COLOUR_ARG_INDEX = {
     "TextColored": 0,

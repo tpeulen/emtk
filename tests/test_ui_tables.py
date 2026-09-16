@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import tables
+from emtk.widgets import tables
 
 
 class RecordingPainter:
@@ -78,7 +78,7 @@ def make_table(**kwargs):
     Parameters
     ----------
     **kwargs
-        Passed through to :class:`~cmtk.widgets.tables.DataTable`.
+        Passed through to :class:`~emtk.widgets.tables.DataTable`.
 
     Returns
     -------
@@ -1026,8 +1026,8 @@ def test_header_labels_are_clipped_too():
 # Scrolling and hit-testing
 # --------------------------------------------------------------------------
 def test_the_scrollbar_is_reused_not_reimplemented():
-    """It is :class:`~cmtk.widgets.basic.ScrollBar`, the shared one."""
-    from cmtk.widgets import basic as widgets
+    """It is :class:`~emtk.widgets.basic.ScrollBar`, the shared one."""
+    from emtk.widgets import basic as widgets
 
     assert isinstance(make_table().bar, widgets.ScrollBar)
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import basic as widgets
+from emtk.widgets import basic as widgets
 
 
 class RecordingPainter:

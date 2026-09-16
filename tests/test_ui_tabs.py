@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import tabs
+from emtk.widgets import tabs
 
 
 class RecordingPainter:

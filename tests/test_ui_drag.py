@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import drag
+from emtk.widgets import drag
 
 
 class RecordingPainter:

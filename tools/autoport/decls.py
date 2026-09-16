@@ -150,7 +150,7 @@ _BUILTIN_CALL_HEADS = {
 
 def _unknown_runtime_call(value: str) -> bool:
     """True when *value* (already ported) calls something that is neither a
-    builtin, cmtk, math, nor a prelude helper -- a C++ runtime call that
+    builtin, emtk, math, nor a prelude helper -- a C++ runtime call that
     would NameError the moment the module is imported."""
     for m in re.finditer(r"([A-Za-z_]\w*(?:\.\w+)*)\s*\(", value):
         head = m.group(1).split(".")[0]

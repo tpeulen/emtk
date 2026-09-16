@@ -6,7 +6,7 @@
   <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Testing your UI &mdash; cmtk 0.1.0 documentation</title>
+  <title>Testing your UI &mdash; emtk 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
 
@@ -32,7 +32,7 @@
           
           
           <a href="index.html" class="icon icon-home">
-            cmtk
+            emtk
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
@@ -68,7 +68,7 @@
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">cmtk</a>
+          <a href="index.html">emtk</a>
       </nav>
 
       <div class="wy-nav-content">
@@ -88,7 +88,7 @@
              
   <section id="testing-your-ui">
 <h1>Testing your UI<a class="headerlink" href="#testing-your-ui" title="Link to this heading"></a></h1>
-<p>cmtk ships <code class="xref py py-mod docutils literal notranslate"><span class="pre">cmtk.testing</span></code>, which is why a widget test needs no window,
+<p>emtk ships <code class="xref py py-mod docutils literal notranslate"><span class="pre">emtk.testing</span></code>, which is why a widget test needs no window,
 no toolkit and no event loop.</p>
 <section id="recordingpainter">
 <h2>RecordingPainter<a class="headerlink" href="#recordingpainter" title="Link to this heading"></a></h2>
@@ -166,7 +166,7 @@ settles layout; the second draws the settled interface).
 <code class="xref py py-func docutils literal notranslate"><span class="pre">screenshot()</span></code> returns PNG bytes.
 <code class="xref py py-func docutils literal notranslate"><span class="pre">assert_images_equal()</span></code> compares two PNGs pixel for
 pixel:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">cmtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">render</span><span class="p">,</span> <span class="n">screenshot</span><span class="p">,</span> <span class="n">assert_images_equal</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">emtk.testing</span><span class="w"> </span><span class="kn">import</span> <span class="n">render</span><span class="p">,</span> <span class="n">screenshot</span><span class="p">,</span> <span class="n">assert_images_equal</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">gui</span><span class="p">():</span>
     <span class="n">im</span><span class="o">.</span><span class="n">begin</span><span class="p">(</span><span class="s2">&quot;Demo&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">60</span><span class="p">))</span>

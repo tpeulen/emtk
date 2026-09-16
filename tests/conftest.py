@@ -1,13 +1,13 @@
 """Shared fixtures.
 
-The one thing this file exists for: **cmtk's tests run without Qt.**
+The one thing this file exists for: **emtk's tests run without Qt.**
 
-cmtk has no dependencies -- that is its claim and most of its point -- and a
+emtk has no dependencies -- that is its claim and most of its point -- and a
 suite that cannot be run without a toolkit installed quietly makes the claim
 untrue. Two separate things used to break it:
 
 * ``pytest-qt``, if it happens to be installed in the environment without a
-  Qt binding, refuses to let pytest *start at all*. cmtk does not use
+  Qt binding, refuses to let pytest *start at all*. emtk does not use
   pytest-qt, so it is switched off in ``pyproject.toml``'s ``addopts``, and
   the fixture it provided is replaced by :func:`qt_app` below.
 * the Qt painter test asked for pytest-qt's ``qapp`` fixture, which without
@@ -26,7 +26,7 @@ def qt_app():
     """A Qt application for the tests that exercise the Qt painter.
 
     Skips -- not errors -- when no Qt binding is installed, which is the
-    normal state for a cmtk checkout. Replaces pytest-qt's ``qapp`` so that
+    normal state for a emtk checkout. Replaces pytest-qt's ``qapp`` so that
     testing the optional Qt backend needs Qt, and nothing else does.
     """
     qtwidgets = pytest.importorskip(

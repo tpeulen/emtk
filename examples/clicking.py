@@ -1,32 +1,32 @@
-"""A button, clicked -- what an event loop has to feed cmtk.
+"""A button, clicked -- what an event loop has to feed emtk.
 
 Run it::
 
-    python examples/cmtk/clicking.py
+    python examples/emtk/clicking.py
 
-There is no window here and no toolkit. A host gives cmtk three things -- where
+There is no window here and no toolkit. A host gives emtk three things -- where
 the pointer is, which buttons went down or up, and how much time passed -- and
 gets back the drawing. That is the whole contract, and it is why the same
 widgets run under Qt, under a browser and under a test.
 """
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 def draw(io, storage) -> tuple[RecordingPainter, bool]:
     painter = RecordingPainter()
     clicked = False
-    with cmtk.frame(painter, (0.0, 0.0, 200.0, 80.0), io=io, storage=storage) as ctx:
-        cmtk.begin("demo", (0.0, 0.0, 200.0, 80.0))
-        if cmtk.button("Press me"):
+    with emtk.frame(painter, (0.0, 0.0, 200.0, 80.0), io=io, storage=storage) as ctx:
+        emtk.begin("demo", (0.0, 0.0, 200.0, 80.0))
+        if emtk.button("Press me"):
             clicked = True
         box = ctx.get_item_rect()
-        cmtk.end()
+        emtk.end()
     return painter, clicked, box
 
 
 def main() -> None:
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
 
     _painter, clicked, box = draw(io, storage)          # frame 1: lay it out
     print(f"button at {tuple(round(v) for v in box)}, clicked={clicked}")

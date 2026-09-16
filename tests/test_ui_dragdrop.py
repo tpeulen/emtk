@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import dragdrop
-from cmtk.widgets.dragdrop import (
+from emtk.widgets import dragdrop
+from emtk.widgets.dragdrop import (
     DELAY_NONE,
     DELAY_NORMAL,
     STATIONARY_DELAY,

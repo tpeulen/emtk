@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.font import load_atlas
-from cmtk.testing import PixelPainter
+from emtk.font import load_atlas
+from emtk.testing import PixelPainter
 
 #: Characters no reasonable build bakes, one per script.
 BEYOND_THE_BAKED = ["ü", "Δ", "λ", "≈", "Ж", "日"]

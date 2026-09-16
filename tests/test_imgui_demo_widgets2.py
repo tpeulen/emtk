@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 def _run(gui, size=(0.0, 0.0, 500.0, 400.0), io=None, storage=None):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size, io=io or cmtk.IO(),
+    with emtk.frame(painter, size, io=io or emtk.IO(),
                     storage=storage if storage is not None else {}):
         gui()
     return painter
@@ -31,8 +31,8 @@ def test_color_edit_keeps_the_colour_it_was_given():
     result: dict = {}
 
     def gui():
-        result["rgb"] = cmtk.color_edit3("MyColor##1", (114, 144, 154))[1]
-        result["rgba"] = cmtk.color_edit4("MyColor##2", (114, 144, 154, 200))[1]
+        result["rgb"] = emtk.color_edit3("MyColor##1", (114, 144, 154))[1]
+        result["rgba"] = emtk.color_edit4("MyColor##2", (114, 144, 154, 200))[1]
 
     _run(gui)
     assert tuple(int(round(c)) for c in result["rgb"]) == (114, 144, 154)
@@ -41,7 +41,7 @@ def test_color_edit_keeps_the_colour_it_was_given():
 
 def test_a_color_button_paints_the_colour_asked_for():
     def gui():
-        cmtk.color_button("MyColor##3c", (114, 144, 154, 200))
+        emtk.color_button("MyColor##3c", (114, 144, 154, 200))
 
     painter = _run(gui)
     fills = [c[5] for c in painter.calls if c[0] == "fill_rect"]
@@ -52,7 +52,7 @@ def test_a_color_picker_round_trips_through_hsv():
     result: dict = {}
 
     def gui():
-        result["out"] = cmtk.color_picker3("MyColor##4", (114, 144, 154))[1]
+        result["out"] = emtk.color_picker3("MyColor##4", (114, 144, 154))[1]
 
     _run(gui)
     # Through HSV and back, within a rounding step per channel.
@@ -63,8 +63,8 @@ def test_a_color_picker_round_trips_through_hsv():
 def test_the_colour_conversions_are_each_other_s_inverse():
     #   ImGui::ColorConvertRGBtoHSV(...); ImGui::ColorConvertHSVtoRGB(...);
     for rgb in ((0.45, 0.56, 0.6), (1.0, 0.0, 0.0), (0.1, 0.9, 0.4)):
-        h, s, v = cmtk.color_convert_rgb_to_hsv(*rgb)
-        assert cmtk.color_convert_hsv_to_rgb(h, s, v) == pytest.approx(rgb, abs=1e-6)
+        h, s, v = emtk.color_convert_rgb_to_hsv(*rgb)
+        assert emtk.color_convert_hsv_to_rgb(h, s, v) == pytest.approx(rgb, abs=1e-6)
 
 
 # --------------------------------------------------------------------------- #
@@ -77,14 +77,14 @@ def test_bullet_text_draws_a_bullet_and_the_text_beside_it():
     boxes: dict = {}
 
     def gui():
-        cmtk.bullet_text("Bullet point 1")
-        boxes["one"] = cmtk.get_item_rect()
-        cmtk.bullet()
-        cmtk.text("Bullet point 3 (two calls)")
-        boxes["three"] = cmtk.get_item_rect()
-        cmtk.bullet()
-        cmtk.small_button("Button")
-        boxes["button"] = cmtk.get_item_rect()
+        emtk.bullet_text("Bullet point 1")
+        boxes["one"] = emtk.get_item_rect()
+        emtk.bullet()
+        emtk.text("Bullet point 3 (two calls)")
+        boxes["three"] = emtk.get_item_rect()
+        emtk.bullet()
+        emtk.small_button("Button")
+        boxes["button"] = emtk.get_item_rect()
 
     painter = _run(gui)
     assert "Bullet point 1" in painter.strings
@@ -98,7 +98,7 @@ def test_bullet_text_draws_a_bullet_and_the_text_beside_it():
 def test_word_wrapping_respects_the_width_it_is_given():
     #   ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + wrap_width); ... PopTextWrapPos();
     def gui():
-        cmtk.text_wrapped(
+        emtk.text_wrapped(
             "The quick brown fox jumps over the lazy dog "
             "and then does it again for good measure")
 
@@ -112,8 +112,8 @@ def test_text_can_be_coloured_and_dimmed():
     #   ImGui::TextColored(ImVec4(1.0f, 0.0f, 1.0f, 1.0f), "Pink");
     #   ImGui::TextDisabled("Disabled");
     def gui():
-        cmtk.text_colored((255, 0, 255, 255), "Pink")
-        cmtk.text_disabled("Disabled")
+        emtk.text_colored((255, 0, 255, 255), "Pink")
+        emtk.text_disabled("Disabled")
 
     painter = _run(gui)
     colours = {c[7] for c in painter.calls if c[0] == "text"}
@@ -124,8 +124,8 @@ def test_text_can_be_coloured_and_dimmed():
 def test_unicode_text_is_drawn_as_given():
     #   ImGui::Text("Hiragana: \xe3\x81\x8b\xe3\x81\x8d\xe3\x81\x8f (kakiku)");
     def gui():
-        cmtk.text("Hiragana: かきく (kakiku)")
-        cmtk.text("Kanjis: 日本語 (nihongo)")
+        emtk.text("Hiragana: かきく (kakiku)")
+        emtk.text("Kanjis: 日本語 (nihongo)")
 
     painter = _run(gui)
     assert any("かきく" in s for s in painter.strings)
@@ -142,8 +142,8 @@ def test_a_progress_bar_fills_in_proportion():
 
     def gui():
         for fraction in (0.0, 0.25, 0.5, 1.0):
-            cmtk.progress_bar(fraction, (200.0, 20.0))
-            box = cmtk.get_item_rect()
+            emtk.progress_bar(fraction, (200.0, 20.0))
+            box = emtk.get_item_rect()
             widths[fraction] = box
 
     painter = _run(gui)
@@ -156,7 +156,7 @@ def test_a_progress_bar_fills_in_proportion():
 
 def test_a_progress_bar_takes_an_overlay_caption():
     def gui():
-        cmtk.progress_bar(0.6, (200.0, 20.0), "60/100")
+        emtk.progress_bar(0.6, (200.0, 20.0), "60/100")
 
     painter = _run(gui)
     assert "60/100" in painter.strings
@@ -164,8 +164,8 @@ def test_a_progress_bar_takes_an_overlay_caption():
 
 def test_a_progress_bar_clamps_out_of_range_values():
     def gui():
-        cmtk.progress_bar(-1.0, (100.0, 20.0))
-        cmtk.progress_bar(5.0, (100.0, 20.0))
+        emtk.progress_bar(-1.0, (100.0, 20.0))
+        emtk.progress_bar(5.0, (100.0, 20.0))
 
     painter = _run(gui)
     for call in (c for c in painter.calls if c[0] == "fill_rect"):
@@ -180,13 +180,13 @@ def test_a_disabled_block_does_not_report_clicks():
     state = {"fired": False, "box": None}
 
     def gui():
-        cmtk.begin_disabled(True)
-        if cmtk.button("Button"):
+        emtk.begin_disabled(True)
+        if emtk.button("Button"):
             state["fired"] = True
-        state["box"] = cmtk.get_item_rect()
-        cmtk.end_disabled()
+        state["box"] = emtk.get_item_rect()
+        emtk.end_disabled()
 
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
     _run(gui, io=io, storage=storage)
     box = state["box"]
     io.mouse_pos = (box[0] + 2, box[1] + 2)
@@ -204,10 +204,10 @@ def test_the_disabled_flag_unwinds():
     seen: dict = {}
 
     def gui():
-        cmtk.begin_disabled(True)
-        seen["inside"] = cmtk.get_item_flags() & cmtk.ItemFlags.DISABLED
-        cmtk.end_disabled()
-        seen["outside"] = cmtk.get_item_flags() & cmtk.ItemFlags.DISABLED
+        emtk.begin_disabled(True)
+        seen["inside"] = emtk.get_item_flags() & emtk.ItemFlags.DISABLED
+        emtk.end_disabled()
+        seen["outside"] = emtk.get_item_flags() & emtk.ItemFlags.DISABLED
 
     _run(gui)
     assert seen["inside"] and not seen["outside"]
@@ -223,11 +223,11 @@ def test_vertical_sliders_stand_side_by_side():
 
     def gui():
         for index, value in enumerate(values):
-            cmtk.push_id(index)
-            cmtk.v_slider_float("##v", (18.0, 160.0), value, 0.0, 1.0)
-            boxes[index] = cmtk.get_item_rect()
-            cmtk.pop_id()
-            cmtk.same_line()
+            emtk.push_id(index)
+            emtk.v_slider_float("##v", (18.0, 160.0), value, 0.0, 1.0)
+            boxes[index] = emtk.get_item_rect()
+            emtk.pop_id()
+            emtk.same_line()
 
     _run(gui)
     ys = {round(b[1]) for b in boxes.values()}
@@ -244,12 +244,12 @@ def test_the_typed_variants_keep_their_type():
     out: dict = {}
 
     def gui():
-        out["si"] = cmtk.slider_int("i", 3, 0, 10)[1]
-        out["sf"] = cmtk.slider_float("f", 0.5, 0.0, 1.0)[1]
-        out["di"] = cmtk.drag_int("di", 7)[1]
-        out["df"] = cmtk.drag_float("df", 1.5)[1]
-        out["ii"] = cmtk.input_int("ii", 4)[1]
-        out["if"] = cmtk.input_float("if", 2.5)[1]
+        out["si"] = emtk.slider_int("i", 3, 0, 10)[1]
+        out["sf"] = emtk.slider_float("f", 0.5, 0.0, 1.0)[1]
+        out["di"] = emtk.drag_int("di", 7)[1]
+        out["df"] = emtk.drag_float("df", 1.5)[1]
+        out["ii"] = emtk.input_int("ii", 4)[1]
+        out["if"] = emtk.input_float("if", 2.5)[1]
 
     _run(gui)
     assert isinstance(out["si"], int) and out["si"] == 3
@@ -262,10 +262,10 @@ def test_the_multi_component_variants_return_what_they_were_given():
     out: dict = {}
 
     def gui():
-        out["f2"] = cmtk.drag_float2("f2", (1.0, 2.0))[1]
-        out["f3"] = cmtk.slider_float3("f3", (0.1, 0.2, 0.3), 0.0, 1.0)[1]
-        out["f4"] = cmtk.input_float4("f4", (1.0, 2.0, 3.0, 4.0))[1]
-        out["i3"] = cmtk.drag_int3("i3", (1, 2, 3))[1]
+        out["f2"] = emtk.drag_float2("f2", (1.0, 2.0))[1]
+        out["f3"] = emtk.slider_float3("f3", (0.1, 0.2, 0.3), 0.0, 1.0)[1]
+        out["f4"] = emtk.input_float4("f4", (1.0, 2.0, 3.0, 4.0))[1]
+        out["i3"] = emtk.drag_int3("i3", (1, 2, 3))[1]
 
     _run(gui)
     assert out["f2"] == pytest.approx((1.0, 2.0))
@@ -278,8 +278,8 @@ def test_a_slider_clamps_to_its_range():
     out: dict = {}
 
     def gui():
-        out["low"] = cmtk.slider_float("f", -5.0, 0.0, 1.0)[1]
-        out["high"] = cmtk.slider_float("g", 5.0, 0.0, 1.0)[1]
+        out["low"] = emtk.slider_float("f", -5.0, 0.0, 1.0)[1]
+        out["high"] = emtk.slider_float("g", 5.0, 0.0, 1.0)[1]
 
     _run(gui)
     assert out["low"] == 0.0 and out["high"] == 1.0

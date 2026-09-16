@@ -9,6 +9,6 @@ dist/
 .ruff_cache/
 .DS_Store
 
-# The glyph atlas is *not* here: `cmtk/atlas/chrome.{png,json}` is committed on
-# purpose, so using cmtk needs no font engine and no build step. `tools/
+# The glyph atlas is *not* here: `emtk/atlas/chrome.{png,json}` is committed on
+# purpose, so using emtk needs no font engine and no build step. `tools/
 # bake_chrome_atlas.py` regenerates it when the font or the point size changes.

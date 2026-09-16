@@ -1,4 +1,4 @@
-cmtk — Dear ImGui for Python, with nothing to compile
+emtk — Dear ImGui for Python, with nothing to compile
 ===========================================================
 
 An immediate-mode GUI toolkit that draws through a *painter*: six operations,
@@ -7,7 +7,7 @@ desktop wgpu surface, in a browser under Pyodide, and in a test with no
 window at all.
 
 .. image:: _screenshots/hello_world.png
-   :alt: A cmtk window with text, a button and a counter
+   :alt: A emtk window with text, a button and a counter
 
 .. toctree::
    :maxdepth: 2

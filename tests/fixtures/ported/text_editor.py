@@ -1,13 +1,13 @@
 """text_editor: auto-ported from TextEditor.h, TextEditor.cpp
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 
 inited = False
 inited = False
@@ -463,7 +463,7 @@ class TextEditor:
 
     def render(self, aTitle, aSize, aBorder):
         """TextEditor::Render()."""
-        # TODO(autoport): BeginChild: cmtk takes a box anchored at the cursor; the id/border/flags are dropped
+        # TODO(autoport): BeginChild: emtk takes a box anchored at the cursor; the id/border/flags are dropped
         self.m_within_render = True
         self.m_text_changed = False
         self.m_cursor_position_changed = False

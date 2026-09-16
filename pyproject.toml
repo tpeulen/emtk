@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cmtk"
+name = "emtk"
 version = "0.1.0"
 description = "Dear ImGui for Python: an immediate-mode GUI toolkit that draws through a painter, with nothing to compile."
 readme = "README.md"
@@ -28,10 +28,10 @@ test = ["pytest"]
 docs = ["sphinx>=8.0", "sphinx-rtd-theme>=3.0"]
 
 [project.urls]
-Source = "https://github.com/tpeulen/cmtk"
+Source = "https://github.com/tpeulen/emtk"
 
 [tool.setuptools.packages.find]
-include = ["cmtk*"]
+include = ["emtk*"]
 
 [tool.setuptools.package-data]
 # The baked glyph atlas is not decoration: every string in an interface is
@@ -39,14 +39,14 @@ include = ["cmtk*"]
 # a menu bar. `wgsl/*.wgsl` is the same kind of thing for the GPU host: the
 # shader is read from disk at pipeline time, so a wheel without it works in
 # a checkout and fails on an install.
-cmtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png", "wgsl/*.wgsl"]
+emtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png", "wgsl/*.wgsl"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# cmtk has no dependencies, and its tests must be runnable without a toolkit
-# installed. pytest-qt is not one of cmtk's plugins -- but if it happens to be
+# emtk has no dependencies, and its tests must be runnable without a toolkit
+# installed. pytest-qt is not one of emtk's plugins -- but if it happens to be
 # in the environment without a Qt binding beside it, it refuses to let pytest
-# start at all, and cmtk's whole suite becomes unrunnable for a reason that
-# has nothing to do with cmtk. The one test that needs Qt uses the `qt_app`
+# start at all, and emtk's whole suite becomes unrunnable for a reason that
+# has nothing to do with emtk. The one test that needs Qt uses the `qt_app`
 # fixture in tests/conftest.py, which skips when Qt is absent.
 addopts = "-p no:pytest-qt"

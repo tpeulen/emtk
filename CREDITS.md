@@ -1,9 +1,9 @@
-# Credits — what cmtk was built by reading
+# Credits — what emtk was built by reading
 
-cmtk is a re-implementation, not an original design, and the projects below are
+emtk is a re-implementation, not an original design, and the projects below are
 what it was written against. Every one is MIT licensed; their licence texts are
 reproduced in `licenses/`, and each ported module names its source in its own
-docstring. cmtk itself is MIT (see `LICENSE`).
+docstring. emtk itself is MIT (see `LICENSE`).
 
 - **[Dear ImGui](https://github.com/ocornut/imgui)** (Omar Cornut, MIT) — the
   whole design and most of the code. `im_core.py` follows `imgui.cpp`,
@@ -38,7 +38,7 @@ docstring. cmtk itself is MIT (see `LICENSE`).
 
 The data half of a port — enums, palettes, option structs, keyword tables — is
 mechanical and is *not* to be typed by hand; the body half is transliterated
-line by line against `cmtk.im` (`ctx.draw` = `ImDrawList`, `ctx.io` =
+line by line against `emtk.im` (`ctx.draw` = `ImDrawList`, `ctx.io` =
 `ImGuiIO`, `ctx.layout` = the cursor, `ctx.button_behavior` =
 `ButtonBehavior`):
 
@@ -51,7 +51,7 @@ python tools/port_imgui_widget.py \
 It extracts the data, emits `def knobs(ctx, ...)` with every public method's
 C++ body pasted in as comment blocks (each line annotated with the `ctx.`
 spelling of the ImGui names it uses), wraps it as `class Knob(ImWidget)`,
-writes a test on `cmtk.testing.RecordingPainter`, registers the module in
+writes a test on `emtk.testing.RecordingPainter`, registers the module in
 `CONTROL_MODULES`, regenerates the lazy name map, and prints a porting
 checklist — which primitives, IO fields, IDs, style vars and popups the source
 touches — plus the methods still to write.

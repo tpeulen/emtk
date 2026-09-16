@@ -1,6 +1,6 @@
 """Painter-level tests for the layout cursor.
 
-:class:`~cmtk.layout.Layout` draws nothing, so what there is to
+:class:`~emtk.layout.Layout` draws nothing, so what there is to
 test is arithmetic -- and the only test worth writing about arithmetic is one
 that asserts the *exact* rectangle a host would otherwise have hand-computed.
 Every number below was worked out from the reference implementation's
@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import basic as widgets
-from cmtk.layout import Layout, LayoutStyle
+from emtk.widgets import basic as widgets
+from emtk.layout import Layout, LayoutStyle
 
 
 class RecordingPainter:
@@ -503,7 +503,7 @@ def test_a_column_of_controls_stays_inside_its_column():
 # --------------------------------------------------------------------------- #
 # The window follows the frame
 #
-# A host resizes. cmtk keeps windows in `storage`, which is carried across
+# A host resizes. emtk keeps windows in `storage`, which is carried across
 # frames on purpose -- and a *stored* box does not follow a frame box that
 # changed. Every test above builds fresh state per frame, which is exactly the
 # arrangement in which this cannot be seen: the content stopped at the old
@@ -511,18 +511,18 @@ def test_a_column_of_controls_stays_inside_its_column():
 # --------------------------------------------------------------------------- #
 def _window_size_across(boxes, **begin_kw):
     """Draw one window per box, sharing io and storage as a host does."""
-    import cmtk
-    from cmtk.testing import PixelPainter
+    import emtk
+    from emtk.testing import PixelPainter
 
-    io, storage, seen = cmtk.IO(), {}, []
+    io, storage, seen = emtk.IO(), {}, []
     for w, h in boxes:
         painter = PixelPainter(int(w), int(h), background=(0, 0, 0, 255))
-        with cmtk.frame(painter, (0, 0, float(w), float(h)),
+        with emtk.frame(painter, (0, 0, float(w), float(h)),
                         io=io, storage=storage):
-            cmtk.begin("w", **begin_kw)
-            seen.append((cmtk.get_window_size(),
-                         cmtk.get_content_region_avail()))
-            cmtk.end()
+            emtk.begin("w", **begin_kw)
+            seen.append((emtk.get_window_size(),
+                         emtk.get_content_region_avail()))
+            emtk.end()
     return seen
 
 
@@ -542,16 +542,16 @@ def test_the_content_region_follows_it_too():
 
 def test_a_window_given_a_box_keeps_it():
     """An explicit box is the caller's decision and outranks the frame."""
-    import cmtk
-    from cmtk.testing import PixelPainter
+    import emtk
+    from emtk.testing import PixelPainter
 
-    io, storage, seen = cmtk.IO(), {}, []
+    io, storage, seen = emtk.IO(), {}, []
     for w, h in ((900, 620), (1400, 900)):
         painter = PixelPainter(w, h, background=(0, 0, 0, 255))
-        with cmtk.frame(painter, (0, 0, float(w), float(h)), io=io, storage=storage):
-            cmtk.begin("w", box=(10.0, 10.0, 300.0, 200.0))
-            seen.append(cmtk.get_window_size())
-            cmtk.end()
+        with emtk.frame(painter, (0, 0, float(w), float(h)), io=io, storage=storage):
+            emtk.begin("w", box=(10.0, 10.0, 300.0, 200.0))
+            seen.append(emtk.get_window_size())
+            emtk.end()
     assert seen == [(300, 200), (300, 200)]
 
 
@@ -561,16 +561,16 @@ def test_an_auto_resizing_window_still_sizes_to_its_content():
     must not happen is the second one going back: following the frame would
     overwrite the measured size every frame and the window would never
     shrink at all."""
-    import cmtk
-    from cmtk.testing import PixelPainter
+    import emtk
+    from emtk.testing import PixelPainter
 
-    io, storage, seen = cmtk.IO(), {}, []
+    io, storage, seen = emtk.IO(), {}, []
     for w, h in ((900, 620), (1400, 900), (700, 400)):
         painter = PixelPainter(w, h, background=(0, 0, 0, 255))
-        with cmtk.frame(painter, (0, 0, float(w), float(h)), io=io, storage=storage):
-            cmtk.begin("w", auto_resize=True)
-            cmtk.text("short")
-            seen.append(cmtk.get_window_size())
-            cmtk.end()
+        with emtk.frame(painter, (0, 0, float(w), float(h)), io=io, storage=storage):
+            emtk.begin("w", auto_resize=True)
+            emtk.text("short")
+            seen.append(emtk.get_window_size())
+            emtk.end()
     assert seen[0] == (900, 620), "the first frame cannot know the content yet"
     assert all(size[0] < 100 for size in seen[1:]), seen

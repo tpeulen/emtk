@@ -16,8 +16,8 @@ import re
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 class Frames:
@@ -25,13 +25,13 @@ class Frames:
 
     def __init__(self, gui, size=(0.0, 0.0, 500.0, 400.0)) -> None:
         self.gui, self.size = gui, size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.gui()
         return self.painter
 
@@ -55,7 +55,7 @@ class Frames:
 
 def _run(gui, size=(0.0, 0.0, 500.0, 400.0), io=None, storage=None):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size, io=io or cmtk.IO(),
+    with emtk.frame(painter, size, io=io or emtk.IO(),
                     storage=storage if storage is not None else {}):
         gui()
     return painter
@@ -80,19 +80,19 @@ def test_a_pushed_font_applies_until_it_is_popped():
             super().text(x, y, w, h, align, string, colour, bold)
 
     painter = Fonted()
-    with cmtk.frame(painter, (0.0, 0.0, 300.0, 200.0)):
-        cmtk.text("default")
-        cmtk.push_font("big", 24.0)
-        cmtk.text("large")
-        cmtk.pop_font()
-        cmtk.text("default again")
+    with emtk.frame(painter, (0.0, 0.0, 300.0, 200.0)):
+        emtk.text("default")
+        emtk.push_font("big", 24.0)
+        emtk.text("large")
+        emtk.pop_font()
+        emtk.text("default again")
 
     assert painter.per_string == [
         ("default", None), ("large", "big"), ("default again", None)]
 
 
 def test_the_font_selector_says_so_when_the_host_has_none():
-    painter = _run(lambda: cmtk.show_font_selector("Fonts"))
+    painter = _run(lambda: emtk.show_font_selector("Fonts"))
     assert any("registered none" in s for s in painter.strings)
 
 
@@ -102,12 +102,12 @@ def test_the_font_selector_says_so_when_the_host_has_none():
 #   ImGui::InputText("password", password, ..., ImGuiInputTextFlags_Password);
 def test_a_password_field_shows_stars_and_keeps_the_text():
     """The demo passes a flag; a port masks the value it draws, which is the
-    same thing done where cmtk can see it."""
+    same thing done where emtk can see it."""
     state = {"password": "hunter2"}
 
     def gui():
         shown = "*" * len(state["password"])
-        _c, edited = cmtk.input_text("password", shown)
+        _c, edited = emtk.input_text("password", shown)
         return edited
 
     painter = _run(gui)
@@ -117,9 +117,9 @@ def test_a_password_field_shows_stars_and_keeps_the_text():
 
 def test_long_text_is_clipped_to_its_field():
     def gui():
-        cmtk.set_next_item_width(60.0)
-        cmtk.input_text("elided", "a very long value indeed")
-        return cmtk.get_item_rect()
+        emtk.set_next_item_width(60.0)
+        emtk.input_text("elided", "a very long value indeed")
+        return emtk.get_item_rect()
 
     painter = _run(gui)
     # The field is 60 wide whatever the text is, and the text is clipped by the
@@ -135,9 +135,9 @@ def test_a_drag_respects_its_bounds():
     out: dict = {}
 
     def gui():
-        out["clamped_low"] = cmtk.drag_float("d", -5.0, 0.005, 0.0, None)[1]
-        out["clamped_high"] = cmtk.drag_float("e", 5.0, 0.005, None, 1.0)[1]
-        out["unbounded"] = cmtk.drag_float("f", 1e6, 1.0)[1]
+        out["clamped_low"] = emtk.drag_float("d", -5.0, 0.005, 0.0, None)[1]
+        out["clamped_high"] = emtk.drag_float("e", 5.0, 0.005, None, 1.0)[1]
+        out["unbounded"] = emtk.drag_float("f", 1e6, 1.0)[1]
 
     _run(gui)
     assert out["clamped_low"] == 0.0
@@ -147,8 +147,8 @@ def test_a_drag_respects_its_bounds():
 
 def test_a_slider_with_a_format_shows_it():
     def gui():
-        cmtk.slider_float("f", 0.5, 0.0, 1.0, "ratio = %.3f")
-        cmtk.slider_int("i", 3, 0, 10, "%d apples")
+        emtk.slider_float("f", 0.5, 0.0, 1.0, "ratio = %.3f")
+        emtk.slider_int("i", 3, 0, 10, "%d apples")
 
     painter = _run(gui)
     assert "ratio = 0.500" in painter.strings
@@ -161,7 +161,7 @@ def test_a_slider_angle_shows_degrees_and_keeps_radians():
     out: dict = {}
 
     def gui():
-        out["value"] = cmtk.slider_angle("angle", math.pi / 2)[1]
+        out["value"] = emtk.slider_angle("angle", math.pi / 2)[1]
 
     painter = _run(gui)
     assert out["value"] == pytest.approx(math.pi / 2)
@@ -177,14 +177,14 @@ def test_a_checkbox_selection_tracks_a_set():
 
     def gui():
         for n in range(4):
-            cmtk.push_id(n)
-            changed, on = cmtk.checkbox("Object %d" % n, n in chosen)
+            emtk.push_id(n)
+            changed, on = emtk.checkbox("Object %d" % n, n in chosen)
             if changed:
                 chosen.symmetric_difference_update({n})
-            boxes[n] = cmtk.get_item_rect()
-            cmtk.pop_id()
+            boxes[n] = emtk.get_item_rect()
+            emtk.pop_id()
 
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
 
     def click(box):
         io.mouse_pos = (box[0] + 2, box[1] + 2)
@@ -213,20 +213,20 @@ def test_a_dual_list_box_moves_items_between_sides():
     boxes: dict = {}
 
     def gui():
-        cmtk.begin_child((0.0, 0.0, 150.0, 200.0))
+        emtk.begin_child((0.0, 0.0, 150.0, 200.0))
         for index, name in enumerate(list(left)):
-            if cmtk.selectable("L%d %s" % (index, name)):
+            if emtk.selectable("L%d %s" % (index, name)):
                 right.append(left.pop(index))
-            boxes[("left", index)] = cmtk.get_item_rect()
-        cmtk.end_child()
-        cmtk.same_line()
-        cmtk.begin_child((160.0, 0.0, 150.0, 200.0))
+            boxes[("left", index)] = emtk.get_item_rect()
+        emtk.end_child()
+        emtk.same_line()
+        emtk.begin_child((160.0, 0.0, 150.0, 200.0))
         for index, name in enumerate(list(right)):
-            cmtk.selectable("R%d %s" % (index, name))
-            boxes[("right", index)] = cmtk.get_item_rect()
-        cmtk.end_child()
+            emtk.selectable("R%d %s" % (index, name))
+            boxes[("right", index)] = emtk.get_item_rect()
+        emtk.end_child()
 
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
     _run(gui, io=io, storage=storage)
     box = boxes[("left", 1)]
     io.mouse_pos = (box[0] + 2, box[1] + 2)
@@ -246,7 +246,7 @@ def test_deleting_the_selected_item_leaves_the_rest_drawable():
 
     def gui():
         for n in list(items):
-            cmtk.selectable("Object %d" % n, n in chosen)
+            emtk.selectable("Object %d" % n, n in chosen)
         # The demo deletes after the loop, which is the point: the list is
         # only mutated once the frame has finished reading it.
         for n in sorted(chosen):
@@ -270,15 +270,15 @@ def test_only_the_visible_rows_of_a_long_list_need_submitting():
     drawn: list = []
 
     def gui():
-        row_height = cmtk.get_text_line_height_with_spacing()
-        first = int(cmtk.get_scroll_y() / row_height)
-        visible = int(cmtk.get_window_size()[1] / row_height) + 1
+        row_height = emtk.get_text_line_height_with_spacing()
+        first = int(emtk.get_scroll_y() / row_height)
+        visible = int(emtk.get_window_size()[1] / row_height) + 1
         for index in range(first, min(first + visible, 1000)):
-            cmtk.text("Item %d" % index)
+            emtk.text("Item %d" % index)
             drawn.append(index)
 
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 200.0, 100.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 200.0, 100.0)) as ctx:
         ctx.begin("list", (0.0, 0.0, 200.0, 100.0))
         gui()
         ctx.end()
@@ -290,7 +290,7 @@ def test_only_the_visible_rows_of_a_long_list_need_submitting():
 # --------------------------------------------------------------------------- #
 # The manifest: every marked section of the demo, accounted for
 # --------------------------------------------------------------------------- #
-#: Sections whose *subject* is a Dear ImGui facility cmtk does not model, with
+#: Sections whose *subject* is a Dear ImGui facility emtk does not model, with
 #: the reason.
 #:
 #: **It is empty.** It held forty-four entries at its worst -- table sizing,
@@ -299,15 +299,15 @@ def test_only_the_visible_rows_of_a_long_list_need_submitting():
 #: An entry added here is a promise to come back to it.
 NOT_PORTABLE: dict[str, str] = {
     "Widgets/Text Input/Completion, History, Edit Callbacks":
-        "input callbacks: cmtk's field returns its value, it does not call back",
+        "input callbacks: emtk's field returns its value, it does not call back",
     "Widgets/Text Input/Resize Callback":
         "the resize callback exists because C buffers are fixed; Python strings are not",
     "Widgets/Tree Nodes/Hierarchy Lines":
-        "a tree-line style flag cmtk has no equivalent for",
+        "a tree-line style flag emtk has no equivalent for",
     "Examples/Custom rendering/Canvas":
         "needs a scrolling, transformable canvas with an input-blocking overlay",
     "Configuration/Backend Flags (readonly)":
-        "backend capability flags: cmtk has one backend, the Painter",
+        "backend capability flags: emtk has one backend, the Painter",
     "Configuration/Configuration":
         "io.ConfigFlags: navigation, docking and viewports are not modelled",
     "Configuration/Style":
@@ -351,7 +351,7 @@ def _ported() -> set[str]:
     # above the code that ports it; nothing else counts.
     lines = []
     for path in sorted(list(here.glob("test_imgui_demo*.py"))
-                       + list(here.glob("test_cmtk_ports*.py"))):
+                       + list(here.glob("test_emtk_ports*.py"))):
         lines += [line for line in path.read_text(errors="ignore").splitlines()
                   if line.lstrip().startswith("#")]
     text = "\n".join(lines)
@@ -377,7 +377,7 @@ def test_every_demo_section_is_ported_or_accounted_for():
 
     Each of the reference's ``IMGUI_DEMO_MARKER`` sections is either driven by
     one of the port files or listed in `NOT_PORTABLE` with the reason -- which
-    is a facility cmtk does not model, named, rather than a gap nobody looked
+    is a facility emtk does not model, named, rather than a gap nobody looked
     at.
     """
     sections = _sections()
@@ -405,13 +405,13 @@ def test_columns_legacy_api_basic():
     cells: dict = {}
 
     def gui():
-        cmtk.text("Without border:")
-        cmtk.columns(3, )
+        emtk.text("Without border:")
+        emtk.columns(3, )
         for index in range(6):
-            cmtk.text("%d,%d" % (index % 3, index // 3))
-            cells[index] = (cmtk.get_column_index(), cmtk.get_item_rect())
-            cmtk.next_column()
-        cmtk.columns(1)
+            emtk.text("%d,%d" % (index % 3, index // 3))
+            cells[index] = (emtk.get_column_index(), emtk.get_item_rect())
+            emtk.next_column()
+        emtk.columns(1)
 
     _run(gui)
     assert [cells[i][0] for i in range(6)] == [0, 1, 2, 0, 1, 2]
@@ -420,12 +420,12 @@ def test_columns_legacy_api_basic():
 def test_columns_legacy_api_borders():
     """Columns (legacy API)/Borders -- a separator spans the whole set."""
     def gui():
-        cmtk.columns(2)
-        cmtk.separator()
-        cmtk.text("left")
-        cmtk.next_column()
-        cmtk.text("right")
-        cmtk.columns(1)
+        emtk.columns(2)
+        emtk.separator()
+        emtk.text("left")
+        emtk.next_column()
+        emtk.text("right")
+        emtk.columns(1)
 
     painter = _run(gui)
     assert "left" in painter.strings and "right" in painter.strings
@@ -436,16 +436,16 @@ def test_columns_legacy_api_mixed_items():
     boxes: dict = {}
 
     def gui():
-        cmtk.columns(3)
+        emtk.columns(3)
         for index in range(3):
-            cmtk.push_id(index)
-            cmtk.text("Item %d" % index)
-            cmtk.button("Press")
-            boxes[index] = cmtk.get_item_rect()
-            cmtk.slider_float("##v", 0.5, 0.0, 1.0)
-            cmtk.pop_id()
-            cmtk.next_column()
-        cmtk.columns(1)
+            emtk.push_id(index)
+            emtk.text("Item %d" % index)
+            emtk.button("Press")
+            boxes[index] = emtk.get_item_rect()
+            emtk.slider_float("##v", 0.5, 0.0, 1.0)
+            emtk.pop_id()
+            emtk.next_column()
+        emtk.columns(1)
 
     _run(gui)
     xs = [boxes[i][0] for i in range(3)]
@@ -455,11 +455,11 @@ def test_columns_legacy_api_mixed_items():
 def test_columns_legacy_api_word_wrapping():
     """Columns (legacy API)/Word-wrapping -- text wraps inside its column."""
     def gui():
-        cmtk.columns(2)
-        cmtk.text_wrapped("The quick brown fox jumps over the lazy dog")
-        cmtk.next_column()
-        cmtk.text_wrapped("The quick brown fox jumps over the lazy dog")
-        cmtk.columns(1)
+        emtk.columns(2)
+        emtk.text_wrapped("The quick brown fox jumps over the lazy dog")
+        emtk.next_column()
+        emtk.text_wrapped("The quick brown fox jumps over the lazy dog")
+        emtk.columns(1)
 
     painter = _run(gui, size=(0.0, 0.0, 240.0, 400.0))
     assert len([c for c in painter.calls if c[0] == "text"]) > 2
@@ -468,14 +468,14 @@ def test_columns_legacy_api_word_wrapping():
 def test_columns_legacy_api_tree():
     """Columns (legacy API)/Tree -- a tree in the first column."""
     def gui():
-        cmtk.columns(2)
-        cmtk.set_next_item_open(True)
-        if cmtk.tree_node_ex("Hello"):
-            cmtk.text("Sailor")
-            cmtk.tree_pop()
-        cmtk.next_column()
-        cmtk.text("beside it")
-        cmtk.columns(1)
+        emtk.columns(2)
+        emtk.set_next_item_open(True)
+        if emtk.tree_node_ex("Hello"):
+            emtk.text("Sailor")
+            emtk.tree_pop()
+        emtk.next_column()
+        emtk.text("beside it")
+        emtk.columns(1)
 
     painter = _run(gui)
     assert "Sailor" in painter.strings and "beside it" in painter.strings
@@ -485,17 +485,17 @@ def test_columns_legacy_api_horizontal_scrolling():
     """Columns (legacy API)/Horizontal Scrolling -- wide content, scrolled."""
     answers: dict = {}
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 300.0, 200.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 300.0, 200.0)) as ctx:
         ctx.begin("cols", (0.0, 0.0, 200.0, 100.0))
         ctx.current_window.content_size = (900.0, 100.0)
-        cmtk.columns(4)
+        emtk.columns(4)
         for index in range(4):
-            cmtk.text("column %d" % index)
-            cmtk.next_column()
-        cmtk.columns(1)
-        answers["max"] = cmtk.get_scroll_max_x()
-        cmtk.set_scroll_x(120.0)
-        answers["x"] = cmtk.get_scroll_x()
+            emtk.text("column %d" % index)
+            emtk.next_column()
+        emtk.columns(1)
+        answers["max"] = emtk.get_scroll_max_x()
+        emtk.set_scroll_x(120.0)
+        answers["x"] = emtk.get_scroll_x()
         ctx.end()
     assert answers["max"] == 700.0 and answers["x"] == 120.0
 
@@ -508,13 +508,13 @@ def test_layout_scrolling_vertical():
     """Layout/Scrolling/Vertical -- track, centre and clamp."""
     seen: dict = {}
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("v", (0.0, 0.0, 200.0, 100.0))
         ctx.current_window.content_size = (200.0, 400.0)
-        seen["max"] = cmtk.get_scroll_max_y()
+        seen["max"] = emtk.get_scroll_max_y()
         for fraction in (0.0, 0.25, 0.5, 1.0):
-            cmtk.set_scroll_here_y(fraction)
-            seen[fraction] = cmtk.get_scroll_y()
+            emtk.set_scroll_here_y(fraction)
+            seen[fraction] = emtk.get_scroll_y()
         ctx.end()
     assert seen["max"] == 300.0
     assert [seen[f] for f in (0.0, 0.25, 0.5, 1.0)] == [0.0, 75.0, 150.0, 300.0]
@@ -524,13 +524,13 @@ def test_layout_scrolling_horizontal_more():
     """Layout/Scrolling/Horizontal (more) -- the same on the other axis."""
     seen: dict = {}
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("h", (0.0, 0.0, 100.0, 100.0))
         ctx.current_window.content_size = (500.0, 100.0)
-        cmtk.set_scroll_here_x(0.5)
-        seen["mid"] = cmtk.get_scroll_x()
-        cmtk.set_scroll_from_pos_x(300.0, 0.0)
-        seen["from_pos"] = cmtk.get_scroll_x()
+        emtk.set_scroll_here_x(0.5)
+        seen["mid"] = emtk.get_scroll_x()
+        emtk.set_scroll_from_pos_x(300.0, 0.0)
+        seen["from_pos"] = emtk.get_scroll_x()
         ctx.end()
     assert seen["mid"] == 200.0
     assert seen["from_pos"] == 300.0
@@ -542,11 +542,11 @@ def test_layout_scrolling_horizontal_contents_size_demo_window():
     The content is wider than the window, and the window says by how much.
     """
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("contents", (0.0, 0.0, 150.0, 100.0))
         ctx.current_window.content_size = (600.0, 100.0)
-        assert cmtk.get_window_size() == (150.0, 100.0)
-        assert cmtk.get_scroll_max_x() == 450.0
+        assert emtk.get_window_size() == (150.0, 100.0)
+        assert emtk.get_scroll_max_x() == 450.0
         ctx.end()
 
 
@@ -558,13 +558,13 @@ def test_the_demo_menu_bar_has_its_four_menus():
     state: dict = {}
 
     def gui():
-        if cmtk.begin_menu_bar():
+        if emtk.begin_menu_bar():
             for title in ("File", "Edit", "Tools", "Examples"):
-                if cmtk.begin_menu(title):
-                    cmtk.menu_item("%s item" % title)
-                    cmtk.end_menu()
-                state[title] = cmtk.get_item_rect()
-            cmtk.end_menu_bar()
+                if emtk.begin_menu(title):
+                    emtk.menu_item("%s item" % title)
+                    emtk.end_menu()
+                state[title] = emtk.get_item_rect()
+            emtk.end_menu_bar()
 
     painter = _run(gui)
     for title in ("File", "Edit", "Tools", "Examples"):
@@ -578,7 +578,7 @@ def test_the_demo_menu_bar_has_its_four_menus():
 # --------------------------------------------------------------------------- #
 def test_tools_about_dear_imgui():
     """Tools/About Dear ImGui -- the about box."""
-    painter = _run(cmtk.show_about_window)
+    painter = _run(emtk.show_about_window)
     assert any("version" in s for s in painter.strings)
 
 
@@ -587,16 +587,16 @@ def test_examples_property_editor_capitalised():
     fields = {"X": 1.0, "Y": 2.0}
 
     def gui():
-        if cmtk.begin_table("props", 2):
+        if emtk.begin_table("props", 2):
             for name, value in fields.items():
-                cmtk.push_id(name)
-                cmtk.table_next_row()
-                cmtk.table_set_column_index(0)
-                cmtk.text(name)
-                cmtk.table_set_column_index(1)
-                cmtk.drag_float("##v", value)
-                cmtk.pop_id()
-            cmtk.end_table()
+                emtk.push_id(name)
+                emtk.table_next_row()
+                emtk.table_set_column_index(0)
+                emtk.text(name)
+                emtk.table_set_column_index(1)
+                emtk.drag_float("##v", value)
+                emtk.pop_id()
+            emtk.end_table()
 
     painter = _run(gui)
     assert "X" in painter.strings and "Y" in painter.strings
@@ -609,15 +609,15 @@ def test_examples_property_editor_capitalised():
 def test_examples_custom_rendering_bg_and_fg_draw_lists():
     """Examples/Custom rendering/BG & FG draw lists.
 
-    cmtk has one draw list -- there is one painter, and order is submission
+    emtk has one draw list -- there is one painter, and order is submission
     order -- so background and foreground are the same list, and what decides
     which is on top is when you draw. The names exist so the port compiles and
     the drawing lands.
     """
     def gui():
-        cmtk.get_background_draw_list().add_circle_filled(
+        emtk.get_background_draw_list().add_circle_filled(
             (50.0, 50.0), 20.0, (255, 0, 0, 255))
-        cmtk.get_foreground_draw_list().add_circle_filled(
+        emtk.get_foreground_draw_list().add_circle_filled(
             (50.0, 50.0), 10.0, (0, 255, 0, 255))
 
     painter = _run(gui)
@@ -633,11 +633,11 @@ def test_examples_custom_rendering_bg_and_fg_draw_lists():
 def test_configuration_capture_logging():
     """Configuration/Capture, Logging -- the log buttons and a capture."""
     def gui():
-        cmtk.log_buttons()
-        cmtk.log_to_clipboard()
-        cmtk.log_text("captured")
-        cmtk.log_finish()
-        assert cmtk.get_clipboard_text() == "captured"
+        emtk.log_buttons()
+        emtk.log_to_clipboard()
+        emtk.log_text("captured")
+        emtk.log_finish()
+        assert emtk.get_clipboard_text() == "captured"
 
     painter = _run(gui)
     assert any("Log to" in s for s in painter.strings)
@@ -646,8 +646,8 @@ def test_configuration_capture_logging():
 def test_configuration_style_fonts():
     """Configuration/Style, Fonts -- the style editor and the font selector."""
     def gui():
-        cmtk.show_style_editor()
-        cmtk.show_font_selector("Fonts")
+        emtk.show_style_editor()
+        emtk.show_font_selector("Fonts")
 
     painter = _run(gui, size=(0.0, 0.0, 500.0, 900.0))
     assert any("frame_rounding" in s for s in painter.strings)
@@ -656,9 +656,9 @@ def test_configuration_style_fonts():
 def test_inputs_outputs_wantcapture_override():
     """Inputs & Focus/Outputs/WantCapture override."""
     def gui():
-        cmtk.set_next_frame_want_capture_mouse(True)
-        cmtk.set_next_frame_want_capture_keyboard(False)
-        state = cmtk.get_current_context().state(("capture",))
+        emtk.set_next_frame_want_capture_mouse(True)
+        emtk.set_next_frame_want_capture_keyboard(False)
+        state = emtk.get_current_context().state(("capture",))
         assert state == {"mouse": True, "keyboard": False}
 
     _run(gui)
@@ -695,18 +695,18 @@ def _clipped(items: int, window=(0.0, 0.0, 300.0, 120.0), scroll=0.0,
              forced=None):
     drawn: list = []
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("scrolling", window)
         ctx.current_window.scroll = (0.0, scroll)
-        clipper = cmtk.ListClipper()
+        clipper = emtk.ListClipper()
         clipper.begin(items)
         if forced is not None:
             clipper.include_item_by_index(forced)
         while clipper.step():
             for index in range(clipper.display_start, clipper.display_end):
-                cmtk.text("Item %d" % index)
+                emtk.text("Item %d" % index)
                 drawn.append(index)
-        end_y = cmtk.get_cursor_pos_y()
+        end_y = emtk.get_cursor_pos_y()
         ctx.end()
     return drawn, end_y, painter
 
@@ -729,7 +729,7 @@ def test_the_clipper_leaves_room_for_every_row():
     """The scrollbar has to know how tall the whole list is, not the visible part."""
     drawn, end_y, _p = _clipped(1000)
     assert len(drawn) < 30
-    assert end_y == pytest.approx(1000 * cmtk.get_text_line_height_with_spacing()
+    assert end_y == pytest.approx(1000 * emtk.get_text_line_height_with_spacing()
                                   if False else end_y)
     assert end_y > 10000.0, end_y
 
@@ -745,19 +745,19 @@ def test_widgets_multi_select_with_clipper():
     chosen = {4000}
     drawn: list = []
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("ms", (0.0, 0.0, 300.0, 120.0))
-        cmtk.begin_multi_select(0, len(chosen), 10000)
-        clipper = cmtk.ListClipper()
+        emtk.begin_multi_select(0, len(chosen), 10000)
+        clipper = emtk.ListClipper()
         clipper.begin(10000)
         for row in sorted(chosen):
             clipper.include_item_by_index(row)
         while clipper.step():
             for index in range(clipper.display_start, clipper.display_end):
-                cmtk.set_next_item_selection_user_data(index)
-                cmtk.selectable("Object %d" % index, index in chosen)
+                emtk.set_next_item_selection_user_data(index)
+                emtk.selectable("Object %d" % index, index in chosen)
                 drawn.append(index)
-        cmtk.end_multi_select()
+        emtk.end_multi_select()
         ctx.end()
     assert 4000 in drawn, "the selected row was clipped away"
     assert len(drawn) < 4100
@@ -767,21 +767,21 @@ def test_examples_assets_browser():
     """Examples/Assets Browser -- a clipped grid of tiles."""
     tiles: list = []
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("assets", (0.0, 0.0, 300.0, 120.0))
         per_row = 5
-        clipper = cmtk.ListClipper()
+        clipper = emtk.ListClipper()
         clipper.begin((1000 + per_row - 1) // per_row, 60.0)
         while clipper.step():
             for line in range(clipper.display_start, clipper.display_end):
                 for column in range(per_row):
                     index = line * per_row + column
-                    cmtk.push_id(index)
-                    cmtk.button("##tile", (48.0, 48.0))
-                    cmtk.pop_id()
+                    emtk.push_id(index)
+                    emtk.button("##tile", (48.0, 48.0))
+                    emtk.pop_id()
                     tiles.append(index)
                     if column < per_row - 1:
-                        cmtk.same_line()
+                        emtk.same_line()
         ctx.end()
     assert 0 < len(tiles) < 100, len(tiles)
 
@@ -805,15 +805,15 @@ def test_inputs_focus_mouse_state():
     answers: dict = {}
 
     def gui():
-        answers["pos"] = cmtk.get_mouse_pos()
-        answers["down"] = [cmtk.is_mouse_down(b) for b in range(3)]
-        answers["clicked"] = [cmtk.is_mouse_clicked(b) for b in range(3)]
-        answers["released"] = [cmtk.is_mouse_released(b) for b in range(3)]
-        answers["double"] = [cmtk.is_mouse_double_clicked(b) for b in range(3)]
-        answers["count"] = cmtk.get_mouse_clicked_count(0)
-        answers["wheel"] = (cmtk.get_io().mouse_wheel, cmtk.get_io().mouse_wheel_h)
+        answers["pos"] = emtk.get_mouse_pos()
+        answers["down"] = [emtk.is_mouse_down(b) for b in range(3)]
+        answers["clicked"] = [emtk.is_mouse_clicked(b) for b in range(3)]
+        answers["released"] = [emtk.is_mouse_released(b) for b in range(3)]
+        answers["double"] = [emtk.is_mouse_double_clicked(b) for b in range(3)]
+        answers["count"] = emtk.get_mouse_clicked_count(0)
+        answers["wheel"] = (emtk.get_io().mouse_wheel, emtk.get_io().mouse_wheel_h)
 
-    io = cmtk.IO()
+    io = emtk.IO()
     io.mouse_pos = (7.0, 9.0)
     io.mouse_down[2] = True
     io.mouse_clicked[0] = True
@@ -831,11 +831,11 @@ def test_inputs_focus_dragging():
     answers: dict = {}
 
     def gui():
-        answers["delta"] = cmtk.get_mouse_drag_delta(0)
-        answers["dragging"] = cmtk.is_mouse_dragging(0)
-        answers["dragging_far"] = cmtk.is_mouse_dragging(0, 200.0)
+        answers["delta"] = emtk.get_mouse_drag_delta(0)
+        answers["dragging"] = emtk.is_mouse_dragging(0)
+        answers["dragging_far"] = emtk.is_mouse_dragging(0, 200.0)
 
-    io = cmtk.IO()
+    io = emtk.IO()
     io.mouse_down[0] = True
     io.mouse_clicked_pos[0] = (10.0, 10.0)
     io.mouse_pos = (60.0, 10.0)
@@ -851,8 +851,8 @@ def test_inputs_focus_mouse_cursors():
 
     def gui():
         for shape in range(9):
-            cmtk.set_mouse_cursor(shape)
-            answers[shape] = cmtk.get_mouse_cursor()
+            emtk.set_mouse_cursor(shape)
+            answers[shape] = emtk.get_mouse_cursor()
 
     _run(gui)
     assert answers == {shape: shape for shape in range(9)}
@@ -863,17 +863,17 @@ def test_popups_menus_inside_a_regular_window():
     state: dict = {}
 
     def gui():
-        cmtk.begin("regular", (0.0, 0.0, 300.0, 200.0))
-        if cmtk.begin_menu_bar():
-            if cmtk.begin_menu("Menu"):
-                if cmtk.menu_item("Item"):
+        emtk.begin("regular", (0.0, 0.0, 300.0, 200.0))
+        if emtk.begin_menu_bar():
+            if emtk.begin_menu("Menu"):
+                if emtk.menu_item("Item"):
                     state["chose"] = True
-                state["item"] = cmtk.get_item_rect()
-                cmtk.end_menu()
-            state["menu"] = cmtk.get_item_rect()
-            cmtk.end_menu_bar()
-        cmtk.text("window body")
-        cmtk.end()
+                state["item"] = emtk.get_item_rect()
+                emtk.end_menu()
+            state["menu"] = emtk.get_item_rect()
+            emtk.end_menu_bar()
+        emtk.text("window body")
+        emtk.end()
 
     frames = Frames(gui)
     frames.draw()
@@ -897,15 +897,15 @@ def test_widgets_drag_and_drop_drag_to_reorder_items_simple():
 
     def gui():
         for n, name in enumerate(list(names)):
-            cmtk.push_id(n)
-            cmtk.selectable(name)
-            boxes[n] = cmtk.get_item_rect()
-            if cmtk.is_item_active() and not cmtk.is_item_hovered():
-                nxt = n + (-1 if cmtk.get_mouse_drag_delta(0)[1] < 0.0 else 1)
+            emtk.push_id(n)
+            emtk.selectable(name)
+            boxes[n] = emtk.get_item_rect()
+            if emtk.is_item_active() and not emtk.is_item_hovered():
+                nxt = n + (-1 if emtk.get_mouse_drag_delta(0)[1] < 0.0 else 1)
                 if 0 <= nxt < len(names):
                     names[n], names[nxt] = names[nxt], names[n]
-                    cmtk.reset_mouse_drag_delta()
-            cmtk.pop_id()
+                    emtk.reset_mouse_drag_delta()
+            emtk.pop_id()
 
     frames = Frames(gui)
     frames.draw()
@@ -930,21 +930,21 @@ def test_widgets_drag_and_drop_tooltip_at_target_location():
     preview: dict = {}
 
     def gui():
-        cmtk.button("source", (60.0, 30.0))
-        boxes["source"] = cmtk.get_item_rect()
-        if cmtk.begin_drag_drop_source():
-            cmtk.set_drag_drop_payload("CELL", "cargo")
-            at = cmtk.get_mouse_pos()
-            cmtk.get_window_draw_list().add_text(
+        emtk.button("source", (60.0, 30.0))
+        boxes["source"] = emtk.get_item_rect()
+        if emtk.begin_drag_drop_source():
+            emtk.set_drag_drop_payload("CELL", "cargo")
+            at = emtk.get_mouse_pos()
+            emtk.get_window_draw_list().add_text(
                 (at[0] + 8.0, at[1] + 8.0), (255, 255, 255, 255), "Moving cargo")
             preview["at"] = (at[0] + 8.0, at[1] + 8.0)
-            cmtk.end_drag_drop_source()
-        cmtk.button("target", (60.0, 30.0))
-        boxes["target"] = cmtk.get_item_rect()
-        if cmtk.begin_drag_drop_target():
-            if cmtk.accept_drag_drop_payload("CELL") is not None:
+            emtk.end_drag_drop_source()
+        emtk.button("target", (60.0, 30.0))
+        boxes["target"] = emtk.get_item_rect()
+        if emtk.begin_drag_drop_target():
+            if emtk.accept_drag_drop_payload("CELL") is not None:
                 preview["dropped"] = True
-            cmtk.end_drag_drop_target()
+            emtk.end_drag_drop_target()
 
     frames = Frames(gui)
     frames.draw()
@@ -974,18 +974,18 @@ def test_examples_auto_resizing_window():
     sizes: dict = {}
 
     def gui(lines):
-        cmtk.begin("Example: Auto-resizing window", (0.0, 0.0, 10.0, 10.0),
+        emtk.begin("Example: Auto-resizing window", (0.0, 0.0, 10.0, 10.0),
                    auto_resize=True)
         for index in range(lines):
-            cmtk.text("%*sThis is line %d" % (index * 4, "", index))
-        cmtk.end()
-        sizes[lines] = cmtk.get_current_context().windows[-1].box
+            emtk.text("%*sThis is line %d" % (index * 4, "", index))
+        emtk.end()
+        sizes[lines] = emtk.get_current_context().windows[-1].box
 
     painter = RecordingPainter()
     storage: dict = {}
-    with cmtk.frame(painter, (0.0, 0.0, 600.0, 600.0), storage=storage):
+    with emtk.frame(painter, (0.0, 0.0, 600.0, 600.0), storage=storage):
         gui(3)
-    with cmtk.frame(painter, (0.0, 0.0, 600.0, 600.0), storage=storage):
+    with emtk.frame(painter, (0.0, 0.0, 600.0, 600.0), storage=storage):
         gui(10)
     assert sizes[10][3] > sizes[3][3], "the window did not grow with its content"
     assert sizes[10][2] > sizes[3][2]
@@ -996,13 +996,13 @@ def test_examples_constrained_resizing_window():
     sizes: dict = {}
 
     def gui():
-        cmtk.set_next_window_size_constraints((100.0, 100.0), (200.0, 150.0))
-        cmtk.begin("Example: Constrained Resize", (0.0, 0.0, 10.0, 10.0),
+        emtk.set_next_window_size_constraints((100.0, 100.0), (200.0, 150.0))
+        emtk.begin("Example: Constrained Resize", (0.0, 0.0, 10.0, 10.0),
                    auto_resize=True)
         for index in range(40):
-            cmtk.text("Line %d of a great many" % index)
-        cmtk.end()
-        sizes["box"] = cmtk.get_current_context().windows[-1].box
+            emtk.text("Line %d of a great many" % index)
+        emtk.end()
+        sizes["box"] = emtk.get_current_context().windows[-1].box
 
     _run(gui, size=(0.0, 0.0, 600.0, 600.0))
     assert sizes["box"][2] <= 200.0 and sizes["box"][3] <= 150.0, sizes["box"]

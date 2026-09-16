@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from cmtk.quad_painter import FLOATS_PER_QUAD, QuadPainter
+from emtk.quad_painter import FLOATS_PER_QUAD, QuadPainter
 
 
 @pytest.fixture()

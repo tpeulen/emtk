@@ -1,13 +1,13 @@
 """arc_progress_bar: auto-ported from arc_progress_bar.hpp, arc_progress_bar.cpp
 (upstream, MIT) by tools/autoport.py.
 
-A mechanical port of Dear ImGui C++ to cmtk. Lines flagged
+A mechanical port of Dear ImGui C++ to emtk. Lines flagged
 TODO(autoport) need a hand; everything else is the C++ under the
 naming rules in tools/autoport.py.
 """
 import math
 
-import cmtk.im as im
+import emtk.im as im
 def _get_style_color(color_id):
     """_GetStyleColor()."""
     assert(color_id >= 0  and  color_id < im.Col.COUNT)

@@ -34,6 +34,6 @@ evidence that a re-implementation matches.
 Mechanical auto-porting
 -----------------------
 
-``tools/autoport`` ports Dear ImGui C++ to cmtk mechanically — the same
+``tools/autoport`` ports Dear ImGui C++ to emtk mechanically — the same
 rules a person applies, written down so they apply the same way every
 time. See ``README.md`` for the full account.

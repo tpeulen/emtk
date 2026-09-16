@@ -5,222 +5,222 @@ The widget families below are driven from |CONTROL_MODULES|. The staleness guard
 in ``tests/test_docs.py`` asserts every family listed there has an ``automodule``
 directive here, so a new widget family cannot be added without a doc entry.
 
-Top-level: ``cmtk``
+Top-level: ``emtk``
 ------------------------
 
-.. automodule:: cmtk
+.. automodule:: emtk
    :noindex:
    :members: CONTROL_MODULES, __version__, IMGUI_VERSION
 
-Facade: ``cmtk.im``
+Facade: ``emtk.im``
 ------------------------
 
-.. automodule:: cmtk.im
+.. automodule:: emtk.im
    :noindex:
 
-Core: ``cmtk.im_core``
+Core: ``emtk.im_core``
 -------------------------
 
-.. automodule:: cmtk.im_core
+.. automodule:: emtk.im_core
    :noindex:
 
-Widgets: ``cmtk.im_widgets``
+Widgets: ``emtk.im_widgets``
 -----------------------------
 
-.. automodule:: cmtk.im_widgets
+.. automodule:: emtk.im_widgets
    :noindex:
 
-Flags: ``cmtk.flags``
+Flags: ``emtk.flags``
 ------------------------
 
-.. automodule:: cmtk.flags
+.. automodule:: emtk.flags
    :noindex:
 
-Painter: ``cmtk.painter``
+Painter: ``emtk.painter``
 ----------------------------
 
-.. automodule:: cmtk.painter
+.. automodule:: emtk.painter
    :noindex:
 
-Draw list: ``cmtk.drawlist``
+Draw list: ``emtk.drawlist``
 --------------------------------
 
-.. automodule:: cmtk.drawlist
+.. automodule:: emtk.drawlist
    :noindex:
 
-Images: ``cmtk.texture``
+Images: ``emtk.texture``
 ---------------------------
 
-.. automodule:: cmtk.texture
+.. automodule:: emtk.texture
    :noindex:
 
-Layout: ``cmtk.layout``
+Layout: ``emtk.layout``
 ---------------------------
 
-.. automodule:: cmtk.layout
+.. automodule:: emtk.layout
    :noindex:
 
-Redraw: ``cmtk.redraw``
+Redraw: ``emtk.redraw``
 --------------------------
 
-.. automodule:: cmtk.redraw
+.. automodule:: emtk.redraw
    :noindex:
 
-Style: ``cmtk.style``
+Style: ``emtk.style``
 -------------------------
 
-.. automodule:: cmtk.style
+.. automodule:: emtk.style
    :noindex:
 
-Events: ``cmtk.events``
+Events: ``emtk.events``
 ----------------------------
 
-.. automodule:: cmtk.events
+.. automodule:: emtk.events
    :noindex:
 
-Keys: ``cmtk.keys``
+Keys: ``emtk.keys``
 ------------------------
 
-.. automodule:: cmtk.keys
+.. automodule:: emtk.keys
    :noindex:
 
-Router: ``cmtk.router``
+Router: ``emtk.router``
 --------------------------
 
-.. automodule:: cmtk.router
+.. automodule:: emtk.router
    :noindex:
 
-Control: ``cmtk.control``
+Control: ``emtk.control``
 ---------------------------
 
-.. automodule:: cmtk.control
+.. automodule:: emtk.control
    :noindex:
 
-Testing: ``cmtk.testing``
+Testing: ``emtk.testing``
 -----------------------------
 
-.. automodule:: cmtk.testing
+.. automodule:: emtk.testing
    :noindex:
 
-Qt painter: ``cmtk.qt_painter``
+Qt painter: ``emtk.qt_painter``
 ----------------------------------
 
-.. automodule:: cmtk.qt_painter
+.. automodule:: emtk.qt_painter
    :noindex:
 
-Quad painter: ``cmtk.quad_painter``
+Quad painter: ``emtk.quad_painter``
 --------------------------------------
 
-.. automodule:: cmtk.quad_painter
+.. automodule:: emtk.quad_painter
    :noindex:
 
-Qt host: ``cmtk.qt_host``
+Qt host: ``emtk.qt_host``
 -----------------------------
 
-.. automodule:: cmtk.qt_host
+.. automodule:: emtk.qt_host
    :noindex:
 
-GPU atlases: ``cmtk.gpu_atlas``
+GPU atlases: ``emtk.gpu_atlas``
 ---------------------------------
 
-.. automodule:: cmtk.gpu_atlas
+.. automodule:: emtk.gpu_atlas
    :noindex:
 
-Shaders: ``cmtk.wgsl``
+Shaders: ``emtk.wgsl``
 -------------------------
 
-.. automodule:: cmtk.wgsl
+.. automodule:: emtk.wgsl
    :noindex:
 
-wgpu host: ``cmtk.wgpu_host``
+wgpu host: ``emtk.wgpu_host``
 --------------------------------
 
-.. automodule:: cmtk.wgpu_host
+.. automodule:: emtk.wgpu_host
    :noindex:
 
 Widget families
 ----------------
 
-.. automodule:: cmtk.widgets.basic
+.. automodule:: emtk.widgets.basic
    :noindex:
 
-.. automodule:: cmtk.widgets.text
+.. automodule:: emtk.widgets.text
    :noindex:
 
-.. automodule:: cmtk.widgets.combo
+.. automodule:: emtk.widgets.combo
    :noindex:
 
-.. automodule:: cmtk.widgets.buttons
+.. automodule:: emtk.widgets.buttons
    :noindex:
 
-.. automodule:: cmtk.widgets.sliders
+.. automodule:: emtk.widgets.sliders
    :noindex:
 
-.. automodule:: cmtk.widgets.drag
+.. automodule:: emtk.widgets.drag
    :noindex:
 
-.. automodule:: cmtk.widgets.inputs
+.. automodule:: emtk.widgets.inputs
    :noindex:
 
-.. automodule:: cmtk.widgets.color
+.. automodule:: emtk.widgets.color
    :noindex:
 
-.. automodule:: cmtk.widgets.selection
+.. automodule:: emtk.widgets.selection
    :noindex:
 
-.. automodule:: cmtk.widgets.list_view
+.. automodule:: emtk.widgets.list_view
    :noindex:
 
-.. automodule:: cmtk.widgets.menus
+.. automodule:: emtk.widgets.menus
    :noindex:
 
-.. automodule:: cmtk.widgets.tabs
+.. automodule:: emtk.widgets.tabs
    :noindex:
 
-.. automodule:: cmtk.widgets.splitter
+.. automodule:: emtk.widgets.splitter
    :noindex:
 
-.. automodule:: cmtk.widgets.tables
+.. automodule:: emtk.widgets.tables
    :noindex:
 
-.. automodule:: cmtk.widgets.dragdrop
+.. automodule:: emtk.widgets.dragdrop
    :noindex:
 
-.. automodule:: cmtk.widgets.text_editor
+.. automodule:: emtk.widgets.text_editor
    :noindex:
 
-.. automodule:: cmtk.widgets.memory_editor
+.. automodule:: emtk.widgets.memory_editor
    :noindex:
 
-.. automodule:: cmtk.widgets.axis
+.. automodule:: emtk.widgets.axis
    :noindex:
 
-.. automodule:: cmtk.widgets.markers
+.. automodule:: emtk.widgets.markers
    :noindex:
 
-.. automodule:: cmtk.widgets.plot
+.. automodule:: emtk.widgets.plot
    :noindex:
 
-.. automodule:: cmtk.widgets.circle
+.. automodule:: emtk.widgets.circle
    :noindex:
 
 Additional widget sub-modules
 ------------------------------
 
-.. automodule:: cmtk.widgets.command_line
+.. automodule:: emtk.widgets.command_line
    :noindex:
 
-.. automodule:: cmtk.widgets.icons
+.. automodule:: emtk.widgets.icons
    :noindex:
 
-.. automodule:: cmtk.widgets.progress
+.. automodule:: emtk.widgets.progress
    :noindex:
 
-.. automodule:: cmtk.widgets.settings_editor
+.. automodule:: emtk.widgets.settings_editor
    :noindex:
 
-.. automodule:: cmtk.widgets.view_spec
+.. automodule:: emtk.widgets.view_spec
    :noindex:
 
-.. automodule:: cmtk.widgets.text_field
+.. automodule:: emtk.widgets.text_field
    :noindex:

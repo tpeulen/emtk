@@ -16,9 +16,9 @@ import struct
 
 import pytest
 
-from cmtk.keys import KEY_DOWN, KEY_RIGHT
-from cmtk.widgets import memory_editor as me
-from cmtk.testing import RecordingPainter
+from emtk.keys import KEY_DOWN, KEY_RIGHT
+from emtk.widgets import memory_editor as me
+from emtk.testing import RecordingPainter
 
 numpy = pytest.importorskip("numpy")
 
@@ -131,7 +131,7 @@ def test_hex_ii_hides_zeroes_and_spells_printable_bytes():
 
 def test_a_zero_byte_is_dimmed_when_asked_and_not_when_not():
     """Grey-out is what makes the data stand out of an empty buffer."""
-    from cmtk.style import TEXT_DISABLED
+    from emtk.style import TEXT_DISABLED
 
     editor = _editor(bytes(16), columns=16)
     assert TEXT_DISABLED in [one[6] for one in _drawn(editor).texts]

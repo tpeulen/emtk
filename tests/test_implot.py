@@ -1,4 +1,4 @@
-"""``cmtk.implot`` -- ImPlot's call shape over :class:`cmtk.widgets.plot.Plot`.
+"""``emtk.implot`` -- ImPlot's call shape over :class:`emtk.widgets.plot.Plot`.
 
 The tests are about the *shape* and about the traps: a plot that reserves no
 room for its own tick labels draws them into the clip and loses them, and a
@@ -11,9 +11,9 @@ import math
 
 import pytest
 
-import cmtk
-from cmtk import implot
-from cmtk.testing import PixelPainter
+import emtk
+from emtk import implot
+from emtk.testing import PixelPainter
 
 
 @pytest.fixture(autouse=True)
@@ -25,12 +25,12 @@ def _no_plot_left_open():
 
 
 def _frame(fn, w=400, h=260):
-    io, storage = cmtk.IO(), {}
+    io, storage = emtk.IO(), {}
     p = PixelPainter(w, h, background=(30, 32, 38, 255))
-    with cmtk.frame(p, (8, 8, w - 16, h - 16), io=io, storage=storage):
-        cmtk.begin("w")
+    with emtk.frame(p, (8, 8, w - 16, h - 16), io=io, storage=storage):
+        emtk.begin("w")
         fn()
-        cmtk.end()
+        emtk.end()
     return p
 
 
@@ -54,11 +54,11 @@ def test_a_plot_reserves_its_own_space():
     seen = {}
 
     def gui():
-        seen["before"] = cmtk.get_cursor_screen_pos()[1]
+        seen["before"] = emtk.get_cursor_screen_pos()[1]
         implot.begin_plot("t", (-1, 120))
         implot.plot_line("a", [0, 1], [0.0, 1.0])
         implot.end_plot()
-        seen["after"] = cmtk.get_cursor_screen_pos()[1]
+        seen["after"] = emtk.get_cursor_screen_pos()[1]
 
     _frame(gui)
     assert seen["after"] - seen["before"] >= 120
@@ -153,7 +153,7 @@ def test_the_mouse_maps_into_the_data_units():
         implot.setup_axis_limits(implot.AXIS_X1, 0.0, 10.0, implot.COND_ALWAYS)
         implot.setup_axis_limits(implot.AXIS_Y1, 0.0, 100.0, implot.COND_ALWAYS)
         x, y, w, h = implot._cur.box
-        cmtk.get_io().mouse_pos = (x + w / 2.0, y + h / 2.0)
+        emtk.get_io().mouse_pos = (x + w / 2.0, y + h / 2.0)
         px, py = implot.get_plot_mouse_pos()
         assert px == pytest.approx(5.0, abs=0.2)
         assert py == pytest.approx(50.0, abs=1.0)
@@ -163,7 +163,7 @@ def test_the_mouse_maps_into_the_data_units():
 
 
 def test_a_float_style_colour_is_accepted_like_implots():
-    """ImPlot styles in floats 0..1; cmtk paints in bytes."""
+    """ImPlot styles in floats 0..1; emtk paints in bytes."""
     def gui():
         implot.begin_plot("t", (-1, 100))
         implot.set_next_line_style((1.0, 0.0, 0.0, 1.0), 2.0)

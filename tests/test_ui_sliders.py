@@ -14,7 +14,7 @@ import math
 
 import pytest
 
-from cmtk.widgets import sliders
+from emtk.widgets import sliders
 
 
 class RecordingPainter:

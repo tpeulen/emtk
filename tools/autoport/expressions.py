@@ -8,16 +8,16 @@ from autoport.lex import (split_args, _is_string, _unquote, _fix_printf,
 from autoport.tables import (ENUM_FAMILIES, MATH_FUNCS, CONSTANTS,
                              OUT_PARAM_INDEX, FMT_FUNCS, FMT_ARG_INDEX,
                              COLOUR_ARG_INDEX, IO_FIELDS)
-from cmtk.im_compat import mechanical_name  # the one naming rule, shared
+from emtk.im_compat import mechanical_name  # the one naming rule, shared
 
 # --------------------------------------------------------------------------- #
 # Expression translation
 # --------------------------------------------------------------------------- #
 
 def _as_rgba(colour: str) -> str:
-    """A Dear ImGui colour, in the units cmtk paints in.
+    """A Dear ImGui colour, in the units emtk paints in.
 
-    ImGui spells a colour as four floats 0..1; cmtk's painters take bytes
+    ImGui spells a colour as four floats 0..1; emtk's painters take bytes
     0..255. Handing the floats over does not raise -- it draws (0, 0, 0),
     so the text is simply invisible, which is the worst kind of difference.
 
@@ -114,7 +114,7 @@ def _bare_brace(m: "re.Match") -> str:
     # ImVec: `decay_lifetimes = {{3.8, 1, 0}, {2.0, 1, 0}}` is rows of
     # numbers, and read as tuples the C++ line that assigns into
     # `decay_lifetimes[i][0]` on the next screen raises. Flat groups stay
-    # tuples, which is what an ImVec2 wants and what cmtk takes.
+    # tuples, which is what an ImVec2 wants and what emtk takes.
     if _group_is_brace_derived(inner):
         return "[" + _as_lists(m.group(1)) + "]"
     if inner and "," not in inner:
@@ -544,7 +544,7 @@ class Porter:
         e = self._vec_operators(e)
         e = self._vec_literal_add(e)
         e = self._ternaries(e)
-        # ImGui::Dummy takes an ImVec2; cmtk spells the two coordinates out
+        # ImGui::Dummy takes an ImVec2; emtk spells the two coordinates out
         e = re.sub(r"\bdummy\(\s*\(([^()]+),\s*([^()]+)\)\s*\)", r"dummy(\1, \2)", e)
         if self.out_src_name:
             e = re.sub(rf"\b{self.out_src_name}\b", "value", e)
@@ -788,7 +788,7 @@ class Porter:
             return f"im.text({args[0]})"
 
         # the *Scalar family carries ImGuiDataType between label and value:
-        # cmtk's scalar widgets dispatch on the Python type, so the type arg
+        # emtk's scalar widgets dispatch on the Python type, so the type arg
         # is dropped and the value is position 2
         if base in ("DragScalar", "SliderScalar", "InputScalar") and len(args) > 2 \
                 and re.fullmatch(r"\w+", args[2].strip()):
@@ -800,7 +800,7 @@ class Porter:
 
         if base == "InputText" and len(args) > 2:
             # `InputText(label, buf, buf_size, flags, ...)`. A Python string
-            # has no fixed buffer, so cmtk's third positional is the *hint*
+            # has no fixed buffer, so emtk's third positional is the *hint*
             # -- and the size landed there and was drawn as placeholder text.
             del args[2]
             if len(args) > 2:
@@ -829,7 +829,7 @@ class Porter:
                 return f"{lhs} = im.{mechanical_name(base)}({', '.join(args)})"
 
         if base == "Begin" and len(args) > 1:
-            # `Begin(name, p_open, flags)`. cmtk's second positional is the
+            # `Begin(name, p_open, flags)`. emtk's second positional is the
             # window's *box*, so the p_open cannot simply be dropped and the
             # rest shuffled up -- the flags would land in `box` and place the
             # window at a bitmask. Drop the p_open however it is spelled and
@@ -842,7 +842,7 @@ class Porter:
             opened = args[1].strip()
             if opened not in ("nullptr", "NULL", "None", "0"):
                 self.todos.append(
-                    "Begin p_open: cmtk windows have no p_open; drop it "
+                    "Begin p_open: emtk windows have no p_open; drop it "
                     "or read the close flag the host keeps")
             del args[1]
             if len(args) > 1:
@@ -865,10 +865,10 @@ class Porter:
             return f"_changed, {val} = im.{fn}({args[0]}, {val}{tail})"
 
         if name in ("ImGui::BeginChild", "BeginChild"):
-            # cmtk's child is a box, not id+size+flags: anchor it at the
+            # emtk's child is a box, not id+size+flags: anchor it at the
             # cursor and drop the id/border/flags the port cannot express
             size = args[1].strip() if len(args) > 1 else "(0, 0)"
-            self.todos.append("BeginChild: cmtk takes a box anchored at the "
+            self.todos.append("BeginChild: emtk takes a box anchored at the "
                               "cursor; the id/border/flags are dropped")
             return (f"im.begin_child((*im.get_cursor_screen_pos(), "
                     f"{size}[0], {size}[1]))")
@@ -892,7 +892,7 @@ class Porter:
             return f"({', '.join(xyzw)})"
         if name == "ImColor":
             if len(args) == 1:
-                # ImColor(existing) is the identity: cmtk colours are tuples
+                # ImColor(existing) is the identity: emtk colours are tuples
                 return args[0]
             rgba = (args + ["255", "255", "255", "255"])[:4]
             return f"({', '.join(rgba)})"
@@ -914,10 +914,10 @@ class Porter:
         if name in ("float", "int", "bool", "double", "ImU32", "ImS32", "ImU64"):
             return f"{ {'ImU32': 'int', 'ImS32': 'int', 'ImU64': 'int'}.get(name, name) }({', '.join(args)})"
         if name in ("ImGui::BeginChild", "BeginChild"):
-            # cmtk's child is a box, not id+size+flags: anchor it at the
+            # emtk's child is a box, not id+size+flags: anchor it at the
             # cursor and drop the id/border/flags the port cannot express
             size = args[1].strip() if len(args) > 1 else "(0, 0)"
-            self.todos.append("BeginChild: cmtk takes a box anchored at the "
+            self.todos.append("BeginChild: emtk takes a box anchored at the "
                               "cursor; the id/border/flags are dropped")
             return (f"im.begin_child((*im.get_cursor_screen_pos(), "
                     f"{size}[0], {size}[1]))")

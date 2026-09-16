@@ -1,13 +1,13 @@
 Testing your UI
 ==================
 
-cmtk ships :mod:`cmtk.testing`, which is why a widget test needs no window,
+emtk ships :mod:`emtk.testing`, which is why a widget test needs no window,
 no toolkit and no event loop.
 
 RecordingPainter
 -----------------
 
-:class:`~cmtk.testing.RecordingPainter` implements the painter contract by
+:class:`~emtk.testing.RecordingPainter` implements the painter contract by
 recording every call. Its metrics are deliberately round — seven pixels
 per character, sixteen per line — so an expected position in a test is
 arithmetic a reader can do in their head::
@@ -75,14 +75,14 @@ pressing, and releasing::
 PixelPainter and screenshots
 -----------------------------
 
-:class:`~cmtk.testing.PixelPainter` rasterises into an RGBA buffer.
-:func:`~cmtk.testing.render` drives two frames through it (the first
+:class:`~emtk.testing.PixelPainter` rasterises into an RGBA buffer.
+:func:`~emtk.testing.render` drives two frames through it (the first
 settles layout; the second draws the settled interface).
-:func:`~cmtk.testing.screenshot` returns PNG bytes.
-:func:`~cmtk.testing.assert_images_equal` compares two PNGs pixel for
+:func:`~emtk.testing.screenshot` returns PNG bytes.
+:func:`~emtk.testing.assert_images_equal` compares two PNGs pixel for
 pixel::
 
-    from cmtk.testing import render, screenshot, assert_images_equal
+    from emtk.testing import render, screenshot, assert_images_equal
 
     def gui():
         im.begin("Demo", (0, 0, 100, 60))

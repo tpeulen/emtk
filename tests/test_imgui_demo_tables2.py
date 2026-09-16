@@ -1,6 +1,6 @@
 """``imgui_demo.cpp``'s Tables sections that needed real table geometry.
 
-cmtk's tables were the layout's equal columns with a stack on top, which is why
+emtk's tables were the layout's equal columns with a stack on top, which is why
 a third of the reference's Tables group had nothing to port on to. They have
 their own geometry now -- a width per column (fixed, or a share of what is
 left), an order that can be changed, columns that can be switched off, padding,
@@ -14,21 +14,21 @@ from __future__ import annotations
 
 import pytest
 
-import cmtk
-from cmtk.testing import RecordingPainter
+import emtk
+from emtk.testing import RecordingPainter
 
 
 class Frames:
     def __init__(self, gui, size=(0.0, 0.0, 600.0, 400.0)) -> None:
         self.gui, self.size = gui, size
-        self.io = cmtk.IO()
+        self.io = emtk.IO()
         self.storage: dict = {}
         self.painter = RecordingPainter()
         self.result = None
 
     def draw(self):
         self.painter = RecordingPainter()
-        with cmtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
+        with emtk.frame(self.painter, self.size, io=self.io, storage=self.storage):
             self.result = self.gui()
         return self.painter
 
@@ -67,7 +67,7 @@ class Frames:
 
 def _run(gui, size=(0.0, 0.0, 600.0, 400.0)):
     painter = RecordingPainter()
-    with cmtk.frame(painter, size):
+    with emtk.frame(painter, size):
         gui()
     return painter
 
@@ -81,15 +81,15 @@ def test_a_fixed_column_is_exactly_as_wide_as_it_was_told():
     widths: dict = {}
 
     def gui():
-        if cmtk.begin_table("explicit", 3, cmtk.TableFlags.BORDERS):
-            cmtk.table_setup_column("one", cmtk.TableColumnFlags.WIDTH_FIXED, 100.0)
-            cmtk.table_setup_column("two", cmtk.TableColumnFlags.WIDTH_FIXED, 200.0)
-            cmtk.table_setup_column("three", cmtk.TableColumnFlags.WIDTH_FIXED, 50.0)
-            cmtk.table_next_row()
+        if emtk.begin_table("explicit", 3, emtk.TableFlags.BORDERS):
+            emtk.table_setup_column("one", emtk.TableColumnFlags.WIDTH_FIXED, 100.0)
+            emtk.table_setup_column("two", emtk.TableColumnFlags.WIDTH_FIXED, 200.0)
+            emtk.table_setup_column("three", emtk.TableColumnFlags.WIDTH_FIXED, 50.0)
+            emtk.table_next_row()
             for index in range(3):
-                cmtk.table_set_column_index(index)
-                widths[index] = cmtk.get_column_width_of(index)
-            cmtk.end_table()
+                emtk.table_set_column_index(index)
+                widths[index] = emtk.get_column_width_of(index)
+            emtk.end_table()
 
     _run(gui)
     assert widths == {0: 100.0, 1: 200.0, 2: 50.0}, widths
@@ -101,14 +101,14 @@ def test_stretch_columns_share_what_is_left_by_weight():
     widths: dict = {}
 
     def gui():
-        if cmtk.begin_table("stretch", 2):
-            cmtk.table_setup_column("AAA", cmtk.TableColumnFlags.WIDTH_STRETCH, 1.0)
-            cmtk.table_setup_column("BBB", cmtk.TableColumnFlags.WIDTH_STRETCH, 2.0)
-            cmtk.table_next_row()
+        if emtk.begin_table("stretch", 2):
+            emtk.table_setup_column("AAA", emtk.TableColumnFlags.WIDTH_STRETCH, 1.0)
+            emtk.table_setup_column("BBB", emtk.TableColumnFlags.WIDTH_STRETCH, 2.0)
+            emtk.table_next_row()
             for index in range(2):
-                cmtk.table_set_column_index(index)
-                widths[index] = cmtk.get_column_width_of(index)
-            cmtk.end_table()
+                emtk.table_set_column_index(index)
+                widths[index] = emtk.get_column_width_of(index)
+            emtk.end_table()
 
     _run(gui, size=(0.0, 0.0, 300.0, 200.0))
     assert widths[1] == pytest.approx(widths[0] * 2.0), widths
@@ -120,14 +120,14 @@ def test_a_fixed_and_a_stretch_column_together():
     widths: dict = {}
 
     def gui():
-        if cmtk.begin_table("mixed", 2):
-            cmtk.table_setup_column("fixed", cmtk.TableColumnFlags.WIDTH_FIXED, 120.0)
-            cmtk.table_setup_column("rest", cmtk.TableColumnFlags.WIDTH_STRETCH, 1.0)
-            cmtk.table_next_row()
+        if emtk.begin_table("mixed", 2):
+            emtk.table_setup_column("fixed", emtk.TableColumnFlags.WIDTH_FIXED, 120.0)
+            emtk.table_setup_column("rest", emtk.TableColumnFlags.WIDTH_STRETCH, 1.0)
+            emtk.table_next_row()
             for index in range(2):
-                cmtk.table_set_column_index(index)
-                widths[index] = cmtk.get_column_width_of(index)
-            cmtk.end_table()
+                emtk.table_set_column_index(index)
+                widths[index] = emtk.get_column_width_of(index)
+            emtk.end_table()
 
     _run(gui, size=(0.0, 0.0, 400.0, 200.0))
     assert widths[0] == 120.0
@@ -142,19 +142,19 @@ def test_dragging_a_header_border_resizes_the_column():
     state: dict = {}
 
     def gui():
-        flags = cmtk.TableFlags.RESIZABLE | cmtk.TableFlags.BORDERS
-        if cmtk.begin_table("resizable", 2, flags):
-            cmtk.table_setup_column("one", cmtk.TableColumnFlags.WIDTH_FIXED, 100.0)
-            cmtk.table_setup_column("two", cmtk.TableColumnFlags.WIDTH_FIXED, 100.0)
-            cmtk.table_headers_row()
-            state["widths"] = [cmtk.get_column_width_of(i) for i in range(2)]
-            state["headers"] = list(cmtk.get_current_context()
+        flags = emtk.TableFlags.RESIZABLE | emtk.TableFlags.BORDERS
+        if emtk.begin_table("resizable", 2, flags):
+            emtk.table_setup_column("one", emtk.TableColumnFlags.WIDTH_FIXED, 100.0)
+            emtk.table_setup_column("two", emtk.TableColumnFlags.WIDTH_FIXED, 100.0)
+            emtk.table_headers_row()
+            state["widths"] = [emtk.get_column_width_of(i) for i in range(2)]
+            state["headers"] = list(emtk.get_current_context()
                                     .state(("table",))["stack"][-1].header_boxes) \
-                if cmtk.get_current_context().state(("table",)).get("stack") else []
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.text("cell")
-            cmtk.end_table()
+                if emtk.get_current_context().state(("table",)).get("stack") else []
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.text("cell")
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()
@@ -171,15 +171,15 @@ def test_a_hidden_column_is_not_laid_out_or_drawn():
     seen: dict = {}
 
     def gui():
-        if cmtk.begin_table("hideable", 3, cmtk.TableFlags.HIDEABLE):
+        if emtk.begin_table("hideable", 3, emtk.TableFlags.HIDEABLE):
             for name in ("one", "two", "three"):
-                cmtk.table_setup_column(name)
-            cmtk.table_set_column_enabled(1, False)
-            cmtk.table_headers_row()
-            seen["count"] = cmtk.table_get_column_count()
-            seen["names"] = [cmtk.table_get_column_name(i)
+                emtk.table_setup_column(name)
+            emtk.table_set_column_enabled(1, False)
+            emtk.table_headers_row()
+            seen["count"] = emtk.table_get_column_count()
+            seen["names"] = [emtk.table_get_column_name(i)
                              for i in range(seen["count"])]
-            cmtk.end_table()
+            emtk.end_table()
 
     painter = _run(gui)
     assert seen["count"] == 2
@@ -191,13 +191,13 @@ def test_columns_can_be_reordered():
     seen: dict = {}
 
     def gui():
-        if cmtk.begin_table("reorder", 3, cmtk.TableFlags.REORDERABLE):
+        if emtk.begin_table("reorder", 3, emtk.TableFlags.REORDERABLE):
             for name in ("one", "two", "three"):
-                cmtk.table_setup_column(name)
-            cmtk.table_set_column_order(2, 0)
-            cmtk.table_set_column_order(0, 2)
-            seen["names"] = [cmtk.table_get_column_name(i) for i in range(3)]
-            cmtk.end_table()
+                emtk.table_setup_column(name)
+            emtk.table_set_column_order(2, 0)
+            emtk.table_set_column_order(0, 2)
+            seen["names"] = [emtk.table_get_column_name(i) for i in range(3)]
+            emtk.end_table()
 
     _run(gui)
     assert seen["names"] == ["three", "two", "one"], seen["names"]
@@ -212,15 +212,15 @@ def test_clicking_a_header_produces_sort_specs():
     state: dict = {}
 
     def gui():
-        flags = cmtk.TableFlags.SORTABLE | cmtk.TableFlags.BORDERS
-        if cmtk.begin_table("sorting", 2, flags):
-            cmtk.table_setup_column("name")
-            cmtk.table_setup_column("size")
-            cmtk.table_headers_row()
-            state["specs"] = cmtk.table_get_sort_specs()
-            table = cmtk.get_current_context().state(("table",))["stack"][-1]
+        flags = emtk.TableFlags.SORTABLE | emtk.TableFlags.BORDERS
+        if emtk.begin_table("sorting", 2, flags):
+            emtk.table_setup_column("name")
+            emtk.table_setup_column("size")
+            emtk.table_headers_row()
+            state["specs"] = emtk.table_get_sort_specs()
+            table = emtk.get_current_context().state(("table",))["stack"][-1]
             state["headers"] = {c.name: box for c, box in table.header_boxes}
-            cmtk.end_table()
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()
@@ -240,19 +240,19 @@ def test_a_sorted_column_reports_the_flag():
     state: dict = {}
 
     def gui():
-        if cmtk.begin_table("sortflag", 2, cmtk.TableFlags.SORTABLE):
-            cmtk.table_setup_column("a")
-            cmtk.table_setup_column("b")
-            cmtk.table_headers_row()
-            table = cmtk.get_current_context().state(("table",))["stack"][-1]
+        if emtk.begin_table("sortflag", 2, emtk.TableFlags.SORTABLE):
+            emtk.table_setup_column("a")
+            emtk.table_setup_column("b")
+            emtk.table_headers_row()
+            table = emtk.get_current_context().state(("table",))["stack"][-1]
             state["headers"] = {c.name: box for c, box in table.header_boxes}
-            state["flags"] = [cmtk.table_get_column_flags(i) for i in range(2)]
-            cmtk.end_table()
+            state["flags"] = [emtk.table_get_column_flags(i) for i in range(2)]
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()
     frames.click(state["headers"]["a"])
-    sorted_flag = cmtk.TableColumnFlags.IS_SORTED
+    sorted_flag = emtk.TableColumnFlags.IS_SORTED
     assert state["flags"][0] & sorted_flag
     assert not state["flags"][1] & sorted_flag
 
@@ -263,14 +263,14 @@ def test_a_sorted_column_reports_the_flag():
 #   ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(...));
 def test_a_cell_background_is_painted_behind_the_cell():
     def gui():
-        if cmtk.begin_table("bg", 2):
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.table_set_bg_color(cmtk.TableBgTarget.CELL_BG, (10, 20, 30, 255))
-            cmtk.text("tinted")
-            cmtk.table_set_column_index(1)
-            cmtk.text("plain")
-            cmtk.end_table()
+        if emtk.begin_table("bg", 2):
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.table_set_bg_color(emtk.TableBgTarget.CELL_BG, (10, 20, 30, 255))
+            emtk.text("tinted")
+            emtk.table_set_column_index(1)
+            emtk.text("plain")
+            emtk.end_table()
 
     painter = _run(gui)
     fills = [c for c in painter.calls if c[0] == "fill_rect"
@@ -280,12 +280,12 @@ def test_a_cell_background_is_painted_behind_the_cell():
 
 def test_a_row_background_spans_the_whole_row():
     def gui():
-        if cmtk.begin_table("bg2", 3):
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.table_set_bg_color(cmtk.TableBgTarget.ROW_BG0, (1, 2, 3, 255))
-            cmtk.text("x")
-            cmtk.end_table()
+        if emtk.begin_table("bg2", 3):
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.table_set_bg_color(emtk.TableBgTarget.ROW_BG0, (1, 2, 3, 255))
+            emtk.text("x")
+            emtk.end_table()
 
     painter = _run(gui, size=(0.0, 0.0, 300.0, 200.0))
     fills = [c for c in painter.calls if c[0] == "fill_rect" and c[5] == (1, 2, 3, 255)]
@@ -298,12 +298,12 @@ def test_a_row_background_spans_the_whole_row():
 # --------------------------------------------------------------------------- #
 def test_borders_are_drawn_between_and_around_the_columns():
     def gui():
-        if cmtk.begin_table("borders", 3, cmtk.TableFlags.BORDERS):
-            cmtk.table_next_row()
+        if emtk.begin_table("borders", 3, emtk.TableFlags.BORDERS):
+            emtk.table_next_row()
             for index in range(3):
-                cmtk.table_set_column_index(index)
-                cmtk.text("c%d" % index)
-            cmtk.end_table()
+                emtk.table_set_column_index(index)
+                emtk.text("c%d" % index)
+            emtk.end_table()
 
     painter = _run(gui)
     verticals = [c for c in painter.calls if c[0] == "fill_rect" and c[3] <= 2.0]
@@ -312,11 +312,11 @@ def test_borders_are_drawn_between_and_around_the_columns():
 
 def test_without_the_border_flag_nothing_is_ruled():
     def gui():
-        if cmtk.begin_table("noborders", 3):
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.text("c")
-            cmtk.end_table()
+        if emtk.begin_table("noborders", 3):
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.text("c")
+            emtk.end_table()
 
     painter = _run(gui)
     verticals = [c for c in painter.calls if c[0] == "fill_rect" and c[3] <= 2.0]
@@ -330,14 +330,14 @@ def test_an_outer_size_bounds_the_table():
     seen: dict = {}
 
     def gui():
-        if cmtk.begin_table("outer", 2, 0, (240.0, 120.0)):
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            seen["w0"] = cmtk.get_column_width_of(0)
-            cmtk.table_set_column_index(1)
-            seen["w1"] = cmtk.get_column_width_of(1)
-            cmtk.end_table()
-        seen["after"] = cmtk.get_cursor_pos()
+        if emtk.begin_table("outer", 2, 0, (240.0, 120.0)):
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            seen["w0"] = emtk.get_column_width_of(0)
+            emtk.table_set_column_index(1)
+            seen["w1"] = emtk.get_column_width_of(1)
+            emtk.end_table()
+        seen["after"] = emtk.get_cursor_pos()
 
     _run(gui, size=(0.0, 0.0, 600.0, 400.0))
     assert seen["w0"] + seen["w1"] == pytest.approx(240.0)
@@ -347,15 +347,15 @@ def test_cell_padding_insets_the_contents():
     boxes: dict = {}
 
     def gui():
-        if cmtk.begin_table("padded", 2):
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.text("x")
-            boxes["cell"] = cmtk.get_item_rect()
-            table = cmtk.get_current_context().state(("table",))["stack"][-1]
+        if emtk.begin_table("padded", 2):
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.text("x")
+            boxes["cell"] = emtk.get_item_rect()
+            table = emtk.get_current_context().state(("table",))["stack"][-1]
             boxes["table_x"] = table.box[0]
             boxes["padding"] = table.cell_padding
-            cmtk.end_table()
+            emtk.end_table()
 
     _run(gui)
     assert boxes["cell"][0] == pytest.approx(boxes["table_x"] + boxes["padding"][0])
@@ -369,24 +369,24 @@ def test_two_tables_with_the_same_id_share_their_column_widths():
     seen: dict = {}
 
     def gui(pass_no):
-        if cmtk.begin_table("synced", 2, cmtk.TableFlags.RESIZABLE):
-            cmtk.table_setup_column("a", cmtk.TableColumnFlags.WIDTH_FIXED, 80.0)
-            cmtk.table_setup_column("b", cmtk.TableColumnFlags.WIDTH_FIXED, 80.0)
+        if emtk.begin_table("synced", 2, emtk.TableFlags.RESIZABLE):
+            emtk.table_setup_column("a", emtk.TableColumnFlags.WIDTH_FIXED, 80.0)
+            emtk.table_setup_column("b", emtk.TableColumnFlags.WIDTH_FIXED, 80.0)
             if pass_no == 0:
-                cmtk.table_set_column_enabled(0, True)
-                table = cmtk.get_current_context().state(("table",))["stack"][-1]
+                emtk.table_set_column_enabled(0, True)
+                table = emtk.get_current_context().state(("table",))["stack"][-1]
                 table.columns[0].user_width = 150.0
-                cmtk.get_current_context().state(
+                emtk.get_current_context().state(
                     ("table_shared", "synced"))[("width", 0)] = 150.0
                 table.resolve()
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            seen[pass_no] = cmtk.get_column_width_of(0)
-            cmtk.end_table()
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            seen[pass_no] = emtk.get_column_width_of(0)
+            emtk.end_table()
 
     painter = RecordingPainter()
     storage: dict = {}
-    with cmtk.frame(painter, (0.0, 0.0, 600.0, 400.0), storage=storage):
+    with emtk.frame(painter, (0.0, 0.0, 600.0, 400.0), storage=storage):
         gui(0)
         gui(1)
     assert seen[0] == 150.0
@@ -400,19 +400,19 @@ def test_a_long_table_only_submits_the_rows_in_view():
     submitted: list = []
 
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("scrolling", (0.0, 0.0, 400.0, 120.0))
-        if cmtk.begin_table("big", 3, cmtk.TableFlags.SCROLL_Y):
-            clipper = cmtk.ListClipper()
+        if emtk.begin_table("big", 3, emtk.TableFlags.SCROLL_Y):
+            clipper = emtk.ListClipper()
             clipper.begin(1000)
             while clipper.step():
                 for row in range(clipper.display_start, clipper.display_end):
-                    cmtk.table_next_row()
+                    emtk.table_next_row()
                     for column in range(3):
-                        cmtk.table_set_column_index(column)
-                        cmtk.text("%d,%d" % (row, column))
+                        emtk.table_set_column_index(column)
+                        emtk.text("%d,%d" % (row, column))
                     submitted.append(row)
-            cmtk.end_table()
+            emtk.end_table()
         ctx.end()
 
     assert 0 < len(submitted) < 40, len(submitted)
@@ -423,24 +423,24 @@ def test_a_tree_inside_a_table_keeps_its_cells():
     cells: dict = {}
 
     def gui():
-        if cmtk.begin_table("tree", 2, cmtk.TableFlags.BORDERS):
-            cmtk.table_setup_column("Name")
-            cmtk.table_setup_column("Size")
-            cmtk.table_headers_row()
+        if emtk.begin_table("tree", 2, emtk.TableFlags.BORDERS):
+            emtk.table_setup_column("Name")
+            emtk.table_setup_column("Size")
+            emtk.table_headers_row()
             for index in range(2):
-                cmtk.table_next_row()
-                cmtk.table_set_column_index(0)
-                cmtk.push_id(index)
-                cmtk.set_next_item_open(True)
-                if cmtk.tree_node_ex("Folder %d" % index):
-                    cmtk.text("child")
-                    cmtk.tree_pop()
-                cells[(index, 0)] = cmtk.get_item_rect()
-                cmtk.table_set_column_index(1)
-                cmtk.text("%d KB" % (index * 10))
-                cells[(index, 1)] = cmtk.get_item_rect()
-                cmtk.pop_id()
-            cmtk.end_table()
+                emtk.table_next_row()
+                emtk.table_set_column_index(0)
+                emtk.push_id(index)
+                emtk.set_next_item_open(True)
+                if emtk.tree_node_ex("Folder %d" % index):
+                    emtk.text("child")
+                    emtk.tree_pop()
+                cells[(index, 0)] = emtk.get_item_rect()
+                emtk.table_set_column_index(1)
+                emtk.text("%d KB" % (index * 10))
+                cells[(index, 1)] = emtk.get_item_rect()
+                emtk.pop_id()
+            emtk.end_table()
 
     painter = _run(gui)
     assert "child" in painter.strings
@@ -454,18 +454,18 @@ def test_a_tree_inside_a_table_keeps_its_cells():
 def test_a_table_wider_than_its_window_can_be_scrolled():
     answers: dict = {}
     painter = RecordingPainter()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 300.0)) as ctx:
         ctx.begin("h", (0.0, 0.0, 200.0, 100.0))
         ctx.current_window.content_size = (700.0, 100.0)
-        if cmtk.begin_table("wide", 7, cmtk.TableFlags.SCROLL_X,
+        if emtk.begin_table("wide", 7, emtk.TableFlags.SCROLL_X,
                             (700.0, 0.0)):
-            cmtk.table_next_row()
+            emtk.table_next_row()
             for index in range(7):
-                cmtk.table_set_column_index(index)
-                cmtk.text("c%d" % index)
-            answers["width"] = sum(cmtk.get_column_width_of(i) for i in range(7))
-            cmtk.end_table()
-        answers["max"] = cmtk.get_scroll_max_x()
+                emtk.table_set_column_index(index)
+                emtk.text("c%d" % index)
+            answers["width"] = sum(emtk.get_column_width_of(i) for i in range(7))
+            emtk.end_table()
+        answers["max"] = emtk.get_scroll_max_x()
         ctx.end()
     assert answers["width"] == pytest.approx(700.0)
     assert answers["max"] == 500.0
@@ -475,14 +475,14 @@ def test_an_item_width_inside_a_cell_is_the_cell_s():
     seen: dict = {}
 
     def gui():
-        if cmtk.begin_table("iw", 2):
-            cmtk.table_setup_column("a", cmtk.TableColumnFlags.WIDTH_FIXED, 150.0)
-            cmtk.table_setup_column("b", cmtk.TableColumnFlags.WIDTH_FIXED, 150.0)
-            cmtk.table_next_row()
-            cmtk.table_set_column_index(0)
-            cmtk.slider_float("##s", 0.5, 0.0, 1.0)
-            seen["slider"] = cmtk.get_item_rect()
-            cmtk.end_table()
+        if emtk.begin_table("iw", 2):
+            emtk.table_setup_column("a", emtk.TableColumnFlags.WIDTH_FIXED, 150.0)
+            emtk.table_setup_column("b", emtk.TableColumnFlags.WIDTH_FIXED, 150.0)
+            emtk.table_next_row()
+            emtk.table_set_column_index(0)
+            emtk.slider_float("##s", 0.5, 0.0, 1.0)
+            seen["slider"] = emtk.get_item_rect()
+            emtk.end_table()
 
     _run(gui)
     assert seen["slider"][2] <= 150.0
@@ -501,23 +501,23 @@ def test_angled_headers_go_through_the_painters_rotated_text_when_it_has_one():
             self.rotated.append((string, radians))
 
     painter = Rotating()
-    with cmtk.frame(painter, (0.0, 0.0, 400.0, 200.0)):
-        if cmtk.begin_table("angled", 3):
+    with emtk.frame(painter, (0.0, 0.0, 400.0, 200.0)):
+        if emtk.begin_table("angled", 3):
             for name in ("alpha", "beta", "gamma"):
-                cmtk.table_setup_column(name)
-            cmtk.table_angled_headers_row()
-            cmtk.end_table()
+                emtk.table_setup_column(name)
+            emtk.table_angled_headers_row()
+            emtk.end_table()
     assert [s for s, _r in painter.rotated] == ["alpha", "beta", "gamma"]
     assert all(r < 0 for _s, r in painter.rotated)
 
 
 def test_angled_headers_fall_back_to_flat_text():
     def gui():
-        if cmtk.begin_table("angled2", 2):
-            cmtk.table_setup_column("alpha")
-            cmtk.table_setup_column("beta")
-            cmtk.table_angled_headers_row()
-            cmtk.end_table()
+        if emtk.begin_table("angled2", 2):
+            emtk.table_setup_column("alpha")
+            emtk.table_setup_column("beta")
+            emtk.table_angled_headers_row()
+            emtk.end_table()
 
     painter = _run(gui)
     assert "alpha" in painter.strings and "beta" in painter.strings
@@ -527,18 +527,18 @@ def test_a_table_header_can_carry_a_context_menu():
     state: dict = {}
 
     def gui():
-        if cmtk.begin_table("ctx", 2, cmtk.TableFlags.HIDEABLE):
-            cmtk.table_setup_column("one")
-            cmtk.table_setup_column("two")
-            cmtk.table_headers_row()
-            table = cmtk.get_current_context().state(("table",))["stack"][-1]
+        if emtk.begin_table("ctx", 2, emtk.TableFlags.HIDEABLE):
+            emtk.table_setup_column("one")
+            emtk.table_setup_column("two")
+            emtk.table_headers_row()
+            table = emtk.get_current_context().state(("table",))["stack"][-1]
             state["headers"] = {c.name: b for c, b in table.header_boxes}
-            if cmtk.begin_popup_context_item("##table_ctx"):
-                if cmtk.selectable("Hide 'two'"):
+            if emtk.begin_popup_context_item("##table_ctx"):
+                if emtk.selectable("Hide 'two'"):
                     state["hide"] = True
-                state["item"] = cmtk.get_item_rect()
-                cmtk.end_popup()
-            cmtk.end_table()
+                state["item"] = emtk.get_item_rect()
+                emtk.end_popup()
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.draw()
@@ -557,13 +557,13 @@ def test_the_hovered_column_is_reported():
     seen: dict = {}
 
     def gui():
-        if cmtk.begin_table("hover", 3, 0, (300.0, 0.0)):
-            cmtk.table_next_row()
+        if emtk.begin_table("hover", 3, 0, (300.0, 0.0)):
+            emtk.table_next_row()
             for index in range(3):
-                cmtk.table_set_column_index(index)
-                cmtk.text("c%d" % index)
-            seen["hovered"] = cmtk.table_get_hovered_column()
-            cmtk.end_table()
+                emtk.table_set_column_index(index)
+                emtk.text("c%d" % index)
+            seen["hovered"] = emtk.table_get_hovered_column()
+            emtk.end_table()
 
     frames = Frames(gui)
     frames.io.mouse_pos = (150.0, 5.0)

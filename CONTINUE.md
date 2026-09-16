@@ -1,13 +1,13 @@
 # Continue here
 
-Two repos, one job: cmc's C++/ImGui GUI is being ported to Python on cmtk.
-`~/dev/cmtk` is the toolkit + `tools/autoport`; `~/dev/cmc` is the app.
-A third, the GPU viewer at `~/dev/chimol`, consumes cmtk and now loads its
+Two repos, one job: cmc's C++/ImGui GUI is being ported to Python on emtk.
+`~/dev/emtk` is the toolkit + `tools/autoport`; `~/dev/cmc` is the app.
+A third, the GPU viewer at `~/dev/chimol`, consumes emtk and now loads its
 shader.
 
 ## State (2026-09-01, later)
 
-* cmtk: **1272 passed, 3 skipped** in the `arm64` env (Qt + wgpu);
+* emtk: **1272 passed, 3 skipped** in the `arm64` env (Qt + wgpu);
   **1266 passed, 9 skipped** in the base env, which has no Qt.
   `tools/gen_names.py --check` current.
 * One GPU host (`wgpu_host`), one shading language (`wgsl/ui.wgsl`), and the
@@ -20,12 +20,12 @@ shader.
 
 ### What landed
 
-* `cmtk/wgsl/ui.wgsl` — the toolkit's shader, moved out of chimol; chimol's
-  `load_wgsl` now falls back to `cmtk.wgsl` and its own copy is deleted.
-* `cmtk/wgpu_host.py` — `WgpuRenderer` (no window, no toolkit: `grab()`
+* `emtk/wgsl/ui.wgsl` — the toolkit's shader, moved out of chimol; chimol's
+  `load_wgsl` now falls back to `emtk.wgsl` and its own copy is deleted.
+* `emtk/wgpu_host.py` — `WgpuRenderer` (no window, no toolkit: `grab()`
   renders offscreen and hands back a NumPy array) and `WgpuControlHost` (a
   `rendercanvas.qt.QRenderWidget`).
-* `cmtk/gpu_atlas.py` — the two atlases and the negative-u convention, with
+* `emtk/gpu_atlas.py` — the two atlases and the negative-u convention, with
   no idea what a device is; `tests/test_gpu_atlas.py` exercises all of it on
   any machine.
 * **`gl_host.py` retired.** One GPU host, one shading language. See the foot
@@ -42,22 +42,22 @@ of pixels differing — antialiased glyph edges and nothing else.
 ## Run and verify
 
 ```bash
-cd ~/dev/cmtk  && python -m pytest tests/ -q && python tools/gen_names.py --check
+cd ~/dev/emtk  && python -m pytest tests/ -q && python tools/gen_names.py --check
 cd ~/dev/cmc   && python tools/port_ui.py && cp src/ext/python/pycmc/*.py bin/pycmc/ \
                   && cp src/ext/python/pycmc/ui/*.py bin/pycmc/ui/
-PYTHONPATH=~/dev/cmc/bin:~/dev/cmtk ~/mambaforge/envs/arm64/bin/python /tmp/draw_real.py
-PYTHONPATH=~/dev/cmc/bin:~/dev/cmtk ~/mambaforge/envs/arm64/bin/python /tmp/draw_app_gpu.py
+PYTHONPATH=~/dev/cmc/bin:~/dev/emtk ~/mambaforge/envs/arm64/bin/python /tmp/draw_real.py
+PYTHONPATH=~/dev/cmc/bin:~/dev/emtk ~/mambaforge/envs/arm64/bin/python /tmp/draw_app_gpu.py
 python src/ext/python/pycmc/check_split.py      # the GUI/compute boundary
 ```
 
 `/tmp/draw_real.py` drives every render method of the wired app and prints
 `DREW n/m`, one line per failure, and each window's box; pass a substring for
 a full traceback. `/tmp/draw_app_gpu.py` draws the same interface through
-`cmtk.wgpu_host.WgpuRenderer`, writes `/tmp/cmc_gpu.png` and prints the
+`emtk.wgpu_host.WgpuRenderer`, writes `/tmp/cmc_gpu.png` and prints the
 correlation against the CPU rasteriser. Both are rebuildable from their own
 docstrings if lost.
 
-The app: `PYTHONPATH=~/dev/cmc/bin:~/dev/cmtk python -m pycmc` (ported UI is
+The app: `PYTHONPATH=~/dev/cmc/bin:~/dev/emtk python -m pycmc` (ported UI is
 the default; `--ui simple` is the small hand-written one).
 
 ## What is next
@@ -92,13 +92,13 @@ the default; `--ui simple` is the small hand-written one).
   same font scale it is 0.94. A parity check that varies two things measures
   neither.
 * **A guard that is too narrow hides the bugs behind it.** `if
-  im.combo(...)` was always true (cmtk returns `(changed, value)`, a truthy
+  im.combo(...)` was always true (emtk returns `(changed, value)`, a truthy
   tuple) because the out-param guard rejected `self.member`. Widening it then
   exposed a *wrong table* it had been masking.
 * **`pycmc/ui/` is generated** — `port_ui.py` overwrites it. Hand-finished
   code goes in `pycmc/wiring.py` and `pycmc/__main__.py`, which are not.
   `wiring.py` is untracked, so `git checkout` on it does nothing.
-* Colours are **bytes 0..255** in cmtk, floats 0..1 in ImGui and in wgpu.
+* Colours are **bytes 0..255** in emtk, floats 0..1 in ImGui and in wgpu.
   Floats don't raise headless; they raise under Qt, and in wgpu they draw a
   black window.
 * Both repos' build flags and env are in `ARCHITECTURE.md` next to
@@ -107,5 +107,5 @@ the default; `--ui simple` is the small hand-written one).
 
 ## The boundary
 
-`~/dev/cmc/src/ext/python/pycmc/ARCHITECTURE.md`: GUI is Python on cmtk,
+`~/dev/cmc/src/ext/python/pycmc/ARCHITECTURE.md`: GUI is Python on emtk,
 everything that computes is C++ behind SWIG. `check_split.py` enforces it.

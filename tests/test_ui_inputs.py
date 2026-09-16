@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk import keys
-from cmtk.widgets import inputs
+from emtk import keys
+from emtk.widgets import inputs
 
 
 class RecordingPainter:

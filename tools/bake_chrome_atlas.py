@@ -1,4 +1,4 @@
-"""Bake cmtk's interface font into a glyph atlas.
+"""Bake emtk's interface font into a glyph atlas.
 
 Why an atlas at all
 -------------------
@@ -36,9 +36,9 @@ Use
 ---
     QT_QPA_PLATFORM=offscreen python tools/bake_chrome_atlas.py
 
-writes ``cmtk/atlas/chrome.png`` and ``chrome.json``. Both ship --
+writes ``emtk/atlas/chrome.png`` and ``chrome.json``. Both ship --
 ``pyproject.toml``'s package data names ``atlas/*`` -- and both are committed,
-so nobody needs Qt to *use* cmtk. Baking is the one step that does.
+so nobody needs Qt to *use* emtk. Baking is the one step that does.
 """
 from __future__ import annotations
 
@@ -100,7 +100,7 @@ CHARSET: str = "".join(
 )
 
 #: Where the atlas lands, inside the package so it ships.
-OUT_DIR = pathlib.Path(__file__).resolve().parents[1] / "cmtk" / "atlas"
+OUT_DIR = pathlib.Path(__file__).resolve().parents[1] / "emtk" / "atlas"
 
 
 def _face(bold: bool, scale: int | None = None):

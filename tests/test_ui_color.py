@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from cmtk.widgets import color
+from emtk.widgets import color
 
 
 class RecordingPainter:
