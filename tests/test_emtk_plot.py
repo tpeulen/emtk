@@ -162,3 +162,51 @@ def test_a_non_finite_sample_breaks_the_line_and_leaves_the_range_alone():
     plot.draw(painter)
     assert plot._y_axis.range == (1.0, 4.0)
     assert plot._x_axis.range == (0.0, 3.0)
+
+
+def test_padding_widens_only_the_fitted_sides():
+    axis = Axis(v_min=0.0)
+    axis.fit([2.0, 12.0])
+    axis.pad(0.1)
+    assert axis.range == pytest.approx((0.0, 13.0))  # the fitted span (2, 12) plus 10 %
+
+
+def test_an_underlay_is_drawn_after_the_gridlines_and_before_the_series():
+    """A fit range shades the data it marks; drawn last it tinted every curve."""
+    p = RecordingPainter()
+    plot = Plot(0.0, 0.0, 200.0, 100.0, show_ticks=True)
+    plot.line("decay", [0.0, 1.0, 2.0], [3.0, 2.0, 1.0], colour=(255, 0, 0))
+    plot.underlays.append(lambda painter, _plot: painter.fill_rect(10.0, 0.0, 5.0, 100.0, (1, 2, 3, 40)))
+    plot.draw(p)
+    colours = [call[-1] for call in p.calls if call[0] in ("fill_rect", "fill_triangle")]
+    underlay = colours.index((1, 2, 3, 40))
+    assert (255, 0, 0) in colours[underlay:], "the series comes after the underlay"
+    assert (255, 0, 0) not in colours[:underlay]
+
+
+def test_the_tick_target_sets_how_many_gridlines_a_plot_gets():
+    p = RecordingPainter()
+    plot = Plot(0.0, 0.0, 400.0, 300.0, x_range=(0.0, 100.0), y_range=(0.0, 100.0), show_ticks=True)
+    plot.x_tick_target = plot.y_tick_target = 10
+    plot.show_y_tick_labels = False
+    plot.draw(p)
+    grid = [call for call in p.calls if call[0] == "fill_rect" and call[-1] == (255, 255, 255, 20)]
+    assert len(grid) >= 18
+
+
+def test_a_log_axis_ticks_on_decades_and_labels_nothing_fractional():
+    axis = Axis(0.0, 4.0)
+    axis.log_decades = True
+    assert axis.ticks(4) == [0.0, 1.0, 2.0, 3.0, 4.0]
+    assert len(axis.minor_ticks()) == 4 * 8
+
+
+def test_a_log_axis_under_two_decades_ticks_on_nice_values():
+    """10**2.3 is 199.53: the ticks are nice *samples*, placed at their exponents."""
+    import math
+
+    axis = Axis(math.log10(150.0), math.log10(900.0))
+    axis.log_decades = True
+    values = [round(10.0 ** v, 6) for v in axis.ticks(4)]
+    assert values and all(v == round(v) for v in values)
+    assert all(150.0 <= v <= 900.0 for v in values)

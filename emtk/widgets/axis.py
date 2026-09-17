@@ -59,6 +59,21 @@ class Axis:
             if v > self._fit_max:
                 self._fit_max = v
 
+    def pad(self, fraction: float) -> None:
+        """Widen the *fitted* range by ``fraction`` of its span on each side.
+
+        A fixed bound stays where the caller put it. Without padding the
+        extreme samples sit on the frame, where a curve's peak is half hidden
+        by the border drawn over it.
+        """
+        if not (self._fit_max > self._fit_min):
+            return
+        margin = (self._fit_max - self._fit_min) * float(fraction)
+        if self._fixed_min is None:
+            self._fit_min -= margin
+        if self._fixed_max is None:
+            self._fit_max += margin
+
     @property
     def range(self) -> tuple[float, float]:
         """The range actually used: fixed bounds, or the fitted ones.
@@ -105,7 +120,32 @@ class Axis:
             if last > first:
                 step = max(1, math.ceil((last - first) / max(target_count, 1)))
                 return [float(v) for v in range(first, last + 1, step)]
+            # Less than two decades on screen: nice numbers of the *samples*,
+            # placed at their exponents. Nice exponents are not nice values --
+            # a tick at 10**2.3 is 199.53, which no label can spell honestly.
+            if hi - lo > 50.0 or lo < -300.0:
+                return []
+            return [math.log10(v) for v in nice_ticks(10.0 ** lo, 10.0 ** hi, target_count) if v > 0.0]
         return nice_ticks(lo, hi, target_count)
+
+    def minor_ticks(self) -> list[float]:
+        """The 2..9 multiples inside each decade of a log axis, as exponents.
+
+        Empty on a linear axis, and when so many decades are shown that the
+        lines would merge into a band.
+        """
+        if not self.log_decades:
+            return []
+        lo, hi = self.range
+        if not (hi > lo) or hi - lo > 8.0:
+            return []
+        out = []
+        for decade in range(math.floor(lo), math.ceil(hi) + 1):
+            for multiple in range(2, 10):
+                v = decade + math.log10(multiple)
+                if lo <= v <= hi:
+                    out.append(v)
+        return out
 
 
 def nice_ticks(lo: float, hi: float, target_count: int = 4) -> list[float]:

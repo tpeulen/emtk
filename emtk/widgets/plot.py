@@ -42,6 +42,7 @@ DEEP_PALETTE: tuple[tuple[int, int, int], ...] = (
 
 _FRAME_BG = (0, 0, 0, 60)
 _GRID_COLOUR = (255, 255, 255, 20)
+_MINOR_GRID_COLOUR = (255, 255, 255, 9)
 _TICK_TEXT = (160, 165, 175)
 _AXIS_LINE = (110, 115, 125)
 
@@ -86,6 +87,15 @@ class Plot:
         #: ``ImPlotAxisFlags_NoTickLabels``: a density plot whose height is
         #: only meaningful relative to its neighbours reads cleaner without them.
         self.show_y_tick_labels = True
+        #: Roughly how many ticks (and gridlines) each axis gets. Four suits a
+        #: caption-sized plot; an analysis panel scales it with its size.
+        self.x_tick_target = 4
+        self.y_tick_target = 4
+        #: ``callable(painter, plot)`` drawn after the gridlines and before the
+        #: series, inside the clip, with both axes already mapped onto the box:
+        #: what shades a span of the data (a fit range) belongs *under* the
+        #: curves it marks, not over them.
+        self.underlays: list = []
         self._x_axis = Axis(*(x_range or (None, None)))
         self._y_axis = Axis(*(y_range or (None, None)))
         self._lines: list[dict] = []
@@ -169,6 +179,8 @@ class Plot:
         try:
             if self.show_ticks:
                 self._draw_gridlines(p)
+            for underlay in self.underlays:
+                underlay(p, self)
             for series in self._lines:
                 self._draw_line(p, series)
             for series in self._scatters:
@@ -183,10 +195,16 @@ class Plot:
 
     def _draw_gridlines(self, p) -> None:
         x, y, w, h = self.x, self.y, self.w, self.h
-        for v in self._y_axis.ticks():
+        # A log axis also gets its 2..9 lines per decade, fainter: without
+        # them a decade is an empty band and a value in it cannot be read.
+        for v in self._y_axis.minor_ticks():
+            p.fill_rect(x, self._y_axis.to_pixels(v), w, 1.0, _MINOR_GRID_COLOUR)
+        for v in self._x_axis.minor_ticks():
+            p.fill_rect(self._x_axis.to_pixels(v), y, 1.0, h, _MINOR_GRID_COLOUR)
+        for v in self._y_axis.ticks(self.y_tick_target):
             py = self._y_axis.to_pixels(v)
             p.fill_rect(x, py, w, 1.0, _GRID_COLOUR)
-        for v in self._x_axis.ticks():
+        for v in self._x_axis.ticks(self.x_tick_target):
             px = self._x_axis.to_pixels(v)
             p.fill_rect(px, y, 1.0, h, _GRID_COLOUR)
 
@@ -197,7 +215,7 @@ class Plot:
         if not self.show_y_tick_labels:
             return
         x = self.x
-        for v in self._y_axis.ticks():
+        for v in self._y_axis.ticks(self.y_tick_target):
             py = self._y_axis.to_pixels(v)
             p.text(x - 34.0, py - 6.0, 30.0, 12.0, ALIGN_RIGHT | ALIGN_VCENTER,
                    self.format_tick(v), _TICK_TEXT)
@@ -248,6 +266,11 @@ class Plot:
             return
         entries = [(s["label"], s["colour"]) for s in self._lines if s["label"]]
         entries += [(s["label"], s["colour"]) for s in self._scatters if s["label"]]
+        # One row per name: a line drawn with markers is a line series and a
+        # scatter series under the same label, and is one thing to the reader.
+        seen: set[str] = set()
+        entries = [(label, colour) for label, colour in entries
+                   if not (label in seen or seen.add(label))]
         if not entries:
             return
         swatch = 8.0

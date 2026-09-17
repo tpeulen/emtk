@@ -339,6 +339,32 @@ class QtPainter:
             font.setBold(False)
             self._p.setFont(font)
 
+    def text_rotated(
+        self,
+        x: float,
+        y: float,
+        w: float,
+        h: float,
+        align: int,
+        string: str,
+        colour: Colour,
+        degrees: float = 0.0,
+    ) -> None:
+        """Draw *string* turned by *degrees* about the centre of the box.
+
+        The box is the text's own, unrotated: a y-axis title asks for a box
+        as tall as the axis and one line wide, turned by -90 degrees.
+        """
+        cx, cy = x + w * 0.5, y + h * 0.5
+        self._p.save()
+        try:
+            self._p.translate(cx, cy)
+            self._p.rotate(float(degrees))
+            self._p.setPen(self._colour(colour))
+            self._p.drawText(self._rect(-w * 0.5, -h * 0.5, w, h), self._flags(align), string)
+        finally:
+            self._p.restore()
+
     def fill_triangle(
         self,
         p0: tuple[float, float],
