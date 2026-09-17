@@ -249,6 +249,31 @@ def plot(painter, box):
         p.line("cos", xs, [math.cos(v) * 0.6 for v in xs])
 
 
+def plot3d(painter, box):
+    """``implot3d``: a colormapped surface in ImPlot3D's rotated box."""
+    import math
+
+    from emtk import implot3d
+
+    n = 24
+    xs, ys, zs = [], [], []
+    for i in range(n):
+        for j in range(n):
+            x, y = -1.0 + 2.0 * j / (n - 1), -1.0 + 2.0 * i / (n - 1)
+            xs.append(x)
+            ys.append(y)
+            zs.append(math.cos(2.2 * math.hypot(x, y)) * math.exp(-0.4 * (x * x + y * y)))
+    im.begin("Plot3D")
+    implot3d.push_colormap(implot3d.COLORMAP_VIRIDIS)
+    if implot3d.begin_plot("##surface", (-1, -1), implot3d.FLAGS_NO_LEGEND):
+        implot3d.setup_axes("x", "y", "z")
+        implot3d.plot_surface("surface", xs, ys, zs, n, n,
+                              spec=implot3d.Spec(line_color=(0.0, 0.0, 0.0, 0.35)))
+        implot3d.end_plot()
+    implot3d.pop_colormap()
+    im.end()
+
+
 #: ``(name, title, gui, size, clicks, hover)``. The clicks are what open a
 #: menu or a header before the shutter; see :func:`shot`.
 SHOTS = [
@@ -261,6 +286,7 @@ SHOTS = [
     ("tabs", "Tabs", tabs, (320, 170), (), None),
     ("table", "Table", table, (360, 210), (), None),
     ("plot", "Plot", plot, (360, 240), (), None),
+    ("plot3d", "Plot3D", plot3d, (360, 340), (), None),
 ]
 
 

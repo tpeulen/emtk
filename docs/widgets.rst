@@ -378,6 +378,37 @@ prior drawn dashed beside its solid posterior -- and it honours
 ``set_next_marker_style`` and ``AXIS_FLAGS_NO_TICK_LABELS``; a log axis ticks
 on whole decades.
 
+Plot3D
+------
+
+``implot3d`` is ImPlot3D, ported whole: a rotatable 3-D box with ticks and
+labels on its outer edges, scatter, line, triangle, quad, surface, mesh (the
+reference's cube, sphere and duck included), image and text items, legends,
+colormaps, and the reference's mouse bindings -- left drag pans, the wheel
+zooms, right drag rotates, a double right click snaps to a face or back to the
+initial view. Every item is projected into triangles, sorted back to front and
+drawn through the painter, so it runs on every host;
+``implot3d_demo.show_demo_window()`` is the reference's demo, section for
+section.
+
+.. image:: _screenshots/plot3d.png
+   :alt: A colormapped surface in ImPlot3D's rotated box
+
+::
+
+    from emtk import implot3d
+
+    painter = RecordingPainter()
+    with im.frame(painter, (0, 0, 420, 420)):
+        im.begin("Plot3D")
+        if implot3d.begin_plot("Line"):
+            implot3d.setup_axes("x", "y", "z")
+            implot3d.plot_line("helix", [0.0, 0.5, 1.0], [0.0, 1.0, 0.0], [0.0, 0.5, 1.0])
+            implot3d.end_plot()
+        im.end()
+
+    assert painter.triangles
+
 File dialog
 -----------
 

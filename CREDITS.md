@@ -33,6 +33,18 @@ docstring. emtk itself is MIT (see `LICENSE`).
   chord its height. Its canvas is not — pyCirclize draws matplotlib patches on
   a `PolarAxes`, so every shape is projected here and emitted as triangles
   through the painter.
+- **[ImPlot3D](https://github.com/brenocq/implot3d)** (Breno Cunha Queiroz,
+  MIT; read at commit 6cbefa9) -- `implot3d.py` follows `implot3d.h`,
+  `implot3d_internal.h` and `implot3d.cpp`, `implot3d_items.py` follows
+  `implot3d_items.cpp`, `implot3d_demo.py` follows `implot3d_demo.cpp`. The
+  rotation quaternion and its animation, the box's active faces and axis-edge
+  lookup tables, the locators, the input bindings, the item renderers and
+  their depth sort are transcribed; the cube, icosphere and duck meshes are
+  extracted from `implot3d_meshes.cpp` by `tools/port_implot3d_meshes.py`
+  rather than retyped. The duck is "Rubber Duck" by Poly by Google (CC-BY,
+  via Poly Pizza), as the reference credits it. What it draws goes through
+  the painter's triangles, which is why the painter grew the optional
+  `gradient_triangle` and `image_triangle`.
 
 ## Porting another one
 

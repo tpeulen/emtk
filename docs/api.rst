@@ -150,6 +150,21 @@ ImPlot shape: ``emtk.implot``
 .. automodule:: emtk.implot
    :noindex:
 
+ImPlot3D: ``emtk.implot3d``
+------------------------------
+
+.. automodule:: emtk.implot3d
+   :noindex:
+
+.. automodule:: emtk.implot3d_items
+   :noindex:
+
+.. automodule:: emtk.implot3d_meshes
+   :noindex:
+
+.. automodule:: emtk.implot3d_demo
+   :noindex:
+
 Forms from view specs: ``emtk.view_form``
 --------------------------------------------
 
