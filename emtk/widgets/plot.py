@@ -19,6 +19,8 @@ draw against and every item must be known before the range is.
 """
 from __future__ import annotations
 
+import math
+
 from collections.abc import Sequence
 from contextlib import contextmanager
 
@@ -199,10 +201,16 @@ class Plot:
                 px, py = self._x_axis.to_pixels(xs[0]), self._y_axis.to_pixels(ys[0])
                 draw_marker(p, "circle", px, py, width, colour)
             return
-        prev = (self._x_axis.to_pixels(xs[0]), self._y_axis.to_pixels(ys[0]))
-        for i in range(1, n):
+        # A non-finite sample is a gap: the segments either side of it are not
+        # drawn, rather than joining its neighbours across data that is not there.
+        prev = None
+        for i in range(n):
+            if not (math.isfinite(xs[i]) and math.isfinite(ys[i])):
+                prev = None
+                continue
             cur = (self._x_axis.to_pixels(xs[i]), self._y_axis.to_pixels(ys[i]))
-            _painter_line(p, prev[0], prev[1], cur[0], cur[1], width, colour)
+            if prev is not None:
+                _painter_line(p, prev[0], prev[1], cur[0], cur[1], width, colour)
             prev = cur
 
     def _draw_scatter(self, p, series: dict) -> None:

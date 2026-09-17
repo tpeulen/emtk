@@ -16,6 +16,7 @@ makes ``scale_to_pixel`` negative and the axis inverts itself.
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 __all__ = ["Axis", "nice_ticks"]
@@ -47,6 +48,8 @@ class Axis:
         a caller-specified range would silently override what they asked for.
         """
         for v in values:
+            if not math.isfinite(v):
+                continue  # a gap in a series, not a range to show
             if v < self._fit_min:
                 self._fit_min = v
             if v > self._fit_max:
