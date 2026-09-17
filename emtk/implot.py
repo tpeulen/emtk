@@ -150,7 +150,9 @@ def _inner(x, y, w, h, gutter):
 def _tick_text(v: float, is_log: bool) -> str:
     """A log axis holds log10 of the sample, so its ticks must read as the
     value the caller plotted, not as the exponent."""
-    return f"{10.0 ** v:g}" if is_log else f"{v:g}"
+    # Three significant digits on a log axis: a range narrower than a decade
+    # gets ticks between decades, and 10**1.6 printed in full is "39.8107".
+    return f"{10.0 ** v:.3g}" if is_log else f"{v:g}"
 
 
 _MIN_W_INNER = _MIN_H_INNER = 4.0

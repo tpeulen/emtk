@@ -404,11 +404,14 @@ def fit_text(p, label: str, room: float) -> str:
     str
         The text, or as much of it as fits.
     """
-    if room <= 0.0 or p.text_width(label) <= room:
+    # Half a pixel of slack: a column sized to exactly the widest label comes
+    # back through float arithmetic as 41.99999999999999 against a 42.0 label,
+    # and the widest entry of every menu lost its last letter to a dot.
+    if room <= 0.0 or p.text_width(label) <= room + 0.5:
         return label
     for cut in range(len(label) - 1, 0, -1):
         short = label[:cut] + "."
-        if p.text_width(short) <= room:
+        if p.text_width(short) <= room + 0.5:
             return short
     return ""
 

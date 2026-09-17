@@ -435,3 +435,29 @@ def test_a_separator_is_a_rule_and_never_takes_a_press():
     assert result.item is None
     assert result.consumed is True         # dead space inside the panel is still the panel's
     assert menu.open is True
+
+
+def test_the_widest_submenu_label_is_not_cut_short():
+    """A panel is sized to its widest label; laying a submenu row out again
+    subtracts the same columns back and lands a hair under that width in
+    floating point. ``fit_text`` then took the last letter off the widest
+    entry -- "Export" in a File menu drew as "Expo." -- so it allows the slack."""
+    from emtk.testing import PixelPainter
+    from emtk.widgets.menus import Menu, MenuBar, MenuItem
+
+    class _Strings(PixelPainter):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.strings = []
+
+        def text(self, x, y, w, h, align, string, colour, bold=False):
+            self.strings.append(string)
+            return super().text(x, y, w, h, align, string, colour, bold)
+
+    painter = _Strings(400, 300)
+    bar = MenuBar([Menu("File", [MenuItem("Load"), MenuItem("Save"),
+                                 Menu("Export", [MenuItem("Traces")]), MenuItem("Exit")])])
+    bar.draw(painter, 0, 0, 400, 22)
+    bar.press(10, 10, 0, 0, 400, 22)
+    bar.draw(painter, 0, 0, 400, 22)
+    assert "Export" in painter.strings

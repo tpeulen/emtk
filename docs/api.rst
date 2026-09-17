@@ -150,6 +150,12 @@ ImPlot shape: ``emtk.implot``
 .. automodule:: emtk.implot
    :noindex:
 
+Forms from view specs: ``emtk.view_form``
+--------------------------------------------
+
+.. automodule:: emtk.view_form
+   :noindex:
+
 File dialog: ``emtk.file_dialog``
 ------------------------------------
 
