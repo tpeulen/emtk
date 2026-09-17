@@ -40,6 +40,10 @@ class Axis:
         self._fit_max = float("-inf")
         self.pixel_min = 0.0
         self.pixel_max = 0.0
+        #: The range holds log10 of the samples. Ticks then go on whole
+        #: decades, as ImPlot's log ticker puts them: a tick at 10**0.5 reads as
+        #: "3.16228", which is a number nobody chose.
+        self.log_decades = False
 
     def fit(self, values: Sequence[float]) -> None:
         """Extend the auto-fit range to cover *values*.
@@ -96,6 +100,11 @@ class Axis:
     def ticks(self, target_count: int = 4) -> list[float]:
         """"Nice" tick positions inside the range. See :func:`nice_ticks`."""
         lo, hi = self.range
+        if self.log_decades:
+            first, last = math.ceil(lo - 1e-9), math.floor(hi + 1e-9)
+            if last > first:
+                step = max(1, math.ceil((last - first) / max(target_count, 1)))
+                return [float(v) for v in range(first, last + 1, step)]
         return nice_ticks(lo, hi, target_count)
 
 

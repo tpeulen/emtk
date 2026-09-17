@@ -144,6 +144,18 @@ wgpu host: ``emtk.wgpu_host``
 .. automodule:: emtk.wgpu_host
    :noindex:
 
+ImPlot shape: ``emtk.implot``
+--------------------------------
+
+.. automodule:: emtk.implot
+   :noindex:
+
+File dialog: ``emtk.file_dialog``
+------------------------------------
+
+.. automodule:: emtk.file_dialog
+   :noindex:
+
 Widget families
 ----------------
 

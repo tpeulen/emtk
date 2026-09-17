@@ -56,6 +56,8 @@ __all__ = [
     "FLAGS_NO_INPUTS", "FLAGS_NO_MENUS", "FLAGS_NO_BOX_SELECT",
     "FLAGS_CANVAS_ONLY", "FLAGS_EQUAL",
     "SCALE_LINEAR", "SCALE_LOG10", "SCALE_SYMLOG",
+    "AXIS_FLAGS_NONE", "AXIS_FLAGS_NO_LABEL", "AXIS_FLAGS_NO_TICK_LABELS",
+    "MARKER_NONE", "MARKER_CIRCLE", "MARKER_SQUARE", "MARKER_DIAMOND", "MARKER_CROSS",
     "INF_LINES_HORIZONTAL", "BARS_HORIZONTAL",
     "HEATMAP_NONE", "HEATMAP_COL_MAJOR",
     "DEEP_PALETTE", "VIRIDIS_COLORMAP",
@@ -63,7 +65,7 @@ __all__ = [
     "setup_axes_limits", "setup_axis_scale", "setup_legend",
     "plot_line", "plot_scatter", "plot_bars", "plot_shaded",
     "plot_inf_lines", "plot_histogram", "plot_heatmap",
-    "set_next_line_style", "set_next_fill_style",
+    "set_next_line_style", "set_next_fill_style", "set_next_marker_style",
     "push_colormap", "pop_colormap",
     "is_plot_hovered", "get_plot_pos", "get_plot_size",
     "get_plot_mouse_pos", "get_plot_limits", "PlotRect", "PlotRange",
@@ -88,6 +90,19 @@ FLAGS_CANVAS_ONLY = (FLAGS_NO_TITLE | FLAGS_NO_LEGEND
                      | FLAGS_NO_MENUS | FLAGS_NO_MOUSE_TEXT)
 
 SCALE_LINEAR, SCALE_LOG10, SCALE_SYMLOG = 0, 1, 2
+
+#: ``ImPlotAxisFlags``, the two that change what an axis *says*. The bit values
+#: are ImPlot's, so a port passing the C++ constants through lands on them.
+AXIS_FLAGS_NONE = 0
+AXIS_FLAGS_NO_LABEL = 1 << 0
+AXIS_FLAGS_NO_TICK_LABELS = 1 << 2
+
+#: ``ImPlotMarker``, the shapes :mod:`emtk.widgets.markers` draws. The values
+#: are ImPlot's enum values (``Cross`` is 7 there, after the four triangles).
+MARKER_NONE, MARKER_CIRCLE, MARKER_SQUARE, MARKER_DIAMOND = -1, 0, 1, 2
+MARKER_CROSS = 7
+_MARKER_NAMES = {MARKER_CIRCLE: "circle", MARKER_SQUARE: "square",
+                 MARKER_DIAMOND: "diamond", MARKER_CROSS: "cross"}
 
 INF_LINES_HORIZONTAL = 1 << 0
 BARS_HORIZONTAL = 1 << 0
@@ -211,6 +226,9 @@ class _Current:
         self.x_log: bool = False
         self.next_line: tuple | None = None
         self.next_fill: tuple | None = None
+        self.next_marker: tuple | None = None
+        self.x_flags: int = 0
+        self.y_flags: int = 0
         self.colormap: Sequence[tuple] | None = None
         self.frame: int = -1
 
@@ -289,7 +307,8 @@ def begin_plot(title: str, size=(-1.0, -1.0), flags: int = 0) -> bool:
     _cur.plot.format_tick = lambda v: _tick_text(v, _cur.y_log)
     _cur.x_label = _cur.y_label = None
     _cur.x_log = _cur.y_log = False
-    _cur.next_line = _cur.next_fill = None
+    _cur.x_flags = _cur.y_flags = AXIS_FLAGS_NONE
+    _cur.next_line = _cur.next_fill = _cur.next_marker = None
     return True
 
 
@@ -319,15 +338,19 @@ def end_plot() -> None:
     if title and not (_cur.flags & FLAGS_NO_TITLE):
         p.text(ox, oy, ow, row, _ALIGN_CENTRE, title, _TITLE_TEXT)
 
+    _cur.plot._x_axis.log_decades = _cur.x_log
+    _cur.plot._y_axis.log_decades = _cur.y_log
+    _cur.plot.show_y_tick_labels = not (_cur.y_flags & AXIS_FLAGS_NO_TICK_LABELS)
     _cur.plot.draw(p)
 
     # Plot draws the y tick labels itself, into the gutter reserved for them,
     # but has no x tick labels and no axis titles -- ImPlot's SetupAxes says
     # what the numbers *are*, so a plot without them is a picture, not data.
-    for v in _cur.plot._x_axis.ticks():
-        px = _cur.plot._x_axis.to_pixels(v)
-        p.text(px - 24.0, y + h + 2.0, 48.0, row, _ALIGN_CENTRE,
-               _tick_text(v, _cur.x_log), _TICK_TEXT)
+    if not (_cur.x_flags & AXIS_FLAGS_NO_TICK_LABELS):
+        for v in _cur.plot._x_axis.ticks():
+            px = _cur.plot._x_axis.to_pixels(v)
+            p.text(px - 24.0, y + h + 2.0, 48.0, row, _ALIGN_CENTRE,
+                   _tick_text(v, _cur.x_log), _TICK_TEXT)
     if _cur.x_label:
         p.text(x, oy + oh - row, w, row, _ALIGN_CENTRE, _cur.x_label, _AXIS_TEXT)
     if _cur.y_label:
@@ -344,7 +367,12 @@ def end_plot() -> None:
 # -- setup ----------------------------------------------------------------- #
 def setup_axes(x_label: str = "", y_label: str = "",
                x_flags: int = 0, y_flags: int = 0) -> None:
-    _cur.x_label, _cur.y_label = x_label or None, y_label or None
+    """Name the axes. Of ``ImPlotAxisFlags``, ``AXIS_FLAGS_NO_LABEL`` and
+    ``AXIS_FLAGS_NO_TICK_LABELS`` are honoured; the others are accepted and
+    ignored, as they only change interaction this shim does not have."""
+    _cur.x_label = None if x_flags & AXIS_FLAGS_NO_LABEL else (x_label or None)
+    _cur.y_label = None if y_flags & AXIS_FLAGS_NO_LABEL else (y_label or None)
+    _cur.x_flags, _cur.y_flags = int(x_flags), int(y_flags)
 
 
 def setup_axis_limits(axis: int, vmin: float, vmax: float,
@@ -400,8 +428,21 @@ def _rgba(colour) -> tuple:
     return tuple(int(v) for v in vals[:4])
 
 
-def set_next_line_style(colour=None, weight: float = 1.5) -> None:
-    _cur.next_line = (_rgba(colour), weight)
+def set_next_line_style(colour=None, weight: float = 1.5, dash=None) -> None:
+    """Style the next item's line. ``dash`` -- an ``(on, off)`` pixel pattern
+    -- is emtk's, not ImPlot's: ImPlot draws every line solid, which leaves a
+    port no way to draw a prior dashed beside its solid posterior."""
+    _cur.next_line = (_rgba(colour), weight, dash)
+
+
+def set_next_marker_style(marker: int = MARKER_CIRCLE, size: float = -1.0,
+                          fill=None, weight: float = -1.0, outline=None) -> None:
+    """``ImPlot::SetNextMarkerStyle``: the next scatter's marker shape, radius
+    in pixels (``-1`` keeps the default) and colour. Given to a line, the
+    markers are drawn at its samples as well, as ImPlot does. ``weight`` and a
+    distinct ``outline`` are accepted; markers are drawn filled in ``fill``
+    (else ``outline``, else the line colour)."""
+    _cur.next_marker = (int(marker), float(size), _rgba(fill), _rgba(outline))
 
 
 def set_next_fill_style(colour=None, alpha: float = 1.0) -> None:
@@ -418,7 +459,18 @@ def pop_colormap() -> None:
 
 def _take_line_style():
     style, _cur.next_line = _cur.next_line, None
-    return style or (None, 1.5)
+    return (style or (None, 1.5))[:2]
+
+
+def _take_dash():
+    """The dash of the pending line style, read before it is consumed."""
+    style = _cur.next_line
+    return style[2] if style is not None and len(style) > 2 else None
+
+
+def _take_marker_style():
+    style, _cur.next_marker = _cur.next_marker, None
+    return style
 
 
 def _is_series(v) -> bool:
@@ -460,8 +512,20 @@ def plot_line(label: str, xs, ys=None, count: int | None = None) -> None:
     xs, ys = _mapped(xs, ys)
     if not xs:
         return
+    dash = _take_dash()
     colour, weight = _take_line_style()
-    _cur.plot.line(_fmt_label(label), xs, ys, colour=colour, width=weight)
+    marker = _take_marker_style()
+    _cur.plot.line(_fmt_label(label), xs, ys, colour=colour, width=weight, dash=dash)
+    if marker is not None and marker[0] != MARKER_NONE:
+        _add_markers("", xs, ys, marker, colour or _cur.plot._lines[-1]["colour"])
+
+
+def _add_markers(label, xs, ys, marker, colour) -> None:
+    """Record a scatter series drawn with a ``set_next_marker_style`` style."""
+    shape, size, fill, outline = marker
+    _cur.plot.scatter(label, xs, ys, colour=fill or outline or colour,
+                      marker=_MARKER_NAMES.get(shape, "circle"),
+                      radius=size if size > 0 else 2.5)
 
 
 def plot_scatter(label: str, xs, ys=None, count: int | None = None) -> None:
@@ -472,6 +536,10 @@ def plot_scatter(label: str, xs, ys=None, count: int | None = None) -> None:
     if not xs:
         return
     colour, _ = _take_line_style()
+    marker = _take_marker_style()
+    if marker is not None and marker[0] != MARKER_NONE:
+        _add_markers(_fmt_label(label), xs, ys, marker, colour)
+        return
     _cur.plot.scatter(_fmt_label(label), xs, ys, colour=colour)
 
 

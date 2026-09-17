@@ -219,3 +219,119 @@ def test_a_histogram_bins_raw_samples():
         implot.end_plot()
 
     _frame(gui)
+
+
+def _lit_in(p, box, threshold=90):
+    """Count pixels brighter than *threshold* (red channel) inside *box*."""
+    x0, y0, x1, y1 = box
+    return sum(1 for y in range(y0, y1) for x in range(x0, x1)
+               if p.px[(y * p.width + x) * 4] > threshold)
+
+
+def test_a_dashed_line_leaves_gaps_a_solid_one_does_not():
+    """A prior drawn dashed beside its solid posterior is the only thing that
+    tells the two apart when they share a colour -- so the dash has to be
+    visible as gaps along the line, not averaged back into a solid stroke."""
+    def draw(dash):
+        def gui():
+            implot.begin_plot("t", (-1, 120), implot.FLAGS_NO_LEGEND)
+            implot.setup_axis_limits(implot.AXIS_Y1, 0.0, 2.0)
+            implot.set_next_line_style((250, 250, 250), 2.0, dash=dash)
+            implot.plot_line("a", [0.0, 10.0], [1.0, 1.0])
+            implot.end_plot()
+        return _frame(gui)
+
+    solid, dashed = draw(None), draw((6.0, 6.0))
+    row = [y for y in range(solid.height)
+           if _lit_in(solid, (60, y, 300, y + 1), 200) > 200]
+    assert row, "the solid line was not drawn"
+    y = row[0]
+    assert _lit_in(dashed, (60, y, 300, y + 1), 200) < 0.7 * _lit_in(solid, (60, y, 300, y + 1), 200)
+    assert _lit_in(dashed, (60, y, 300, y + 1), 200) > 0.3 * _lit_in(solid, (60, y, 300, y + 1), 200)
+
+
+def test_the_dash_pattern_continues_across_samples():
+    """On a densely sampled curve every segment is shorter than a dash; a
+    pattern that restarted at each vertex would draw the curve solid."""
+    xs = [i * 0.05 for i in range(201)]
+
+    def gui():
+        implot.begin_plot("t", (-1, 120), implot.FLAGS_NO_LEGEND)
+        implot.setup_axis_limits(implot.AXIS_Y1, 0.0, 2.0)
+        implot.set_next_line_style((250, 250, 250), 2.0, dash=(8.0, 8.0))
+        implot.plot_line("a", xs, [1.0] * len(xs))
+        implot.end_plot()
+
+    p = _frame(gui)
+    lit_rows = [y for y in range(p.height) if _lit_in(p, (60, y, 300, y + 1), 200) > 20]
+    assert lit_rows
+    y = lit_rows[0]
+    assert _lit_in(p, (60, y, 300, y + 1), 200) < 0.75 * 240
+
+
+def test_set_next_marker_style_sizes_and_colours_the_scatter():
+    """``SetNextMarkerStyle`` is consumed by the next item: its radius and fill
+    reach the scatter, and the item after it is back to the default."""
+    def gui():
+        implot.begin_plot("t", (-1, 120))
+        implot.set_next_marker_style(implot.MARKER_SQUARE, 4.0, (255, 0, 0))
+        implot.plot_scatter("a", [0, 1], [0.0, 1.0])
+        implot.plot_scatter("b", [0, 1], [1.0, 0.0])
+        scatters = implot._cur.plot._scatters
+        assert scatters[0]["radius"] == 4.0
+        assert scatters[0]["marker"] == "square"
+        assert scatters[0]["colour"][:3] == (255, 0, 0)
+        assert scatters[1]["radius"] == 2.5
+        implot.end_plot()
+
+    _frame(gui)
+
+
+def test_a_marker_style_on_a_line_marks_its_samples():
+    """ImPlot draws markers on a line's samples when one is set."""
+    def gui():
+        implot.begin_plot("t", (-1, 120))
+        implot.set_next_marker_style(implot.MARKER_CIRCLE, 3.0)
+        implot.plot_line("a", [0, 1, 2], [0.0, 1.0, 0.5])
+        assert len(implot._cur.plot._lines) == 1
+        assert len(implot._cur.plot._scatters) == 1
+        assert implot._cur.plot._scatters[0]["xs"] == [0, 1, 2]
+        implot.end_plot()
+
+    _frame(gui)
+
+
+def test_no_tick_labels_hides_the_numbers_not_the_plot():
+    """``AXIS_FLAGS_NO_TICK_LABELS`` on y leaves the gutter dark where the
+    numbers would be, while the curve is still drawn."""
+    def draw(flags):
+        def gui():
+            implot.begin_plot("t", (-1, 150), implot.FLAGS_NO_LEGEND)
+            implot.setup_axes("", "", 0, flags)
+            implot.setup_axis_limits(implot.AXIS_Y1, 0.0, 100.0)
+            implot.plot_line("a", [0, 1, 2], [10.0, 50.0, 90.0])
+            implot.end_plot()
+        return _frame(gui)
+
+    shown, hidden = draw(0), draw(implot.AXIS_FLAGS_NO_TICK_LABELS)
+    gutter = (8, 20, 44, 150)
+    assert _lit_in(shown, gutter) > 0
+    assert _lit_in(hidden, gutter) == 0
+
+
+def test_a_log_axis_ticks_on_whole_decades():
+    """A log tick at 10**0.5 would read '3.16228'. ImPlot's log ticker puts
+    them on decades; so does this, once the range spans more than one."""
+    seen = {}
+
+    def gui_and_capture():
+        implot.begin_plot("t", (-1, 120))
+        implot.setup_axis_scale(implot.AXIS_X1, implot.SCALE_LOG10)
+        implot.plot_line("a", [1.0, 10.0, 1000.0], [0.0, 1.0, 0.5])
+        plot = implot._cur.plot
+        implot.end_plot()
+        seen["ticks"] = plot._x_axis.ticks()
+
+    _frame(gui_and_capture)
+    assert seen["ticks"] and all(float(t).is_integer() for t in seen["ticks"])
+    assert [implot._tick_text(t, True) for t in seen["ticks"]][:2] == ["1", "10"]

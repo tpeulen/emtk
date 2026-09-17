@@ -340,6 +340,35 @@ Plot
 
     assert painter is not None
 
+``implot`` gives the same plot ImPlot's free-function shape
+(``begin_plot`` / ``plot_line`` / ``end_plot``). Beyond ImPlot it takes a
+dash pattern in ``set_next_line_style(colour, weight, dash=(on, off))`` -- a
+prior drawn dashed beside its solid posterior -- and it honours
+``set_next_marker_style`` and ``AXIS_FLAGS_NO_TICK_LABELS``; a log axis ticks
+on whole decades.
+
+File dialog
+-----------
+
+``file_dialog.FileDialog`` chooses files to open or a file to save, drawn by
+emtk inside any window: filters (the chosen one comes back as
+``filter_index``), multi-selection, a save-mode name field that appends the
+filter's extension, and paging. Dear ImGui has none, a browser host has no
+native one, and a test cannot press a native dialog's buttons.
+
+::
+
+    from emtk.file_dialog import FileDialog
+
+    dialog = FileDialog("Load", filters="Sessions (*.mat);;Raw (*.dat)")
+    painter = RecordingPainter()
+    with im.frame(painter, (0, 0, 400, 400)):
+        im.begin("Load")
+        result = dialog.draw()
+        im.end()
+
+    assert result is None
+
 Circle plot
 ------------
 

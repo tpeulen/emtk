@@ -82,6 +82,10 @@ class Plot:
         #: Run the y-axis downwards: its minimum at the top, as an image's
         #: row index does. Everything placed through the axis follows.
         self.y_inverted = False
+        #: Draw the y tick *numbers* (the gridlines stay). ImPlot's
+        #: ``ImPlotAxisFlags_NoTickLabels``: a density plot whose height is
+        #: only meaningful relative to its neighbours reads cleaner without them.
+        self.show_y_tick_labels = True
         self._x_axis = Axis(*(x_range or (None, None)))
         self._y_axis = Axis(*(y_range or (None, None)))
         self._lines: list[dict] = []
@@ -101,12 +105,20 @@ class Plot:
         ys: Sequence[float],
         colour: tuple | None = None,
         width: float = 1.5,
+        dash: tuple[float, float] | None = None,
     ) -> None:
-        """Add a polyline series. Extends both axes' auto-fit range."""
+        """Add a polyline series. Extends both axes' auto-fit range.
+
+        ``dash`` is an ``(on, off)`` pattern in pixels. ImPlot has no dashed
+        lines; a plot that has to tell a *prior* from a *posterior* of the same
+        colour, or an excluded stretch of a trace from the included one, needs
+        one, and a second colour would claim a second quantity.
+        """
         colour = colour or self._auto_colour()
         self._x_axis.fit(xs)
         self._y_axis.fit(ys)
-        self._lines.append({"label": label, "xs": xs, "ys": ys, "colour": colour, "width": width})
+        self._lines.append({"label": label, "xs": xs, "ys": ys, "colour": colour,
+                            "width": width, "dash": dash})
 
     def scatter(
         self,
@@ -182,6 +194,8 @@ class Plot:
         """The y ticks' numbers, in the margin left of the box. Callers that
         draw a plot flush to a window edge get nothing -- reserve the margin,
         as :mod:`emtk.implot` does."""
+        if not self.show_y_tick_labels:
+            return
         x = self.x
         for v in self._y_axis.ticks():
             py = self._y_axis.to_pixels(v)
@@ -201,6 +215,11 @@ class Plot:
                 px, py = self._x_axis.to_pixels(xs[0]), self._y_axis.to_pixels(ys[0])
                 draw_marker(p, "circle", px, py, width, colour)
             return
+        dash = series.get("dash")
+        # The dash phase carries across vertices, so a pattern reads as one
+        # pattern along the curve rather than restarting at every sample --
+        # which on a densely sampled curve would draw it solid.
+        phase = 0.0
         # A non-finite sample is a gap: the segments either side of it are not
         # drawn, rather than joining its neighbours across data that is not there.
         prev = None
@@ -210,7 +229,10 @@ class Plot:
                 continue
             cur = (self._x_axis.to_pixels(xs[i]), self._y_axis.to_pixels(ys[i]))
             if prev is not None:
-                _painter_line(p, prev[0], prev[1], cur[0], cur[1], width, colour)
+                if dash:
+                    phase = _dashed_segment(p, prev, cur, width, colour, dash, phase)
+                else:
+                    _painter_line(p, prev[0], prev[1], cur[0], cur[1], width, colour)
             prev = cur
 
     def _draw_scatter(self, p, series: dict) -> None:
@@ -250,6 +272,49 @@ class Plot:
     def __exit__(self, exc_type, exc, tb) -> None:
         if exc_type is None:
             self.draw(self._painter)
+
+
+def _dashed_segment(p, a, b, width, colour, dash, phase) -> float:
+    """Draw ``a -> b`` as dashes and return the pattern phase at ``b``.
+
+    Parameters
+    ----------
+    p : Painter
+        Target.
+    a, b : tuple of float
+        Segment end points, in pixels.
+    width : float
+        Line width.
+    colour : tuple
+        RGBA.
+    dash : tuple of float
+        ``(on, off)`` lengths in pixels.
+    phase : float
+        Distance already travelled into the pattern at ``a``.
+
+    Returns
+    -------
+    float
+        The phase at ``b``, to continue the pattern on the next segment.
+    """
+    on, off = max(float(dash[0]), 0.5), max(float(dash[1]), 0.0)
+    period = on + off
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length = math.hypot(dx, dy)
+    if length <= 0.0:
+        return phase
+    ux, uy = dx / length, dy / length
+    t = 0.0
+    while t < length:
+        pos = (phase + t) % period
+        if pos < on:
+            run = min(on - pos, length - t)
+            _painter_line(p, a[0] + ux * t, a[1] + uy * t,
+                          a[0] + ux * (t + run), a[1] + uy * (t + run), width, colour)
+        else:
+            run = min(period - pos, length - t)
+        t += run
+    return (phase + length) % period
 
 
 def begin_plot(
