@@ -140,3 +140,15 @@ def test_series_without_an_explicit_colour_cycle_through_the_palette():
     colours = {s["colour"] for s in plot._lines}
     assert len(colours) == 2
     plot.draw(p)
+
+
+def test_an_inverted_plot_puts_the_y_minimum_at_the_top():
+    """Image rows run down the screen; a plot showing one says so with y_inverted."""
+    plot = Plot(0.0, 0.0, 100.0, 50.0, x_range=(0.0, 1.0), y_range=(0.0, 10.0))
+    plot.draw(RecordingPainter())
+    assert plot._y_axis.to_pixels(0.0) == pytest.approx(50.0)
+
+    plot.y_inverted = True
+    plot.draw(RecordingPainter())
+    assert plot._y_axis.to_pixels(0.0) == pytest.approx(0.0)
+    assert plot._y_axis.to_pixels(10.0) == pytest.approx(50.0)

@@ -77,6 +77,9 @@ class Plot:
         #: inches wide has no room for one, and the key then covers the curves
         #: it is naming. Callers that small turn it off.
         self.show_legend = show_legend
+        #: Run the y-axis downwards: its minimum at the top, as an image's
+        #: row index does. Everything placed through the axis follows.
+        self.y_inverted = False
         self._x_axis = Axis(*(x_range or (None, None)))
         self._y_axis = Axis(*(y_range or (None, None)))
         self._lines: list[dict] = []
@@ -136,7 +139,10 @@ class Plot:
         """Render the frame, gridlines, items, guides and legend."""
         x, y, w, h = self.x, self.y, self.w, self.h
         self._x_axis.set_pixels(x, x + w)
-        self._y_axis.set_pixels(y + h, y)  # bottom -> Min, top -> Max: inverts Y.
+        if self.y_inverted:
+            self._y_axis.set_pixels(y, y + h)  # top -> Min, as screen rows run.
+        else:
+            self._y_axis.set_pixels(y + h, y)  # bottom -> Min, top -> Max: inverts Y.
 
         p.fill_rect(x, y, w, h, _FRAME_BG)
         # The tick *labels* sit in the margin to the left of the box, so they
