@@ -249,6 +249,30 @@ def plot(painter, box):
         p.line("cos", xs, [math.cos(v) * 0.6 for v in xs])
 
 
+def implot2d(painter, box):
+    """``implot``: shaded bands, a line with markers, bars and a legend."""
+    import math
+
+    from emtk import implot
+
+    xs = [i * 0.05 for i in range(101)]
+    im.begin("ImPlot")
+    if implot.begin_plot("Measurements", (-1, -1)):
+        implot.setup_axes("time / s", "signal")
+        implot.plot_bars("counts", [0.5 + i for i in range(5)], [0.2, 0.5, 0.35, 0.8, 0.45], 5, 0.6,
+                         spec=implot.PlotSpec(fill_alpha=0.5))
+        implot.plot_shaded("model", xs, [0.55 + 0.25 * math.sin(v) + 0.08 for v in xs],
+                           [0.55 + 0.25 * math.sin(v) - 0.08 for v in xs],
+                           spec=implot.PlotSpec(fill_alpha=0.3))
+        implot.plot_line("model", xs, [0.55 + 0.25 * math.sin(v) for v in xs])
+        implot.plot_error_bars("data", [0.5, 1.5, 2.5, 3.5, 4.5], [0.7, 0.78, 0.7, 0.35, 0.25],
+                               [0.06] * 5, 5)
+        implot.plot_scatter("data", [0.5, 1.5, 2.5, 3.5, 4.5], [0.7, 0.78, 0.7, 0.35, 0.25], 5,
+                            spec=implot.PlotSpec(marker=implot.MARKER_SQUARE))
+        implot.end_plot()
+    im.end()
+
+
 def plot3d(painter, box):
     """``implot3d``: a colormapped surface in ImPlot3D's rotated box."""
     import math
@@ -286,6 +310,7 @@ SHOTS = [
     ("tabs", "Tabs", tabs, (320, 170), (), None),
     ("table", "Table", table, (360, 210), (), None),
     ("plot", "Plot", plot, (360, 240), (), None),
+    ("implot", "ImPlot", implot2d, (420, 300), (), None),
     ("plot3d", "Plot3D", plot3d, (360, 340), (), None),
 ]
 

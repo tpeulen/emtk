@@ -150,6 +150,15 @@ ImPlot shape: ``emtk.implot``
 .. automodule:: emtk.implot
    :noindex:
 
+.. automodule:: emtk.implot_internal
+   :noindex:
+
+.. automodule:: emtk.implot_items
+   :noindex:
+
+.. automodule:: emtk.implot_demo
+   :noindex:
+
 ImPlot3D: ``emtk.implot3d``
 ------------------------------
 

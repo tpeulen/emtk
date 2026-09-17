@@ -371,12 +371,33 @@ Plot
 
     assert painter is not None
 
-``implot`` gives the same plot ImPlot's free-function shape
-(``begin_plot`` / ``plot_line`` / ``end_plot``). Beyond ImPlot it takes a
-dash pattern in ``set_next_line_style(colour, weight, dash=(on, off))`` -- a
-prior drawn dashed beside its solid posterior -- and it honours
-``set_next_marker_style`` and ``AXIS_FLAGS_NO_TICK_LABELS``; a log axis ticks
-on whole decades.
+ImPlot
+------
+
+``implot`` is ImPlot's 2-D library, ported whole and spelled the way a C++
+port reads (``begin_plot`` / ``setup_axes`` / ``plot_line`` / ``end_plot``,
+and every ``ImPlot*_`` constant): line, scatter, bubbles, polygons, stairs,
+shaded bands, bars and bar groups (stacked too), error bars, stems, infinite
+lines, pie charts, heatmaps, 1-D and 2-D histograms, digital signals, images,
+text, annotations, tags and legend-only items; six axes with linear, time,
+log10, symlog and custom scales, inversion, formats, custom ticks, links,
+constraints and equal aspect; subplots with linked axes and a shared legend;
+all sixteen built-in colormaps with the colormap scale, slider and button;
+and the interaction -- left drag pans, the wheel zooms about the cursor, right
+drag box-selects, a double click fits, an axis drags and zooms alone, a legend
+entry click hides its item, right click opens the plot, axis and legend menus
+-- plus ``drag_point``/``drag_line_x``/``drag_line_y``/``drag_rect``, which
+return ``(modified, value..., clicked, hovered, held)``.
+``implot_demo.show_demo_window()`` is the reference demo, section for section.
+Beyond ImPlot it takes a dash pattern in ``PlotSpec(dash=(on, off))`` (and the
+obsolete ``set_next_line_style(colour, weight, dash=...)``).
+
+.. image:: _screenshots/implot.png
+   :alt: An ImPlot plot with bars, a shaded band, a line, error bars and a legend
+
+::
+
+    from emtk import implot
 
 Plot3D
 ------

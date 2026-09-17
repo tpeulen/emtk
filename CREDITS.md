@@ -33,6 +33,22 @@ docstring. emtk itself is MIT (see `LICENSE`).
   chord its height. Its canvas is not — pyCirclize draws matplotlib patches on
   a `PolarAxes`, so every shape is projected here and emitted as triangles
   through the painter.
+- **[ImPlot](https://github.com/epezent/implot)** (Evan Pezent and Breno
+  Cunha Queiroz, MIT; read at commit 7eeb916) -- `implot.py` follows
+  `implot.h` and `implot.cpp`, `implot_internal.py` follows
+  `implot_internal.h`, `implot_items.py` follows `implot_items.cpp`,
+  `implot_demo.py` follows `implot_demo.cpp`. The axis (transforms, locks,
+  constraints, fitting), the linear/log/symlog/time locators and the time
+  format tables, `SetupFinish`'s padding arithmetic, `UpdateInput`'s pan, zoom
+  and box select, the legend, the context menus, subplots, the drag tools,
+  every item renderer and the marker tables, and all sixteen built-in
+  colormaps with their lookup tables are transcribed; the demo's custom
+  candlestick plotter is ported as the demo writes it. The enumerations keep
+  the reference's values, so a C++ port that passes `ImPlotAxisFlags_Invert`
+  lands on the same bit. What emtk does differently -- items drawn in
+  `end_plot` after the fit, axes that follow their data until touched -- is
+  said in `implot.py`'s docstring. `widgets/axis.py` and `widgets/plot.py`
+  took their first arithmetic from the same reference.
 - **[ImPlot3D](https://github.com/brenocq/implot3d)** (Breno Cunha Queiroz,
   MIT; read at commit 6cbefa9) -- `implot3d.py` follows `implot3d.h`,
   `implot3d_internal.h` and `implot3d.cpp`, `implot3d_items.py` follows

@@ -7,9 +7,9 @@ draws confidently wrong bars (the count lands in ``bar_size`` and the bar size
 in ``shift``). The tests below are mostly about the second case: it has no
 symptom other than the picture.
 
-The bars are recorded as a step polyline, so a bar centred on ``x`` with size
-``s`` is the pair of points ``x - s/2, x + s/2`` -- which is what makes the
-size and the shift readable back off the series.
+What a call plotted is read back off the plot's record of it (``Plot.records``):
+each bar's ``(position, value)`` point, its base, the bar size and whether it
+is horizontal.
 """
 from __future__ import annotations
 
@@ -36,16 +36,18 @@ def _bars(*args, **kw):
         emtk.begin("w")
         implot.begin_plot("##t", (-1, 160))
         implot.plot_bars(*args, **kw)
-        seen["series"] = implot._cur.plot._lines[0]
+        seen["series"] = implot._cur.plot.records[0]
         implot.end_plot()
         emtk.end()
     return seen["series"]
 
 
 def _first_bar(series):
-    """``(centre, size)`` of the first bar in the step polyline."""
-    xs, ys = series["xs"], series["ys"]
-    return (xs[0] + xs[1]) / 2.0, xs[1] - xs[0], ys[0]
+    """``(centre, size, value)`` of the first bar."""
+    (x, y) = series["pts1"][0]
+    if series["horizontal"]:
+        return y, series["size"], x
+    return x, series["size"], y
 
 
 def test_the_values_overload_takes_its_count_before_the_bar_size():
@@ -72,7 +74,7 @@ def test_the_xy_overload_reads_bar_size_where_the_reference_puts_it():
     assert size == pytest.approx(0.01), f"bar size read as {size}"
     assert centre == pytest.approx(0.0), "the bar size was applied as a shift"
     assert height == pytest.approx(1.0)
-    assert len(series["xs"]) == 2 * len(xs), "the count truncated the series"
+    assert len(series["pts1"]) == len(xs), "the count truncated the series"
 
 
 def test_the_xy_overload_has_flags_where_the_values_overload_has_shift():
@@ -83,11 +85,12 @@ def test_the_xy_overload_has_flags_where_the_values_overload_has_shift():
     positions = [0.1, 0.2, 0.3]
     series = _bars("##PRBars", values, positions, len(values), 0.05,
                    implot.BARS_HORIZONTAL)
-    xs, ys = series["xs"], series["ys"]
-    # horizontal bars: the pair shares an x (the value) and spans y (the band)
-    assert xs[0] == xs[1] == pytest.approx(1.0), "the bars were drawn upright"
-    assert (ys[0] + ys[1]) / 2.0 == pytest.approx(0.1), "flags read as a shift"
-    assert ys[1] - ys[0] == pytest.approx(0.05)
+    # horizontal bars: the value is the x extent, the position the y band
+    assert series["horizontal"], "the bars were drawn upright"
+    centre, size, value = _first_bar(series)
+    assert value == pytest.approx(1.0)
+    assert centre == pytest.approx(0.1), "flags read as a shift"
+    assert size == pytest.approx(0.05)
 
 
 def test_the_values_overload_still_takes_a_shift_after_the_bar_size():
@@ -104,7 +107,7 @@ def test_a_scalar_third_argument_never_reads_as_a_series():
     argument position, which is the whole bug."""
     values = [1.0, 2.0, 3.0, 4.0]
     truncated = _bars("a", values, 2)                 # count, not ys
-    assert len(truncated["xs"]) == 4                  # two bars, two points each
+    assert len(truncated["pts1"]) == 2
     paired = _bars("a", [10.0, 20.0], values[:2])     # ys, not a count
     assert _first_bar(paired)[0] == pytest.approx(10.0)
 
@@ -123,6 +126,7 @@ def test_the_values_overload_puts_horizontal_bars_along_x():
     index is the position on y. Kept in the vertical arrangement they are a
     transposed picture of the same numbers."""
     series = _bars("a", [5.0, 9.0], 2, 0.5, 0.0, implot.BARS_HORIZONTAL)
-    xs, ys = series["xs"], series["ys"]
-    assert xs[0] == xs[1] == pytest.approx(5.0)
-    assert (ys[0] + ys[1]) / 2.0 == pytest.approx(0.0)   # index zero
+    centre, _size, value = _first_bar(series)
+    assert series["horizontal"]
+    assert value == pytest.approx(5.0)
+    assert centre == pytest.approx(0.0)   # index zero

@@ -246,7 +246,7 @@ def test_a_grid_larger_than_its_data_draws_nothing():
     def gui():
         implot.begin_plot("##t", (360, 240))
         implot.plot_heatmap("##h", [1.0, 2.0], 4, 4, 0, 0, None)
-        assert implot._cur.plot._lines == []
+        assert implot._cur.plot.records == []
         implot.end_plot()
 
     _frame(gui)
