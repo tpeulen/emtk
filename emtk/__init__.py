@@ -163,7 +163,7 @@ NAMESPACED_MODULES = (
 #: emtk's own version. It is a library with its own tests, examples and docs
 #: (see ``README.md``), so it says what it is rather than borrowing the
 #: application's number.
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 #: The Dear ImGui release whose published API ``im`` is checked against. The
 #: list of names lives in ``tests/emtk/imgui_api.txt``, taken from this

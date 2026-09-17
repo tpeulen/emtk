@@ -139,6 +139,17 @@ host.show()
 app.exec()
 ```
 
+No Qt? `emtk.tk_host.TkHost` hosts the same adapter in a `tkinter` window
+(standard library) and draws it with `emtk.pil_painter.PilPainter` (needs
+Pillow) — the whole toolkit of a small application, and what a frozen app
+ships instead of a Qt binding:
+
+```python
+from emtk.tk_host import TkHost
+
+TkHost(App(gui), title="gui", size=(320, 140)).run()
+```
+
 ### Where to go next
 
 - `examples/hello_world.py` — Dear ImGui's own "Hello, world!", with the C++ it

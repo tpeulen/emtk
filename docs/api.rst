@@ -126,6 +126,18 @@ Qt host: ``emtk.qt_host``
 .. automodule:: emtk.qt_host
    :noindex:
 
+Pillow painter: ``emtk.pil_painter``
+--------------------------------------
+
+.. automodule:: emtk.pil_painter
+   :noindex:
+
+Tk host: ``emtk.tk_host``
+----------------------------
+
+.. automodule:: emtk.tk_host
+   :noindex:
+
 GPU atlases: ``emtk.gpu_atlas``
 ---------------------------------
 

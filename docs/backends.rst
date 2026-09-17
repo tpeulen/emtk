@@ -27,6 +27,34 @@ any particular control. It paints whatever it was given through
 and keys. One widget and not one per control, because each would
 re-derive the same four event translations.
 
+Pillow painter and Tk host
+----------------------------
+
+For an application that should ship **no GUI toolkit at all**.
+``emtk.pil_painter.PilPainter`` is the painter contract on a Pillow image:
+the same atlas glyphs, clip rule and pixel-centre triangle fill as
+:class:`~emtk.testing.PixelPainter`, with the inner loops in Pillow's C, so
+a 1080x720 application frame costs about five milliseconds instead of more
+than a second. Tests hold it to ``PixelPainter`` pixel for pixel where the
+arithmetic is the same.
+
+``emtk.tk_host.TkHost`` presents those frames in a ``tkinter`` window --
+standard library, so a frozen application carries Tcl/Tk (a few megabytes)
+instead of a Qt binding. Tk owns the window, the event loop and the
+clipboard and draws nothing itself. Keys and modifiers are translated into
+the Qt values :mod:`emtk.keys` uses, including Qt's macOS convention that
+Command reports as Control, so a control written against the Qt host moves
+across unchanged::
+
+    from emtk.tk_host import TkHost
+
+    host = TkHost(App(gui), title="tool", size=(800, 600))
+    host.run()
+
+One process hosts one toolkit: on macOS a Tk root created beside a
+``QApplication`` aborts the interpreter, so ``TkHost`` refuses with a
+``RuntimeError`` instead.
+
 GPU quad painter
 ------------------
 
