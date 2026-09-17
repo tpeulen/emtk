@@ -189,3 +189,16 @@ def test_a_slider_takes_its_range_from_the_model():
 def test_find_section_finds_a_panel_by_title():
     assert find_section(SPEC, "Run")["n_col"] == 2
     assert find_section(SPEC, "missing") is None
+
+
+def test_fields_of_a_panel_line_up_in_columns():
+    """Labels of different lengths must not push their fields to different x."""
+    spec = {"sections": [{"type": "panel", "n_col": 1, "sections": [
+        {"type": "value", "attr": "restarts", "label": "Min Center", "kind": "int"},
+        {"type": "value", "attr": "series", "label": "Dwell", "kind": "int"},
+    ]}]}
+    driver = Driver(spec, Model())
+    driver.frame()
+    first, second = driver.state.rects["restarts"], driver.state.rects["series"]
+    assert abs(first[0] - second[0]) < 0.5
+    assert second[1] > first[1]

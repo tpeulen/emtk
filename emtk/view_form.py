@@ -279,15 +279,15 @@ def _commit(model: Any, section: dict, value: Any, state: FormState) -> None:
     state.used(section_name(section) or str(call))
 
 
-def _label(text: str) -> None:
-    """A label centred on a field row, then the cursor stays on the line."""
+def _label(text: str, width: float = 0.0) -> None:
+    """A label centred on a field row, reserving at least *width*."""
     x, y = _w.get_cursor_screen_pos()
     tw, th = _w.calc_text_size(text)[:2]
     fh = _core.get_frame_height()
-    _core.get_window_draw_list().add_text((x, y + max(0.0, (fh - th) / 2.0)),
-                                          _LABEL_COLOUR, text)
-    _w.dummy(tw, fh)
-    _w.same_line()
+    if text:
+        _core.get_window_draw_list().add_text((x, y + max(0.0, (fh - th) / 2.0)),
+                                              _LABEL_COLOUR, text)
+    _w.dummy(max(width, tw), fh)
 
 
 def _remember(state: FormState, name: str) -> None:
@@ -438,14 +438,9 @@ def _fixed_width(section: dict) -> float:
     return 0.0
 
 
-def _draw_leaf(section: dict, model: Any, state: FormState, width: float) -> None:
+def _draw_control(section: dict, model: Any, state: FormState, width: float) -> None:
+    """The control of a leaf section, without its label."""
     kind = str(section.get("type", "")).lower()
-    name = section_name(section)
-    label = _label_of(section)
-    enabled = _enabled(model, name) if name else True
-    _w.begin_disabled(not enabled)
-    if label:
-        _label(label)
     if kind == "value":
         _draw_value(section, model, state, width)
     elif kind == "choice":
@@ -465,7 +460,46 @@ def _draw_leaf(section: dict, model: Any, state: FormState, width: float) -> Non
         if source and callable(getattr(model, source, None)):
             text = getattr(model, source)()
         _w.text_wrapped(str(text))
-    _w.end_disabled()
+
+
+def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
+    """Lay leaf sections out ``n_col`` to a line, **aligned in columns**.
+
+    Every label of a column is as wide as the column's widest, and every control
+    starts at the same x -- the label/field grid a form reads down, rather than
+    fields that start wherever their own label happens to end.
+    """
+    n_col = max(1, int(n_col))
+    rows = [leaves[i:i + n_col] for i in range(0, len(leaves), n_col)]
+    spacing = 8.0
+    label_w = [0.0] * n_col
+    fixed_w = [0.0] * n_col
+    weight = [0.0] * n_col
+    for row in rows:
+        for c, section in enumerate(row):
+            text = _label_of(section)
+            if text:
+                label_w[c] = max(label_w[c], _w.calc_text_size(text)[0] + spacing)
+            fixed_w[c] = max(fixed_w[c], _fixed_width(section))
+            weight[c] = max(weight[c], _weight(section))
+    avail = _w.get_content_region_avail()[0]
+    free = max(avail - sum(label_w) - sum(fixed_w) - spacing * (n_col - 1), 30.0)
+    unit = free / sum(weight) if sum(weight) > 0 else 0.0
+    control_w = [fixed_w[c] + unit * weight[c] for c in range(n_col)]
+    column_x = [0.0] * n_col
+    for c in range(1, n_col):
+        column_x[c] = column_x[c - 1] + label_w[c - 1] + control_w[c - 1] + spacing
+    for row in rows:
+        for c, section in enumerate(row):
+            name = section_name(section)
+            _w.begin_disabled(not (_enabled(model, name) if name else True))
+            if c:
+                _w.same_line(column_x[c])
+            if label_w[c] > 0:
+                _label(_label_of(section), label_w[c])
+                _w.same_line(column_x[c] + label_w[c])
+            _draw_control(section, model, state, max(control_w[c], 30.0))
+            _w.end_disabled()
 
 
 def _is_table(section: dict) -> bool:
@@ -506,24 +540,12 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
     titles : bool
         Draw a nested panel's title as a caption line.
     """
-    row: list[dict] = []
+    leaves: list = []
 
     def flush() -> None:
-        if not row:
-            return
-        avail = _w.get_content_region_avail()[0]
-        spacing = 8.0
-        labels = [_label_of(s) for s in row]
-        label_room = sum(_w.calc_text_size(t)[0] + spacing for t in labels if t)
-        fixed = sum(_fixed_width(s) for s in row)
-        weights = [_weight(s) for s in row]
-        free = max(avail - label_room - fixed - spacing * (len(row) - 1), 30.0)
-        unit = free / sum(weights) if sum(weights) > 0 else 0.0
-        for i, section in enumerate(row):
-            if i:
-                _w.same_line()
-            _draw_leaf(section, model, state, max(unit * weights[i], 30.0))
-        row.clear()
+        if leaves:
+            _draw_grid(list(leaves), model, state, n_col)
+            leaves.clear()
 
     for section in sections or ():
         if not isinstance(section, dict) or _hidden(section, model):
@@ -540,9 +562,7 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             draw_sections(section.get("sections") or [], model, state,
                           int(section.get("n_col") or 1), titles)
             continue
-        row.append(section)
-        if len(row) >= max(1, n_col):
-            flush()
+        leaves.append(section)
     flush()
 
 
