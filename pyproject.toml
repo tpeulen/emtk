@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "emtk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Dear ImGui for Python: an immediate-mode GUI toolkit that draws through a painter, with nothing to compile."
 readme = "README.md"
 requires-python = ">=3.10"
