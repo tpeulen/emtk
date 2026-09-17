@@ -553,6 +553,114 @@ class QuadPainter:
         self._tris.append(block)
         self._note(_TRIS)
 
+    def gradient_triangle(self, p0, p1, p2, c0: Colour, c1: Colour,
+                          c2: Colour) -> None:
+        """Fill a triangle whose colour is interpolated from its corners.
+
+        The vertex format already carries a colour per vertex, so this is
+        :meth:`fill_triangle` with three colours instead of one -- the GPU
+        interpolates them, which is exactly Gouraud shading.
+        """
+        u, v = self._solid_uv
+        scale = self._scale
+        cx0, cy0, cx1, cy1 = self._scaled_clip
+        block = np.empty((3, FLOATS_PER_VERTEX), dtype=np.float32)
+        for row, ((x, y), colour) in enumerate(((p0, c0), (p1, c1), (p2, c2))):
+            block[row, 0] = x * scale
+            block[row, 1] = y * scale
+            block[row, 4:8] = _rgba(colour)
+        block[:, 2] = u
+        block[:, 3] = v
+        block[:, 8:12] = (cx0, cy0, cx1, cy1)
+        self._tris.append(block)
+        self._note(_TRIS)
+
+    def image_triangle(self, p0, p1, p2, handle, uv0=(0.0, 0.0),
+                       uv1=(1.0, 0.0), uv2=(1.0, 1.0),
+                       tint: Colour = (255, 255, 255, 255)) -> None:
+        """Map part of an image onto a triangle.
+
+        ``handle`` is resolved through :attr:`image_uv_resolver`, as for
+        :meth:`image`; the three ``uv`` (0..1 of the resolved region) become
+        the three vertices' texel coordinates. Declined or unresolved, the
+        triangle is filled with *tint*.
+        """
+        resolve = self.image_uv_resolver
+        region = resolve(handle) if callable(resolve) else None
+        if region is None:
+            self.fill_triangle(p0, p1, p2, tint)
+            return
+        (ru0, rv0), (ru1, rv1) = region
+        scale = self._scale
+        cx0, cy0, cx1, cy1 = self._scaled_clip
+        block = np.empty((3, FLOATS_PER_VERTEX), dtype=np.float32)
+        for row, ((x, y), (fu, fv)) in enumerate(((p0, uv0), (p1, uv1), (p2, uv2))):
+            block[row, 0] = x * scale
+            block[row, 1] = y * scale
+            block[row, 2] = ru0 + fu * (ru1 - ru0)
+            block[row, 3] = rv0 + fv * (rv1 - rv0)
+        block[:, 4:8] = _rgba(tint)
+        block[:, 8:12] = (cx0, cy0, cx1, cy1)
+        self._tris.append(block)
+        self._note(_TRIS)
+
+    def text_rotated(self, x: float, y: float, w: float, h: float, align: int,
+                     string: str, colour: Colour, degrees: float = 0.0) -> None:
+        """Draw *string* in the box, turned by *degrees* about its centre.
+
+        The glyph quads :meth:`text` would emit, with their four corners
+        rotated -- so they can no longer ride the axis-aligned rect record and
+        go out as two triangles each, sampling the same atlas cells.
+        """
+        import math
+
+        if not string:
+            return
+        shrink = self._shrink
+        quad_w, quad_h = self._glyph_w, self._glyph_h
+        if quad_w <= 0.0 or quad_h <= 0.0:
+            return
+        advance = self._advance
+        span = advance * len(string)
+        pen_x = (x + w - span if align & ALIGN_RIGHT
+                 else x + (w - span) * 0.5 if align & ALIGN_HCENTER else x)
+        baseline = (y + h * 0.5 + (self._ascent - self._half_cell_h) * shrink
+                    if align & ALIGN_VCENTER else y + self._ascent * shrink)
+        top = baseline - (self._ascent + self._pad) * shrink
+        left = pen_x - self._pad * shrink
+        ccx, ccy = x + w * 0.5, y + h * 0.5
+        rad = math.radians(float(degrees))
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+        scale = self._scale
+        r, g, b, a = _rgba(colour)
+        cx0, cy0, cx1, cy1 = self._scaled_clip
+        corners = []
+        uvs = []
+        for index, char in enumerate(string):
+            cell = self._atlas.cell_of(char)
+            if cell is None:
+                continue
+            u, v, cw, ch = cell
+            gx0 = left + index * advance
+            quad = ((gx0, top, u, v), (gx0 + quad_w, top, u + cw, v),
+                    (gx0 + quad_w, top + quad_h, u + cw, v + ch),
+                    (gx0, top + quad_h, u, v + ch))
+            for k in (0, 1, 2, 0, 2, 3):
+                qx, qy, qu, qv = quad[k]
+                dx, dy = qx - ccx, qy - ccy
+                corners.append(((ccx + dx * cos_a - dy * sin_a) * scale,
+                                (ccy + dx * sin_a + dy * cos_a) * scale))
+                uvs.append((qu, qv))
+        if not corners:
+            return
+        block = np.empty((len(corners), FLOATS_PER_VERTEX), dtype=np.float32)
+        block[:, 0:2] = corners
+        block[:, 2:4] = uvs
+        block[:, 4:8] = (r, g, b, a)
+        block[:, 8:12] = (cx0, cy0, cx1, cy1)
+        self._tris.append(block)
+        self._note(_TRIS, len(corners) // 3)
+
     def polyline(self, points, width: float, colour: Colour, closed: bool = False) -> None:
         """Stroke a path in one numpy pass: two triangles per segment, no Python loop.
 

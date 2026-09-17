@@ -480,7 +480,7 @@ def test_the_backend_flags_describe_the_painter_in_hand():
         def set_font(self, font):
             pass
 
-        def text_rotated(self, x, y, string, radians, colour):
+        def text_rotated(self, x, y, w, h, align, string, colour, degrees=0.0):
             pass
 
     painter = Capable()

@@ -110,6 +110,9 @@ class IO:
     mouse_clicked_pos: list[tuple[float, float]] = field(default_factory=lambda: [(-1.0, -1.0)] * 3)
     #: ``io.MousePos`` last frame -- what makes ``MouseDelta`` a delta.
     mouse_pos_prev: tuple[float, float] = (-1.0, -1.0)
+    #: Where the pointer was when this frame began; becomes
+    #: :attr:`mouse_pos_prev` at the next :meth:`begin_frame`.
+    mouse_pos_frame: tuple[float, float] = (-1.0, -1.0)
     #: ``io.FontGlobalScale``: the atlas is one bitmap face, so this stays 1.
     font_global_scale: float = 1.0
     mouse_wheel: float = 0.0
@@ -141,7 +144,14 @@ class IO:
     want_capture_keyboard: bool = False
 
     def begin_frame(self, now: Optional[float] = None) -> None:
-        self.mouse_pos_prev = tuple(self.mouse_pos)
+        # ``NewFrame``: ``MouseDelta = MousePos - MousePosPrev``, then
+        # ``MousePosPrev = MousePos``. Copying the *current* position into
+        # ``mouse_pos_prev`` here -- what this did -- made the delta zero in
+        # every frame whose pointer was moved by the host between frames,
+        # which is every frame: a drag that pans or rotates by the delta
+        # never moved. The previous frame's position is kept instead.
+        self.mouse_pos_prev = tuple(self.mouse_pos_frame)
+        self.mouse_pos_frame = tuple(self.mouse_pos)
         if now is not None:
             self.delta_time = max(1e-6, float(now) - self.now) if self.now else 1.0 / 60.0
             self.now = float(now)
@@ -155,7 +165,15 @@ class IO:
 
     @property
     def mouse_delta(self) -> tuple[float, float]:
-        """``io.MouseDelta``: this frame's pointer move, since last frame."""
+        """``io.MouseDelta``: this frame's pointer move, since last frame.
+
+        Zero when either position is unknown (``(-1, -1)``), as ImGui gives
+        zero for an invalid ``MousePos`` -- otherwise the first frame after
+        the pointer enters would jump by its whole coordinate.
+        """
+        if (tuple(self.mouse_pos) == (-1.0, -1.0)
+                or tuple(self.mouse_pos_prev) == (-1.0, -1.0)):
+            return (0.0, 0.0)
         return (self.mouse_pos[0] - self.mouse_pos_prev[0],
                 self.mouse_pos[1] - self.mouse_pos_prev[1])
 

@@ -68,6 +68,10 @@ __all__ = [
     "Colour",
     "Painter",
     "line",
+    "gradient_triangle",
+    "image_triangle",
+    "text_rotated",
+    "subdivide_gradient",
 ]
 
 #: A colour: ``(r, g, b)`` or ``(r, g, b, a)``, 0-255.
@@ -115,7 +119,8 @@ REQUIRED_OPERATIONS: tuple[str, ...] = (
 #: `io.backend_flags` from the answer, and falls back visibly where one is
 #: missing -- an image becomes its frame, a font push is ignored.
 OPTIONAL_OPERATIONS: tuple[str, ...] = ("image", "set_font", "set_font_scale",
-                                        "text_rotated")
+                                        "text_rotated", "gradient_triangle",
+                                        "image_triangle")
 
 #: Faster spellings of what the helpers below already do with the required
 #: operations. A host that has a vectorised path offers one of these and the
@@ -267,6 +272,42 @@ class Painter(Protocol):
         Declared because `painter_capabilities` asks every painter whether it
         has this, and an operation the run time probes for but the protocol
         never names is one a host author cannot discover.
+        """
+
+    def gradient_triangle(
+        self,
+        p0: tuple[float, float],
+        p1: tuple[float, float],
+        p2: tuple[float, float],
+        c0: Colour,
+        c1: Colour,
+        c2: Colour,
+    ) -> None:
+        """Fill a triangle whose colour is interpolated from its corners.
+
+        **Optional** -- see :func:`gradient_triangle`. Gouraud shading: the
+        colour at a point is the barycentric mix of ``c0``, ``c1`` and ``c2``,
+        alpha included. The caller is ImPlot3D's surface and mesh, where a
+        colormap is sampled per *vertex* and a flat triangle would show every
+        facet of the grid.
+        """
+
+    def image_triangle(
+        self,
+        p0: tuple[float, float],
+        p1: tuple[float, float],
+        p2: tuple[float, float],
+        handle,
+        uv0=(0.0, 0.0),
+        uv1=(1.0, 0.0),
+        uv2=(1.0, 1.0),
+        tint: Colour = (255, 255, 255, 255),
+    ) -> None:
+        """Map the ``uv`` triangle of *handle* onto a screen triangle.
+
+        **Optional** -- see :func:`image_triangle`. The affine map an
+        axis-aligned :meth:`image` cannot express: a picture lying on a face
+        of a rotated 3-D box.
         """
 
     def line_height(self) -> float:
@@ -433,6 +474,106 @@ def image(
         op(x, y, w, h, handle, uv0, uv1, tint)
         return
     p.fill_rect(x, y, w, h, tint)
+
+
+def text_rotated(p: "Painter", x: float, y: float, w: float, h: float,
+                 align: int, string: str, colour: Colour,
+                 degrees: float = 0.0) -> bool:
+    """Draw *string* in the box turned by *degrees* about the box centre.
+
+    Positive degrees turn clockwise on screen, as ``QPainter::rotate`` does
+    in a y-down frame. A painter without the operation gets the string
+    unrotated in the same box -- still legible, still where it was asked for
+    -- and the return value says which happened.
+    """
+    op = getattr(p, "text_rotated", None)
+    if callable(op) and abs(float(degrees)) > 1e-9:
+        op(x, y, w, h, align, string, colour, float(degrees))
+        return True
+    p.text(x, y, w, h, align, string, colour)
+    return abs(float(degrees)) <= 1e-9
+
+
+def _spread(c0, c1, c2) -> int:
+    a, b, c = _rgba255(c0), _rgba255(c1), _rgba255(c2)
+    return max(max(a[k], b[k], c[k]) - min(a[k], b[k], c[k]) for k in range(4))
+
+
+def _rgba255(colour) -> tuple[int, int, int, int]:
+    return (int(colour[0]), int(colour[1]), int(colour[2]),
+            int(colour[3]) if len(colour) > 3 else 255)
+
+
+def _mix(a, b):
+    return tuple((a[k] + b[k]) * 0.5 for k in range(4))
+
+
+def subdivide_gradient(fill, p0, p1, p2, c0, c1, c2,
+                       tolerance: int = 6, max_depth: int = 5) -> None:
+    """Approximate a Gouraud triangle with flat ones, calling ``fill(a, b, c, colour)``.
+
+    Split at the edge midpoints until the corners of a piece differ by no more
+    than *tolerance* levels on any channel, or its longest edge is under two
+    pixels, or *max_depth* halvings have been made; each piece is filled with
+    the mean of its corners. This is what a painter with no per-vertex colour
+    draws, and what the Qt painter draws natively: ``QPainter`` has no vertex
+    colours, and at the size a surface cell is on screen the steps are below
+    what the eye resolves.
+    """
+    c0, c1, c2 = _rgba255(c0), _rgba255(c1), _rgba255(c2)
+    stack = [(p0, p1, p2, c0, c1, c2, 0)]
+    while stack:
+        a, b, c, ca, cb, cc, depth = stack.pop()
+        longest = max((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2,
+                      (b[0] - c[0]) ** 2 + (b[1] - c[1]) ** 2,
+                      (c[0] - a[0]) ** 2 + (c[1] - a[1]) ** 2)
+        if (depth >= max_depth or longest < 4.0
+                or _spread(ca, cb, cc) <= tolerance):
+            mean = tuple(int(round((ca[k] + cb[k] + cc[k]) / 3.0)) for k in range(4))
+            fill(a, b, c, mean)
+            continue
+        ab = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
+        bc = ((b[0] + c[0]) * 0.5, (b[1] + c[1]) * 0.5)
+        ca_ = ((c[0] + a[0]) * 0.5, (c[1] + a[1]) * 0.5)
+        cab, cbc, cca = _mix(ca, cb), _mix(cb, cc), _mix(cc, ca)
+        d = depth + 1
+        stack.append((a, ab, ca_, ca, cab, cca, d))
+        stack.append((ab, b, bc, cab, cb, cbc, d))
+        stack.append((ca_, bc, c, cca, cbc, cc, d))
+        stack.append((ab, bc, ca_, cab, cbc, cca, d))
+
+
+def gradient_triangle(p: "Painter", p0, p1, p2, c0: Colour, c1: Colour,
+                      c2: Colour) -> None:
+    """Fill a triangle with per-corner colours on any painter.
+
+    The painter's own ``gradient_triangle`` when it has one; three equal
+    colours are one :meth:`Painter.fill_triangle`; anything else is
+    :func:`subdivide_gradient` over ``fill_triangle``.
+    """
+    op = getattr(p, "gradient_triangle", None)
+    if callable(op):
+        op(p0, p1, p2, c0, c1, c2)
+        return
+    if _rgba255(c0) == _rgba255(c1) == _rgba255(c2):
+        p.fill_triangle(p0, p1, p2, c0)
+        return
+    subdivide_gradient(p.fill_triangle, p0, p1, p2, c0, c1, c2)
+
+
+def image_triangle(p: "Painter", p0, p1, p2, handle, uv0=(0.0, 0.0),
+                   uv1=(1.0, 0.0), uv2=(1.0, 1.0),
+                   tint: Colour = (255, 255, 255, 255)) -> None:
+    """Map part of an image onto a triangle on any painter.
+
+    A painter without ``image_triangle`` fills the triangle with *tint* --
+    the same "a picture occupies this area" fallback :func:`image` gives.
+    """
+    op = getattr(p, "image_triangle", None)
+    if callable(op):
+        op(p0, p1, p2, handle, uv0, uv1, uv2, tint)
+        return
+    p.fill_triangle(p0, p1, p2, tint)
 
 
 def set_font(p: "Painter", font) -> bool:

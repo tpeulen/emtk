@@ -39,6 +39,10 @@ class RecordingPainter:
         self.texts: list[tuple] = []
         self.clips: list[tuple] = []
         self.triangles: list[tuple] = []
+        #: ``gradient_triangle`` and ``image_triangle``, the optional
+        #: operations ImPlot3D's surfaces, meshes and images draw with.
+        self.gradient_triangles: list[tuple] = []
+        self.image_triangles: list[tuple] = []
         #: Every operation, in call order, as ``(kind, *args)`` -- the
         #: per-kind lists above lose draw order *across* kinds (a fill and a
         #: triangle interleaved land in two separate lists with no shared
@@ -73,6 +77,18 @@ class RecordingPainter:
         """Record a filled triangle."""
         self.triangles.append((p0, p1, p2, colour))
         self.calls.append(("fill_triangle", p0, p1, p2, colour))
+
+    def gradient_triangle(self, p0, p1, p2, c0, c1, c2) -> None:
+        """Record a triangle with per-corner colours."""
+        self.gradient_triangles.append((p0, p1, p2, c0, c1, c2))
+        self.calls.append(("gradient_triangle", p0, p1, p2, c0, c1, c2))
+
+    def image_triangle(self, p0, p1, p2, handle, uv0=(0.0, 0.0),
+                       uv1=(1.0, 0.0), uv2=(1.0, 1.0),
+                       tint=(255, 255, 255, 255)) -> None:
+        """Record a textured triangle."""
+        self.image_triangles.append((p0, p1, p2, handle, uv0, uv1, uv2, tint))
+        self.calls.append(("image_triangle", p0, p1, p2, handle, uv0, uv1, uv2, tint))
 
     def push_clip(self, x, y, w, h) -> None:
         """Record a clip rectangle."""
@@ -320,6 +336,14 @@ class PixelPainter:
         x0, x1 = max(int(x), cx), min(int(x + w), cx + cw)
         if x1 <= x0:
             return
+        # The protocol's stops are colours, evenly spaced; ``(t, colour)``
+        # pairs are accepted as well, which is what this painter took first.
+        # Unpacking a bare RGBA tuple as a pair raised, so every
+        # ``add_rect_filled_multi_color`` through this painter did.
+        if stops and not (len(stops[0]) == 2
+                          and isinstance(stops[0][1], (tuple, list))):
+            n = max(len(stops) - 1, 1)
+            stops = [(k / n, c) for k, c in enumerate(stops)]
         pts = [(float(t), self._rgba(c)) for t, c in stops]
         span = max(1.0, float(w))
         for xx in range(x0, x1):
@@ -360,6 +384,97 @@ class PixelPainter:
                     self.px[o + 1] = int(g * sa + self.px[o + 1] * (1 - sa))
                     self.px[o + 2] = int(b * sa + self.px[o + 2] * (1 - sa))
                     self.px[o + 3] = max(self.px[o + 3], a)
+
+    def gradient_triangle(self, p0, p1, p2, c0, c1, c2) -> None:
+        """Fill a triangle, the colour interpolated from its corners.
+
+        The same pixel-centre coverage rule as :meth:`fill_triangle`, so a
+        mesh drawn with gradients and one drawn flat cover the same pixels;
+        only the colour differs, and it is the barycentric mix, alpha
+        included.
+        """
+        (x0, y0), (x1, y1), (x2, y2) = p0, p1, p2
+        cx, cy, cw, ch = self._clip()
+        minx = max(int(min(x0, x1, x2)), cx)
+        maxx = min(int(max(x0, x1, x2)) + 1, cx + cw)
+        miny = max(int(min(y0, y1, y2)), cy)
+        maxy = min(int(max(y0, y1, y2)) + 1, cy + ch)
+        den = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if den == 0:
+            return
+        a, b, c = self._rgba(c0), self._rgba(c1), self._rgba(c2)
+        stride = self.width * 4
+        px = self.px
+        for yy in range(miny, maxy):
+            fy = yy + 0.5
+            for xx in range(minx, maxx):
+                fx = xx + 0.5
+                w0 = ((y1 - y2) * (fx - x2) + (x2 - x1) * (fy - y2)) / den
+                w1 = ((y2 - y0) * (fx - x2) + (x0 - x2) * (fy - y2)) / den
+                w2 = 1.0 - w0 - w1
+                if w0 < 0 or w1 < 0 or w2 < 0:
+                    continue
+                r = a[0] * w0 + b[0] * w1 + c[0] * w2
+                g = a[1] * w0 + b[1] * w1 + c[1] * w2
+                bl = a[2] * w0 + b[2] * w1 + c[2] * w2
+                al = a[3] * w0 + b[3] * w1 + c[3] * w2
+                o = yy * stride + xx * 4
+                sa = al / 255.0
+                px[o] = int(r * sa + px[o] * (1 - sa))
+                px[o + 1] = int(g * sa + px[o + 1] * (1 - sa))
+                px[o + 2] = int(bl * sa + px[o + 2] * (1 - sa))
+                px[o + 3] = max(px[o + 3], int(al))
+
+    def image_triangle(self, p0, p1, p2, handle, uv0=(0.0, 0.0),
+                       uv1=(1.0, 0.0), uv2=(1.0, 1.0),
+                       tint=(255, 255, 255, 255)) -> None:
+        """Map the ``uv`` triangle of a :class:`~emtk.texture.Texture` onto a
+        screen triangle, nearest texel, tinted.
+
+        Any other handle is opaque and fills the triangle with *tint*, the
+        fallback every painter gives an image it cannot read.
+        """
+        from .texture import Texture
+        if not isinstance(handle, Texture):
+            self.fill_triangle(p0, p1, p2, tint)
+            return
+        (x0, y0), (x1, y1), (x2, y2) = p0, p1, p2
+        cx, cy, cw, ch = self._clip()
+        minx = max(int(min(x0, x1, x2)), cx)
+        maxx = min(int(max(x0, x1, x2)) + 1, cx + cw)
+        miny = max(int(min(y0, y1, y2)), cy)
+        maxy = min(int(max(y0, y1, y2)) + 1, cy + ch)
+        den = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2)
+        if den == 0:
+            return
+        tr, tg, tb, ta = self._rgba(tint)
+        tw, th, tpx = handle.width, handle.height, handle.px
+        stride = self.width * 4
+        px = self.px
+        for yy in range(miny, maxy):
+            fy = yy + 0.5
+            for xx in range(minx, maxx):
+                fx = xx + 0.5
+                w0 = ((y1 - y2) * (fx - x2) + (x2 - x1) * (fy - y2)) / den
+                w1 = ((y2 - y0) * (fx - x2) + (x0 - x2) * (fy - y2)) / den
+                w2 = 1.0 - w0 - w1
+                if w0 < 0 or w1 < 0 or w2 < 0:
+                    continue
+                u = uv0[0] * w0 + uv1[0] * w1 + uv2[0] * w2
+                v = uv0[1] * w0 + uv1[1] * w1 + uv2[1] * w2
+                sx = min(max(int(u * tw), 0), tw - 1)
+                sy = min(max(int(v * th), 0), th - 1)
+                si = (sy * tw + sx) * 4
+                sr, sg, sb, sa_ = tpx[si], tpx[si + 1], tpx[si + 2], tpx[si + 3]
+                al = (sa_ * ta) // 255
+                if not al:
+                    continue
+                o = yy * stride + xx * 4
+                s = al / 255.0
+                px[o] = int((sr * tr) // 255 * s + px[o] * (1 - s))
+                px[o + 1] = int((sg * tg) // 255 * s + px[o + 1] * (1 - s))
+                px[o + 2] = int((sb * tb) // 255 * s + px[o + 2] * (1 - s))
+                px[o + 3] = max(px[o + 3], al)
 
     def text(self, x, y, w, h, align, string, colour, bold=False) -> None:
         """Blit *string* from the baked atlas, one glyph cell per character.
@@ -533,9 +648,61 @@ class PixelPainter:
     def set_font(self, _spec) -> None:
         """Font pushes are ignored: the atlas is the one size there is."""
 
-    def text_rotated(self, x, y, string, colour, angle, pivot) -> None:
-        self.text(x, y, self.text_width(string), self.line_height(), 0,
-                  string, colour)
+    def text_rotated(self, x, y, w, h, align, string, colour,
+                     degrees: float = 0.0) -> None:
+        """Draw *string* in the box, turned by *degrees* about its centre.
+
+        The protocol's signature (``Painter.text_rotated``), which this
+        painter did not have: it took ``(x, y, string, colour, angle,
+        pivot)``, ignored the angle, and so answered "yes" to
+        ``painter_capabilities`` for an operation it could not be called
+        with. The text is laid out unrotated into a scratch buffer by
+        :meth:`text`, and every destination pixel samples it through the
+        inverse rotation -- nearest texel, which at label sizes is what a
+        rotated bitmap glyph looks like anyway.
+        """
+        import math
+        if not string:
+            return
+        bw, bh = max(int(math.ceil(w)) + 2, 1), max(int(math.ceil(h)) + 2, 1)
+        scratch = PixelPainter.__new__(PixelPainter)
+        scratch.width, scratch.height = bw, bh
+        scratch.px = bytearray(bw * bh * 4)
+        scratch.scale = self.scale
+        scratch._clips = [(0, 0, bw, bh)]
+        scratch._atlas = self._atlas
+        scratch._font_scale = self._font_scale
+        scratch.text(1.0, 1.0, w, h, align, string, (255, 255, 255, 255))
+        r, g, b, a = self._rgba(colour)
+        ccx, ccy = x + w * 0.5, y + h * 0.5          # rotation centre, screen
+        scx, scy = 1.0 + w * 0.5, 1.0 + h * 0.5      # the same, in the scratch
+        rad = math.radians(float(degrees))
+        cos_a, sin_a = math.cos(rad), math.sin(rad)
+        half = 0.5 * math.hypot(bw, bh) + 1.0
+        cx, cy, cw, ch = self._clip()
+        x0, x1 = max(int(ccx - half), cx), min(int(ccx + half) + 1, cx + cw)
+        y0, y1 = max(int(ccy - half), cy), min(int(ccy + half) + 1, cy + ch)
+        stride = self.width * 4
+        src, px = scratch.px, self.px
+        for yy in range(y0, y1):
+            dy = yy + 0.5 - ccy
+            for xx in range(x0, x1):
+                dx = xx + 0.5 - ccx
+                # inverse rotation: screen offset back into the text's frame
+                ux = dx * cos_a + dy * sin_a + scx
+                uy = -dx * sin_a + dy * cos_a + scy
+                ix, iy = int(ux), int(uy)
+                if ux < 0 or uy < 0 or ix >= bw or iy >= bh:
+                    continue
+                alpha = src[(iy * bw + ix) * 4 + 3]
+                if not alpha:
+                    continue
+                o = yy * stride + xx * 4
+                s = (a / 255.0) * (alpha / 255.0)
+                px[o] = int(r * s + px[o] * (1 - s))
+                px[o + 1] = int(g * s + px[o + 1] * (1 - s))
+                px[o + 2] = int(b * s + px[o + 2] * (1 - s))
+                px[o + 3] = max(px[o + 3], int(a * alpha / 255))
 
 
 # --------------------------------------------------------------------------- #

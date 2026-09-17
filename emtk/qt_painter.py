@@ -397,6 +397,76 @@ class QtPainter:
         self._p.setBrush(fill)
         self._p.drawPath(path)
 
+    def gradient_triangle(self, p0, p1, p2, c0: Colour, c1: Colour,
+                          c2: Colour) -> None:
+        """Fill a triangle with per-corner colours.
+
+        ``QPainter`` has no vertex colours, so the triangle is split at its
+        edge midpoints until neighbouring corners differ by a few levels and
+        each piece is filled flat (:func:`emtk.painter.subdivide_gradient`).
+        The pieces are :meth:`fill_triangle`\\ s, whose same-colour hairline
+        closes the seams antialiasing would otherwise leave between them.
+        """
+        from .painter import subdivide_gradient
+
+        subdivide_gradient(self.fill_triangle, p0, p1, p2, c0, c1, c2)
+
+    def image_triangle(self, p0, p1, p2, handle, uv0=(0.0, 0.0),
+                       uv1=(1.0, 0.0), uv2=(1.0, 1.0),
+                       tint: Colour = (255, 255, 255, 255)) -> None:
+        """Map the ``uv`` triangle of a :class:`~emtk.texture.Texture` onto a
+        screen triangle: the affine transform that takes the three texel
+        corners to the three screen corners, clipped to the triangle.
+
+        Any other handle degrades to a *tint*-filled triangle.
+        """
+        from qtpy import QtCore, QtGui
+
+        from .texture import Texture
+
+        if not isinstance(handle, Texture):
+            self.fill_triangle(p0, p1, p2, tint)
+            return
+        tw, th = handle.width, handle.height
+        (u0, v0), (u1, v1), (u2, v2) = ((uv0[0] * tw, uv0[1] * th),
+                                        (uv1[0] * tw, uv1[1] * th),
+                                        (uv2[0] * tw, uv2[1] * th))
+        den = (u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0)
+        if den == 0:
+            return
+        (x0, y0), (x1, y1), (x2, y2) = p0, p1, p2
+        # Solve screen = M * (u, v, 1) from the three correspondences.
+        m11 = ((x1 - x0) * (v2 - v0) - (x2 - x0) * (v1 - v0)) / den
+        m21 = ((x2 - x0) * (u1 - u0) - (x1 - x0) * (u2 - u0)) / den
+        m12 = ((y1 - y0) * (v2 - v0) - (y2 - y0) * (v1 - v0)) / den
+        m22 = ((y2 - y0) * (u1 - u0) - (y1 - y0) * (u2 - u0)) / den
+        dx = x0 - m11 * u0 - m21 * v0
+        dy = y0 - m12 * u0 - m22 * v0
+        key = id(handle)
+        hit = self._image_cache.get(key)
+        if hit is None or hit[0] != handle.revision:
+            img = QtGui.QImage(bytes(handle.px), tw, th, tw * 4,
+                               QtGui.QImage.Format_RGBA8888)
+            self._image_cache[key] = (handle.revision, img)
+        else:
+            img = hit[1]
+        path = QtGui.QPainterPath()
+        path.moveTo(QtCore.QPointF(*p0))
+        path.lineTo(QtCore.QPointF(*p1))
+        path.lineTo(QtCore.QPointF(*p2))
+        path.closeSubpath()
+        painter = self._p
+        painter.save()
+        try:
+            painter.setClipPath(path, QtCore.Qt.IntersectClip)
+            painter.setTransform(QtGui.QTransform(m11, m12, m21, m22, dx, dy), True)
+            painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, False)
+            if (list(tint) + [255])[3] < 255:
+                painter.setOpacity((list(tint) + [255])[3] / 255.0)
+            painter.drawImage(QtCore.QPointF(0.0, 0.0), img)
+        finally:
+            painter.restore()
+
     def push_clip(self, x: float, y: float, w: float, h: float) -> None:
         """Restrict drawing to a rectangle until :meth:`pop_clip`."""
         self._p.save()

@@ -497,8 +497,8 @@ def test_angled_headers_go_through_the_painters_rotated_text_when_it_has_one():
             super().__init__()
             self.rotated = []
 
-        def text_rotated(self, x, y, string, radians, colour):
-            self.rotated.append((string, radians))
+        def text_rotated(self, x, y, w, h, align, string, colour, degrees=0.0):
+            self.rotated.append((string, degrees))
 
     painter = Rotating()
     with emtk.frame(painter, (0.0, 0.0, 400.0, 200.0)):

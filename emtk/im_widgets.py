@@ -2124,9 +2124,18 @@ def table_angled_headers_row() -> None:
 
 
 def _rotated_text(ctx, pos, string, radians, colour) -> None:
+    """Through the protocol's ``text_rotated(x, y, w, h, align, string,
+    colour, degrees)``. This called it as ``(x, y, string, radians, colour)``,
+    a spelling no shipped painter had, so a painter that *could* rotate text
+    raised here instead."""
+    import math
+
+    from .painter import ALIGN_LEFT, ALIGN_VCENTER
     op = getattr(ctx.p, "text_rotated", None)
     if callable(op):
-        op(pos[0], pos[1], string, radians, colour)
+        w, h = ctx.draw.calc_text_size(string)
+        op(pos[0], pos[1], w, h, ALIGN_LEFT | ALIGN_VCENTER, string, colour,
+           math.degrees(radians))
         return
     ctx.draw.add_text(pos, colour, string)
 
