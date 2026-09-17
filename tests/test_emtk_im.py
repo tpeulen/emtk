@@ -171,3 +171,35 @@ def test_button_flags_pressed_on_click():
     w = ImWidget(widget)
     w.draw(p, 0, 0, 100, 100)
     assert w.press(5, 5, 0, 0, 100, 100) is True
+
+
+@pytest.mark.parametrize("enter", [13, 0x01000004, 0x01000005])
+def test_enter_returns_true_accepts_every_spelling_of_enter(enter):
+    """``ENTER_RETURNS_TRUE`` must fire for Qt's Return and Enter codes as well
+    as for a plain carriage return: a host that forwards Qt key codes is the
+    common case, and under it a field could be typed into but never committed."""
+    import emtk
+    from emtk.flags import InputTextFlags
+
+    io, storage = emtk.IO(), {}
+    seen = {}
+
+    def frame():
+        with emtk.frame(RecordingPainter(), (0, 0, 300, 80), io=io, storage=storage) as ctx:
+            emtk.begin("w", (0, 0, 300, 80))
+            seen["changed"], seen["value"] = emtk.input_text(
+                "##f", "0.5", "", InputTextFlags.ENTER_RETURNS_TRUE)
+            seen["box"] = ctx.get_item_rect()
+            emtk.end()
+
+    frame()
+    x, y, w, h = seen["box"]
+    io.mouse_pos = io.mouse_clicked_pos[0] = (x + 4, y + 4)
+    io.mouse_down[0] = io.mouse_clicked[0] = True
+    frame()
+    io.mouse_down[0] = False
+    io.mouse_released[0] = True
+    frame()
+    io.key = enter
+    frame()
+    assert seen["changed"] is True

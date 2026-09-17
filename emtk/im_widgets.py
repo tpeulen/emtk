@@ -1130,7 +1130,7 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
     if focused and ctx.io.key in (_BACKSPACE, _DELETE) and value and not read_only:
         value, changed = value[:-1], True
     if enter_returns:
-        changed = focused and ctx.io.key == _ENTER and bool(typed or value)
+        changed = focused and ctx.io.key in _ENTER_KEYS and bool(typed or value)
 
     ctx.draw.add_rect_filled(
         (box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
@@ -1151,7 +1151,11 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
     return (changed, value)
 
 
-_ENTER = 13  # KEY_RETURN, plain: im_core owns the Qt-valued table
+#: What Enter arrives as. A host that forwards Qt's key codes delivers
+#: ``KEY_RETURN`` / ``KEY_ENTER`` (0x01000004/5), one that forwards characters
+#: delivers 13; checking only 13 meant ``ENTER_RETURNS_TRUE`` never fired under
+#: ``qt_host``, so a field could be typed into and never committed.
+_ENTER_KEYS = (13, 0x01000004, 0x01000005)
 
 
 def input_text_with_hint(label: str, hint: str, value: str) -> tuple[bool, str]:
