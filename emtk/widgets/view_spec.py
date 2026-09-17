@@ -17,6 +17,17 @@ That is the whole design, and it is worth stating because the alternative --
 teaching the painted chrome to build Qt-shaped widgets, or teaching AutoForm to
 paint -- is what a "port" would have meant.
 
+Tables
+------
+``table`` sections and ``custom`` ``data_table`` sections are not rows of a
+settings list, so they are not turned into :class:`Setting` rows. They are
+bound to the model by :class:`~.data_table.TableBinding` -- records or arrays,
+column specs, sorting, selection into ``selected_call``, and a refresh that
+notices a source growing while a computation streams -- and drawn by
+:class:`~.data_table.DataTable`. :func:`table_bindings` returns them for a
+spec, and :class:`ViewSpecPanel` draws a spec's settings and its tables in one
+box.
+
 What is deliberately *not* supported
 ------------------------------------
 The spec vocabulary is larger than a painted panel can honour. A
@@ -33,6 +44,7 @@ import json
 import pathlib
 from typing import Any, Callable, Iterable
 
+from .data_table import TableBinding, is_table_section
 from .settings_editor import (
     ACTION,
     BOOL,
@@ -48,9 +60,11 @@ from .settings_editor import (
 __all__ = [
     "CONTAINER_TYPES",
     "FIELD_KINDS",
+    "ViewSpecPanel",
     "load_view_spec",
     "model_from_view_spec",
     "settings_from_view_spec",
+    "table_bindings",
     "unsupported_sections",
 ]
 
@@ -208,6 +222,8 @@ def settings_from_view_spec(spec: dict, model: Any) -> list[Setting]:
     """The editable rows a view spec describes, in spec order."""
     rows: list[Setting] = []
     for section, group in _iter_sections(spec):
+        if is_table_section(section):
+            continue  # a table is not a row; see `table_bindings`
         attr = _attr_of(section)
         if not attr:
             continue
@@ -249,6 +265,14 @@ def unsupported_sections(spec: dict, model: Any) -> list[str]:
     missing: list[str] = []
     for section, _group in _iter_sections(spec):
         kind = str(section.get("type", "")).strip().lower()
+        if is_table_section(section):
+            options = dict(section.get("options") or {})
+            source = options.get("source") or section.get("source") or ""
+            if not source:
+                missing.append(f"{kind}: no source to read rows from")
+            elif not hasattr(model, source):
+                missing.append(f"{kind} '{source}': the model has no such source")
+            continue
         attr = _attr_of(section)
         if not attr:
             missing.append(f"{kind or 'section'}: no attribute to edit")
@@ -297,3 +321,135 @@ def model_from_view_spec(
             on_change(key, value)
 
     return SettingsModel(rows, getter, setter)
+
+
+def table_bindings(spec: dict, model: Any) -> list[TableBinding]:
+    """The tables a view spec declares, bound to *model*, in spec order.
+
+    Both dialects: ``{"type": "table", "source": ...}`` and
+    ``{"type": "custom", "key": "data_table", "options": {"source": ...}}``.
+    """
+    return [TableBinding(section, model)
+            for section, _group in _iter_sections(spec) if is_table_section(section)]
+
+
+class ViewSpecPanel:
+    """A whole view spec in one box: its settings above, its tables below.
+
+    Parameters
+    ----------
+    spec : dict
+        A parsed ``view.json``.
+    model : object
+        What the settings edit and the tables read.
+    on_change : callable, optional
+        ``on_change(attr, value)`` after a setting is written.
+    visible_rows : int
+        Setting rows shown before the list scrolls.
+
+    Notes
+    -----
+    Each table gets its section's ``height``; a table that asks to ``expand``
+    (or the last one, when none does) takes what is left. The control follows
+    the host contract, so a ``ControlHost`` or a ``PixelPainter`` drives it.
+    """
+
+    def __init__(self, spec: dict, model: Any,
+                 on_change: Callable[[str, Any], None] | None = None,
+                 visible_rows: int = 6) -> None:
+        from .settings_editor import SettingsEditor
+
+        self.spec = spec
+        self.model = model
+        self.settings = model_from_view_spec(spec, model, on_change)
+        self.editor = SettingsEditor(self.settings, visible_rows=visible_rows) \
+            if self.settings.settings else None
+        self.tables = table_bindings(spec, model)
+        self._boxes: list[tuple[Any, tuple]] = []
+        self._pressed: Any = None
+
+    def draw(self, p, x: float, y: float, w: float, h: float) -> None:
+        """Lay the settings and the tables out top to bottom and draw them."""
+        line = p.line_height()
+        self._boxes = []
+        cursor = y
+        if self.editor is not None:
+            rows = min(len(self.settings.settings), self.editor.visible_rows)
+            editor_h = min(line * 1.6 * (rows + 2.2), h * 0.6 if self.tables else h)
+            self.editor.visible_rows = max(rows, 1)
+            self.editor.draw(p, x, cursor, w, editor_h)
+            self._boxes.append((self.editor, (x, cursor, w, editor_h)))
+            cursor += editor_h + 6.0
+        if not self.tables:
+            return
+        remaining = max(y + h - cursor, line * 4)
+        stretch = [t for t in self.tables if t.expand] or [self.tables[-1]]
+        fixed = sum(t.height for t in self.tables if t not in stretch)
+        spare = max(remaining - fixed - 6.0 * (len(self.tables) - 1), line * 4)
+        for binding in self.tables:
+            binding.refresh()
+            box_h = spare / len(stretch) if binding in stretch else binding.height
+            binding.control.draw(p, x, cursor, w, box_h)
+            self._boxes.append((binding.control, (x, cursor, w, box_h)))
+            cursor += box_h + 6.0
+
+    def _target(self, px: float, py: float):
+        for control, (bx, by, bw, bh) in self._boxes:
+            if bx <= px <= bx + bw and by <= py <= by + bh:
+                return control
+        return None
+
+    def press(self, px: float, py: float, *box: Any, **kw: Any) -> bool:
+        """Route a press to the settings or the table under it."""
+        target = self._pressed = self._target(px, py)
+        for binding in self.tables:
+            if binding.control is not target:
+                binding.control.filter_focused = False
+        if target is None:
+            return False
+        if target is self.editor:
+            return self.editor.press(px, py) is not None
+        return target.press(px, py, *box, **kw)
+
+    def drag(self, px: float, py: float, *box: Any) -> bool:
+        """Continue a drag on whatever the press landed on."""
+        target = self._pressed
+        if target is None:
+            return False
+        if target is self.editor:
+            return self.editor.drag(px, py)
+        return target.drag(px, py, *box)
+
+    def release(self, *args: Any, **kw: Any) -> None:
+        """End a drag."""
+        if self._pressed is not None:
+            self._pressed.release()
+        self._pressed = None
+
+    def hover(self, px: float, py: float, *box: Any) -> None:
+        """Track the row under the pointer in the table there."""
+        target = self._target(px, py)
+        for binding in self.tables:
+            if binding.control is target:
+                binding.control.hover(px, py)
+            else:
+                binding.control.hovered = None
+
+    def scroll(self, rows: int) -> None:
+        """Scroll the hovered table, else the settings list."""
+        for binding in self.tables:
+            if binding.control.hovered is not None:
+                binding.control.scroll(rows)
+                return
+        if self.editor is not None:
+            self.editor.scroll(rows)
+
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        """Keys go to a table whose filter has focus, else the selected table."""
+        for binding in self.tables:
+            if binding.control.filter_focused:
+                return binding.control.key(key, text, modifiers)
+        for binding in self.tables:
+            if binding.control.selected_key is not None:
+                return binding.control.key(key, text, modifiers)
+        return False

@@ -25,8 +25,10 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``hidden_when``), ``value`` (``kind`` int/float/str, ``minimum``, ``maximum``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
 ``call``), ``choice`` (``options``, ``labels``, ``options_source``,
-``style`` ``"radio"``, ``call``), ``toggle``, ``toggle_row``, ``button_row``
-and ``info`` -- and no key of its own. Two things a form needs that the dialect
+``style`` ``"radio"``, ``call``), ``toggle``, ``toggle_row``, ``button_row``,
+``info``, and the two table dialects -- ``table`` and ``custom``
+``data_table`` (:mod:`emtk.widgets.data_table`), one full-width row each --
+and no key of its own. Two things a form needs that the dialect
 does not say are asked of the **model**, so the spec stays shared:
 
 ``model.enabled(name) -> bool``
@@ -80,9 +82,13 @@ class FormState:
         Picked index per choice name, consumed on the next frame.
     on_used : callable or None
         ``on_used(name)`` after a field is committed or an action pressed.
+    tables : dict
+        The bound table of every table section drawn, by name (its ``source``),
+        so its sort, filter, scroll and selection outlive the frame.
     """
 
     def __init__(self, on_used: Callable[[str], None] | None = None) -> None:
+        self.tables: dict[str, Any] = {}
         self.buffers: dict[str, str] = {}
         self.rects: dict[str, tuple] = {}
         self.dropdown_request: tuple | None = None
@@ -462,6 +468,27 @@ def _draw_leaf(section: dict, model: Any, state: FormState, width: float) -> Non
     _w.end_disabled()
 
 
+def _is_table(section: dict) -> bool:
+    from .widgets.data_table import is_table_section
+
+    return is_table_section(section)
+
+
+def _draw_table_section(section: dict, model: Any, state: FormState) -> None:
+    """A table section as one full-width item, bound once and kept in *state*."""
+    from .widgets.data_table import TableBinding, draw_table
+
+    options = dict(section.get("options") or {})
+    name = str(options.get("source") or section.get("source") or section_name(section))
+    binding = state.tables.get(name)
+    if binding is None or binding.model is not model:
+        binding = state.tables[name] = TableBinding(section, model)
+    if section.get("title") and str(section.get("type", "")).lower() == "custom":
+        _w.text(str(section["title"]))
+    draw_table(binding, name)
+    _remember(state, name)
+
+
 def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int = 1,
                   titles: bool = True) -> None:
     """Draw a list of sections into the current window.
@@ -502,6 +529,10 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
         if not isinstance(section, dict) or _hidden(section, model):
             continue
         kind = str(section.get("type", "")).lower()
+        if _is_table(section):
+            flush()
+            _draw_table_section(section, model, state)
+            continue
         if kind in _CONTAINERS or isinstance(section.get("sections"), list):
             flush()
             if titles and section.get("title"):

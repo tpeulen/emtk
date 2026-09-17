@@ -221,6 +221,37 @@ reordered, multi-sorted, frozen, clipped.
         im.end_table()
         im.end()
 
+Declared tables
+---------------
+
+``widgets.data_table`` draws the tables a ChiSurf ``view.json`` declares --
+``{"type": "table"}`` and ``{"type": "custom", "key": "data_table"}`` -- the
+way AutoForm's Qt renderer reads them: records or named arrays from a model
+``source``, column specs, values sorted as values, selection into
+``selected_call``, and a refresh that notices a source growing while a
+computation streams. A column with ``"display": "bar"`` and a ``range`` draws
+its value as a bar under the text (diverging, coloured by sign, when the range
+spans zero). :func:`emtk.widgets.view_spec.table_bindings` and
+:class:`emtk.widgets.view_spec.ViewSpecPanel` render them from a retained
+panel; :mod:`emtk.view_form` draws them in an immediate-mode form.
+
+::
+
+    from emtk.widgets.data_table import TableBinding
+
+    class Ranking:
+        def rows(self):
+            return [{"score": 0.8, "x": "Tau"}, {"score": -0.3, "x": "N"}]
+
+    section = {"type": "custom", "key": "data_table", "options": {
+        "source": "rows", "sort": {"key": "score", "descending": True},
+        "columns": [{"key": "score", "display": "bar", "range": [-1, 1]},
+                    {"key": "x"}]}}
+    binding = TableBinding(section, Ranking())
+    painter = RecordingPainter()
+    binding.control.draw(painter, 0, 0, 300, 120)
+    assert "Tau" in painter.strings
+
 Drag and drop
 -------------
 

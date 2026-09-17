@@ -246,5 +246,8 @@ Additional widget sub-modules
 .. automodule:: emtk.widgets.view_spec
    :noindex:
 
+.. automodule:: emtk.widgets.data_table
+   :noindex:
+
 .. automodule:: emtk.widgets.text_field
    :noindex:
