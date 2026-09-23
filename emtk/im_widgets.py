@@ -551,16 +551,21 @@ def text_wrapped(s: str) -> None:
     ctx = get_current_context()
     advance = max(ctx.draw.calc_text_size("M")[0], 1.0)
     per_line = max(int((ctx.layout.w - ctx.layout.indent_x) / advance), 1)
-    words, line = str(s).split(), ""
-    for word in words:
-        candidate = f"{line} {word}".strip()
-        if len(candidate) > per_line and line:
+    # A newline starts a new line, as in ImGui; each paragraph wraps on its own.
+    for paragraph in str(s).split("\n"):
+        words, line = paragraph.split(), ""
+        if not words:
+            text("")
+            continue
+        for word in words:
+            candidate = f"{line} {word}".strip()
+            if len(candidate) > per_line and line:
+                text(line)
+                line = word
+            else:
+                line = candidate
+        if line:
             text(line)
-            line = word
-        else:
-            line = candidate
-    if line:
-        text(line)
 
 
 def bullet() -> None:

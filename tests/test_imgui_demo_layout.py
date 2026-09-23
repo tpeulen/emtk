@@ -234,6 +234,19 @@ def test_text_wrapped_breaks_into_more_than_one_line():
     assert ys == sorted(ys) and len(set(ys)) == len(ys)
 
 
+def test_text_wrapped_keeps_its_newlines():
+    def gui():
+        emtk.text_wrapped("first line\nsecond\n\nfourth")
+
+    painter = _run(gui, size=(0.0, 0.0, 400.0, 400.0))
+    lines = [c for c in painter.calls if c[0] == "text"]
+    shown = [c for c in lines if any("first" in str(a) or "second" in str(a) or "fourth" in str(a)
+                                     for a in c)]
+    assert len(shown) == 3
+    ys = [c[2] for c in shown]
+    assert ys == sorted(ys) and len(set(ys)) == 3
+
+
 def test_align_text_to_frame_padding_is_a_no_op_on_its_own():
     """It changes where the *next* line sits, not what is drawn."""
     def gui():
