@@ -106,6 +106,9 @@ __all__ = [
     "WgpuControlHost",
     "ImageAtlas",
     "wgpu_host_class",
+    "ui_bind_group_layout_entries",
+    "ui_bind_group_entries",
+    "ui_samplers",
     "make_wgpu_control_host",
     "default_device",
     "image_u",
@@ -188,6 +191,75 @@ def default_device():
         )
     _DEVICE = adapter.request_device_sync()
     return _DEVICE
+
+
+# --------------------------------------------------------------------------- #
+# The shader's bindings, for anyone who draws with it
+# --------------------------------------------------------------------------- #
+def ui_bind_group_layout_entries() -> list:
+    """The group-1 bind-group layout ``ui.wgsl`` declares, as layout entries.
+
+    One definition for every pipeline that compiles ``ui.wgsl`` -- this
+    renderer's, and an application's that draws emtk's interface inside its
+    own render pass. A copy kept by the application goes stale the moment the
+    shader gains a binding, and the failure is not an error at the change but
+    a pipeline that no longer validates: a window cleared to its error colour.
+
+    Bindings: 0 the uniforms (``UiUniforms``), 1 the glyph atlas, 2 its
+    linear sampler, 3 the image atlas, 4 its linear sampler, 5 the nearest
+    sampler for ``Texture(filter="nearest")``.
+    """
+    wgpu = _wgpu()
+    fragment = wgpu.ShaderStage.FRAGMENT
+    texture = {"sample_type": wgpu.TextureSampleType.float}
+    sampler = {"type": wgpu.SamplerBindingType.filtering}
+    return [
+        # VERTEX|FRAGMENT: the vertex places the quad, the fragment decodes
+        # the image quads' uvs against `atlas2`.
+        {"binding": 0, "visibility": wgpu.ShaderStage.VERTEX | fragment,
+         "buffer": {"type": wgpu.BufferBindingType.uniform}},
+        {"binding": 1, "visibility": fragment, "texture": dict(texture)},
+        {"binding": 2, "visibility": fragment, "sampler": dict(sampler)},
+        # The image atlas. Zero texels are transparent, so it binds
+        # harmlessly empty for an interface that shows no pictures.
+        {"binding": 3, "visibility": fragment, "texture": dict(texture)},
+        {"binding": 4, "visibility": fragment, "sampler": dict(sampler)},
+        # Nearest texel, for textures drawn block by block (a histogram).
+        {"binding": 5, "visibility": fragment, "sampler": dict(sampler)},
+    ]
+
+
+def ui_samplers(device) -> tuple:
+    """``(linear, nearest)`` samplers for :func:`ui_bind_group_entries`.
+
+    Linear for the atlases -- the glyphs are baked supersampled and sampled
+    down, so filtering is what turns coverage into a smooth edge -- and
+    nearest for textures drawn texel by texel.
+    """
+    wgpu = _wgpu()
+    linear = device.create_sampler(
+        label="emtk.ui.sampler",
+        mag_filter=wgpu.FilterMode.linear, min_filter=wgpu.FilterMode.linear,
+    )
+    nearest = device.create_sampler(
+        label="emtk.ui.sampler.nearest",
+        mag_filter=wgpu.FilterMode.nearest, min_filter=wgpu.FilterMode.nearest,
+    )
+    return linear, nearest
+
+
+def ui_bind_group_entries(uniform_buffer, atlas_view, image_view,
+                          linear_sampler, nearest_sampler) -> list:
+    """The group-1 bind-group entries matching :func:`ui_bind_group_layout_entries`."""
+    return [
+        {"binding": 0, "resource": {"buffer": uniform_buffer, "offset": 0,
+                                    "size": uniform_buffer.size}},
+        {"binding": 1, "resource": atlas_view},
+        {"binding": 2, "resource": linear_sampler},
+        {"binding": 3, "resource": image_view},
+        {"binding": 4, "resource": linear_sampler},
+        {"binding": 5, "resource": nearest_sampler},
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -335,46 +407,7 @@ class WgpuRenderer:
             layout=self._empty_layout, entries=[]
         )
         self._layout = device.create_bind_group_layout(
-            label="emtk.ui.group1",
-            entries=[
-                {
-                    # VERTEX|FRAGMENT: the vertex places the quad, the
-                    # fragment decodes the image quads' uvs against `atlas2`.
-                    "binding": 0,
-                    "visibility": (wgpu.ShaderStage.VERTEX
-                                   | wgpu.ShaderStage.FRAGMENT),
-                    "buffer": {"type": wgpu.BufferBindingType.uniform},
-                },
-                {
-                    "binding": 1,
-                    "visibility": wgpu.ShaderStage.FRAGMENT,
-                    "texture": {"sample_type": wgpu.TextureSampleType.float},
-                },
-                {
-                    "binding": 2,
-                    "visibility": wgpu.ShaderStage.FRAGMENT,
-                    "sampler": {"type": wgpu.SamplerBindingType.filtering},
-                },
-                # The image atlas. Zero texels are transparent, so it binds
-                # harmlessly empty for an interface that shows no pictures.
-                {
-                    "binding": 3,
-                    "visibility": wgpu.ShaderStage.FRAGMENT,
-                    "texture": {"sample_type": wgpu.TextureSampleType.float},
-                },
-                {
-                    "binding": 4,
-                    "visibility": wgpu.ShaderStage.FRAGMENT,
-                    "sampler": {"type": wgpu.SamplerBindingType.filtering},
-                },
-                # Nearest texel, for textures drawn block by block
-                # (``Texture.filter == "nearest"``: a histogram of bins).
-                {
-                    "binding": 5,
-                    "visibility": wgpu.ShaderStage.FRAGMENT,
-                    "sampler": {"type": wgpu.SamplerBindingType.filtering},
-                },
-            ],
+            label="emtk.ui.group1", entries=ui_bind_group_layout_entries()
         )
         return self._empty_layout, self._layout
 
@@ -550,19 +583,7 @@ class WgpuRenderer:
         wgpu = _wgpu()
         device = self.device
         if self._sampler is None:
-            # Linear: the atlas is baked supersampled and sampled down, so
-            # filtering is what turns coverage into a smooth edge rather
-            # than a stair.
-            self._sampler = device.create_sampler(
-                label="emtk.ui.sampler",
-                mag_filter=wgpu.FilterMode.linear,
-                min_filter=wgpu.FilterMode.linear,
-            )
-            self._nearest_sampler = device.create_sampler(
-                label="emtk.ui.sampler.nearest",
-                mag_filter=wgpu.FilterMode.nearest,
-                min_filter=wgpu.FilterMode.nearest,
-            )
+            self._sampler, self._nearest_sampler = ui_samplers(device)
         uniforms = np.zeros(UNIFORM_FLOATS, dtype=np.float32)
         uniforms[0:2] = (float(width), float(height))
         uniforms[2:4] = (float(self._atlas_size[0]), float(self._atlas_size[1]))
@@ -581,16 +602,13 @@ class WgpuRenderer:
             self._bind_group = device.create_bind_group(
                 label="emtk.ui.bind",
                 layout=layout,
-                entries=[
-                    {"binding": 0,
-                     "resource": {"buffer": self._uniform_buffer, "offset": 0,
-                                  "size": self._uniform_buffer.size}},
-                    {"binding": 1, "resource": self._atlas_texture.create_view()},
-                    {"binding": 2, "resource": self._sampler},
-                    {"binding": 3, "resource": self._image_texture.create_view()},
-                    {"binding": 4, "resource": self._sampler},
-                    {"binding": 5, "resource": self._nearest_sampler},
-                ],
+                entries=ui_bind_group_entries(
+                    self._uniform_buffer,
+                    self._atlas_texture.create_view(),
+                    self._image_texture.create_view(),
+                    self._sampler,
+                    self._nearest_sampler,
+                ),
             )
             self._bind_key = key
         return self._bind_group

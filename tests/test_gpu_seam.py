@@ -140,3 +140,25 @@ def test_the_depth_texture_can_be_both_written_and_sampled():
     assert combined & enums.TextureUsage.RENDER_ATTACHMENT
     assert combined & enums.TextureUsage.TEXTURE_BINDING
     assert enums.TextureUsage.RENDER_ATTACHMENT != enums.TextureUsage.TEXTURE_BINDING
+
+
+def test_the_ui_layout_declares_every_binding_the_shader_has():
+    """``ui_bind_group_layout_entries`` is the one definition of ``ui.wgsl``'s
+    group 1, used by emtk's renderer and by applications that draw the
+    interface in their own pass. When the shader gained a nearest sampler at
+    binding 5, an application's private copy of the layout stopped validating
+    and its window came up the error colour -- so the two are compared here.
+    """
+    from emtk.wgpu_host import ui_bind_group_entries, ui_bind_group_layout_entries
+    from emtk.wgsl import load_wgsl
+
+    declared = {int(b) for g, b in re.findall(r"@group\((\d+)\)\s*@binding\((\d+)\)",
+                                              load_wgsl("ui.wgsl")) if g == "1"}
+    layout = {entry["binding"] for entry in ui_bind_group_layout_entries()}
+    assert layout == declared, f"layout {sorted(layout)} vs shader {sorted(declared)}"
+
+    class _Buffer:
+        size = 32
+
+    entries = ui_bind_group_entries(_Buffer(), "atlas", "images", "lin", "near")
+    assert {entry["binding"] for entry in entries} == declared
