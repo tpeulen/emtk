@@ -212,6 +212,7 @@ def test_frame_border_size_outlines_buttons_and_fields():
 
     style = Style()
     style.frame_border_size = 1.0
+    style.window_border_size = 0.0          # count the frames' outlines only
     style.colors[Col.BORDER] = (9, 8, 7, 255)
     painter = RecordingPainter()
     with emtk.frame(painter, (0, 0, 300, 120), style=style):
@@ -251,3 +252,23 @@ def test_text_sits_in_the_middle_of_its_frame():
     label = next(t for t in painter.texts if t[5] == "label")
     assert abs(value[1] - (field[1] + pad)) < 0.5
     assert abs(label[1] - (box[1] + pad)) < 0.5
+
+
+def test_a_window_paints_an_opaque_background_and_a_border():
+    """Dear ImGui's window: what lies under it does not show through."""
+    from emtk.im_core import Col, Style
+    from emtk.flags import WindowFlags
+
+    style = Style()
+    style.colors[Col.WINDOW_BG] = (1, 2, 3, 200)
+    style.colors[Col.BORDER] = (4, 5, 6, 255)
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 300, 200), style=style):
+        emtk.begin("w", (10, 20, 100, 50))
+        emtk.end()
+        emtk.begin("bare", (150, 20, 100, 50), WindowFlags.NO_BACKGROUND)
+        emtk.end()
+    fills = [c for c in painter.calls if c[0] == "fill_rect" and tuple(c[5]) == (1, 2, 3, 255)]
+    assert [c[1:5] for c in fills] == [(10, 20, 100, 50)]
+    borders = [c for c in painter.calls if c[0] == "stroke_rect" and tuple(c[5])[:3] == (4, 5, 6)]
+    assert [c[1:5] for c in borders] == [(10, 20, 100, 50)]

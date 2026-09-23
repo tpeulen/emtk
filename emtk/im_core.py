@@ -334,6 +334,8 @@ class Style:
     #: boxes and fields. Zero (the dark theme) draws none; a light desktop
     #: theme needs it, since a white field on a pale window has no edge.
     frame_border_size: float = 0.0
+    #: ``WindowBorderSize``: the outline of a window's box (1, as the reference).
+    window_border_size: float = 1.0
     grab_min_size: float = 12.0
     grab_rounding: float = 0.0
     #: What ``BeginDisabled`` multiplies colours by, as ``ImGuiStyle`` does.
@@ -1102,6 +1104,14 @@ class Context:
         self.clip_rect = window.box
         self.layout = Layout(self.p, *window.box, style=self.layout.style)
         self.p.push_clip(*window.box)
+        if not flags & _WF.NO_BACKGROUND:
+            # Dear ImGui's window: an opaque background and a border, so what
+            # is drawn under a window (a plot, another window) does not show
+            # through its contents. NoBackground is the way out.
+            bg = self.style.color(Col.WINDOW_BG)
+            self.p.fill_rect(*window.box, (*tuple(bg)[:3], 255))
+            if self.style.window_border_size > 0.0:
+                self.p.stroke_rect(*window.box, self.style.color(Col.BORDER))
         return True
 
     def end(self) -> None:
