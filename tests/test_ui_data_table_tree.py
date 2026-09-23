@@ -127,3 +127,11 @@ def test_binding_shares_the_models_expanded_set():
     assert len(control.order()) == 5
     control.set_expanded("gamma", False)
     assert model.open_rows == set()
+
+
+def test_a_tree_without_parents_is_not_indented():
+    table = DataTable([TableColumn("name", "Name")], row_key="name", tree_key="parent")
+    table.set_records([{"name": "a", "parent": ""}, {"name": "b", "parent": ""}])
+    painter = RecordingPainter()
+    table.draw(painter, 0.0, 0.0, 200.0, 100.0)
+    assert {t[0] for t in painter.texts if t[5] in ("a", "b")} == {6.0}

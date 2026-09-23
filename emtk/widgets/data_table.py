@@ -617,7 +617,11 @@ class DataTable:
 
     def _indent(self, index: int) -> float:
         """Room before the first column's text: the level, and the triangle."""
-        return (self.depth_of(index) + 1) * self.TREE_INDENT if self.tree_key else 0.0
+        if not self.tree_key:
+            return 0.0
+        # The triangle's room only while some row has one: a tree of leaves
+        # (no vector yet) reads as a flat table.
+        return (self.depth_of(index) + (1 if self._has_children else 0)) * self.TREE_INDENT
 
     def selected_index(self) -> Optional[int]:
         """Source index of the selected row, or ``None``."""
