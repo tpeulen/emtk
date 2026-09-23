@@ -535,3 +535,96 @@ def test_spin_true_adds_arrows_to_a_scientific_value():
     io.mouse_released[0] = True
     driver.frame()
     assert abs(model.don_value - 86.9) < 1e-9
+
+
+# ------------------------------------------------------ narrow windows
+class AxisModel:
+    def __init__(self):
+        self.x_name = "Proximity ratio"
+        self.bins = 81
+        self.log = False
+        self.path = "/Users/someone/data/experiment/burstwise_All 0.1500#30"
+
+    def parameter_options(self):
+        return ["Tau (green)", "Proximity ratio"]
+
+    def set_axis(self):
+        pass
+
+
+AXIS_ROW = {"sections": [{"type": "row", "n_col": 4, "sections": [
+    {"type": "choice", "attr": "x_name", "label": "x:", "options_source": "parameter_options"},
+    {"type": "value", "attr": "bins", "kind": "int", "width": 48, "wrap_before": True},
+    {"type": "toggle", "attr": "log", "label": ""},
+    {"type": "button_row", "weight": 0, "buttons": [{"label": "Set", "action": "set_axis"}]},
+]}]}
+
+
+def _draw_at(spec, model, width, state=None, io=None):
+    state = state or FormState()
+    io = io or emtk.IO()
+    with emtk.frame(RecordingPainter(), (0, 0, width, 300), io=io, storage={}):
+        emtk.begin("form", (0, 0, width, 300))
+        draw_form(spec, model, state)
+        emtk.end()
+    return state
+
+
+def _chars_shown(width):
+    """Characters of "0" that fit in a combo box *width* wide."""
+    with emtk.frame(RecordingPainter(), (0, 0, 10, 10), io=emtk.IO(), storage={}):
+        emtk.begin("m", (0, 0, 10, 10))
+        one = emtk.calc_text_size("0")[0]
+        emtk.end()
+    return width / one
+
+
+def test_a_line_that_fits_stays_one_line_and_the_choice_takes_the_room():
+    state = _draw_at(AXIS_ROW, AxisModel(), 500)
+    rects = state.rects
+    assert len({round(r[1]) for r in rects.values()}) == 1
+    assert rects["x_name"][2] > 250, "the combo box is the flexible one"
+    assert rects["set_axis"][2] < 60, "a weight-0 button is as wide as its label"
+
+
+def test_a_line_too_narrow_wraps_at_its_break_and_nothing_overflows():
+    width = 170
+    state = _draw_at(AXIS_ROW, AxisModel(), width)
+    rects = state.rects
+    assert rects["bins"][1] > rects["x_name"][1], "wrapped before the bins"
+    assert rects["set_axis"][1] == rects["bins"][1]
+    for name, (x, _y, w, _h) in rects.items():
+        assert x + w <= width + 0.5, f"{name} runs past the form"
+    assert _chars_shown(rects["x_name"][2]) >= 12
+
+
+def test_the_continuation_line_starts_under_the_controls():
+    rects = _draw_at(AXIS_ROW, AxisModel(), 170).rects
+    assert abs(rects["bins"][0] - rects["x_name"][0]) < 1.0
+
+
+def test_a_button_row_too_narrow_for_its_labels_wraps_them():
+    spec = {"sections": [{"type": "button_row", "buttons": [
+        {"label": "Screenshot", "action": "a"}, {"label": "Data", "action": "b"},
+        {"label": "Clear", "action": "c"}]}]}
+
+    class M:
+        a = b = c = staticmethod(lambda: None)
+
+    wide = _draw_at(spec, M(), 400).rects
+    assert len({r[1] for r in wide.values()}) == 1
+    narrow = _draw_at(spec, M(), 110).rects
+    assert len({r[1] for r in narrow.values()}) >= 2
+    for x, _y, w, _h in narrow.values():
+        assert x + w <= 110.5
+
+
+def test_a_path_shows_its_end_at_rest():
+    spec = {"sections": [{"type": "value", "attr": "path", "kind": "str", "elide": "start"}]}
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 200, 60), io=emtk.IO(), storage={}):
+        emtk.begin("form", (0, 0, 200, 60))
+        draw_form(spec, AxisModel(), FormState())
+        emtk.end()
+    shown = [t for t in painter.strings if "#30" in t]
+    assert shown and shown[0].startswith("…"), painter.strings

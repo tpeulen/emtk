@@ -35,7 +35,13 @@ and no key of its own. A container with ``collapsible: true`` draws AutoForm's
 fold -- a header line that opens and closes it, closed at first when it says
 ``collapsed: true`` -- and remembers the fold in :attr:`FormState.folds`. A
 leaf's ``width`` fixes its control to that many pixels instead of sharing out
-the line. A ``custom`` section whose ``key`` the host registered in
+the line; the others share it by ``weight`` (a button row of ``weight`` 0 is
+as wide as its labels), none narrower than ``min_width`` pixels or
+``min_chars`` characters (a choice shows 12 by default). A line that cannot
+give every control its minimum **wraps** -- at a leaf marked ``wrap_before``
+if it has one -- and a button row too narrow for its labels wraps its
+buttons, so a narrow window shows every control whole instead of clipping.
+A ``value`` with ``elide: "start"`` shows the end of a long text (a path). A ``custom`` section whose ``key`` the host registered in
 :attr:`FormState.custom` is drawn by the host's callback, full width, in its
 place in the form -- a plot between two rows of fields.
 
@@ -414,7 +420,8 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     shown = state.buffers.get(name, shown_value)
     _w.set_next_item_width(max(field_w - stepper_w, 20.0))
     flags = InputTextFlags.ENTER_RETURNS_TRUE | (InputTextFlags.READ_ONLY if read_only else 0)
-    entered, text = _w.input_text(f"##{name}", shown, str(section.get("placeholder", "")), flags)
+    entered, text = _w.input_text(f"##{name}", shown, str(section.get("placeholder", "")), flags,
+                                  elide_start=str(section.get("elide", "")).lower() == "start")
     _remember(state, f"{name}.edit" if slider else name)
     _tooltip(section)
     if spin:
@@ -612,31 +619,74 @@ def _draw_toggle(section: dict, model: Any, state: FormState, label: str) -> Non
         _commit(model, section, bool(new), state)
 
 
+def _button_label(item: dict, model: Any) -> str:
+    action = str(item.get("action", ""))
+    label = item.get("label", action)
+    source = item.get("label_source")
+    if source and callable(getattr(model, source, None)):
+        label = str(getattr(model, source)())
+    return str(label)
+
+
+def _button_natural(label: str) -> float:
+    """What a button needs to show *label* whole: its text and the frame padding."""
+    pad = _core.get_style().frame_padding[0]
+    return _w.calc_text_size(_visible(label))[0] + 2.0 * pad
+
+
+def _visible(label: str) -> str:
+    return str(label).split("##", 1)[0]
+
+
+def _flow(widths: Sequence[float], room: float, spacing: float) -> list[list[int]]:
+    """Indices of *widths* packed into lines no wider than *room*, in order.
+
+    A width wider than *room* gets a line of its own (it cannot do better).
+    """
+    lines: list[list[int]] = []
+    used = 0.0
+    for i, width in enumerate(widths):
+        if lines and used + spacing + width <= room + 0.5:
+            lines[-1].append(i)
+            used += spacing + width
+        else:
+            lines.append([i])
+            used = width
+    return lines
+
+
 def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> None:
+    """A button row: the buttons share *width*; when their labels do not fit
+    side by side they **wrap**, each line's buttons sharing that line, so a
+    narrow column shows every label whole instead of clipping them all."""
     buttons = [item for item in section.get("buttons") or [] if not _hidden(item, model)]
     if not buttons:
         return
-    spacing = 8.0
-    button_w = max(30.0, (width - spacing * (len(buttons) - 1)) / len(buttons))
-    for i, item in enumerate(buttons):
-        if i:
-            _w.same_line()
-        action = str(item.get("action", ""))
-        label = item.get("label", action)
-        source = item.get("label_source")
-        if source and callable(getattr(model, source, None)):
-            label = str(getattr(model, source)())
-        _w.begin_disabled(not _enabled(model, action))
-        pressed = _w.button(_id(label, action), (button_w, 0.0))
-        _remember(state, action)
-        if item.get("description"):
-            _w.set_item_tooltip(str(item["description"]))
-        _w.end_disabled()
-        if pressed:
-            state.used(action)
-            fn = getattr(model, action, None)
-            if callable(fn):
-                fn()
+    spacing = _core.get_style().item_spacing[0]
+    labels = [_button_label(item, model) for item in buttons]
+    natural = [_button_natural(label) for label in labels]
+    for line in _flow(natural, width, spacing):
+        room = width - spacing * (len(line) - 1)
+        need = sum(natural[i] for i in line)
+        for k, i in enumerate(line):
+            item = buttons[i]
+            # Extra room is shared evenly, so equal labels make equal buttons.
+            button_w = max(natural[i] + (room - need) / len(line), 30.0) \
+                if need <= room else room
+            if k:
+                _w.same_line()
+            action = str(item.get("action", ""))
+            _w.begin_disabled(not _enabled(model, action))
+            pressed = _w.button(_id(labels[i], action), (button_w, 0.0))
+            _remember(state, action)
+            if item.get("description"):
+                _w.set_item_tooltip(str(item["description"]))
+            _w.end_disabled()
+            if pressed:
+                state.used(action)
+                fn = getattr(model, action, None)
+                if callable(fn):
+                    fn()
 
 
 def _label_of(section: dict) -> str:
@@ -649,6 +699,8 @@ def _label_of(section: dict) -> str:
 def _weight(section: dict) -> float:
     if section.get("width"):
         return 0.0
+    if section.get("weight") is not None:
+        return max(float(section["weight"]), 0.0)
     kind = str(section.get("type", "")).lower()
     if kind == "button_row":
         return 0.8 * len(section.get("buttons") or [])
@@ -659,19 +711,79 @@ def _weight(section: dict) -> float:
     return 1.0
 
 
-def _fixed_width(section: dict) -> float:
+def _toggle_width(label: str) -> float:
+    """What :func:`emtk.im_widgets.checkbox` takes: the box, and a label beside it."""
+    style = _core.get_style()
+    box = _core.get_frame_height()
+    text = _w.calc_text_size(_visible(label))[0] if label else 0.0
+    return box + (style.item_inner_spacing[0] + text + 2.0 if text else 0.0)
+
+
+def _fixed_width(section: dict, model: Any = None) -> float:
     """Width a control takes regardless of the space there is: a declared
-    ``width``, or what a checkbox row needs."""
-    if section.get("width"):
-        return float(section["width"])
+    ``width`` (for a button row, never less than its labels need), what a
+    checkbox row needs, or -- a button row of ``weight`` 0 -- its labels."""
     kind = str(section.get("type", "")).lower()
-    box = _core.get_frame_height() + 6.0
+    if section.get("width"):
+        width = float(section["width"])
+        if kind == "button_row":
+            width = max(width, _min_width(section, model))
+        return width
+    if kind == "button_row" and section.get("weight") is not None \
+            and float(section["weight"]) <= 0:
+        # weight 0: as wide as the labels, and no wider
+        return _min_width(section, model)
     if kind == "toggle":
-        return box + _w.calc_text_size(str(section.get("label", "")))[0] + 8.0
+        return _toggle_width(str(section.get("label", "")))
     if kind == "toggle_row":
-        return sum(box + _w.calc_text_size(str(item.get("label", "")))[0] + 12.0
-                   for item in section.get("items") or [])
+        spacing = _core.get_style().item_spacing[0]
+        items = section.get("items") or []
+        return sum(_toggle_width(str(item.get("label", ""))) for item in items) \
+            + spacing * max(len(items) - 1, 0)
     return 0.0
+
+
+#: Characters a control shows at the least, before its line wraps: a choice
+#: (a parameter name), and a value field. ``min_chars`` in a section overrides.
+MIN_CHARS = {"choice": 12, "value": 5}
+
+
+def _min_width(section: dict, model: Any = None) -> float:
+    """The narrowest a control may be drawn and still be read.
+
+    ``min_width`` (pixels) or ``min_chars`` in the section say so; otherwise a
+    choice shows :data:`MIN_CHARS` characters beside its arrow, a value field
+    a few digits (and its stepper), a button row its labels side by side.
+    A line whose controls cannot all get this much **wraps** (:func:`_draw_grid`).
+    """
+    if section.get("min_width"):
+        return float(section["min_width"])
+    kind = str(section.get("type", "")).lower()
+    style = _core.get_style()
+    pad = style.frame_padding[0]
+    fh = _core.get_frame_height()
+    if kind == "button_row":
+        buttons = [item for item in section.get("buttons") or []
+                   if model is None or not _hidden(item, model)]
+        if not buttons:
+            return 0.0
+        return sum(_button_natural(_button_label(item, model)) for item in buttons) \
+            + style.item_spacing[0] * (len(buttons) - 1)
+    chars = section.get("min_chars", MIN_CHARS.get(kind))
+    if chars is None:
+        return 30.0
+    text = _w.calc_text_size("0" * int(chars))[0]
+    if kind == "choice":
+        if str(section.get("style", "")).lower() in ("radio", "radio_list"):
+            return 30.0
+        # _combo_field: padding, text, a padding's gap, the arrow, padding
+        return text + 3.0 * pad + fh * 0.32 * 1.4 + pad
+    if kind == "value":
+        style_name = str(section.get("style", "")).lower()
+        spin = style_name == "spin" or bool(section.get("spin"))
+        return text + 2.0 * pad + (fh * 0.75 if spin else 0.0) \
+            + (40.0 if style_name == "slider" else 0.0)
+    return 30.0
 
 
 def _draw_control(section: dict, model: Any, state: FormState, width: float) -> None:
@@ -735,44 +847,142 @@ def _draw_progress(section: dict, model: Any, width: float) -> None:
                       _core.get_style().color(_core.Col.TEXT), text)
 
 
+def _segments(label_w: list, need_w: list, avail: float, spacing: float,
+              breaks: frozenset = frozenset()) -> list:
+    """Columns ``0..n-1`` cut into runs that each fit *avail* at their least.
+
+    One run when the line fits. Otherwise the line is cut at the columns in
+    *breaks* first (a section's ``wrap_before``: where the spec would rather
+    it broke), the pieces packed greedily left to right, and a piece still
+    too wide cut wherever it must. The cut is the same for every line of the
+    grid, so columns stay aligned after a wrap; a column wider than *avail*
+    on its own gets a run of its own.
+    """
+    n = len(label_w)
+
+    def width(cols) -> float:
+        return sum(label_w[c] + need_w[c] for c in cols) + spacing * max(len(cols) - 1, 0)
+
+    def pack(pieces) -> list:
+        runs: list[list[int]] = []
+        for piece in pieces:
+            if runs and width(runs[-1] + piece) <= avail + 0.5:
+                runs[-1].extend(piece)
+            else:
+                runs.append(list(piece))
+        return runs
+
+    everything = list(range(n))
+    if width(everything) <= avail + 0.5:
+        return [everything]
+    pieces, current = [], []
+    for c in everything:
+        if c in breaks and current:
+            pieces.append(current)
+            current = []
+        current.append(c)
+    if current:
+        pieces.append(current)
+    runs = []
+    for run in pack(pieces):
+        runs.extend(pack([[c] for c in run]) if width(run) > avail + 0.5 else [run])
+    return runs
+
+
+def _share(run: list, label_w: list, fixed_w: list, min_w: list, weight: list,
+           avail: float, spacing: float) -> dict:
+    """Control widths of the columns of *run*: fixed ones as declared, the
+    rest sharing what is left by weight -- none below its minimum."""
+    free = avail - sum(label_w[c] + fixed_w[c] for c in run) - spacing * (len(run) - 1)
+    flexible = [c for c in run if weight[c] > 0]
+    widths = {c: fixed_w[c] for c in run}
+    # A column pinned at its minimum leaves the rest to the others.
+    while flexible:
+        total = sum(weight[c] for c in flexible)
+        unit = max(free, 0.0) / total
+        short = [c for c in flexible if unit * weight[c] < min_w[c]]
+        if not short:
+            for c in flexible:
+                widths[c] += unit * weight[c]
+            break
+        for c in short:
+            # never past the line: a control alone on a line too narrow for
+            # its minimum gets the line (a button row then wraps inside it)
+            give = min(min_w[c], max(free, 0.0))
+            widths[c] += give
+            free -= give
+            flexible.remove(c)
+    return widths
+
+
 def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
     """Lay leaf sections out ``n_col`` to a line, **aligned in columns**.
 
     Every label of a column is as wide as the column's widest, and every control
     starts at the same x -- the label/field grid a form reads down, rather than
     fields that start wherever their own label happens to end.
+
+    Controls with no ``width`` share the room left by weight, none narrower
+    than :func:`_min_width`. When a line cannot give every control that
+    much, it **wraps**: its columns continue on the next line (the same cut on
+    every line of the grid), and each part shares its own line.
     """
     n_col = max(1, int(n_col))
     rows = [leaves[i:i + n_col] for i in range(0, len(leaves), n_col)]
-    spacing = 8.0
+    spacing = _core.get_style().item_spacing[0]
     label_w = [0.0] * n_col
     fixed_w = [0.0] * n_col
+    min_w = [0.0] * n_col
     weight = [0.0] * n_col
+    breaks = set()
     for row in rows:
         for c, section in enumerate(row):
+            if section.get("wrap_before"):
+                breaks.add(c)
             text = _label_of(section)
             if text:
                 label_w[c] = max(label_w[c], _w.calc_text_size(text)[0] + spacing)
-            fixed_w[c] = max(fixed_w[c], _fixed_width(section))
+            fixed_w[c] = max(fixed_w[c], _fixed_width(section, model))
             weight[c] = max(weight[c], _weight(section))
+            if _weight(section) > 0:
+                min_w[c] = max(min_w[c], _min_width(section, model))
     avail = _w.get_content_region_avail()[0]
-    free = max(avail - sum(label_w) - sum(fixed_w) - spacing * (n_col - 1), 30.0)
-    unit = free / sum(weight) if sum(weight) > 0 else 0.0
-    control_w = [fixed_w[c] + unit * weight[c] for c in range(n_col)]
-    column_x = [0.0] * n_col
-    for c in range(1, n_col):
-        column_x[c] = column_x[c - 1] + label_w[c - 1] + control_w[c - 1] + spacing
+    need_w = [fixed_w[c] + (min_w[c] if weight[c] > 0 else 0.0) for c in range(n_col)]
+    runs = _segments(label_w, need_w, avail, spacing, frozenset(breaks))
+    layout = []
+    for k, run in enumerate(runs):
+        # A continuation whose first column has no label starts under the
+        # first run's first control, not under its label.
+        indent = label_w[0] if k and not label_w[run[0]] else 0.0
+        least = sum(label_w[c] + need_w[c] for c in run) + spacing * (len(run) - 1)
+        if indent + least > avail + 0.5:
+            indent = 0.0
+        widths = _share(run, label_w, fixed_w, min_w, weight, avail - indent, spacing)
+        x, column_x = indent, {}
+        for c in run:
+            column_x[c] = x
+            x += label_w[c] + widths[c] + spacing
+        layout.append((run, widths, column_x))
     for row in rows:
-        for c, section in enumerate(row):
-            name = section_name(section)
-            _w.begin_disabled(not (_enabled(model, name) if name else True))
-            if c:
-                _w.same_line(column_x[c])
-            if label_w[c] > 0:
-                _label(_label_of(section), label_w[c])
-                _w.same_line(column_x[c] + label_w[c])
-            _draw_control(section, model, state, max(control_w[c], 30.0))
-            _w.end_disabled()
+        for run, widths, column_x in layout:
+            first = True
+            for c in run:
+                if c >= len(row):
+                    continue
+                section = row[c]
+                name = section_name(section)
+                _w.begin_disabled(not (_enabled(model, name) if name else True))
+                if not first:
+                    _w.same_line(column_x[c])
+                elif column_x[c]:
+                    _w.dummy(column_x[c], 0.0)
+                    _w.same_line(column_x[c])
+                first = False
+                if label_w[c] > 0:
+                    _label(_label_of(section), label_w[c])
+                    _w.same_line(column_x[c] + label_w[c])
+                _draw_control(section, model, state, max(widths[c], 30.0))
+                _w.end_disabled()
 
 
 def _is_table(section: dict) -> bool:

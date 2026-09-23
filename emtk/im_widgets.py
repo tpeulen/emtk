@@ -864,11 +864,12 @@ def selectable(label: str, selected: bool = False, size=None) -> bool:
 def combo(label: str, current: int, items: Sequence[str],
           items_count: int = -1,
           popup_max_height_in_items: int = -1) -> tuple[bool, int]:
-    """``ImGui::Combo``: click steps to the next item.
+    """``ImGui::Combo``: a click opens the list; a pick from it is the change.
 
-    The reference opens a popup; the popup lives on the overlay stack, so this
-    is the closed form and :func:`~emtk.im.Context.open_popup` is how a
-    port that needs the list draws it.
+    The list is an overlay (:mod:`emtk.overlays`), drawn over everything at
+    the end of the frame: below the field or flipped above it, as wide as its
+    longest item, inside the frame, scrolled when it is long, with the keyboard
+    and type-to-find. The pick is returned on the frame after it was made.
 
     ``items_count`` and ``popup_max_height_in_items`` are the reference's
     trailing parameters. C++ has no length on an array of pointers, so the
@@ -878,7 +879,9 @@ def combo(label: str, current: int, items: Sequence[str],
     """
     if items_count is not None and 0 <= items_count < len(items):
         items = list(items)[:items_count]
-    del popup_max_height_in_items        # this closed form has no popup
+    del popup_max_height_in_items        # the list is as tall as the frame allows
+    from . import overlays as _overlays
+
     ctx = get_current_context()
     height = _frame_height(ctx)
     # `SetNextItemWidth` applies to a combo in the reference, as it does to
@@ -898,18 +901,32 @@ def combo(label: str, current: int, items: Sequence[str],
     else:
         box = ctx.layout.row(height=height, width=frame_w + label_w)
     frame = (box[0], box[1], frame_w, height)
-    hovered, _held, pressed = ctx.button_behavior(frame, ctx.get_id(label))
+    item_id = ctx.get_id(label)
+    changed = False
+    picked = _overlays.take_choice(item_id)
+    if picked is not None and 0 <= picked < len(items) and picked != current:
+        current, changed = picked, True
+    hovered, _held, pressed = ctx.button_behavior(frame, item_id)
     ctx.draw.add_rect_filled((frame[0], frame[1]), (frame[0] + frame_w, frame[1] + height),
                              _col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
     shown = items[current] if 0 <= current < len(items) else ""
+    # The caption stops short of the arrow, clipped to the frame.
+    arrow = height * 0.32
+    ax = frame[0] + frame_w - ctx.style.frame_padding[0] - arrow * 1.2
+    ctx.draw.push_clip_rect((frame[0], frame[1]), (ax - 2.0, frame[1] + height))
     ctx.draw.add_text((frame[0] + ctx.style.frame_padding[0], frame[1]), _col(Col.TEXT), str(shown))
+    ctx.draw.pop_clip_rect()
+    cy = frame[1] + height / 2.0
+    ctx.draw.add_triangle_filled((ax, cy - arrow * 0.45), (ax + arrow * 1.2, cy - arrow * 0.45),
+                                 (ax + arrow * 0.6, cy + arrow * 0.45), _col(Col.TEXT))
     if visible:
         ctx.draw.add_text((frame[0] + frame_w + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), visible)
-    if pressed and items:
-        return (True, (current + 1) % len(items))
-    return (False, current)
+    _overlays.combo_list(item_id, [str(item) for item in items], current,
+                         below=frame if pressed and items else None)
+    ctx._last_item, ctx._last_id = frame, item_id
+    return (changed, current)
 
 
 def collapsing_header(label: str, open_: Optional[bool] = None) -> bool:
@@ -1090,7 +1107,8 @@ def input_int(label: str, v: int, step: int = 1, step_fast: int = 100,
     return (changed, int(round(value)))
 
 
-def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[bool, str]:
+def input_text(label: str, value: str, hint: str = "", flags: int = 0,
+               elide_start: bool = False) -> tuple[bool, str]:
     """``ImGui::InputText``: the field, edited by the keys in ``io``.
 
     A port gets the box, the caret and the text; the *keys* come from
@@ -1106,6 +1124,11 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
     therefore fills in the two lines above the call. It is read to its first
     NUL and the edited **string** is what comes back, which is what the C++
     assigns out of the buffer on the next line anyway.
+
+    A value wider than the field shows its end while the field has the
+    keyboard, so the caret stays in sight. *elide_start* (an emtk extension)
+    shows the end at rest too, after a "…" -- a path, whose file name is the
+    part worth seeing.
     """
     from .cpp_compat import String
     from .flags import InputTextFlags as _ITF
@@ -1154,13 +1177,20 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
         ctx.style.frame_rounding)
     _frame_border(ctx, box)
     shown = value if (value or not hint) else hint
+    pad = ctx.style.frame_padding[0]
+    room = box[2] - 2.0 * pad
+    text_w = ctx.draw.calc_text_size(shown)[0]
+    # Scrolled so the end -- the caret -- is in the field while typing.
+    shift = max(text_w - room, 0.0) if (focused and value) else 0.0
+    if value and elide_start and not focused and text_w > room:
+        shown = _elide_start(ctx, value, room)
     # Clipped to the field, as the reference's InputText is: a value longer
     # than its box used to run over whatever stood beside it.
     ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
+    ctx.draw.add_text((box[0] + pad - shift, box[1] + ctx.style.frame_padding[1]),
                       _col(Col.TEXT) if value else _col(Col.TEXT_DISABLED), shown)
     if focused:
-        caret = box[0] + ctx.style.frame_padding[0] + ctx.draw.calc_text_size(value)[0]
+        caret = box[0] + pad - shift + ctx.draw.calc_text_size(value)[0]
         ctx.draw.add_line((caret, box[1] + 2.0), (caret, box[1] + box[3] - 2.0),
                           _col(Col.TEXT), 1.0)
     ctx.draw.pop_clip_rect()
@@ -1169,6 +1199,18 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
         ctx.draw.add_text((box[0] + box[2] + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), label_shown)
     return (changed, value)
+
+
+def _elide_start(ctx, text: str, room: float) -> str:
+    """"…" and the longest end of *text* that fits in *room* with it."""
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if ctx.draw.calc_text_size("…" + text[len(text) - mid:])[0] <= room:
+            lo = mid
+        else:
+            hi = mid - 1
+    return "…" + text[len(text) - lo:] if lo else "…"
 
 
 #: What Enter arrives as. A host that forwards Qt's key codes delivers
