@@ -481,6 +481,15 @@ def test_select_all_marks_every_row_and_delete_removes_them_last_first():
     assert control.selected_indices() == []
 
 
+def test_a_right_click_inside_select_all_keeps_the_selection():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.select_all()
+    control.context(*cell(control, 1, 0))
+    assert control.selected_indices() == [0, 1]
+
+
 def test_a_click_after_select_all_selects_one_row_again():
     model = Gates()
     control = TableBinding(GATE_TABLE, model).control

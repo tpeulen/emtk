@@ -939,8 +939,11 @@ class DataTable:
         if position is not None:
             if self.editing is not None:
                 self.commit_edit()
-            self._select_position(position)
             index = self.order()[position]
+            # A right click inside the selection keeps it, so a menu can act on
+            # every selected row (Select All, then Delete); elsewhere it selects.
+            if self.key_of(index) not in self.also_selected:
+                self._select_position(position)
         column = self.column_at(x)
         if self.on_context is not None:
             self.on_context(index, column.key if column is not None else None, x, y)
