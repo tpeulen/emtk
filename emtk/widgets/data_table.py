@@ -53,6 +53,8 @@ table needs them and neither dialect had them:
     value: ``None`` (not at all), ``"column"`` (each column over its own
     range) or ``"table"`` (one range for every column). The ramp is a hue sweep
     at fixed saturation, as the Qt table's, so the text stays legible;
+``reserve`` (with ``expand``)
+    the height left free under an expanding table, for the rows after it;
 ``min_column_width``
     columns never get narrower than this; when they do not fit, the table
     scrolls sideways (a bar under the rows, the horizontal wheel, or shift and
@@ -1061,6 +1063,8 @@ class TableBinding:
         self.editable = bool(merged.get("editable", False))
         self.height = float(merged.get("height", 240) or 240)
         self.expand = bool(merged.get("expand", False))
+        #: Height an expanding table leaves free under it, for the rows that follow.
+        self.reserve = float(merged.get("reserve", 0) or 0)
         self._declared_columns = list(merged.get("columns") or [])
         self.control = DataTable(
             on_select=self._on_select,
@@ -1210,7 +1214,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     avail_w, avail_h = widgets.get_content_region_avail()[:2]
     w = float(width) if width is not None else float(avail_w)
     h = float(height) if height is not None else (
-        max(float(avail_h), 60.0) if binding.expand else binding.height)
+        max(float(avail_h) - binding.reserve, 60.0) if binding.expand else binding.height)
     box = ctx.layout.row(height=h, width=w)
     hovered = ctx.item_add(box, ctx.get_id(f"##table-{name}"))
     control = binding.control

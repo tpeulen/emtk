@@ -605,3 +605,20 @@ def test_fit_columns_sizes_to_the_contents():
     control.fit_columns()
     draw(control)
     assert control._widths[0] > control._widths[1] and even[0] == even[1]
+
+
+def test_an_expanding_table_leaves_its_reserve_free():
+    from emtk.view_form import FormState, draw_form
+
+    model = Sheet()
+    spec = {"sections": [
+        {"type": "custom", "key": "data_table",
+         "options": {"source": "sheet", "expand": True, "reserve": 50}},
+        {"type": "button_row", "buttons": [{"label": "OK", "action": "ok"}]}]}
+    state = FormState()
+    with emtk.frame(RecordingPainter(), (0, 0, 400, 300), io=emtk.IO(), storage={}):
+        emtk.begin("form", (0, 0, 400, 300))
+        draw_form(spec, model, state)
+        emtk.end()
+    table, button = state.rects["sheet"], state.rects["ok"]
+    assert button[1] + button[3] <= 300 and table[3] < 300 - 50 + 1
