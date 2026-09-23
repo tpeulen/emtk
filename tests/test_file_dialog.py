@@ -186,3 +186,24 @@ def test_a_click_that_navigates_away_does_not_hold_the_pointer(folder):
     assert dialog.directory == str(folder / "sub")
     driver.click("[..]")
     assert dialog.directory == str(folder)
+
+
+def test_the_save_name_field_is_drawn_across_the_dialog(folder):
+    """``set_next_item_width(-1)`` is "to the right edge": the name field used
+    to get a negative width and was not drawn at all."""
+    dialog = FileDialog("Save", mode="save", filters=[("PNG", ["*.png"])],
+                        directory=str(folder), filename="shot.png")
+    driver = _Driver(dialog)
+    driver.frame()
+    calls = driver.painter.calls
+    at = next(i for i, call in enumerate(calls) if "shot.png" in call)
+    clip = next(call for call in reversed(calls[:at]) if call[0] == "push_clip")
+    assert clip[3] > 400.0, clip
+
+
+def test_a_negative_row_width_is_measured_from_the_right_edge():
+    from emtk.layout import Layout
+
+    layout = Layout(RecordingPainter(), 10.0, 0.0, 200.0, 100.0)
+    x, _y, w, _h = layout.row(width=-1.0)
+    assert x == 10.0 and w == 199.0

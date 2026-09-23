@@ -350,7 +350,8 @@ class Layout:
             Row height. Defaults to :attr:`row_height`.
         width : float, optional
             Row width. Defaults to everything left to the right edge (of the
-            current column, inside :meth:`columns`). Pass a width when the row
+            current column, inside :meth:`columns`); a negative width is that
+            much short of the edge. Pass a width when the row
             is going to be followed by :meth:`same_line` -- a full-width row
             leaves the cursor at the right edge, and the reference behaves the
             same way.
@@ -362,6 +363,12 @@ class Layout:
         """
         row_h = self.row_height if height is None else float(height)
         row_w = self.avail()[0] if width is None else float(width)
+        if row_w < 0.0:
+            # The reference's CalcItemWidth: a negative width is measured from
+            # the right edge -- SetNextItemWidth(-1) is "fill the row, less a
+            # pixel". Taken literally it was a box of negative width, and the
+            # field (a file dialog's name field) was not there at all.
+            row_w = max(1.0, self.avail()[0] + row_w)
         box = (self._cursor_x, self._cursor_y, row_w, row_h)
         self.advance(row_w, row_h)
         self._last_item = box
