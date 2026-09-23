@@ -432,3 +432,19 @@ def test_edge_tick_labels_stay_inside_the_frame():
     (px, _py), (pw, _ph) = frame["rect"]
     assert labels["0"][0] >= 50.0 - 0.5
     assert labels["6"][0] + labels["6"][2] <= 50.0 + 300.0 + 0.5
+
+
+def test_a_log_axis_within_one_decade_labels_its_minor_ticks():
+    import emtk
+    from emtk import implot_internal as I
+    from emtk.testing import RecordingPainter
+
+    with emtk.frame(RecordingPainter(), (0, 0, 100, 100)):
+        ticker = I.Ticker()
+        I.locator_log10(ticker, (0.5, 5.0), 600.0, False, I.formatter_default, None)
+        labelled = [round(t.plot_pos, 6) for t in ticker.ticks if t.show_label]
+        assert 1.0 in labelled and 2.0 in labelled and 5.0 in labelled
+        ticker = I.Ticker()
+        I.locator_log10(ticker, (0.1, 1000.0), 600.0, False, I.formatter_default, None)
+        majors = [round(t.plot_pos, 6) for t in ticker.ticks if t.show_label]
+        assert majors == [0.1, 1.0, 10.0, 100.0, 1000.0]

@@ -1275,8 +1275,9 @@ def calc_logarithmic_exponents(rng, pix: float, vertical: bool):
 
 
 def add_ticks_logarithmic(rng, exp_min: int, exp_max: int, exp_step: int, ticker: Ticker,
-                          formatter, data) -> None:
-    """``AddTicksLogarithmic``."""
+                          formatter, data, label_minors=()) -> None:
+    """``AddTicksLogarithmic``. *label_minors* -- emtk's -- names the minor
+    mantissas (``2``..``9``) whose ticks also get a label."""
     rmin, rmax = rng
     sign = 1.0 if rmax > 0 else (-1.0 if rmax < 0 else 0.0)
     e = exp_min - exp_step
@@ -1291,14 +1292,26 @@ def add_ticks_logarithmic(rng, exp_min: int, exp_max: int, exp_step: int, ticker
             for i in range(1, 9 + int(j < exp_step - 1)):
                 minor = major1 + i * interval
                 if rmin - DBL_EPSILON <= minor <= rmax + DBL_EPSILON:
-                    ticker.add_tick(minor, False, 0, False, formatter=formatter, data=data)
+                    labelled = (i + 1) in label_minors and exp_step == 1
+                    ticker.add_tick(minor, False, 0, labelled, formatter=formatter, data=data)
         e += exp_step
 
 
 def locator_log10(ticker: Ticker, rng, pixels: float, vertical: bool, formatter, data) -> None:
+    """``Locator_Log10``, plus emtk's: a range with fewer than two decades on it
+    labels minor ticks too (2..9, or 2 and 5 when space is short), so an axis
+    0.5..5 does not read as a lone "1"."""
     ok, emin, emax, estep = calc_logarithmic_exponents(rng, pixels, vertical)
-    if ok:
-        add_ticks_logarithmic(rng, emin, emax, estep, ticker, formatter, data)
+    if not ok:
+        return
+    lo, hi = sorted(abs(v) for v in rng)
+    majors = sum(1 for e in range(emin - 1, emax + 2) if lo <= 10.0 ** e <= hi)
+    label_minors = ()
+    if majors < 2:
+        span = math.log10(hi / lo) if lo > 0 else 1.0
+        per_decade = pixels / max(span, 1e-9)
+        label_minors = tuple(range(2, 10)) if per_decade > 400 else (2, 5)
+    add_ticks_logarithmic(rng, emin, emax, estep, ticker, formatter, data, label_minors)
 
 
 def calc_symlog_pixel(plt: float, rng, pixels: float) -> float:
