@@ -36,6 +36,7 @@ Nothing here imports ``rendercanvas``, ``glfw`` or ``wgpu`` at module scope.
 from __future__ import annotations
 
 import importlib
+import math
 import logging
 import os
 import sys
@@ -315,6 +316,8 @@ class CanvasEvents:
         self.drop_callback = None
         self._repeat_key = None
         self._repeat_generation = 0
+        #: ``(time, x, y, button)`` of the last press that could start a double click.
+        self._last_down = None
         self.connect()
 
     # -- wiring ---------------------------------------------------------- #
@@ -385,16 +388,61 @@ class CanvasEvents:
             mask |= button_from_canvas(button)
         return mask
 
-    def _on_pointer_down(self, event: dict) -> None:
-        self._deliver("on_pointer_press", float(event["x"]), float(event["y"]),
-                      button_from_canvas(event.get("button", 0)),
-                      modifiers_from_canvas(event.get("modifiers")))
+    #: A second press this soon (seconds) and this near (logical px) to the
+    #: first is a double click -- rendercanvas' own thresholds.
+    DOUBLE_CLICK_TIME = 0.25
+    DOUBLE_CLICK_DISTANCE = 5.0
 
-    def _on_double_click(self, event: dict) -> None:
-        # Delivered *in addition to* the ordinary press, so it only says double.
-        self._deliver("on_pointer_press", float(event["x"]), float(event["y"]),
-                      button_from_canvas(event.get("button", 0)),
-                      modifiers_from_canvas(event.get("modifiers")), double=True)
+    def _on_pointer_down(self, event: dict) -> None:
+        import time  # noqa: PLC0415
+
+        x, y = self.pointer_position(event)
+        button = button_from_canvas(event.get("button", 0))
+        now = time.perf_counter()
+        last = self._last_down
+        double = (last is not None and last[3] == button
+                  and now - last[0] <= self.DOUBLE_CLICK_TIME
+                  and math.hypot(x - last[1], y - last[2]) <= self.DOUBLE_CLICK_DISTANCE)
+        # a third press starts over, as the platform's click count does
+        self._last_down = None if double else (now, x, y, button)
+        kwargs = {"double": True} if double else {}
+        self._deliver("on_pointer_press", x, y, button,
+                      modifiers_from_canvas(event.get("modifiers")), **kwargs)
+
+    def pointer_position(self, event: dict) -> tuple:
+        """Where the pointer is for a button event, in logical pixels.
+
+        rendercanvas' glfw backend stamps a button event with the position of
+        the last *move* it saw. A window that a window manager moves or
+        resizes under a still pointer (Magnet, macOS tiling) sees no move, so
+        the first click after it landed where the pointer had been relative to
+        the old frame -- on another control. Asked of glfw instead where the
+        canvas has a glfw window.
+        """
+        x, y = float(event["x"]), float(event["y"])
+        window = getattr(self.canvas, "_window", None)
+        if window is None:
+            return x, y
+        try:
+            import glfw  # noqa: PLC0415
+
+            gx, gy = glfw.get_cursor_pos(window)
+            if not getattr(self.canvas, "_screen_size_is_logical", True):
+                ratio = float(self.canvas.get_pixel_ratio()) or 1.0
+                gx, gy = gx / ratio, gy / ratio
+            return float(gx), float(gy)
+        except Exception:  # noqa: BLE001 - not a glfw window after all
+            return x, y
+
+    def _on_double_click(self, _event: dict) -> None:
+        """Ignored: the second press already said double (:meth:`_on_pointer_down`).
+
+        rendercanvas emits ``double_click`` after the second *release*.
+        Delivered as one more press, it left the button held in the app's
+        eyes with nothing to release it -- the next pointer move was a drag,
+        and the next stray release anywhere completed a click on whatever
+        the phantom press had landed on.
+        """
 
     def _on_pointer_move(self, event: dict) -> None:
         self._deliver("on_pointer_move", float(event["x"]), float(event["y"]),
@@ -402,7 +450,7 @@ class CanvasEvents:
                       modifiers_from_canvas(event.get("modifiers")))
 
     def _on_pointer_up(self, event: dict) -> None:
-        self._deliver("on_pointer_release", float(event["x"]), float(event["y"]),
+        self._deliver("on_pointer_release", *self.pointer_position(event),
                       button_from_canvas(event.get("button", 0)),
                       modifiers_from_canvas(event.get("modifiers")))
 

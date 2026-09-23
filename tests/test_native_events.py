@@ -211,18 +211,43 @@ def test_return_does_not_repeat():
 
 
 # --------------------------------------------------------------- pointer
-def test_pointer_events_translate_buttons_and_double_click():
+def test_pointer_events_translate_buttons():
     _ev, canvas, sink, _loop = _events()
     canvas.emit("pointer_down", {"x": 3, "y": 4, "button": 2, "modifiers": ("Shift",)})
-    canvas.emit("double_click", {"x": 3, "y": 4, "button": 1, "modifiers": ()})
     canvas.emit("pointer_move", {"x": 5, "y": 6, "buttons": (1, 3), "modifiers": ()})
     canvas.emit("pointer_up", {"x": 5, "y": 6, "button": 3, "modifiers": ()})
     assert sink.calls == [
         ("on_pointer_press", (3.0, 4.0, RIGHT_BUTTON, SHIFT_MODIFIER), {}),
-        ("on_pointer_press", (3.0, 4.0, LEFT_BUTTON, 0), {"double": True}),
         ("on_pointer_move", (5.0, 6.0, LEFT_BUTTON | MIDDLE_BUTTON, 0), {}),
         ("on_pointer_release", (5.0, 6.0, MIDDLE_BUTTON, 0), {}),
     ]
+
+
+def _click(canvas, x=3, y=4, button=1):
+    canvas.emit("pointer_down", {"x": x, "y": y, "button": button, "modifiers": ()})
+    canvas.emit("pointer_up", {"x": x, "y": y, "button": button, "modifiers": ()})
+
+
+def test_the_second_press_of_a_double_click_says_double_and_is_released():
+    """rendercanvas emits ``double_click`` after the second release. Passed on
+    as a third press it left the button held with nothing to release it."""
+    _ev, canvas, sink, _loop = _events()
+    _click(canvas)
+    _click(canvas)
+    canvas.emit("double_click", {"x": 3, "y": 4, "button": 1, "modifiers": ()})
+    presses = [(n, k) for n, _a, k in sink.calls if n == "on_pointer_press"]
+    releases = [n for n, _a, _k in sink.calls if n == "on_pointer_release"]
+    assert presses == [("on_pointer_press", {}), ("on_pointer_press", {"double": True})]
+    assert len(releases) == 2, "every press is released: no button is left down"
+
+
+def test_presses_apart_in_space_or_time_are_single():
+    ev, canvas, sink, _loop = _events()
+    _click(canvas, 3, 4)
+    _click(canvas, 30, 40)
+    ev._last_down = (ev._last_down[0] - 1.0,) + ev._last_down[1:]
+    _click(canvas, 30, 40)
+    assert all(k == {} for n, _a, k in sink.calls if n == "on_pointer_press")
 
 
 @pytest.mark.parametrize("dy, steps", [(100, -1), (-100, 1), (250, -2), (3, -1), (-3, 1), (0, 0)])
@@ -276,3 +301,18 @@ def test_a_named_backend_is_imported_as_asked(monkeypatch):
     assert canvas_module(env="MYAPP_CANVAS").__name__ == "rendercanvas.offscreen"
     with pytest.raises(ImportError):
         canvas_module("no_such_backend")
+
+
+def test_a_click_lands_where_the_pointer_is_not_where_it_last_moved(monkeypatch):
+    """A window moved under a still pointer (Magnet, tiling) gets no move;
+    rendercanvas stamps the click with the stale position. glfw is asked."""
+    import sys
+    import types
+
+    ev, canvas, sink, _loop = _events()
+    canvas._window = object()
+    canvas._screen_size_is_logical = True
+    monkeypatch.setitem(sys.modules, "glfw",
+                        types.SimpleNamespace(get_cursor_pos=lambda _w: (40.0, 50.0)))
+    _click(canvas, 3, 4)
+    assert [a[:2] for _n, a, _k in sink.calls] == [(40.0, 50.0), (40.0, 50.0)]
