@@ -154,7 +154,8 @@ def format_value(value: Any, section: dict) -> str:
     """How a ``value`` section shows its number.
 
     ``decimals`` fixes the digits; ``style: "scientific"`` writes an exponent;
-    neither gives the shortest faithful spelling (``0.05``, ``100``).
+    neither gives the shortest faithful spelling (``0.05``, ``100``). A
+    ``suffix`` (AutoForm's, ``" fps"``) is written after a number.
 
     Parameters
     ----------
@@ -170,6 +171,11 @@ def format_value(value: Any, section: dict) -> str:
     kind = str(section.get("kind", "str")).lower()
     if value is None:
         return ""
+    suffix = str(section.get("suffix") or "") if kind in ("int", "float") else ""
+    return _format_number(value, section, kind) + suffix
+
+
+def _format_number(value: Any, section: dict, kind: str) -> str:
     if kind == "int":
         try:
             return str(int(round(float(value))))
@@ -210,8 +216,12 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
     kind = str(section.get("kind", "str")).lower()
     if kind not in ("int", "float"):
         return text
+    text = str(text).strip()
+    suffix = str(section.get("suffix") or "").strip()
+    if suffix and text.endswith(suffix):
+        text = text[:-len(suffix)].strip()
     try:
-        number = float(str(text).strip())
+        number = float(text)
     except ValueError:
         return None
     if not math.isfinite(number):

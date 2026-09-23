@@ -298,3 +298,13 @@ def test_a_choice_is_drawn_as_a_combo_box():
     assert text[0] < x + 10.0                       # left-aligned, not centred
     driver.click("method")
     assert driver.state.dropdown_request[2] == ["Manual", "Auto"]
+
+
+def test_a_suffix_is_written_after_the_number_and_read_back():
+    """AutoForm's ``suffix`` (``" fps"``): shown in the field, accepted when typed."""
+    section = {"kind": "int", "suffix": " fps", "minimum": 1, "maximum": 60}
+    assert format_value(10, section) == "10 fps"
+    assert parse_value("12 fps", section) == 12
+    assert parse_value("12", section) == 12
+    assert parse_value("99fps", section) == 60
+    assert format_value("text", {"kind": "str", "suffix": " fps"}) == "text"
