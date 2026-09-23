@@ -132,6 +132,12 @@ def host_class():
                 )
             finally:
                 painter.end()
+            # A control that is animating (a playback, results streaming in)
+            # needs frames without input, as it gets in every other host:
+            # ask for the next one once this one is on screen.
+            animating = getattr(self.control, "animating", None)
+            if callable(animating) and animating():
+                QtCore.QTimer.singleShot(16, self.update)
 
         def _box(self) -> tuple[float, float, float, float]:
             """The box the control is drawn in: the whole widget."""
