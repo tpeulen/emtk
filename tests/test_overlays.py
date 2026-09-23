@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 import emtk
-from emtk.keys import KEY_DOWN, KEY_ENTER, KEY_ESCAPE, KEY_UP
+from emtk.keys import KEY_BACKSPACE, KEY_DOWN, KEY_ENTER, KEY_ESCAPE, KEY_UP
 from emtk.testing import RecordingPainter
 from emtk.view_form import FormState, draw_form
 from emtk.widgets import menus
@@ -201,32 +201,212 @@ def test_the_keyboard_moves_picks_and_closes():
     assert model.pick == "gamma"
 
 
-def test_typing_jumps_to_the_first_item_that_starts_with_it():
-    options = ["Alpha", "Rate", "Ratio green", "Ratio red", "Red", "Tau"]
-    form = Form(Model(options), _spec())
+TAUS = ["Number of photons", "Tau (green)", "Tau (red)", "Ratio green/red",
+        "Anisotropy (green)", "Mean macro time", "Tau (yellow)", "Duration", "Count rate"]
+
+
+def _type(form, text):
+    for ch in text:
+        form.key(ord(ch.upper()), ch)
+    return form.painter
+
+
+def _row_strings(form, panel):
+    """The rows the open list drew, top to bottom, as whole labels."""
+    return [panel.entries[i].label for i in panel.shown() if panel.row_rect(i) is not None]
+
+
+def test_a_long_list_opens_with_a_focused_filter_field_a_short_one_without():
+    form = Form(Model(TAUS), _spec())
     panel = form.open()
-    clock = [0.0]
-    panel.clock = lambda: clock[0]
-    form.key(ord("R"), "r")
-    assert panel.highlight == 1                        # "Rate"
-    clock[0] += 0.2
-    form.key(ord("A"), "a")
-    clock[0] += 0.2
-    form.key(ord("T"), "t")
-    clock[0] += 0.2
-    form.key(ord("I"), "i")
-    assert panel.highlight == 2                        # "Rati" -> "Ratio green"
-    clock[0] += 5.0                                    # a pause starts a new search
-    form.key(ord("T"), "t")
-    assert panel.highlight == 5
-    clock[0] += 5.0
-    form.key(ord("R"), "r")
-    clock[0] += 0.2
-    form.key(ord("R"), "r")                            # the same letter again: the next
+    assert panel.filterable and panel.query == ""
+    assert panel.filter_rect is not None
+    assert menus.FILTER_PLACEHOLDER in form.painter.strings
+    fx, fy, fw, fh = panel.filter_rect
+    px, py, pw, ph = panel.panel_rect
+    assert py < fy < panel.view_rect[1], "the field is at the top, above the rows"
+    short = Form(Model(["one", "two", "three"]), _spec())
+    panel = short.open()
+    assert len(short.model.options) < menus.FILTER_MIN_ITEMS
+    assert not panel.filterable and panel.filter_rect is None
+    assert menus.FILTER_PLACEHOLDER not in short.painter.strings
+    _type(short, "tw")
+    assert panel.open and panel.shown() == [0, 1, 2], "typing does nothing, not even a jump"
+    assert panel.highlight == 0
+
+
+def test_a_short_list_can_ask_for_a_filter_and_a_long_one_can_refuse_it():
+    spec = _spec()
+    spec["sections"][-1]["filter"] = True
+    form = Form(Model(["one", "two", "three"]), spec)
+    assert form.open().filterable
+    spec = _spec()
+    spec["sections"][-1]["filter"] = False
+    form = Form(Model(TAUS), spec)
+    assert not form.open().filterable
+
+
+def test_typing_filters_the_list_to_only_the_matches():
+    form = Form(Model(TAUS), _spec())
+    panel = form.open()
+    painter = _type(form, "tau")
+    assert panel.query == "tau"
+    assert _row_strings(form, panel) == ["Tau (green)", "Tau (red)", "Tau (yellow)"]
+    assert panel.row_rect(0) is None and panel.row_rect(3) is None, "non-matches are gone"
+    view = panel.view_rect
+    in_list = [t[5] for t in painter.texts if _inside(t[:4], view)]
+    assert "Number of photons" not in in_list, "the closed field's caption is outside"
+    assert "tau" in painter.strings, "the filter field shows what was typed"
+    assert menus.FILTER_PLACEHOLDER not in painter.strings
+    # Case-insensitive, anywhere in the label; the matched part is gold.
+    painter = _type(form, "\b")
+    form.key(KEY_BACKSPACE)
+    form.key(KEY_BACKSPACE)
+    form.key(KEY_BACKSPACE)
+    assert panel.query == ""
+    painter = _type(form, "GREEN")
+    assert _row_strings(form, panel) == ["Tau (green)", "Ratio green/red", "Anisotropy (green)"]
+    gold = [t[5] for t in painter.texts if t[6][:3] == menus.style.GOLD[:3]]
+    assert gold.count("green") == 3
+
+
+def test_every_word_matches_in_any_order():
+    assert menus.filter_marks("Tau (green)", "tau gr") == [(0, 3), (5, 7)]
+    assert menus.filter_marks("Tau (green)", "gr tau") == [(0, 3), (5, 7)]
+    assert menus.filter_marks("Tau (green)", "tau red") is None
+    assert menus.filter_marks("Tau (green)", "  ") == []
+    form = Form(Model(TAUS), _spec())
+    panel = form.open()
+    _type(form, "gr tau")
+    assert _row_strings(form, panel) == ["Tau (green)"]
+
+
+def test_the_arrows_and_enter_pick_among_the_matches():
+    model = Model(TAUS, value="Duration")
+    form = Form(model, _spec())
+    panel = form.open()
+    assert panel.highlight == TAUS.index("Duration")
+    _type(form, "tau")
+    assert panel.highlight == 1, "the first match is highlighted"
+    form.key(KEY_DOWN)
+    form.key(KEY_DOWN)
+    assert panel.highlight == 6
+    form.key(KEY_DOWN)
+    assert panel.highlight == 6, "the last match is the end: hidden rows are skipped"
+    form.key(KEY_UP)
     assert panel.highlight == 2
     form.key(KEY_ENTER)
+    assert not panel.open
     form.frame()
-    assert form.model.pick == "Ratio green"
+    assert model.pick == "Tau (red)"
+
+
+def test_escape_clears_the_filter_then_closes():
+    model = Model(TAUS, value="Duration")
+    form = Form(model, _spec())
+    panel = form.open()
+    _type(form, "zz")
+    form.key(KEY_ESCAPE)
+    assert panel.open and panel.query == ""
+    assert len(_row_strings(form, panel)) == len(TAUS), "the whole list is back"
+    form.key(KEY_ESCAPE)
+    assert not panel.open
+    form.frame()
+    assert model.pick == "Duration" and form.panel() is None
+
+
+def test_a_filter_that_matches_nothing_shows_a_dim_no_match_row():
+    model = Model(TAUS)
+    form = Form(model, _spec())
+    panel = form.open()
+    painter = _type(form, "xyz")
+    assert panel.shown() == [] and panel.highlight is None
+    row = [t for t in painter.texts if t[5] == menus.NO_MATCH]
+    assert row and row[0][6][:3] == menus.style.TEXT_DISABLED[:3]
+    form.key(KEY_ENTER)
+    assert panel.open, "Enter on no match picks nothing"
+    x, y, w, h = panel.view_rect
+    form.click(x + 10.0, y + ROW_H / 2.0)
+    assert panel.open and model.pick == TAUS[0], "the no-match row is not an item"
+    form.key(KEY_BACKSPACE)
+    assert panel.query == "xy"
+
+
+def test_a_click_picks_an_item_from_the_filtered_list():
+    model = Model(TAUS)
+    form = Form(model, _spec())
+    panel = form.open()
+    _type(form, "tau")
+    x, y, w, h = panel.row_rect(6)                    # "Tau (yellow)", third row now
+    assert y == pytest.approx(panel.view_rect[1] + 2 * ROW_H)
+    form.click(x + w / 2.0, y + h / 2.0)
+    assert not panel.open
+    assert model.pick == "Tau (yellow)"
+
+
+def test_keys_typed_into_the_filter_do_not_reach_the_form_under_it():
+    seen = []
+    spec = _spec()
+    spec["sections"].insert(0, {"type": "value", "attr": "name", "label": ""})
+    spec["sections"].append({"type": "custom", "key": "probe"})
+    model = Model(TAUS)
+    model.name = "abc"
+    form = Form(model, spec)
+    form.state.custom["probe"] = lambda *a: seen.append(
+        (emtk.get_io().key, emtk.get_io().text))
+    # Focus the text field, as a user who was typing there would have it ...
+    x, y, w, h = form.state.rects["name"]
+    form.click(x + w - 4.0, y + h / 2.0)
+    form.key(ord("D"), "d")
+    assert form.state.buffers.get("name") == "abcd"
+    # ... then open the list and type: the filter gets it, the form nothing.
+    panel = form.open()
+    assert form.io.want_capture_keyboard
+    seen.clear()
+    _type(form, "tau")
+    form.key(KEY_BACKSPACE)
+    form.key(KEY_DOWN)
+    assert panel.query == "ta"
+    assert seen and all(s == (0, "") for s in seen), "the form under the list saw keys"
+    assert model.name == "abcd", "the click on the combo committed the field, no more"
+    assert "name" not in form.state.buffers, "the filter's keys were typed into the field"
+
+
+def test_the_list_stays_anchored_while_it_filters():
+    form = Form(Model(TAUS), _spec())
+    panel = form.open()
+    opened = panel.panel_rect
+    heights = [opened[3]]
+    for ch in "tau (":
+        _type(form, ch)
+        x, y, w, h = panel.panel_rect
+        assert (x, y, w) == pytest.approx(opened[:3]), "moved or changed width"
+        assert panel.filter_rect[1] == pytest.approx(opened[1] + menus.PAD)
+        heights.append(h)
+    assert heights[-1] < heights[0] and heights == sorted(heights, reverse=True)
+    assert heights[-1] == pytest.approx(3 * ROW_H + ROW_H + 2.5 * menus.PAD)
+    form.key(KEY_ESCAPE)
+    assert panel.panel_rect == pytest.approx(opened), "cleared, it is as it opened"
+    # A list flipped above its field keeps its top, too.
+    flipped = Form(Model(TAUS), _spec(above=12), size=(400.0, 420.0))
+    field = flipped.state.rects["pick"]
+    panel = flipped.open()
+    opened = panel.panel_rect
+    assert opened[1] + opened[3] == pytest.approx(field[1]), "flipped above"
+    _type(flipped, "red")
+    assert panel.panel_rect[:3] == pytest.approx(opened[:3])
+    assert panel.panel_rect[3] < opened[3]
+
+
+def test_a_context_menu_has_no_filter_and_ignores_typing():
+    popup = menus.Popup([menus.MenuItem(f"Action {i}") for i in range(20)])
+    popup.open_at(10.0, 10.0)
+    painter = RecordingPainter()
+    popup.draw(painter, 0.0, 0.0, 300.0, 400.0)
+    assert not popup.filterable and popup.filter_rect is None
+    popup.key(ord("A"), "a")
+    popup.key(ord("5"), "5")
+    assert popup.query == "" and popup.highlight is None and popup.open
 
 
 def test_a_click_on_an_item_picks_it():

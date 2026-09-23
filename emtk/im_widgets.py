@@ -869,7 +869,8 @@ def combo(label: str, current: int, items: Sequence[str],
     The list is an overlay (:mod:`emtk.overlays`), drawn over everything at
     the end of the frame: below the field or flipped above it, as wide as its
     longest item, inside the frame, scrolled when it is long, with the keyboard
-    and type-to-find. The pick is returned on the frame after it was made.
+    and -- for a long list -- a filter field typed into. The pick is returned
+    on the frame after it was made.
 
     ``items_count`` and ``popup_max_height_in_items`` are the reference's
     trailing parameters. C++ has no length on an array of pointers, so the

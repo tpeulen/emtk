@@ -46,25 +46,26 @@ What was deliberately skipped
   has hover information; nothing in this module reads a clock.
 * **Keyboard navigation of bar menus.** The reference's menus are fully
   navigable, through a global input context. A :class:`Popup` takes keys
-  through :meth:`Popup.key` (up, down, Enter, Escape, type-to-find), which is
-  what a combo's list and a context menu need; a :class:`MenuBar` leaves keys
-  to the host.
+  through :meth:`Popup.key` (up, down, Enter, Escape, and -- in a combo's
+  list -- a filter typed into a field at its top), which is what a combo's
+  list and a context menu need; a :class:`MenuBar` leaves keys to the host.
 
 A :class:`Popup` taller than its viewport is capped to it and **scrolls** (the
 wheel, a scrollbar, the keyboard), and one opened under a field
 (:meth:`Popup.open_below`) is the list of a combo box: as wide as the field and
-its widest row, below it or flipped above it, never outside the viewport.
+its widest row, below it or flipped above it, never outside the viewport. A
+long one has a **filter** at its top (:data:`FILTER_MIN_ITEMS`): what is typed
+narrows the list to the rows that contain every word of it, in any order.
 :mod:`emtk.overlays` draws one over an immediate-mode frame and feeds it the
 frame's input.
 """
 from __future__ import annotations
 
-import time
 from collections.abc import Sequence
 from typing import NamedTuple, Union
 
 from .. import style
-from ..keys import (KEY_DOWN, KEY_END, KEY_ENTER, KEY_ESCAPE, KEY_HOME, KEY_PAGE_DOWN,
+from ..keys import (KEY_BACKSPACE, KEY_DOWN, KEY_END, KEY_ENTER, KEY_ESCAPE, KEY_HOME, KEY_PAGE_DOWN,
                     KEY_PAGE_UP, KEY_RETURN, KEY_UP)
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 
@@ -77,7 +78,10 @@ __all__ = [
     "SEPARATOR_SCALE",
     "SCROLLBAR_W",
     "WHEEL_ROWS",
-    "FIND_TIMEOUT",
+    "FILTER_MIN_ITEMS",
+    "FILTER_PLACEHOLDER",
+    "NO_MATCH",
+    "filter_marks",
     "best_popup_pos",
     "PopupPress",
     "MenuItem",
@@ -117,8 +121,16 @@ SCROLLBAR_W = 10.0
 #: Rows one notch of the wheel scrolls a popup by.
 WHEEL_ROWS = 3
 
-#: Seconds between two letters typed into a popup that still extend one search.
-FIND_TIMEOUT = 1.0
+#: A combo's list of at least this many items opens with a filter field at its
+#: top; a shorter one is read at a glance and has none. The same for every
+#: host; :func:`emtk.overlays.combo_list` takes ``filter=`` to force either.
+FILTER_MIN_ITEMS = 8
+
+#: What an empty filter field says.
+FILTER_PLACEHOLDER = "filter…"
+
+#: The dim row a filter that matches nothing leaves in the list.
+NO_MATCH = "no match"
 
 #: Stands in for the reference's ``FLT_MAX`` in a rectangle that is unbounded
 #: on one axis. A real number rather than ``inf`` because an unbounded viewport
@@ -217,6 +229,31 @@ def best_popup_pos(
     return (pos_x, pos_y, "none")
 
 
+def filter_marks(label: str, query: str) -> list[tuple[int, int]] | None:
+    """Where *query* matches *label*, or ``None`` when it does not.
+
+    The query is split at whitespace and **every** word must occur in the
+    label, case-insensitively, in any order: "tau gr" matches "Tau (green)".
+    The result is the matched ``(start, end)`` spans, sorted and merged -- what
+    a row draws highlighted; an empty query matches with no spans.
+    """
+    words = query.lower().split()
+    text = label.lower()
+    spans: list[tuple[int, int]] = []
+    for word in words:
+        at = text.find(word)
+        if at < 0:
+            return None
+        spans.append((at, at + len(word)))
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
 class PopupPress(NamedTuple):
     """What a menu or popup did with one press.
 
@@ -287,6 +324,29 @@ def _wrap(p: Painter, text: str, room: float) -> list[str]:
             line += char
     lines.append(line)
     return lines
+
+
+def _draw_marked(p: Painter, x: float, y: float, room: float, h: float, shown: str,
+                 label: str, marks, colour) -> None:
+    """Draw *shown* (*label*, perhaps cut) with the *marks* spans in gold.
+
+    The label is drawn in runs, each at the width of the text before it, so
+    the letters land where one :meth:`Painter.text` would put them. A cut
+    label marks only what is still visible of it.
+    """
+    visible = len(shown) if shown == label else max(len(shown) - 1, 0)
+    cuts = sorted({0, len(shown)} | {min(max(i, 0), visible)
+                                     for span in marks for i in span})
+    marked = [False] * len(shown)
+    for start, end in marks:
+        for i in range(min(start, visible), min(end, visible)):
+            marked[i] = True
+    for start, end in zip(cuts, cuts[1:]):
+        if start >= end:
+            continue
+        left = p.text_width(shown[:start]) if start else 0.0   # some painters measure "" as a glyph
+        p.text(x + left, y, max(room - left, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
+               shown[start:end], style.GOLD if marked[start] else colour)
 
 
 def _columns_width(label_w: float, shortcut_w: float, mark_w: float) -> float:
@@ -535,6 +595,9 @@ class MenuItem:
         :class:`Menu` so every row's shortcut lands in the same column. Zero
         when the row is drawn on its own, which right-aligns its own shortcut in
         its own box -- the same result for a menu of one.
+    marks : tuple of (int, int)
+        Spans of the label a filter matched, drawn in the accent colour. Set by
+        the :class:`Popup` filtering the row; empty otherwise.
     """
 
     def __init__(
@@ -552,6 +615,7 @@ class MenuItem:
         self.checkable = bool(checkable)
         self.hovered = False
         self.column_shortcut_width = 0.0
+        self.marks: tuple[tuple[int, int], ...] = ()
 
     def toggle(self) -> bool:
         """Flip the tick and return its new state.
@@ -584,8 +648,11 @@ class MenuItem:
         room = self.label_room(p, w)
 
         colour = style.TEXT if self.enabled else style.TEXT_DISABLED
-        p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
-               _ellipsize(p, self.label, room), colour)
+        shown = _ellipsize(p, self.label, room)
+        if self.marks and self.enabled:
+            _draw_marked(p, x + PAD, y, room, h, shown, self.label, self.marks, colour)
+        else:
+            p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, shown, colour)
 
         if self.shortcut:
             dim = style.DIM if self.enabled else style.with_alpha(style.TEXT_DISABLED, 140)
@@ -1119,10 +1186,17 @@ class Popup:
     A panel taller than the viewport is capped to it and **scrolls**: the
     wheel (:meth:`wheel`), a scrollbar on its right edge (:meth:`press`,
     :meth:`drag`, :meth:`release`) and the keyboard (:meth:`key`: up, down,
-    Home, End, Page up/down, Enter, Escape, and type-to-find -- letters typed
-    in quick succession jump to the first row that starts with them). A row
-    too long even for the viewport ends in "…" and shows its whole text in a
-    tooltip while it is highlighted.
+    Home, End, Page up/down, Enter, Escape). A row too long even for the
+    viewport ends in "…" and shows its whole text in a tooltip while it is
+    highlighted.
+
+    A popup opened with ``filter=True`` (the list of a long combo) has a text
+    field at its top that takes what is typed: the list shows only the rows
+    containing every word of :attr:`query` (:func:`filter_marks`), with the
+    matched letters in gold, or one dim "no match" row. The arrows and Enter
+    work among the matches, Backspace edits, and Escape clears the filter
+    before it closes the list. While it filters, the panel keeps the place and
+    the width it opened with and only gives up height, at the bottom.
 
     Parameters
     ----------
@@ -1148,6 +1222,10 @@ class Popup:
         Index into :attr:`entries` of the row under the pointer or the keyboard.
     tooltip : str or None
         The whole text of the highlighted row when the row had to be cut.
+    filterable : bool
+        Whether the panel has a filter field (see :meth:`open_below`).
+    query : str
+        What is typed into the filter field.
     modal : bool
         False here; see :class:`PopupModal`.
     """
@@ -1166,8 +1244,8 @@ class Popup:
         self.scroll = 0.0
         self.highlight: int | None = None
         self.tooltip: str | None = None
-        #: The clock type-to-find reads; a test swaps it for a fake one.
-        self.clock = time.monotonic
+        self.filterable = False
+        self.query = ""
         self._panel: tuple[float, float, float, float] | None = None
         self._view: tuple[float, float, float, float] | None = None
         self._rows: list[Row] = []
@@ -1179,20 +1257,33 @@ class Popup:
         self._reveal: tuple[int, bool] | None = None
         self._pointer: tuple[float, float] | None = None
         self._rehover = False
-        self._find = ("", -1.0e9)
+        self._filter_rect: tuple[float, float, float, float] | None = None
 
     # ------------------------------------------------------------------ #
     def _reset(self) -> None:
         self.last_dir = None
         self.scroll = 0.0
         self.tooltip = None
+        self.query = ""
         self._grab = None
         self._pointer = None
-        self._find = ("", -1.0e9)
         for entry in self.entries:
             if entry is not None:
                 entry.hovered = False
+                entry.marks = ()
         self.open = True
+
+    def shown(self) -> list[int]:
+        """Indices into :attr:`entries` of the rows the list shows: all of
+        them, or -- while a filter is typed -- the items that match it."""
+        if not (self.filterable and self.query.strip()):
+            return list(range(len(self.entries)))
+        return [i for i, entry in enumerate(self.entries)
+                if entry is not None and filter_marks(entry.label, self.query) is not None]
+
+    def _filter_h(self, row_h: float) -> float:
+        """The height the filter field takes at the top, with its gap."""
+        return row_h + PAD * 0.5 if self.filterable else 0.0
 
     def open_at(self, x: float | None = None, y: float | None = None) -> None:
         """Put the panel up at a point.
@@ -1208,7 +1299,8 @@ class Popup:
         self._reveal = None
         self._reset()
 
-    def open_below(self, field: Sequence[float], current: int | None = None) -> None:
+    def open_below(self, field: Sequence[float], current: int | None = None,
+                   filter: bool = False) -> None:
         """Put the panel up as the list of the field ``(x, y, w, h)``.
 
         Parameters
@@ -1219,8 +1311,11 @@ class Popup:
         current : int, optional
             Index into :attr:`entries` of the current choice: highlighted, and
             scrolled into view when the panel first draws.
+        filter : bool, optional
+            Give the list a filter field at its top, which takes the keys.
         """
         fx, fy, fw, fh = (float(v) for v in field)
+        self.filterable = bool(filter)
         self.below = (fx, fy, fw, fh)
         self.anchor = (fx, fy + fh)
         self.min_width = fw
@@ -1255,10 +1350,10 @@ class Popup:
         tuple of float
             ``(width, height)``.
         """
-        width, height, _row_h, _title_h, _shortcut_w = _panel_metrics(
+        width, height, row_h, _title_h, _shortcut_w = _panel_metrics(
             p, self.entries, self.title
         )
-        return (max(width, self.min_width), height)
+        return (max(width, self.min_width), height + self._filter_h(row_h))
 
     @property
     def panel_rect(self) -> tuple[float, float, float, float] | None:
@@ -1312,10 +1407,25 @@ class Popup:
         Never outside the viewport: taller than it, the panel is capped to it
         (and scrolls); wider than it, the panel is the viewport's width (and
         its longest rows end in "…").
+
+        The place is worked out from **all** the entries, whatever the filter
+        shows, so a list does not move or change width while it is filtered;
+        a filtered list is only shorter, from the bottom.
         """
-        width, height, _row_h, _title_h, _shortcut_w = _panel_metrics(
+        pos_x, pos_y, pan_w, pan_h = self._place_all(p, x, y, w, h)
+        shown = self.shown()
+        if len(shown) < len(self.entries):
+            _w, need, row_h, _t, _s = _panel_metrics(
+                p, [self.entries[i] for i in shown] or [MenuItem(NO_MATCH)], self.title)
+            pan_h = min(pan_h, need + self._filter_h(row_h))
+        return (pos_x, pos_y, pan_w, pan_h)
+
+    def _place_all(self, p: Painter, x: float, y: float, w: float, h: float
+                   ) -> tuple[float, float, float, float]:
+        width, height, row_h, _title_h, _shortcut_w = _panel_metrics(
             p, self.entries, self.title
         )
+        height += self._filter_h(row_h)
         pan_h = min(height, h)
         if height > h + 0.5:
             width += SCROLLBAR_W
@@ -1358,12 +1468,15 @@ class Popup:
             p.fill_rect(x, y, w, h, style.MODAL_DIM_BG)
 
         pos_x, pos_y, width, height = self.place(p, x, y, w, h)
+        shown = self.shown()
+        entries = [self.entries[i] for i in shown]
         _nat_w, nat_h, row_h, title_h, _shortcut_w = _panel_metrics(
-            p, self.entries, self.title
+            p, entries or [MenuItem(NO_MATCH)], self.title
         )
+        head = title_h + self._filter_h(row_h)
         self._row_h = row_h
         self._panel = (pos_x, pos_y, width, height)
-        view = (pos_x, pos_y + PAD + title_h, width, max(height - 2.0 * PAD - title_h, 0.0))
+        view = (pos_x, pos_y + PAD + head, width, max(height - 2.0 * PAD - head, 0.0))
         self._view = view
         content = nat_h - 2.0 * PAD - title_h
         self._max_scroll = max(content - view[3], 0.0)
@@ -1374,11 +1487,14 @@ class Popup:
             self._reveal = None
             self._reveal_row(p, index, centre, view[3])
         self.scroll = style.clamp(self.scroll, 0.0, self._max_scroll)
-        self._rows = _lay_rows(p, pos_x, pos_y - self.scroll, row_w, self.entries,
-                               self.title, (x + w, y + h))
+        self._rows = _lay_rows(p, pos_x, pos_y + head - title_h - self.scroll, row_w,
+                               entries, self.title, (x + w, y + h))
+        filtering = self.filterable and bool(self.query.strip())
         for index, entry in enumerate(self.entries):
             if entry is not None:
                 entry.hovered = index == self.highlight
+                marks = filter_marks(entry.label, self.query) if filtering else None
+                entry.marks = tuple(marks or ())
 
         # Opaque, as emtk's windows are: a list over a form must not show the
         # form's text through its rows.
@@ -1398,8 +1514,15 @@ class Popup:
                                 1.0, style.SEPARATOR)
                     continue
                 entry.draw_row(p, *rect)
+            if not entries:
+                p.text(pos_x + PAD, view[1], max(row_w - 2.0 * PAD, 1.0), row_h,
+                       ALIGN_VCENTER | ALIGN_LEFT, NO_MATCH, style.TEXT_DISABLED)
         finally:
             p.pop_clip()
+        self._filter_rect = None
+        if self.filterable:
+            self._draw_filter(p, pos_x + PAD, pos_y + PAD + title_h,
+                              max(width - 2.0 * PAD, 1.0), row_h)
         self._draw_scrollbar(p, view, content)
 
         for entry, rect in self._rows:
@@ -1407,12 +1530,41 @@ class Popup:
                 entry.draw_panel(p, *rect)
         self._draw_tooltip(p, x, y, w, h)
 
+    def _draw_filter(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
+        """The filter field: what is typed and a caret, or a dim placeholder."""
+        self._filter_rect = (x, y, w, h)
+        p.stroke_rect(x, y, w, h, style.FRAME_BG_ACTIVE, style.FRAME_BG)
+        room = max(w - 2.0 * PAD, 1.0)
+        if not self.query:
+            p.fill_rect(x + PAD, y + 3.0, 1.0, max(h - 6.0, 1.0), style.TEXT)
+            p.text(x + PAD + 2.0, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
+                   _ellipsize(p, FILTER_PLACEHOLDER, room), style.DIM)
+            return
+        text = self.query
+        while len(text) > 1 and p.text_width(text) > room - 2.0:
+            text = text[1:]                     # a long filter shows its end
+        p.push_clip(x, y, w, h)
+        try:
+            p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, text, style.TEXT)
+            caret = min(x + PAD + p.text_width(text) + 1.0, x + w - 2.0)
+            p.fill_rect(caret, y + 3.0, 1.0, max(h - 6.0, 1.0), style.TEXT)
+        finally:
+            p.pop_clip()
+
+    @property
+    def filter_rect(self) -> tuple[float, float, float, float] | None:
+        """Where the filter field was last painted, or ``None`` without one."""
+        return self._filter_rect
+
     def _reveal_row(self, p: Painter, index: int, centre: bool, view_h: float) -> None:
         """Scroll so entry *index* is in view: centred, or just inside an edge."""
         _w, _h, row_h, _title_h, _sw = _panel_metrics(p, self.entries, self.title)
+        shown = self.shown()
+        if index not in shown:
+            return
         top = 0.0
-        for entry in self.entries[:index]:
-            top += row_h * SEPARATOR_SCALE if entry is None else row_h
+        for i in shown[:shown.index(index)]:
+            top += row_h * SEPARATOR_SCALE if self.entries[i] is None else row_h
         if centre:
             self.scroll = top - (view_h - row_h) * 0.5
         elif top < self.scroll:
@@ -1573,8 +1725,25 @@ class Popup:
 
     # ------------------------------------------------------------------ #
     def _navigable(self) -> list[int]:
-        return [i for i, entry in enumerate(self.entries)
-                if entry is not None and entry.enabled]
+        return [i for i in self.shown()
+                if self.entries[i] is not None and self.entries[i].enabled]
+
+    def set_query(self, query: str) -> None:
+        """Filter the list by *query*: the first match is highlighted and the
+        list scrolls to its top; cleared, the highlight stays and is shown."""
+        query = str(query)
+        if query == self.query:
+            return
+        self.query = query
+        rows = self._navigable()
+        if query.strip():
+            self.highlight = rows[0] if rows else None
+            self.scroll = 0.0
+            self._reveal = None
+        else:
+            if self.highlight not in rows:
+                self.highlight = rows[0] if rows else None
+            self._reveal = (self.highlight, True) if self.highlight is not None else None
 
     def _go(self, index: int | None) -> None:
         if index is not None:
@@ -1585,8 +1754,10 @@ class Popup:
         """Process a key while the popup is up.
 
         Up/Down move the highlight (Home/End to the ends, Page up/down by a
-        page), Enter activates the highlighted row, Escape closes the popup,
-        and letters jump to the first row starting with what was typed.
+        page) and Enter activates the highlighted row. With a filter field,
+        typed text and Backspace edit the filter, and Escape clears a filter
+        before it closes the popup; without one, Escape closes it and text is
+        ignored.
 
         Returns
         -------
@@ -1599,8 +1770,14 @@ class Popup:
         at = rows.index(self.highlight) if self.highlight in rows else None
         page = max(int(self._view[3] // self._row_h) - 1, 1) if self._view and self._row_h else 8
         if key == KEY_ESCAPE:
+            if self.filterable and self.query:
+                self.set_query("")
+                return PopupPress(None, True, False)
             self.close()
             return PopupPress(None, True, True)
+        if self.filterable and key == KEY_BACKSPACE:
+            self.set_query(self.query[:-1])
+            return PopupPress(None, True, False)
         if key in (KEY_RETURN, KEY_ENTER):
             if self.highlight is None:
                 return PopupPress(None, True, False)
@@ -1624,30 +1801,11 @@ class Popup:
             self._go(rows[0])
         elif rows and key == KEY_END:
             self._go(rows[-1])
-        elif text and text.isprintable():
-            self._type_to_find(text, rows)
+        elif self.filterable and text:
+            typed = "".join(ch for ch in text if ch.isprintable())
+            if typed:
+                self.set_query(self.query + typed)
         return PopupPress(None, True, False)
-
-    def _type_to_find(self, text: str, rows: list[int]) -> None:
-        """Jump to the first row starting with the letters typed lately.
-
-        Letters typed within :data:`FIND_TIMEOUT` of each other extend one
-        search ("ra" finds "ratio" rather than "red"); the same letter typed
-        again, when nothing starts with the doubled prefix, steps to the next
-        row starting with that letter, as native lists do.
-        """
-        now = self.clock()
-        typed, when = self._find
-        typed = (typed if now - when <= FIND_TIMEOUT else "") + text.lower()
-        self._find = (typed, now)
-        labels = {i: self.entries[i].label.lower() for i in rows}
-        match = next((i for i in rows if labels[i].startswith(typed)), None)
-        if match is None and len(set(typed)) == 1:
-            first = [i for i in rows if labels[i].startswith(typed[0])]
-            if first:
-                later = [i for i in first if self.highlight is None or i > self.highlight]
-                match = (later or first)[0]
-        self._go(match)
 
     def _press_outside(self) -> PopupPress:
         """Report what a press that missed the panel does.

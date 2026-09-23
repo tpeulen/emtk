@@ -68,8 +68,9 @@ from: the text is edited freely and **committed** on Enter or when the pointer
 goes down elsewhere, then parsed, clamped and written. A choice opens its list
 itself, as an overlay over everything the frame drew (:mod:`emtk.overlays`):
 below the field or flipped above it, as wide as its longest option, inside the
-frame, scrolled when long, with the keyboard and type-to-find. The host draws
-and routes nothing for it.
+frame, scrolled when long, with the keyboard; a long one (or one whose section
+says ``"filter": true``) has a filter field at its top that narrows it to what
+is typed. The host draws and routes nothing for it.
 """
 from __future__ import annotations
 
@@ -549,7 +550,8 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
     caption = labels[index] if labels else ""
     clicked = _combo_field(f"##choice-{name}", caption, width)
     field = tuple(ctx.get_item_rect())
-    _overlays.combo_list(key, list(labels), index, below=field if clicked else None)
+    _overlays.combo_list(key, list(labels), index, below=field if clicked else None,
+                         filter=section.get("filter"))
     _remember(state, name)
     _tooltip(section)
 

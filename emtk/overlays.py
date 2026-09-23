@@ -11,7 +11,10 @@ outside closes it without reaching what is behind.
 What is drawn is a :class:`emtk.widgets.menus.Popup`: placed inside the frame
 (below its field, flipped above it, or shifted and capped to the frame, never
 outside), as wide as its widest row, scrolled with the wheel, a scrollbar or
-the keyboard, with type-to-find. So a host draws nothing and routes nothing:
+the keyboard. A combo's list of :data:`~emtk.widgets.menus.FILTER_MIN_ITEMS`
+items or more opens with a filter field at its top, which takes the keys:
+typing narrows the list to the items containing every word typed. So a host
+draws nothing and routes nothing:
 
 .. code-block:: python
 
@@ -133,7 +136,8 @@ def _index(state: dict, item) -> Optional[int]:
 
 
 def combo_list(key: Any, labels: Sequence[str], current: int,
-               below: Optional[Sequence[float]] = None) -> None:
+               below: Optional[Sequence[float]] = None,
+               filter: Optional[bool] = None) -> None:
     """The list of a combo box: opened under *below*, kept up while open.
 
     Call it every frame the combo is drawn, after its closed field; pass the
@@ -150,14 +154,21 @@ def combo_list(key: Any, labels: Sequence[str], current: int,
         The current option: ticked, highlighted, and scrolled into view.
     below : (x, y, w, h), optional
         The closed field; given, the list opens (again) under it.
+    filter : bool, optional
+        Whether the list has a filter field at its top. ``None`` (the
+        default) gives one to a list of at least
+        :data:`~emtk.widgets.menus.FILTER_MIN_ITEMS` items.
     """
-    from .widgets.menus import MenuItem, Popup
+    from .widgets.menus import FILTER_MIN_ITEMS, MenuItem, Popup
 
     state = _combo(key)
     if below is not None and labels:
         items = [MenuItem(str(label), checked=(i == current)) for i, label in enumerate(labels)]
         panel = Popup(items)
-        panel.open_below(below, current if 0 <= current < len(items) else None)
+        if filter is None:
+            filter = len(items) >= FILTER_MIN_ITEMS
+        panel.open_below(below, current if 0 <= current < len(items) else None,
+                         filter=bool(filter))
         state["panel"], state["items"] = panel, items
     panel = state.get("panel")
     if panel is None:
