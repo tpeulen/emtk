@@ -26,6 +26,8 @@ __all__ = [
     "DROP_DIR",
     "MOUNT_DIR",
     "WebPage",
+    "download",
+    "in_browser",
     "mount",
     "wheel_steps_from_dom",
     "user_files_dir",
@@ -63,6 +65,56 @@ def user_files_dir(fallback: str = "/") -> str:
         if pathlib.Path(candidate).is_dir():
             return candidate
     return fallback
+
+
+def in_browser() -> bool:
+    """Whether this interpreter runs in a page (Pyodide), where files come and go
+    through drops, the mounted folder and downloads."""
+    import sys  # noqa: PLC0415
+
+    return sys.platform == "emscripten"
+
+
+def download(name: str, data: bytes, mime: str = "application/octet-stream", js=None) -> None:
+    """Hand *data* to the browser as a download called *name*.
+
+    A page has no file system of the user's: a file written to Pyodide's is
+    gone when the tab closes, and one written into the mounted folder only
+    exists where a folder was mounted. A download is the one way out that
+    always works -- what "Save" means in a page.
+
+    Parameters
+    ----------
+    name : str
+        The file name the browser suggests.
+    data : bytes
+        The content.
+    mime : str
+        Its media type (``image/png``, ``application/json``, ...).
+    js : module, optional
+        The ``js`` namespace; Pyodide's by default. A test passes a stand-in.
+    """
+    if js is None:
+        import js  # noqa: PLC0415 - only exists inside Pyodide
+    try:
+        from pyodide.ffi import to_js  # noqa: PLC0415
+    except ImportError:  # a stand-in js namespace: pass Python values through
+        def to_js(value, **_kw):
+            return value
+    buffer = to_js(memoryview(bytes(data)))
+    options = to_js({"type": str(mime)}, dict_converter=js.Object.fromEntries)
+    blob = js.Blob.new(to_js([buffer]), options)
+    url = js.URL.createObjectURL(blob)
+    try:
+        anchor = js.document.createElement("a")
+        anchor.href = url
+        anchor.download = str(name)
+        anchor.style.display = "none"
+        js.document.body.appendChild(anchor)
+        anchor.click()
+        js.document.body.removeChild(anchor)
+    finally:
+        js.URL.revokeObjectURL(url)
 
 
 class WebPage:

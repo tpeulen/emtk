@@ -185,3 +185,40 @@ def test_a_control_is_lifted_and_a_spec_is_mounted(monkeypatch):
     assert isinstance(web.app, _Control)
     assert web.surface.control is web.app
     assert web.surface.attached == ("d", "rgba8unorm", 1600, 1000, 2.0)
+
+
+def test_download_hands_the_bytes_to_an_anchor_and_lets_the_url_go():
+    """``download`` builds a Blob of the bytes, clicks a hidden ``<a download>``
+    with the name, removes it, and revokes the object URL."""
+    from types import SimpleNamespace
+
+    from emtk.web.page import download, in_browser
+
+    log = []
+
+    class _Anchor(SimpleNamespace):
+        def click(self):
+            log.append(("click", self.href, self.download))
+
+    class _Blob:
+        @staticmethod
+        def new(parts, options):
+            log.append(("blob", bytes(parts[0]), options))
+            return "blob-object"
+
+    body = SimpleNamespace(appendChild=lambda a: log.append(("append", a.download)),
+                           removeChild=lambda a: log.append(("remove", a.download)))
+    fake = SimpleNamespace(
+        Object=SimpleNamespace(fromEntries=dict),
+        Blob=_Blob,
+        URL=SimpleNamespace(createObjectURL=lambda blob: "blob:1",
+                            revokeObjectURL=lambda url: log.append(("revoke", url))),
+        document=SimpleNamespace(body=body,
+                                 createElement=lambda tag: _Anchor(style=SimpleNamespace())),
+    )
+    download("shot.png", b"\x89PNG", "image/png", js=fake)
+    assert log[0] == ("blob", b"\x89PNG", {"type": "image/png"})
+    assert ("click", "blob:1", "shot.png") in log
+    assert log[-1] == ("revoke", "blob:1")
+    assert ("remove", "shot.png") in log
+    assert in_browser() is False
