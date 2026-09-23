@@ -26,7 +26,7 @@ from . import implot as ImPlot
 from . import implot_items as _items
 from .implot_internal import gp
 
-__all__ = ["show_demo_window", "DEMOS", "STATE", "plot_candlestick"]
+__all__ = ["show_demo_window", "DEMOS", "STATE", "plot_candlestick", "make_app"]
 
 #: The demos' ``static`` locals, by demo.
 STATE: dict = {}
@@ -1130,3 +1130,31 @@ def show_demo_window() -> None:
                 if im.tree_node(label):
                     demo()
                     im.tree_pop()
+
+
+def _demo_gui() -> None:
+    """The demo window, filling the host's surface -- the gui of :func:`make_app`."""
+    from .im_core import get_current_context  # noqa: PLC0415
+
+    x, y, w, h = get_current_context().box
+    im.begin("ImPlot Demo", (x + 8.0, y + 8.0, max(w - 16.0, 100.0), max(h - 16.0, 100.0)))
+    # One live plot up front, so the page shows a plot before any click; the
+    # reference's sections follow, as its ShowDemoWindow lays them out.
+    demo_line_plots()
+    show_demo_window()
+    im.end()
+
+
+def make_app():
+    """ImPlot's demo as an emtk app, for any GPU host.
+
+    ::
+
+        python -m emtk.web.serve --app emtk.implot_demo:make_app
+        python -m emtk.native --app emtk.implot_demo:make_app
+
+    Continuous frames, because several demos animate with the clock.
+    """
+    from .app import ImApp  # noqa: PLC0415
+
+    return ImApp(_demo_gui, continuous=True)

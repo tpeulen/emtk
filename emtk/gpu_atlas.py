@@ -179,9 +179,27 @@ def png_decode(data: bytes):
     try:
         return qt_decode(data)
     except ImportError:
+        pass
+    # Pillow next: it is what a browser page has (Pyodide ships it, and Qt
+    # can never be there), and in WebAssembly the pure-Python decoder is not
+    # two seconds but half a minute of a page that looks hung.
+    try:
+        return _pil_decode(data)
+    except ImportError:
         from .testing import png_decode as slow_decode  # noqa: PLC0415
 
         return slow_decode(data)
+
+
+def _pil_decode(data: bytes):
+    """``(width, height, rgba bytes)`` through Pillow; ``ImportError`` without it."""
+    import io  # noqa: PLC0415
+
+    from PIL import Image  # noqa: PLC0415
+
+    with Image.open(io.BytesIO(data)) as image:
+        rgba = image.convert("RGBA")
+        return rgba.width, rgba.height, rgba.tobytes()
 
 
 # --------------------------------------------------------------------------- #

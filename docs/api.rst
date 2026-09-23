@@ -156,6 +156,33 @@ wgpu host: ``emtk.wgpu_host``
 .. automodule:: emtk.wgpu_host
    :noindex:
 
+Apps and surfaces: ``emtk.app``
+--------------------------------
+
+.. automodule:: emtk.app
+   :noindex:
+
+GPU seam: ``emtk.gpu``
+------------------------
+
+.. automodule:: emtk.gpu
+   :noindex:
+
+Toolkit-free window: ``emtk.native``
+--------------------------------------
+
+.. automodule:: emtk.native
+   :noindex:
+
+Browser host: ``emtk.web``
+----------------------------
+
+.. automodule:: emtk.web.serve
+   :noindex:
+
+.. automodule:: emtk.web.page
+   :noindex:
+
 ImPlot shape: ``emtk.implot``
 --------------------------------
 

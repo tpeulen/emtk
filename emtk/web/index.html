@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="emtk-app" content="{{APP}}">
+<title>{{TITLE}}</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1a1a1a; color: #ddd;
+               font: 13px/1.5 Menlo, monospace; }
+  #view { display: block; width: 100vw; height: calc(100vh - 28px);
+          touch-action: none; }
+  #bar { height: 28px; box-sizing: border-box; border-top: 1px solid #333;
+         display: flex; align-items: center; gap: 12px; padding: 0 10px; }
+  #status { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #files { display: flex; align-items: center; gap: 8px; color: #999; }
+  #files button { font: inherit; color: #ddd; background: #2a2a2a;
+                  border: 1px solid #444; border-radius: 3px; padding: 1px 8px;
+                  cursor: pointer; }
+  #files button:hover { background: #333; }
+  #view.dropping { outline: 2px dashed #6a6; outline-offset: -4px; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="bar">
+  <div id="status">starting…</div>
+  <!-- Local files. Drop a file on the view; in a browser with the File System
+       Access API, mount a whole folder. Both land on Pyodide's filesystem --
+       the app sees paths. -->
+  <div id="files">
+    <span id="drop-hint" hidden>drop a file to open it</span>
+    <button id="mount" hidden title="Mount a local folder at /mnt/local">Mount folder…</button>
+  </div>
+</div>
+<!-- Written by `python -m emtk.web.serve`: what to load and what to run. -->
+<script id="emtk-config" type="application/json">{{CONFIG}}</script>
+<script src="{{PYODIDE_JS}}"></script>
+<script src="boot.js"></script>
+</body>
+</html>

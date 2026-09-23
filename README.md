@@ -150,6 +150,29 @@ from emtk.tk_host import TkHost
 TkHost(App(gui), title="gui", size=(320, 140)).run()
 ```
 
+### 3. In a browser tab, or a window with no toolkit at all
+
+The adapter above ships as `emtk.app.ImApp`, and any control -- or a `gui()`
+wrapped in `ImApp` -- is an *app* the two GPU hosts run from a factory
+`make_app()` that takes no arguments:
+
+```sh
+# A browser tab: Pyodide runs the Python, the browser's WebGPU draws it.
+python -m emtk.web.serve --app emtk.implot_demo:make_app
+# ...with an app package, pure-Python deps, Pyodide packages and local wheels:
+python -m emtk.web.serve --app myapp.main:make_app --package ./myapp \
+    --extra-packages somepurelib --pyodide-packages numpy,scipy --wheels dist/*.whl
+
+# A desktop window through rendercanvas + wgpu, no Qt (pip install glfw wgpu):
+python -m emtk.native --app emtk.implot_demo:make_app
+```
+
+`emtk.web` (loader, DOM event forwarding, file drop, `mountNativeFS`) and
+`emtk.native` (rendercanvas event translation) both drive an
+`emtk.app.Surface`; an application that renders its own 3-D scene beside the
+interface subclasses it instead of being a control. The WebGPU calls go through
+`emtk.gpu`, served by `wgpu-py` on the desktop and by the browser in a page.
+
 ### Where to go next
 
 - `examples/hello_world.py` — Dear ImGui's own "Hello, world!", with the C++ it

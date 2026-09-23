@@ -141,19 +141,19 @@ def _numpy():
 
 
 def _wgpu():
-    """The ``wgpu`` binding, imported on use.
+    """The GPU seam, :mod:`emtk.gpu.api`, spelled like the binding.
 
-    Raises
-    ------
-    ImportError
-        If wgpu is not installed -- the same failure, in the same place, as
-        :func:`.qt_host.host_class` gives without Qt. emtk's claim is that
-        it has no dependencies, which holds exactly as long as importing a
-        module does not have any.
+    Not ``wgpu`` itself: the constants are the specification's and the
+    adapter comes from whichever backend is live -- ``wgpu-py`` on the
+    desktop, the browser's ``navigator.gpu`` in a page -- so this renderer
+    draws in both without knowing which. Importing the seam imports no
+    binding; asking it for an adapter without ``wgpu`` installed raises
+    ``ImportError`` there, the same failure :func:`.qt_host.host_class`
+    gives without Qt.
     """
-    import wgpu  # noqa: PLC0415
+    from .gpu import api  # noqa: PLC0415
 
-    return wgpu
+    return api
 
 
 #: The adapter and device shared by every renderer that did not ask for its
