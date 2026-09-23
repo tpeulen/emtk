@@ -66,12 +66,16 @@ class DialogWindow:
 
     def __init__(self, title: str, size: Sequence[float] = (420.0, 300.0),
                  pos: Optional[Sequence[float]] = None, key: str = "",
-                 escape_closes: bool = True) -> None:
+                 escape_closes: bool = True, fit_height: bool = False) -> None:
         self.title = str(title)
         self.size = (float(size[0]), float(size[1]))
         self.pos = None if pos is None else (float(pos[0]), float(pos[1]))
         self.key = key or self.title
         self.escape_closes = escape_closes
+        #: Size the height to the content drawn last frame (``size[1]`` is then
+        #: only the first frame's guess): a form that folds open or shut, or a
+        #: denser style, never leaves the window half empty or cut short.
+        self.fit_height = bool(fit_height)
         self.open = False
         self.box: Optional[Rect] = None
         self.content_box: Optional[Rect] = None
@@ -163,5 +167,12 @@ class DialogWindow:
 
     def end(self) -> None:
         """Close the content region and the window."""
+        if self.fit_height and self.content_box is not None:
+            # the cursor sits under the last item: that is how tall the content is
+            used = float(_w.get_cursor_screen_pos()[1]) - self.content_box[1]
+            height = round(self.HEADER_H + self.PADDING * 1.75 + max(used, 0.0))
+            if abs(height - self.size[1]) >= 1.0:
+                self.size = (self.size[0], float(height))
+                _core.get_current_context().request_frame()
         _w.end_child()
         _w.end()

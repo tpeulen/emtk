@@ -86,3 +86,32 @@ def test_show_hide_toggle():
     assert window.open
     window.hide()
     assert not window.open
+
+
+def test_fit_height_sizes_the_window_to_its_content():
+    """A window told to fit shrinks to what it drew, and grows when more is drawn."""
+    lines = {"n": 2}
+
+    class Fitting(Host):
+        def frame(self):
+            self.painter = RecordingPainter()
+            with emtk.frame(self.painter, FRAME, io=self.io, storage=self.storage):
+                self.window.begin(FRAME)
+                for i in range(lines["n"]):
+                    emtk.text(f"line {i}")
+                self.window.end()
+
+    host = Fitting(DialogWindow("Fit", size=(400, 500), fit_height=True))
+    host.frame()
+    host.frame()
+    short = host.window.size[1]
+    assert short < 150.0, short
+    _, cy, _, ch = host.window.content_box
+    lines["n"] = 12
+    host.frame()
+    host.frame()
+    assert host.window.size[1] > short + 100.0
+    fixed = Fitting(DialogWindow("Fixed", size=(400, 500)))
+    fixed.frame()
+    fixed.frame()
+    assert fixed.window.size[1] == 500.0
