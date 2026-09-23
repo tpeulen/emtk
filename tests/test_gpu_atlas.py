@@ -283,3 +283,20 @@ def test_the_decoder_needs_no_toolkit_and_agrees_with_the_one_that_does():
     slow_w, slow_h, pure = slow(data)
     assert (fast_w, fast_h) == (slow_w, slow_h)
     assert bytes(fast) == bytes(pure)
+
+
+def test_the_atlas_decodes_without_importing_a_toolkit():
+    """The GPU hosts exist so a process need not load Qt; reading the atlas
+    must not load it either when Pillow can do the job."""
+    import subprocess
+    import sys
+
+    pytest.importorskip("PIL")
+    code = ("import sys\n"
+            "from emtk.font import load_atlas\n"
+            "from emtk.gpu_atlas import png_decode\n"
+            "png_decode(load_atlas().image_path.read_bytes())\n"
+            "print(','.join(m for m in sys.modules if m.split('.')[0] in "
+            "('qtpy', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6')))\n")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == ""

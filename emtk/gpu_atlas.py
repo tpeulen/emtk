@@ -157,34 +157,26 @@ def png_decode(data: bytes):
 
     Notes
     -----
-    Two decoders, and the choice is not about correctness -- they agree --
+    Three decoders, and the choice is not about correctness -- they agree --
     but about **2 seconds**. The pure-Python one in :mod:`.testing` unfilters
     the 640x2795 atlas a byte at a time, which is seven million interpreter
-    iterations and a visible pause at start-up. Qt's decoder is the same
-    picture in tens of milliseconds.
+    iterations and a visible pause at start-up (half a minute in WebAssembly).
 
-    So the Qt one is used *if Qt is installed in this process*, through
-    :mod:`.qt_painter` -- the adapter whose job is already to be optional.
-    This module does not name a toolkit and does not need one: with no Qt it
-    takes the slow road and everything still works, which is what lets the
-    GPU path be tested on a machine with no toolkit at all.
-
-    The ``ImportError`` is caught around the **call**, not around the
-    import. :mod:`.qt_painter` imports Qt inside its functions, precisely so
-    that importing it is free -- so the import always succeeds and it is the
-    call that fails without a binding.
+    Pillow is tried first: a browser page has it (Pyodide ships it), and a
+    desktop process on this GPU path is one that chose *not* to have a
+    toolkit -- decoding through Qt imported all of PyQt into it just to read
+    one picture. Qt, through :mod:`.qt_painter` (which imports it inside its
+    functions), is the fallback where there is no Pillow, and the slow decoder
+    the last resort. This module names no toolkit and works without one.
     """
+    try:
+        return _pil_decode(data)
+    except ImportError:
+        pass
     from .qt_painter import png_decode as qt_decode  # noqa: PLC0415
 
     try:
         return qt_decode(data)
-    except ImportError:
-        pass
-    # Pillow next: it is what a browser page has (Pyodide ships it, and Qt
-    # can never be there), and in WebAssembly the pure-Python decoder is not
-    # two seconds but half a minute of a page that looks hung.
-    try:
-        return _pil_decode(data)
     except ImportError:
         from .testing import png_decode as slow_decode  # noqa: PLC0415
 
