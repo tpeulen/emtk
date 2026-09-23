@@ -36,7 +36,7 @@ from typing import Any, Callable, Optional
 from .control import Control
 from .drawlist import DrawList
 from .events import LEFT_BUTTON, MIDDLE_BUTTON, RIGHT_BUTTON
-from .layout import Layout, LayoutStyle
+from .layout import FRAME_PADDING, ITEM_SPACING, Layout, LayoutStyle
 from .painter import Painter
 from .style import hit
 
@@ -331,8 +331,9 @@ class Style:
     seven coloured buttons needs.
     """
 
-    frame_padding: tuple[float, float] = (4.0, 3.0)
-    item_spacing: tuple[float, float] = (8.0, 4.0)
+    #: The same defaults :class:`~emtk.layout.LayoutStyle` lays rows out with.
+    frame_padding: tuple[float, float] = FRAME_PADDING
+    item_spacing: tuple[float, float] = ITEM_SPACING
     item_inner_spacing: tuple[float, float] = (4.0, 4.0)
     frame_rounding: float = 0.0
     #: ``FrameBorderSize``: an outline in ``Col.BORDER`` around buttons, check

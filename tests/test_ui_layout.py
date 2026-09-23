@@ -13,6 +13,10 @@ The box is ``(10, 20, 200, 300)`` throughout and the painter measures a line at
 * a default row is ``12 + 3 * 2 = 18`` tall,
 * rows are ``4`` apart and items on a line ``8`` apart,
 * one indent step is ``12 + 4 * 2 = 20``.
+
+emtk's own defaults are denser (:data:`emtk.layout.FRAME_PADDING`,
+:data:`~emtk.layout.ITEM_SPACING`), so these tests lay out with the
+reference's constants, :data:`REFERENCE`, and one test checks the defaults.
 """
 
 from __future__ import annotations
@@ -59,12 +63,15 @@ class RecordingPainter:
 
 
 BOX = (10.0, 20.0, 200.0, 300.0)
+#: The reference's ``ItemSpacing = (8, 4)`` and ``FramePadding = (4, 3)``.
+REFERENCE = LayoutStyle(item_spacing_x=8.0, item_spacing_y=4.0,
+                        frame_padding_x=4.0, frame_padding_y=3.0)
 
 
 def make() -> tuple[RecordingPainter, Layout]:
     """A painter and a layout over :data:`BOX`."""
     painter = RecordingPainter()
-    return painter, Layout(painter, *BOX)
+    return painter, Layout(painter, *BOX, style=REFERENCE)
 
 
 # ---------------------------------------------------------------------- #
@@ -435,7 +442,7 @@ def test_content_height_is_the_sum_of_what_was_laid_out():
 def test_content_height_does_not_count_the_gap_after_the_last_row():
     """A panel its rows exactly fill must not grow a scrollbar for nothing."""
     painter = RecordingPainter()
-    layout = Layout(painter, 0.0, 0.0, 100.0, 40.0)
+    layout = Layout(painter, 0.0, 0.0, 100.0, 40.0, REFERENCE)
     layout.row()
     layout.row()
     assert layout.content_height() == 40.0
@@ -574,3 +581,16 @@ def test_an_auto_resizing_window_still_sizes_to_its_content():
             emtk.end()
     assert seen[0] == (900, 620), "the first frame cannot know the content yet"
     assert all(size[0] < 100 for size in seen[1:]), seen
+
+
+def test_emtks_defaults_are_a_text_line_plus_2_px_and_3_px_apart():
+    """emtk's own density: a field is its line plus 2 px above and below, and
+    the next line starts 3 px under it -- the same numbers the ``Style`` has."""
+    from emtk import Style
+    from emtk.layout import FRAME_PADDING, ITEM_SPACING
+
+    layout = Layout(RecordingPainter(), *BOX)
+    assert layout.row() == (10.0, 20.0, 200.0, 16.0)
+    assert layout.row() == (10.0, 39.0, 200.0, 16.0)
+    assert Style().frame_padding == FRAME_PADDING == (4.0, 2.0)
+    assert Style().item_spacing == ITEM_SPACING == (8.0, 3.0)

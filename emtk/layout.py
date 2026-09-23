@@ -46,7 +46,9 @@ Where the numbers come from
 ``FramePadding = (4, 3)``, ``IndentSpacing = 21`` (documented there as
 "generally ``FontSize + FramePadding.x * 2``", which is how it is derived here
 so it tracks the chrome's font rather than the reference's 13-pixel one), and
-``SeparatorSize = 1``. The advance itself is ``ItemSize``:
+``SeparatorSize = 1``. emtk's own defaults are denser in two of them
+(:data:`FRAME_PADDING` ``(4, 2)``, :data:`ITEM_SPACING` ``(8, 3)``); the
+arithmetic is the reference's. The advance itself is ``ItemSize``:
 
 .. code-block:: text
 
@@ -65,12 +67,22 @@ from dataclasses import dataclass
 from .painter import Painter
 
 __all__ = [
+    "FRAME_PADDING",
+    "ITEM_SPACING",
     "LayoutStyle",
     "Layout",
 ]
 
 #: A rectangle, in the order every control's ``draw`` takes it.
 Rect = tuple[float, float, float, float]
+
+#: emtk's default metrics, shared by :class:`LayoutStyle` and
+#: :class:`emtk.im_core.Style` so the two cannot drift. Denser than the
+#: reference's ``FramePadding = (4, 3)`` / ``ItemSpacing = (8, 4)``: a field is
+#: its text line plus 2 px above and below (still a comfortable hit target),
+#: and lines are 3 px apart -- panels full of controls show more of them.
+FRAME_PADDING = (4.0, 2.0)
+ITEM_SPACING = (8.0, 3.0)
 
 
 def _trunc(value: float) -> float:
@@ -93,18 +105,18 @@ def _trunc(value: float) -> float:
 class LayoutStyle:
     """The spacing constants a :class:`Layout` lays out with.
 
-    The defaults are the reference implementation's ``ImGuiStyle``, in pixels.
+    The defaults are :data:`FRAME_PADDING` and :data:`ITEM_SPACING`, in pixels.
 
     Attributes
     ----------
     item_spacing_x, item_spacing_y : float
-        Gap between two items on a line, and between two lines. The reference's
-        ``ItemSpacing = (8, 4)``.
+        Gap between two items on a line, and between two lines:
+        :data:`ITEM_SPACING` (the reference's ``ItemSpacing`` is ``(8, 4)``).
     frame_padding_x, frame_padding_y : float
         Padding inside a framed control. Only the vertical half is used for
         layout -- it is what makes a row taller than its text -- but both are
         kept because the horizontal half is what ``indent_spacing`` derives
-        from. The reference's ``FramePadding = (4, 3)``.
+        from. :data:`FRAME_PADDING` (the reference's is ``(4, 3)``).
     indent_spacing : float or None
         How far :meth:`Layout.indent` moves the left margin. ``None`` derives
         it as ``line_height + frame_padding_x * 2``, which is what the
@@ -114,10 +126,10 @@ class LayoutStyle:
         reference's ``SeparatorSize = 1``.
     """
 
-    item_spacing_x: float = 8.0
-    item_spacing_y: float = 4.0
-    frame_padding_x: float = 4.0
-    frame_padding_y: float = 3.0
+    item_spacing_x: float = ITEM_SPACING[0]
+    item_spacing_y: float = ITEM_SPACING[1]
+    frame_padding_x: float = FRAME_PADDING[0]
+    frame_padding_y: float = FRAME_PADDING[1]
     indent_spacing: float | None = None
     separator_size: float = 1.0
 
@@ -186,11 +198,11 @@ class Layout:
     ...     def line_height(self): return 12.0
     >>> layout = Layout(P(), 10.0, 20.0, 200.0, 300.0)
     >>> layout.row()
-    (10.0, 20.0, 200.0, 18.0)
+    (10.0, 20.0, 200.0, 16.0)
     >>> layout.row()
-    (10.0, 42.0, 200.0, 18.0)
+    (10.0, 39.0, 200.0, 16.0)
     >>> layout.content_height()
-    40.0
+    35.0
     """
 
     def __init__(

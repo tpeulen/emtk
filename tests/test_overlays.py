@@ -388,7 +388,7 @@ def test_the_list_stays_anchored_while_it_filters():
     form.key(KEY_ESCAPE)
     assert panel.panel_rect == pytest.approx(opened), "cleared, it is as it opened"
     # A list flipped above its field keeps its top, too.
-    flipped = Form(Model(TAUS), _spec(above=12), size=(400.0, 420.0))
+    flipped = Form(Model(TAUS), _spec(above=14), size=(400.0, 420.0))
     field = flipped.state.rects["pick"]
     panel = flipped.open()
     opened = panel.panel_rect

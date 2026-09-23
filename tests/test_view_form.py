@@ -254,7 +254,8 @@ def test_a_fold_header_is_compact_left_aligned_and_its_buttons_sit_close():
     fold = driver.state.rects["Axes.fold"]
     field = driver.state.rects["restarts"]
     assert fold[3] < field[3]
-    assert fold[3] == line + 2 * 2.0                     # a text line + 2 x 2 px
+    pad_y = max(emtk.Style().frame_padding[1] - 1.0, 1.0)
+    assert fold[3] == line + 2 * pad_y                   # a text line + a little padding
     tx = next(t[0] for t in driver.painter.texts if t[5] == "Axes")
     assert tx < fold[0] + 30.0                           # left-aligned, not centred
     ok, cancel = driver.state.rects["ok"], driver.state.rects["cancel"]

@@ -330,8 +330,8 @@ def test_content_scaling_restores_the_style_and_the_font():
     _frame(build, io=io, storage=storage, painter=painter)
 
     frame_padding, item_spacing, line_height, scale = seen[-1]
-    assert frame_padding == (4.0, 3.0), "im style vars leaked past the node"
-    assert item_spacing == (8.0, 4.0)
+    assert frame_padding == emtk.Style().frame_padding, "im style vars leaked past the node"
+    assert item_spacing == emtk.Style().item_spacing
     assert line_height == RecordingPainter.LINE_H, "font scale leaked"
     assert scale == 1.0, "content scale reported outside scope"
 
