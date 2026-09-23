@@ -300,6 +300,25 @@ def test_a_choice_is_drawn_as_a_combo_box():
     assert driver.state.dropdown_request[2] == ["Manual", "Auto"]
 
 
+def test_a_long_choice_is_cut_with_an_ellipsis_before_the_arrow():
+    """A caption wider than the field ends in "…" clear of the arrow, not
+    clipped mid-glyph under it; the full text is still what was chosen."""
+    class Wide:
+        param = "Proximity ratio (green channel)"
+
+        def enabled(self, name):
+            return True
+
+    driver = Driver({"sections": [{"type": "choice", "attr": "param", "width": 90,
+                                   "options": [Wide.param, "Tau (green)"]}]}, Wide())
+    driver.frame()
+    x, y, w, h = driver.state.rects["param"]
+    shown = [t for t in driver.painter.texts if t[5].startswith("Prox")]
+    assert shown and shown[0][5].endswith("…"), [t[5] for t in driver.painter.texts]
+    assert shown[0][5] != Wide.param
+    assert shown[0][0] + driver.painter.text_width(shown[0][5]) <= x + w - h * 0.32 * 1.4
+
+
 def test_a_suffix_is_written_after_the_number_and_read_back():
     """AutoForm's ``suffix`` (``" fps"``): shown in the field, accepted when typed."""
     section = {"kind": "int", "suffix": " fps", "minimum": 1, "maximum": 60}

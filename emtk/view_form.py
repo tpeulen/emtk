@@ -551,6 +551,24 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
     _tooltip(section)
 
 
+def _fit_text(text: str, room: float) -> str:
+    """*text*, or its longest prefix plus "…" that fits in *room* logical px.
+
+    A closed combo box used to clip its caption at the arrow, so a long
+    parameter name lost its tail without a hint that it had one.
+    """
+    if _w.calc_text_size(text)[0] <= room:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if _w.calc_text_size(text[:mid].rstrip() + "…")[0] <= room:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…" if lo else "…"
+
+
 def _combo_field(item_id: str, caption: str, width: float) -> bool:
     """A closed combo box: the current choice left-aligned, a down arrow at the
     right, as a desktop toolkit draws one. True on the click that opens it."""
@@ -567,11 +585,17 @@ def _combo_field(item_id: str, caption: str, width: float) -> bool:
     _w._frame_border(ctx, box)
     arrow = h * 0.32
     ax = x + w - style.frame_padding[0] - arrow * 1.4
+    # room ends a padding short of the arrow: a glyph cut flush against it
+    # reads as part of the arrow ("rati▾")
+    room = ax - style.frame_padding[0] - (x + style.frame_padding[0])
+    shown = _fit_text(caption, room)
+    th = _w.calc_text_size(shown)[1]
     draw.push_clip_rect((x, y), (ax, y + h))
-    tw, th = _w.calc_text_size(caption)[:2]
     draw.add_text((x + style.frame_padding[0], y + (h - th) / 2.0), _w._col(_core.Col.TEXT),
-                  caption)
+                  shown)
     draw.pop_clip_rect()
+    if hovered and shown != caption:
+        _w.set_tooltip(caption)
     cy = y + h / 2.0
     draw.add_triangle_filled((ax, cy - arrow * 0.45), (ax + arrow * 1.2, cy - arrow * 0.45),
                              (ax + arrow * 0.6, cy + arrow * 0.45), _w._col(_core.Col.TEXT))
