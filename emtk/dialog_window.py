@@ -19,8 +19,8 @@ window, a close button -- and each app was drawing its own. This is that one.
 
 ``begin`` places the window (centred at first, or where the user dragged it,
 kept on screen), paints it, draws the header's buttons -- ``buttons`` plus the
-closing ✕ -- and opens a child region for the content. It returns the header
-button pressed, ``"close"`` for ✕ or Escape, or ``None``. :attr:`box` and
+closing × -- and opens a child region for the content. It returns the header
+button pressed, ``"close"`` for × or Escape, or ``None``. :attr:`box` and
 :attr:`content_box` are the screen rectangles of the last frame, for a test or
 a screenshot of just the dialog.
 """
@@ -113,7 +113,7 @@ class DialogWindow:
     def begin(self, frame: Rect, buttons: Sequence[str] = ()) -> Optional[str]:
         """Draw the window and open its content region.
 
-        Returns the label of the header button pressed (``"close"`` for ✕ or
+        Returns the label of the header button pressed (``"close"`` for × or
         Escape), or ``None``. Always pair with :meth:`end`.
         """
         x, y, w, h = self.place(frame)
@@ -131,7 +131,7 @@ class DialogWindow:
                       style.color(_core.Col.TEXT), self.title)
 
         pressed = None
-        labels = list(buttons) + ["✕"]
+        labels = list(buttons) + ["×"]
         widths = [_w.calc_text_size(label)[0] + 14.0 for label in labels]
         bh = _core.get_frame_height()
         bx = x + w - sum(widths) - 4.0 * len(labels) - 2.0
@@ -139,7 +139,7 @@ class DialogWindow:
         for label, bw in zip(labels, widths):
             _w.set_cursor_screen_pos((bx, y + (self.HEADER_H - bh) / 2.0))
             if _w.button(f"{label}##{self.key}.header.{label}", (bw, bh)):
-                pressed = "close" if label == "✕" else label
+                pressed = "close" if label == "×" else label
             on_button = on_button or _w.is_item_hovered()
             bx += bw + 4.0
 

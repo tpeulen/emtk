@@ -43,7 +43,7 @@ def test_centred_with_title_content_and_header_buttons():
     host = Host(DialogWindow("GMM Settings", size=(400, 300)))
     host.frame()
     assert host.window.box == (200.0, 150.0, 400.0, 300.0)
-    for text in ("GMM Settings", "content", "Help", "✕"):
+    for text in ("GMM Settings", "content", "Help", "×"):
         assert text in host.painter.strings, text
     cx, cy, cw, ch = host.window.content_box
     assert cy > 150.0 + DialogWindow.HEADER_H - 1 and cx > 200.0
