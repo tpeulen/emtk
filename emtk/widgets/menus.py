@@ -108,6 +108,9 @@ MARK_SCALE = 1.2
 #: A separator row's height, as a multiple of a normal row's.
 SEPARATOR_SCALE = 0.5
 
+#: A :class:`Popup`'s fill: the style's popup colour, opaque.
+_OPAQUE_POPUP_BG = (*tuple(style.POPUP_BG)[:3], 255)
+
 #: Width of a scrolling popup's scrollbar, in logical pixels.
 SCROLLBAR_W = 10.0
 
@@ -1377,7 +1380,9 @@ class Popup:
             if entry is not None:
                 entry.hovered = index == self.highlight
 
-        p.stroke_rect(pos_x, pos_y, width, height, style.BORDER, style.POPUP_BG)
+        # Opaque, as emtk's windows are: a list over a form must not show the
+        # form's text through its rows.
+        p.stroke_rect(pos_x, pos_y, width, height, style.BORDER, _OPAQUE_POPUP_BG)
         if self.title:
             p.text(pos_x + PAD, pos_y + PAD, max(width - 2.0 * PAD, 1.0), row_h,
                    ALIGN_VCENTER | ALIGN_LEFT,
@@ -1451,7 +1456,7 @@ class Popup:
         if tip_y + tip_h > y + h:
             tip_y = rect[1] - tip_h - 2.0
         tip_y = style.clamp(tip_y, y, y + h - tip_h)
-        p.stroke_rect(tip_x, tip_y, tip_w, tip_h, style.BORDER, style.POPUP_BG)
+        p.stroke_rect(tip_x, tip_y, tip_w, tip_h, style.BORDER, _OPAQUE_POPUP_BG)
         for i, line in enumerate(lines):
             p.text(tip_x + PAD, tip_y + PAD * 0.5 + i * line_h, tip_w - 2.0 * PAD, line_h,
                    ALIGN_VCENTER | ALIGN_LEFT, line, style.TEXT)
