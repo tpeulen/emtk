@@ -132,6 +132,11 @@ def host_class():
                 )
             finally:
                 painter.end()
+            from .app import window_title
+
+            title = window_title(self.control)
+            if title is not None and title != self.window().windowTitle():
+                self.window().setWindowTitle(title)
             # A control that is animating (a playback, results streaming in)
             # needs frames without input, as it gets in every other host:
             # ask for the next one once this one is on screen.

@@ -337,6 +337,11 @@ class TkHost:
             self._photo.paste(frame)
         self._frame = frame
         self.frames += 1
+        from .app import window_title  # noqa: PLC0415
+
+        title = window_title(self.control)
+        if title is not None and title != self.root.title():
+            self.root.title(title)
         return frame
 
     def _font_scale(self) -> float:

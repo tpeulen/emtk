@@ -157,3 +157,9 @@ def test_close_runs_on_close_once(host):
     host.close()
     host.close()
     assert host.closed == [True]
+
+
+def test_the_window_takes_the_controls_title(host):
+    host.control.window_title = "ndX -- m000.bur"
+    host.paint()
+    assert host.root.title() == "ndX -- m000.bur"

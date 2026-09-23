@@ -37,3 +37,16 @@ def test_an_animating_control_gets_frames_without_input(qt_app):
     _pump(qt_app, 0.2)
     assert control.frames <= drawn + 1, "an idle control kept being redrawn"
     host.close()
+
+
+def test_the_window_takes_the_controls_title(qt_app):
+    from emtk.qt_host import ControlHost
+
+    control = _Ticker(frames_wanted=0)
+    control.window_title = "ndX -- m000.bur"
+    host = ControlHost(control)
+    host.resize(100, 80)
+    host.show()
+    _pump(qt_app, 0.1)
+    assert host.windowTitle() == "ndX -- m000.bur"
+    host.close()

@@ -185,6 +185,13 @@ class WebPage:
         self.frames += 1
         return result
 
+    def title(self) -> str:
+        """The app's :func:`~emtk.app.window_title`, or ``""``: ``boot.js``
+        sets ``document.title`` from it after each frame."""
+        from ..app import window_title  # noqa: PLC0415
+
+        return window_title(self.app) or ""
+
     def animating(self) -> bool:
         """Whether ``boot.js`` should keep a frame loop going."""
         try:

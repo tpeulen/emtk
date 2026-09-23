@@ -61,6 +61,7 @@ __all__ = [
     "ImApp",
     "load_app",
     "as_surface",
+    "window_title",
     "WHEEL_ROWS",
 ]
 
@@ -68,6 +69,21 @@ __all__ = [
 #: :mod:`.qt_host` and :mod:`.tk_host` already use (``scroll(-3)`` per notch
 #: away from the user).
 WHEEL_ROWS = 3
+
+
+def window_title(app) -> str | None:
+    """The title *app* wants its window to carry now, or ``None`` for "leave it".
+
+    An app says so with a ``window_title`` attribute or property (a string);
+    a host reads it after each frame and retitles the window when it changed
+    -- "ndX -- m000.bur" once a file is open. Hosts: :mod:`.native`
+    (``canvas.set_title``), :mod:`.tk_host` (``root.title``), :mod:`.qt_host`
+    (the top-level widget's title) and :mod:`.web` (``document.title``).
+    """
+    title = getattr(app, "window_title", None)
+    if callable(title):
+        title = title()
+    return None if title is None else str(title)
 
 
 class Surface:

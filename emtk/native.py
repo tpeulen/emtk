@@ -557,8 +557,20 @@ class NativeHost:
         if width <= 0 or height <= 0:
             return
         self.surface.render(self.context.get_current_texture().create_view())
+        self._retitle()
         if self.surface.animating():
             self.canvas.request_draw()
+
+    def _retitle(self) -> None:
+        """Carry the app's :func:`~emtk.app.window_title` onto the window."""
+        from .app import window_title  # noqa: PLC0415
+
+        title = window_title(self.app)
+        if title is not None and title != getattr(self, "_title", None):
+            self._title = title
+            set_title = getattr(self.canvas, "set_title", None)
+            if callable(set_title):
+                set_title(title)
 
     def request_draw(self) -> None:
         """Ask for a frame; the canvas coalesces requests."""

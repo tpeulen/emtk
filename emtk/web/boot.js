@@ -23,6 +23,35 @@ const status = (message) => {
   console.log(`[${config.name || "emtk"}]`, message);
 };
 
+// <copy-dropped> -- tests/test_web_drop.py runs this block under node.
+// Write one dropped thing into Pyodide's filesystem under `dir` and return its
+// path there. A File is written as it is; a FileSystemEntry (what
+// `DataTransferItem.webkitGetAsEntry` gives) may be a directory -- a
+// burst-analysis folder, a sample's result folder -- and is copied whole,
+// so the app is handed one folder path, as a desktop drop would hand it.
+async function copyDropped(item, dir, FS) {
+  const path = `${dir}/${item.name}`;
+  FS.mkdirTree(dir);
+  if (item.isDirectory) {
+    FS.mkdirTree(path);
+    const reader = item.createReader();
+    // `readEntries` hands a directory over in batches (Chrome: 100) and an
+    // empty batch at the end; one call reads only the first batch.
+    for (;;) {
+      const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+      if (!batch.length) break;
+      for (const child of batch) await copyDropped(child, path, FS);
+    }
+    return path;
+  }
+  const file = item.isFile
+    ? await new Promise((resolve, reject) => item.file(resolve, reject))
+    : item;
+  FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+  return path;
+}
+// </copy-dropped>
+
 async function boot() {
   const canvas = document.getElementById("view");
   const dpr0 = window.devicePixelRatio || 1;
@@ -94,6 +123,8 @@ mount(js.emtkCanvas, _emtk_app_spec)
     frame = requestAnimationFrame(() => {
       frame = null;
       page.draw();
+      const title = page.title();
+      if (title && document.title !== title) document.title = title;
       if (page.animating()) redraw();
     });
   };
@@ -185,20 +216,26 @@ mount(js.emtkCanvas, _emtk_app_spec)
     canvas.addEventListener("drop", async (event) => {
       event.preventDefault();
       canvas.classList.remove("dropping");
-      const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
-      for (const file of files) {
-        status(`opening ${file.name}…`);
+      // Entries, not `files`: a dropped *folder* is a File of size 0 in
+      // `files`, whose bytes cannot be read. The entries have to be taken
+      // now -- the DataTransfer is emptied at the first `await`.
+      const items = Array.from((event.dataTransfer && event.dataTransfer.items) || []);
+      const entries = items.map((item) => item.webkitGetAsEntry && item.webkitGetAsEntry())
+        .filter(Boolean);
+      const dropped = entries.length
+        ? entries
+        : Array.from((event.dataTransfer && event.dataTransfer.files) || []);
+      for (const item of dropped) {
+        status(`opening ${item.name}…`);
         try {
-          pyodide.FS.mkdirTree(page.DROP_DIR);
-          const path = `${page.DROP_DIR}/${file.name}`;
-          pyodide.FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+          const path = await copyDropped(item, page.DROP_DIR, pyodide.FS);
           if (await promising(page.open_path, path)) redraw();
         } catch (error) {
-          status(`could not open ${file.name}: ${error}`);
+          status(`could not open ${item.name}: ${error}`);
           console.error(error);
         }
       }
-      if (files.length) status(`opened ${files.map((f) => f.name).join(", ")}`);
+      if (dropped.length) status(`opened ${dropped.map((f) => f.name).join(", ")}`);
     });
   }
   // Mount: Chrome's File System Access API hands over a directory handle and
