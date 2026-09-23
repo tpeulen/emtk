@@ -202,3 +202,76 @@ def test_fields_of_a_panel_line_up_in_columns():
     first, second = driver.state.rects["restarts"], driver.state.rects["series"]
     assert abs(first[0] - second[0]) < 0.5
     assert second[1] > first[1]
+
+
+def test_a_collapsible_panel_folds_and_remembers():
+    """``collapsible`` draws a header; ``collapsed`` closes it at first; a click
+    on the header opens it and the fold is kept by title."""
+    spec = {"sections": [
+        {"type": "panel", "title": "Axes", "collapsible": True, "collapsed": True,
+         "sections": [{"type": "value", "attr": "restarts", "label": "Restarts", "kind": "int"}]},
+        {"type": "panel", "title": "Open", "collapsible": True,
+         "sections": [{"type": "value", "attr": "series", "label": "Series", "kind": "int"}]},
+    ]}
+    driver = Driver(spec, Model())
+    driver.frame()
+    assert "restarts" not in driver.state.rects
+    assert "series" in driver.state.rects
+    assert "Axes" in driver.painter.strings and "Open" in driver.painter.strings
+    driver.click("Axes.fold")
+    assert driver.state.folds["Axes"] is True
+    driver.state.rects.clear()
+    driver.frame()
+    assert "restarts" in driver.state.rects
+    # the open panel's field moved down below the first panel's
+    assert driver.state.rects["series"][1] > driver.state.rects["restarts"][1]
+
+
+def test_a_declared_width_fixes_the_control():
+    spec = {"sections": [{"type": "panel", "n_col": 3, "sections": [
+        {"type": "choice", "attr": "method", "label": "x:", "options": ["Manual", "Auto"]},
+        {"type": "value", "attr": "restarts", "kind": "int", "width": 50},
+        {"type": "value", "attr": "series", "kind": "int", "width": 60},
+    ]}]}
+    driver = Driver(spec, Model())
+    driver.frame()
+    assert abs(driver.state.rects["restarts"][2] - 50) < 0.5
+    assert abs(driver.state.rects["series"][2] - 60) < 0.5
+    # what is left of the line goes to the field without a width
+    assert driver.state.rects["method"][2] > 200
+
+
+def test_a_custom_section_is_drawn_by_the_host_in_its_place():
+    seen = []
+
+    def draw_plot(section, model, state, width):
+        seen.append((section["options"]["what"], width))
+        emtk.dummy(width, 40)
+
+    spec = {"sections": [
+        {"type": "value", "attr": "restarts", "label": "Restarts", "kind": "int"},
+        {"type": "custom", "key": "plot", "options": {"what": "z"}},
+        {"type": "value", "attr": "series", "label": "Series", "kind": "int"},
+    ]}
+    driver = Driver(spec, Model())
+    driver.state.custom["plot"] = draw_plot
+    driver.frame()
+    assert seen and seen[0][0] == "z" and seen[0][1] > 100
+    gap = driver.state.rects["series"][1] - driver.state.rects["restarts"][1]
+    assert gap > 40
+
+
+def test_labels_take_the_style_text_colour():
+    """A light theme draws its labels dark: the colour comes from the style."""
+    from emtk.im_core import Col, Style
+
+    style = Style()
+    style.colors[Col.TEXT] = (1, 2, 3, 255)
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 400, 200), style=style):
+        emtk.begin("form", (0, 0, 400, 200))
+        draw_form({"sections": [{"type": "value", "attr": "restarts", "label": "Restarts",
+                                 "kind": "int"}]}, Model(), FormState())
+        emtk.end()
+    colours = [t[6] for t in painter.texts if t[5] == "Restarts"]
+    assert colours and all(tuple(c)[:3] == (1, 2, 3) for c in colours)

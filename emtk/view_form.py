@@ -28,7 +28,15 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``style`` ``"radio"``, ``call``), ``toggle``, ``toggle_row``, ``button_row``,
 ``info``, and the two table dialects -- ``table`` and ``custom``
 ``data_table`` (:mod:`emtk.widgets.data_table`), one full-width row each --
-and no key of its own. Two things a form needs that the dialect
+and no key of its own. A container with ``collapsible: true`` draws AutoForm's
+fold -- a header line that opens and closes it, closed at first when it says
+``collapsed: true`` -- and remembers the fold in :attr:`FormState.folds`. A
+leaf's ``width`` fixes its control to that many pixels instead of sharing out
+the line. A ``custom`` section whose ``key`` the host registered in
+:attr:`FormState.custom` is drawn by the host's callback, full width, in its
+place in the form -- a plot between two rows of fields.
+
+Two things a form needs that the dialect
 does not say are asked of the **model**, so the spec stays shared:
 
 ``model.enabled(name) -> bool``
@@ -57,8 +65,6 @@ from .flags import InputTextFlags
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
            "format_value", "parse_value"]
 
-#: Label colour; the style's text colour in the default theme.
-_LABEL_COLOUR = (225, 228, 235, 255)
 
 #: Section types that hold other sections.
 _CONTAINERS = frozenset({"panel", "group", "box", "tab", "tabs", "row", "column"})
@@ -85,10 +91,18 @@ class FormState:
     tables : dict
         The bound table of every table section drawn, by name (its ``source``),
         so its sort, filter, scroll and selection outlive the frame.
+    folds : dict
+        Whether each collapsible container is open, by title. Absent until the
+        user folds it: the spec's ``collapsed`` decides until then.
+    custom : dict
+        ``key -> draw(section, model, state, width)`` for ``custom`` sections the
+        host draws itself.
     """
 
     def __init__(self, on_used: Callable[[str], None] | None = None) -> None:
         self.tables: dict[str, Any] = {}
+        self.folds: dict[str, bool] = {}
+        self.custom: dict[str, Callable[[dict, Any, "FormState", float], None]] = {}
         self.buffers: dict[str, str] = {}
         self.rects: dict[str, tuple] = {}
         self.dropdown_request: tuple | None = None
@@ -285,8 +299,9 @@ def _label(text: str, width: float = 0.0) -> None:
     tw, th = _w.calc_text_size(text)[:2]
     fh = _core.get_frame_height()
     if text:
+        colour = _core.get_style().color(_core.Col.TEXT)
         _core.get_window_draw_list().add_text((x, y + max(0.0, (fh - th) / 2.0)),
-                                              _LABEL_COLOUR, text)
+                                              colour, text)
     _w.dummy(max(width, tw), fh)
 
 
@@ -416,6 +431,8 @@ def _label_of(section: dict) -> str:
 
 
 def _weight(section: dict) -> float:
+    if section.get("width"):
+        return 0.0
     kind = str(section.get("type", "")).lower()
     if kind == "button_row":
         return 0.8 * len(section.get("buttons") or [])
@@ -427,7 +444,10 @@ def _weight(section: dict) -> float:
 
 
 def _fixed_width(section: dict) -> float:
-    """Width a checkbox row takes regardless of the space there is."""
+    """Width a control takes regardless of the space there is: a declared
+    ``width``, or what a checkbox row needs."""
+    if section.get("width"):
+        return float(section["width"])
     kind = str(section.get("type", "")).lower()
     box = _core.get_frame_height() + 6.0
     if kind == "toggle":
@@ -555,15 +575,63 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             flush()
             _draw_table_section(section, model, state)
             continue
+        if kind == "custom" and section.get("key") in state.custom:
+            flush()
+            state.custom[section["key"]](section, model, state,
+                                         float(_w.get_content_region_avail()[0]))
+            continue
         if kind in _CONTAINERS or isinstance(section.get("sections"), list):
             flush()
-            if titles and section.get("title"):
+            if section.get("collapsible"):
+                if not _fold(section, state):
+                    continue
+            elif titles and section.get("title"):
                 _w.text(str(section["title"]))
             draw_sections(section.get("sections") or [], model, state,
                           int(section.get("n_col") or 1), titles)
             continue
         leaves.append(section)
     flush()
+
+
+def _fold(section: dict, state: FormState) -> bool:
+    """A collapsible container's header line; returns whether it is open.
+
+    The header spans the line, its title centred behind a triangle that points
+    right when folded and down when open, as AutoForm draws a collapsible box.
+    """
+    title = str(section.get("title", ""))
+    is_open = state.folds.get(title, not bool(section.get("collapsed", False)))
+    ctx = _core.get_current_context()
+    height = _core.get_frame_height() + 4.0
+    box = ctx.layout.row(height=height)
+    hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(f"##fold-{title}"))
+    if pressed:
+        is_open = not is_open
+        state.folds[title] = is_open
+        state.used(f"{title}.fold")
+    state.rects[f"{title}.fold"] = tuple(box)
+    x, y, w, h = box
+    style = _core.get_style()
+    draw = _core.get_window_draw_list()
+    fill = style.color(_core.Col.BUTTON_HOVERED if hovered else _core.Col.BUTTON)
+    draw.add_rect_filled((x, y), (x + w, y + h), fill, style.frame_rounding)
+    draw.add_rect((x, y), (x + w, y + h), style.color(_core.Col.BORDER), style.frame_rounding)
+    text_colour = style.color(_core.Col.TEXT)
+    tw, th = _w.calc_text_size(title)[:2]
+    mark = th * 0.55
+    gap = mark * 0.9
+    left = x + max((w - tw - mark - gap) / 2.0, 4.0)
+    cy = y + h / 2.0
+    if is_open:
+        draw.add_triangle_filled((left, cy - mark * 0.4), (left + mark, cy - mark * 0.4),
+                                 (left + mark / 2.0, cy + mark * 0.5), text_colour)
+    else:
+        draw.add_triangle_filled((left + mark * 0.1, cy - mark / 2.0),
+                                 (left + mark * 0.1, cy + mark / 2.0),
+                                 (left + mark, cy), text_colour)
+    draw.add_text((left + mark + gap, y + (h - th) / 2.0), text_colour, title)
+    return is_open
 
 
 def draw_form(spec: dict, model: Any, state: FormState, titles: bool = True) -> None:

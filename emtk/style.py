@@ -42,6 +42,7 @@ _MAX_BANDS = 24
 
 __all__ = [
     "Colour",
+    "use_palette",
     "TEXT",
     "DIM",
     "GOLD",
@@ -175,6 +176,8 @@ TABLE_BORDER_STRONG = (79, 79, 89, 255)
 TABLE_BORDER_LIGHT = (59, 59, 64, 255)
 TABLE_ROW_BG = (25, 25, 28, 220)
 TABLE_ROW_BG_ALT = (34, 34, 38, 220)
+#: Header captions of a painted table (emtk's gold, as the chrome's headers).
+TABLE_HEADER_TEXT = GOLD
 # ImGuiCol_TextLink (the reference aliases this to HeaderActive)
 TEXT_LINK = HEADER_ACTIVE
 # ImGuiCol_TextSelectedBg
@@ -449,3 +452,45 @@ def format_value(fmt: str, value: float) -> str:
         return fmt % value
     except (TypeError, ValueError):
         return f"{value:.2f}"
+
+
+
+def use_palette(colours: dict) -> dict:
+    """Replace palette entries; returns the entries it replaced.
+
+    The painter-level controls read this module's colours as they draw, so an
+    application that is not drawn over a dark scene -- a desktop tool in a
+    light window -- installs its palette once at start-up::
+
+        previous = style.use_palette({"TEXT": (0, 0, 0), "BORDER": (160, 160, 160)})
+        ...
+        style.use_palette(previous)        # put it back (a test does)
+
+    Immediate-mode windows take their colours from an
+    :class:`~emtk.im_core.Style`, whose defaults are read from here when it is
+    made, so a style made after this call starts from the new palette too.
+
+    Parameters
+    ----------
+    colours : dict
+        Upper-case palette name -> colour.
+
+    Returns
+    -------
+    dict
+        The previous colour of every name given.
+
+    Raises
+    ------
+    KeyError
+        For a name that is not in the palette -- a typo would otherwise
+        silently leave the old colour in place.
+    """
+    module = globals()
+    previous = {}
+    for name, colour in colours.items():
+        if not name.isupper() or name not in module or not isinstance(module[name], tuple):
+            raise KeyError(f"{name!r} is not a palette colour")
+        previous[name] = module[name]
+    module.update({name: tuple(colour) for name, colour in colours.items()})
+    return previous

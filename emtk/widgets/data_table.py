@@ -35,7 +35,18 @@ table needs them and neither dialect had them:
     selected row's under the rows;
 ``row_key``
     the record field that identifies a row, so a selection survives rows
-    streaming in above it. Without one, a row is its position in the source.
+    streaming in above it. Without one, a row is its position in the source;
+``editable`` (the section, or one column)
+    cells the user may change: a ``True``/``False`` cell is a check box a click
+    flips, any other cell opens for typing on a double click (Enter commits,
+    Escape cancels, a click elsewhere commits). The new value is written into
+    a mutable record and handed to ``edited_call(record, key, value)``;
+``delete_call``
+    called with the selected record when Delete (or Backspace) is pressed.
+
+A ``True``/``False`` cell is drawn as a check box whether or not it is
+editable. Colours are read from :mod:`emtk.style` as the table draws, so a
+palette the application installs (:func:`emtk.style.use_palette`) applies.
 
 Values are sorted as values, never as their text, and only the visible rows are
 drawn, so a table of a hundred thousand rows costs what twenty cost.
@@ -49,23 +60,24 @@ puts a binding into an immediate-mode window.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
-from ..keys import KEY_DOWN, KEY_END, KEY_ESCAPE, KEY_HOME, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_UP
-from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
-from ..style import (
-    BORDER as _BORDER,
-    DIM as _DIM,
-    GOLD as _GOLD,
-    HEADER as _HOVER,
-    HEADER_BG as _HEADER_BG,
-    ROW_SEL as _ROW_SEL,
-    TABLE_ROW_BG as _ROW_EVEN,
-    TABLE_ROW_BG_ALT as _ROW_ODD,
-    TEXT as _TEXT,
-    TRACK_BG as _TRACK_BG,
-    fit_text,
+from .. import style as _style
+from ..keys import (
+    KEY_BACKSPACE,
+    KEY_DELETE,
+    KEY_DOWN,
+    KEY_END,
+    KEY_ENTER,
+    KEY_ESCAPE,
+    KEY_HOME,
+    KEY_PAGE_DOWN,
+    KEY_PAGE_UP,
+    KEY_RETURN,
+    KEY_UP,
 )
+from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
+from ..style import fit_text
 from .basic import ScrollBar, TextInput
 
 __all__ = [
@@ -121,6 +133,8 @@ class TableColumn:
         Hidden columns are neither drawn nor filtered on.
     align_right : bool
         Numbers read best right-aligned; set from the first value if not given.
+    editable : bool
+        Whether the user may change the column's cells.
     """
 
     key: str
@@ -132,9 +146,10 @@ class TableColumn:
     tooltip: str = ""
     visible: bool = True
     align_right: Optional[bool] = None
+    editable: bool = False
 
     @classmethod
-    def from_spec(cls, spec: Mapping) -> "TableColumn":
+    def from_spec(cls, spec: Mapping, editable: bool = False) -> "TableColumn":
         """Read either dialect's column mapping."""
         key = str(spec.get("key", ""))
         title = spec.get("title", spec.get("label", "")) or key
@@ -153,6 +168,7 @@ class TableColumn:
             tooltip=str(spec.get("tooltip", spec.get("description", "")) or ""),
             visible=bool(spec.get("visible", True)),
             align_right=None if align is None else str(align).lower() == "right",
+            editable=bool(spec.get("editable", editable)),
         )
 
     def text(self, value: Any) -> str:
@@ -200,6 +216,24 @@ class TableColumn:
         return (0.0, at(number), BAR_COLOUR)
 
 
+def _np_bool():
+    """numpy's bool type when numpy is loaded, for ``isinstance`` checks."""
+    import sys
+
+    numpy = sys.modules.get("numpy")
+    return numpy.bool_ if numpy is not None else bool
+
+
+def _is_number(value: Any) -> bool:
+    if value is None or isinstance(value, (str, bool)):
+        return False
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 def _sort_key(value: Any) -> tuple:
     """Numbers before text; NaN and missing last."""
     if value is None:
@@ -228,7 +262,11 @@ class DataTable:
         selected (by click or arrow key), ``None`` when the selection is
         cleared. Not called by :meth:`select_key`.
     on_activate : callable, optional
-        ``on_activate(index)`` on a double click.
+        ``on_activate(index)`` on a double click that does not open a cell.
+    on_edit : callable, optional
+        ``on_edit(index, key, value)`` when the user changed a cell.
+    on_delete : callable, optional
+        ``on_delete(index)`` when Delete is pressed on the selected row.
     filter_box : bool
         Draw a filter box above the rows.
     tooltip_key : str
@@ -251,10 +289,18 @@ class DataTable:
         tooltip_key: str = "",
         row_key: str = "",
         row_scale: float = 1.45,
+        on_edit: Optional[Callable[[int, str, Any], None]] = None,
+        on_delete: Optional[Callable[[int], None]] = None,
     ) -> None:
         self.columns: list[TableColumn] = list(columns)
         self.on_select = on_select
         self.on_activate = on_activate
+        self.on_edit = on_edit
+        self.on_delete = on_delete
+        #: ``(source index, column key)`` of the cell being typed into.
+        self.editing: Optional[tuple] = None
+        self.editor = TextInput("", "")
+        self._editor_box: Optional[tuple] = None
         self.show_filter = bool(filter_box)
         self.tooltip_key = str(tooltip_key or "")
         self.row_key = str(row_key or "")
@@ -453,7 +499,7 @@ class DataTable:
         self._header_box = (x, cursor, list_w, header_h)
         self._body_box = (x, body_top, list_w, body_h)
 
-        p.stroke_rect(x, cursor, list_w, header_h, _BORDER, _HEADER_BG)
+        p.stroke_rect(x, cursor, list_w, header_h, _style.BORDER, _style.HEADER_BG)
         col_x = x
         for position, (column, width) in enumerate(zip(columns, self._widths)):
             right = self._right_aligned(column, order)
@@ -464,12 +510,12 @@ class DataTable:
                 else column.title
             p.text(col_x + 6.0, cursor, max(width - 12.0, 1.0), header_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
-                   fit_text(p, title, width - 12.0), _GOLD, bold=True)
+                   fit_text(p, title, width - 12.0), _style.TABLE_HEADER_TEXT, bold=True)
             if position:
-                p.fill_rect(col_x, cursor + 3.0, 1.0, header_h - 6.0, _BORDER)
+                p.fill_rect(col_x, cursor + 3.0, 1.0, header_h - 6.0, _style.BORDER)
             col_x += width
 
-        p.stroke_rect(x, body_top, list_w, body_h, _BORDER, _ROW_EVEN)
+        p.stroke_rect(x, body_top, list_w, body_h, _style.BORDER, _style.TABLE_ROW_BG)
         p.push_clip(x, body_top, list_w, body_h)
         top = self.bar.top
         row_y = body_top
@@ -484,7 +530,7 @@ class DataTable:
             note_y = body_top + body_h + 4.0
             for offset, text in enumerate(_wrap(p, note, w - 8.0, note_lines)):
                 p.text(x + 4.0, note_y + offset * line, w - 8.0, line,
-                       ALIGN_VCENTER | ALIGN_LEFT, text, _DIM)
+                       ALIGN_VCENTER | ALIGN_LEFT, text, _style.DIM)
 
     def _right_aligned(self, column: TableColumn, order: Sequence[int]) -> bool:
         if column.align_right is not None:
@@ -495,30 +541,38 @@ class DataTable:
 
     def _draw_filter(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         field = self.filter.field
-        p.stroke_rect(x, y, w, h, _GOLD if self.filter_focused else _BORDER, _TRACK_BG)
+        p.stroke_rect(x, y, w, h, _style.GOLD if self.filter_focused else _style.BORDER, _style.TRACK_BG)
         p.push_clip(x, y, w, h)
         p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-               field.text or field.placeholder, _TEXT if field.text else _DIM)
+               field.text or field.placeholder, _style.TEXT if field.text else _style.DIM)
         if self.filter_focused:
             caret = x + 4.0 + p.text_width(field.text[: field.cursor])
-            p.fill_rect(caret, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _GOLD)
+            p.fill_rect(caret, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
         p.pop_clip()
 
     def _draw_row(self, p: Painter, position: int, index: int, columns, order, x: float,
                   y: float, h: float) -> None:
         key = self.key_of(index)
         if self.selected_key is not None and key == self.selected_key:
-            background = _ROW_SEL
+            background = _style.ROW_SEL
         elif position == self.hovered:
-            background = _HOVER
+            background = _style.HEADER
         else:
-            background = _ROW_ODD if position % 2 else None
+            background = _style.TABLE_ROW_BG_ALT if position % 2 else None
         if background is not None:
             p.fill_rect(x, y, sum(self._widths), h, background)
         text_h = min(h, p.line_height() * 1.15)
         col_x = x
         for column, width in zip(columns, self._widths):
             value = self.value(index, column.key)
+            if self.editing == (index, column.key):
+                self._draw_editor(p, col_x, y, width, h)
+                col_x += width
+                continue
+            if isinstance(value, (bool, _np_bool())):
+                self._draw_check(p, col_x, y, width, h, bool(value))
+                col_x += width
+                continue
             bar = column.bar(value)
             if bar is not None:
                 start, end, colour = bar
@@ -529,8 +583,77 @@ class DataTable:
             right = self._right_aligned(column, order)
             p.text(col_x + 6.0, y + 1.0, max(width - 12.0, 1.0), text_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
-                   fit_text(p, column.text(value), width - 12.0), _TEXT)
+                   fit_text(p, column.text(value), width - 12.0), _style.TEXT)
             col_x += width
+
+    @staticmethod
+    def _draw_check(p: Painter, x: float, y: float, w: float, h: float, on: bool) -> None:
+        """A check box centred in the cell."""
+        side = max(8.0, min(h - 6.0, p.line_height() * 0.95))
+        bx, by = x + (w - side) / 2.0, y + (h - side) / 2.0
+        p.stroke_rect(bx, by, side, side, _style.BORDER, _style.FRAME_BG)
+        if on:
+            inset = max(2.0, side * 0.22)
+            p.fill_rect(bx + inset, by + inset, side - 2 * inset, side - 2 * inset,
+                        _style.CHECK_MARK)
+
+    def _draw_editor(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
+        """The cell being typed into: a field with a caret."""
+        field = self.editor.field
+        self._editor_box = (x, y, w, h)
+        p.stroke_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, _style.CHECK_MARK, _style.FRAME_BG)
+        p.push_clip(x + 1.0, y + 1.0, w - 2.0, h - 2.0)
+        p.text(x + 5.0, y, max(w - 10.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, field.text,
+               _style.TEXT)
+        caret = x + 5.0 + p.text_width(field.text[: field.cursor])
+        p.fill_rect(caret, y + h * 0.2, 1.0, h * 0.6, _style.TEXT)
+        p.pop_clip()
+
+    # -- editing ------------------------------------------------------------------- #
+
+    def column_editable(self, key: str) -> bool:
+        column = next((c for c in self.columns if c.key == key), None)
+        return bool(column is not None and column.editable)
+
+    def begin_edit(self, index: int, key: str) -> None:
+        """Open cell ``(index, key)`` for typing, filled with its text."""
+        column = next(c for c in self.columns if c.key == key)
+        self.editing = (index, key)
+        value = self.value(index, key)
+        self.editor.set_text("" if value is None else (
+            repr(float(value)) if isinstance(value, float) and not column.fmt else column.text(value)))
+
+    def commit_edit(self) -> None:
+        """Parse what was typed like the value it replaces, and report it."""
+        if self.editing is None:
+            return
+        index, key = self.editing
+        self.editing = None
+        self._editor_box = None
+        old = self.value(index, key)
+        text = self.editor.text.strip()
+        value: Any = text
+        if isinstance(old, (int, float)) and not isinstance(old, bool) or _is_number(old):
+            try:
+                value = int(text) if isinstance(old, int) and not isinstance(old, bool) \
+                    else float(text)
+            except ValueError:
+                return  # a typo leaves the cell as it was
+        if value != old:
+            self._write(index, key, value)
+
+    def cancel_edit(self) -> None:
+        self.editing = None
+        self._editor_box = None
+
+    def _write(self, index: int, key: str, value: Any) -> None:
+        if self.arrays is None and 0 <= index < len(self.records):
+            record = self.records[index]
+            if isinstance(record, MutableMapping):
+                record[key] = value
+        self.revision += 1
+        if self.on_edit is not None:
+            self.on_edit(index, key, value)
 
     # -- input --------------------------------------------------------------------- #
 
@@ -542,12 +665,16 @@ class DataTable:
         return bx <= x <= bx + bw and by <= y <= by + bh
 
     def press(self, x: float, y: float, *box: Any, **kw: Any) -> bool:
-        """Focus the filter, sort by a header, select a row, or scroll.
+        """Focus the filter, sort by a header, select a row, flip or open a cell.
 
         Accepts the host's ``press(px, py, bx, by, bw, bh, modifiers, clicks)``;
         returns whether the press landed on the table.
         """
         clicks = int(kw.get("clicks", box[5] if len(box) > 5 else 1) or 1)
+        if self.editing is not None:
+            if self._inside(self._editor_box, x, y):
+                return True
+            self.commit_edit()
         if self._inside(self._filter_box, x, y):
             self.filter_focused = True
             return True
@@ -563,8 +690,18 @@ class DataTable:
         if position is None:
             return self._inside(self._body_box, x, y)
         self._select_position(position)
+        index = self.order()[position]
+        column = self.column_at(x)
+        if column is not None and column.editable:
+            value = self.value(index, column.key)
+            if isinstance(value, (bool, _np_bool())):
+                self._write(index, column.key, not bool(value))
+                return True
+            if clicks > 1:
+                self.begin_edit(index, column.key)
+                return True
         if clicks > 1 and self.on_activate is not None:
-            self.on_activate(self.order()[position])
+            self.on_activate(index)
         return True
 
     def _select_position(self, position: int) -> None:
@@ -597,7 +734,15 @@ class DataTable:
         return self.bar.scroll(int(rows))
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
-        """Type into the focused filter, or move the selection with the arrows."""
+        """Type into a cell or the filter, delete a row, or move the selection."""
+        if self.editing is not None:
+            if key in (KEY_RETURN, KEY_ENTER):
+                self.commit_edit()
+            elif key == KEY_ESCAPE:
+                self.cancel_edit()
+            else:
+                self.editor.field.key(key, text, modifiers)
+            return True
         if self.filter_focused:
             if key == KEY_ESCAPE:
                 self.filter_focused = False
@@ -606,6 +751,13 @@ class DataTable:
         order = self.order()
         if not order:
             return False
+        if key in (KEY_DELETE, KEY_BACKSPACE):
+            index = self.selected_index()
+            if index is None or self.on_delete is None:
+                return False
+            self.on_delete(index)
+            self.selected_key = None
+            return True
         current = next((pos for pos, i in enumerate(order)
                         if self.key_of(i) == self.selected_key), None)
         moves = {KEY_UP: -1, KEY_DOWN: 1, KEY_PAGE_UP: -self._visible, KEY_PAGE_DOWN: self._visible}
@@ -674,12 +826,17 @@ class TableBinding:
         self.selected_call = str(merged.get("selected_call", "") or "")
         self.selected_attr = str(merged.get("selected_attr", "") or "")
         self.activated_call = str(merged.get("activated_call", "") or "")
+        self.edited_call = str(merged.get("edited_call", "") or "")
+        self.delete_call = str(merged.get("delete_call", "") or "")
+        self.editable = bool(merged.get("editable", False))
         self.height = float(merged.get("height", 240) or 240)
         self.expand = bool(merged.get("expand", False))
         self._declared_columns = list(merged.get("columns") or [])
         self.control = DataTable(
             on_select=self._on_select,
             on_activate=self._on_activate,
+            on_edit=self._on_edit,
+            on_delete=self._on_delete,
             filter_box=bool(merged.get("filter", False)),
             tooltip_key=str(merged.get("tooltip_key", "") or ""),
             row_key=str(merged.get("row_key", "") or ""),
@@ -741,7 +898,8 @@ class TableBinding:
         changed = False
         if columns_token != self._columns_token:
             self._columns_token = columns_token
-            self.control.columns = [TableColumn.from_spec(s) for s in specs if isinstance(s, Mapping)]
+            self.control.columns = [TableColumn.from_spec(s, self.editable) for s in specs
+                                    if isinstance(s, Mapping)]
             self.control.changed()
             changed = True
         if token != self._data_token:
@@ -774,6 +932,18 @@ class TableBinding:
             fn = getattr(self.model, self.selected_call, None)
             if callable(fn):
                 fn(payload)
+
+    def _on_edit(self, index: int, key: str, value: Any) -> None:
+        if self.edited_call:
+            fn = getattr(self.model, self.edited_call, None)
+            if callable(fn):
+                fn(self.record(index), key, value)
+
+    def _on_delete(self, index: int) -> None:
+        if self.delete_call:
+            fn = getattr(self.model, self.delete_call, None)
+            if callable(fn):
+                fn(self.record(index))
 
     def _on_activate(self, index: int) -> None:
         if self.activated_call:
@@ -821,6 +991,6 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     if io.mouse_released[0]:
         control.release()
     if io.key or io.text:
-        if hovered or control.filter_focused:
+        if hovered or control.filter_focused or control.editing is not None:
             control.key(int(io.key), io.text, 0)
     control.draw(ctx.p, *box)

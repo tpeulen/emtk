@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 import emtk
-from emtk.keys import KEY_BACKSPACE, KEY_DOWN, KEY_UP
+from emtk.keys import KEY_BACKSPACE, KEY_DELETE, KEY_DOWN, KEY_ESCAPE, KEY_RETURN, KEY_UP
 from emtk.testing import PixelPainter, RecordingPainter
 from emtk.view_form import FormState, draw_form
 from emtk.widgets.data_table import (
@@ -366,3 +366,125 @@ def test_the_immediate_mode_form_draws_a_table_and_a_click_selects():
     io.mouse_clicked[0] = io.mouse_down[0] = False
     assert model.picked and model.picked[-1]["x"] == "b"
     assert "ranked_rows" in state.rects
+
+
+# ---- editing ----------------------------------------------------------------------------
+
+
+class Gates:
+    """A gate list: the ndXplorer selection table, as a model."""
+
+    def __init__(self):
+        self.rows = [{"name": "Tau", "lower": 1.0, "upper": 3.0, "invert": False,
+                      "enabled": True},
+                     {"name": "PR", "lower": 0.1, "upper": 0.5, "invert": False,
+                      "enabled": True}]
+        self.edits = []
+        self.deleted = []
+
+    def gate_rows(self):
+        return self.rows
+
+    def edit_gate(self, record, key, value):
+        self.edits.append((record["name"], key, value))
+
+    def delete_gate(self, record):
+        self.deleted.append(record["name"])
+
+
+GATE_TABLE = {
+    "type": "custom", "key": "data_table",
+    "options": {
+        "source": "gate_rows", "editable": True, "edited_call": "edit_gate",
+        "delete_call": "delete_gate",
+        "columns": [{"key": "name", "title": "Parameter", "editable": False},
+                    {"key": "lower", "title": "Min"}, {"key": "upper", "title": "Max"},
+                    {"key": "invert", "title": "Invert"}, {"key": "enabled", "title": "Enable"}],
+    },
+}
+
+
+def cell(control, position, column):
+    bx, by, _bw, _bh = control._body_box
+    x = bx + sum(control._widths[:column]) + control._widths[column] / 2
+    return x, by + control._row_h * (position + 0.5)
+
+
+def test_a_bool_cell_is_a_check_box_a_click_flips():
+    model = Gates()
+    binding = TableBinding(GATE_TABLE, model)
+    control = binding.control
+    painter = draw(control)
+    assert "True" not in painter.strings and "False" not in painter.strings
+    control.press(*cell(control, 1, 3))
+    assert model.edits == [("PR", "invert", True)]
+    assert model.rows[1]["invert"] is True          # written into the record
+
+
+def test_a_double_click_opens_a_cell_and_enter_commits_a_number():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 0, 1), clicks=2)
+    assert control.editing == (0, "lower")
+    for _ in range(10):
+        control.key(KEY_BACKSPACE)
+    for char in "0.25":
+        control.key(0, char)
+    painter = draw(control)
+    assert "0.25" in painter.strings
+    control.key(KEY_RETURN)
+    assert model.edits == [("Tau", "lower", 0.25)]
+    assert control.editing is None
+
+
+def test_escape_or_a_typo_leaves_the_cell():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 0, 2), clicks=2)
+    control.key(0, "x")
+    control.key(KEY_ESCAPE)
+    control.press(*cell(control, 0, 2), clicks=2)
+    control.key(0, "abc")
+    control.press(0.0, 250.0)                       # a click elsewhere commits
+    assert model.edits == [] and model.rows[0]["upper"] == 3.0
+
+
+def test_a_read_only_column_does_not_open():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 0, 0), clicks=2)
+    assert control.editing is None
+
+
+def test_delete_removes_the_selected_row_through_the_model():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 1, 0))
+    control.key(KEY_DELETE)
+    assert model.deleted == ["PR"]
+
+
+def test_the_table_draws_in_the_installed_palette():
+    from emtk import style
+
+    previous = style.use_palette({"TEXT": (1, 2, 3), "TABLE_HEADER_TEXT": (4, 5, 6)})
+    try:
+        control = DataTable([TableColumn("x", title="X")])
+        control.set_records([{"x": "a"}])
+        painter = draw(control)
+        colours = {t[5]: tuple(t[6])[:3] for t in painter.texts}
+        assert colours["a"] == (1, 2, 3) and colours["X"] == (4, 5, 6)
+    finally:
+        style.use_palette(previous)
+    assert style.TEXT == previous["TEXT"]
+
+
+def test_a_palette_name_must_exist():
+    from emtk import style
+
+    with pytest.raises(KeyError):
+        style.use_palette({"TEXTT": (0, 0, 0)})
