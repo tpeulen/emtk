@@ -14,12 +14,23 @@ from __future__ import annotations
 import json
 import pathlib
 
-__all__ = ["Atlas", "load_atlas", "ATLAS_DIR", "MISSING_GLYPH"]
+__all__ = ["Atlas", "load_atlas", "ATLAS_DIR", "MISSING_GLYPH", "PX_PER_PT",
+           "DEFAULT_FONT_PT"]
 
 #: Drawn in place of a character the atlas has no glyph for. Matches the
 #: baker's own constant; a placeholder that is itself missing would be the bug
 #: twice over, so it is in the charset by construction.
 MISSING_GLYPH = "\u00a4"
+
+#: Logical pixels per emtk point: 96 dpi, as CSS and Qt on Linux and Windows
+#: count them, and as the atlas was baked. One number for every host, so a
+#: ``font_pt`` means the same logical size in a browser, a native window, a
+#: Qt widget and a Tk window; the device pixel ratio is applied after this,
+#: once, by whatever turns logical pixels into device ones.
+PX_PER_PT = 96.0 / 72.0
+
+#: The interface font's point size when a host is not told one.
+DEFAULT_FONT_PT = 9.0
 
 #: Where the baked atlas lives.
 ATLAS_DIR = pathlib.Path(__file__).resolve().parent / "atlas"

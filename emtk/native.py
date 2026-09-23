@@ -38,6 +38,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import sys
 from collections.abc import Callable, Sequence
 
 from .events import NO_BUTTON, button_from_canvas, modifiers_from_canvas
@@ -54,6 +55,8 @@ __all__ = [
     "NativeHost",
     "canvas_module",
     "event_types",
+    "fit_to_screen",
+    "screen_workarea",
     "open_canvas",
     "wheel_steps",
     "main",
@@ -159,6 +162,7 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
     rendercanvas.BaseRenderCanvas
     """
     options = {} if present_method in (None, "", "auto") else {"present_method": present_method}
+    size = fit_to_screen(size, screen_workarea(module))
     try:
         return module.RenderCanvas(size=size, title=title, max_fps=max_fps,
                                    update_mode="ondemand", **options)
@@ -169,6 +173,55 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
                        "to the library's own choice", present_method)
         return module.RenderCanvas(size=size, title=title, max_fps=max_fps,
                                    update_mode="ondemand")
+
+
+#: Logical pixels a window's frame takes beyond its content -- a title bar.
+#: Only used to keep a requested size on screen; generous rather than exact.
+WINDOW_FRAME = (0, 40)
+
+
+def screen_workarea(module) -> tuple | None:
+    """The primary screen's usable area, ``(width, height)`` in **logical** pixels.
+
+    ``None`` when *module* is not the glfw backend or glfw cannot say. glfw
+    reports the work area in screen coordinates, which are logical on macOS
+    and physical elsewhere; the monitor's content scale converts the latter.
+    """
+    if getattr(module, "__name__", "").rsplit(".", 1)[-1] != "glfw":
+        return None
+    try:
+        import glfw  # noqa: PLC0415
+
+        if not glfw.init():  # idempotent; the canvas calls it again
+            return None
+        monitor = glfw.get_primary_monitor()
+        if not monitor:
+            return None
+        _x, _y, width, height = glfw.get_monitor_workarea(monitor)
+        scale = 1.0
+        if sys.platform != "darwin":
+            scale = float(glfw.get_monitor_content_scale(monitor)[0]) or 1.0
+    except Exception:  # noqa: BLE001 - no display, or an old glfw
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return (width / scale, height / scale)
+
+
+def fit_to_screen(size, workarea) -> tuple:
+    """*size* (logical), shrunk to fit *workarea* (logical) with its frame.
+
+    A window asked for in logical pixels opens at that many logical pixels --
+    ``ratio`` times as many device pixels -- and only a screen too small for
+    it makes it smaller. Without the clamp the window manager does it, and
+    each does it differently.
+    """
+    width, height = int(size[0]), int(size[1])
+    if not workarea:
+        return (width, height)
+    room_w = int(workarea[0]) - WINDOW_FRAME[0]
+    room_h = int(workarea[1]) - WINDOW_FRAME[1]
+    return (max(1, min(width, room_w)), max(1, min(height, room_h)))
 
 
 def event_types(canvas) -> frozenset:

@@ -30,6 +30,30 @@ __all__ = ["QtPainter", "png_decode", "image_bytes"]
 DEFAULT_FONT_PT = 9
 
 
+def qt_point_size(font_pt: float, device=None) -> float:
+    """The Qt point size that draws emtk's *font_pt* at emtk's pixel size.
+
+    An emtk point is ``PX_PER_PT`` logical pixels on every host -- the size
+    the glyph atlas was baked at. Qt converts points through the paint
+    device's logical DPI instead, which is 96 on Linux and Windows but 72 on
+    macOS and on every ``QImage``, so the same ``font_pt`` drew three
+    quarters the size there: the Qt host's text disagreed with the GPU hosts'
+    beside it. Asking for ``font_pt * 96 / dpi`` points pins the pixel size.
+    The device pixel ratio is not in this: Qt applies it once, below.
+    """
+    from .font import PX_PER_PT  # noqa: PLC0415
+
+    dpi = 0.0
+    if device is not None:
+        try:
+            dpi = float(device.logicalDpiY())
+        except Exception:  # noqa: BLE001 - a device without DPI
+            dpi = 0.0
+    if dpi <= 0.0:
+        return float(font_pt)
+    return float(font_pt) * PX_PER_PT * 72.0 / dpi
+
+
 # --------------------------------------------------------------------------- #
 # Decoding, which is Qt's other useful trick
 # --------------------------------------------------------------------------- #
@@ -136,14 +160,21 @@ class QtPainter:
 
         font = QtGui.QFont("Menlo")
         font.setStyleHint(QtGui.QFont.Monospace)
-        font.setPointSizeF(float(font_pt))
+        font.setPointSizeF(qt_point_size(font_pt, self._p.device()))
         self._p.setFont(font)
         # The *float* metrics, deliberately. The integer flavour rounds every
         # advance down, and the error is per character: a node title measured
         # at a scaled-down size loses a fraction of a pixel per glyph and the
         # accumulated shortfall crops the last characters off -- visible only
         # under the node editor's zoom, and unreadable as anything but a bug.
-        self._metrics = QtGui.QFontMetricsF(font)
+        #
+        # Measured on the device drawn to, not the screen: the point size
+        # above is chosen for the device's DPI, and a screen of another DPI
+        # would measure text the painter does not draw.
+        try:
+            self._metrics = QtGui.QFontMetricsF(font, self._p.device())
+        except TypeError:  # a binding without the device overload
+            self._metrics = QtGui.QFontMetricsF(font)
 
     def set_font_scale(self, scale: float) -> None:
         """Draw and measure subsequent text `scale` times :attr:`font_pt`.

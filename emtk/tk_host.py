@@ -211,6 +211,13 @@ class TkHost:
         Called once when the window closes, before Tk is torn down.
     root : tkinter.Tk, optional
         Use this root instead of creating one (tests share one).
+    font_pt : float, optional
+        Point size of the interface font, as every other host takes it.
+
+        The window is in logical pixels and the frame is drawn at one pixel
+        per logical pixel: Tk shows a photo image a pixel per point, so on a
+        2x display the frame is the right size and softer, never twice the
+        size.
 
     Notes
     -----
@@ -219,7 +226,8 @@ class TkHost:
 
     def __init__(self, control, title: str = "emtk", size: tuple = (800, 600),
                  background: tuple = (30, 32, 38, 255), interval_ms: int = 50,
-                 on_close: Callable[[], None] | None = None, root=None) -> None:
+                 on_close: Callable[[], None] | None = None, root=None,
+                 font_pt: float | None = None) -> None:
         if root is None and qt_application_exists():
             raise RuntimeError(
                 "a QApplication already runs in this process; a Tk window beside it "
@@ -229,6 +237,9 @@ class TkHost:
         self._tk = tk
         self.control = control
         self.background = tuple(background)
+        from .font import DEFAULT_FONT_PT  # noqa: PLC0415
+
+        self.font_pt = float(DEFAULT_FONT_PT if font_pt is None else font_pt)
         self.interval_ms = int(interval_ms)
         self.on_close = on_close
         self.root = root if root is not None else tk.Tk()
@@ -312,7 +323,8 @@ class TkHost:
         from .pil_painter import PilPainter  # noqa: PLC0415
 
         w, h = self._size
-        painter = PilPainter(w, h, background=self.background, frame=self._frame)
+        painter = PilPainter(w, h, background=self.background, frame=self._frame,
+                             scale=self._font_scale())
         self.control.draw(painter, 0.0, 0.0, float(w), float(h))
         frame = painter.frame
         if self._photo is None or frame is not self._frame:
@@ -326,6 +338,13 @@ class TkHost:
         self._frame = frame
         self.frames += 1
         return frame
+
+    def _font_scale(self) -> float:
+        """:attr:`font_pt` as a multiple of the baked atlas, as the GPU hosts take it."""
+        from .font import load_atlas  # noqa: PLC0415
+
+        baked = float(load_atlas().font_pt)
+        return self.font_pt / baked if baked else 1.0
 
     def grab(self):
         """The last presented frame as a :class:`PIL.Image.Image` copy."""
