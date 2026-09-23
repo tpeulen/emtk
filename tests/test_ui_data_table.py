@@ -451,6 +451,83 @@ def test_escape_or_a_typo_leaves_the_cell():
     assert model.edits == [] and model.rows[0]["upper"] == 3.0
 
 
+def test_the_typographic_minus_and_infinity_parse():
+    from emtk.widgets.data_table import parse_number
+
+    assert parse_number("\u22120.1571") == -0.1571 == parse_number("-0.1571")
+    assert parse_number("\u2212\u221e") == float("-inf") and parse_number("\u221e") == float("inf")
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 0, 1), clicks=2)
+    for _ in range(10):
+        control.key(KEY_BACKSPACE)
+    control.key(0, "\u22120.5")
+    control.key(KEY_RETURN)
+    assert model.edits == [("Tau", "lower", -0.5)]
+
+
+def test_text_typed_in_the_same_frame_as_enter_is_kept():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 0, 1), clicks=2)
+    for _ in range(10):
+        control.key(KEY_BACKSPACE)
+    control.key(0, "0.2")
+    control.key(KEY_RETURN, "5")                    # "5" and Enter in one frame
+    assert model.edits == [("Tau", "lower", 0.25)]
+
+
+def _form_frame(spec, model, state, io, storage):
+    with emtk.frame(RecordingPainter(), (0, 0, 480, 360), io=io, storage=storage):
+        emtk.begin("form", (0, 0, 480, 360))
+        draw_form(spec, model, state)
+        emtk.end()
+    for i in range(3):
+        io.mouse_clicked[i] = io.mouse_double_clicked[i] = False
+    io.key, io.text = 0, ""
+
+
+def _type_into_a_cell(model, spec, io, storage, state):
+    """Double-click Tau's Min in a form, clear it and type 0.75 as keys."""
+    _form_frame(spec, model, state, io, storage)
+    control = state.tables["gate_rows"].control
+    point = cell(control, 0, 1)
+    io.mouse_pos = point
+    _form_frame(spec, model, state, io, storage)
+    io.mouse_clicked[0] = io.mouse_double_clicked[0] = True
+    _form_frame(spec, model, state, io, storage)
+    assert control.editing == (0, "lower")
+    for _ in range(10):
+        io.key = KEY_BACKSPACE
+        _form_frame(spec, model, state, io, storage)
+    for char in "0.75":
+        io.text = char
+        _form_frame(spec, model, state, io, storage)
+    return control
+
+
+def test_in_a_form_typing_then_enter_commits():
+    model, io, storage, state = Gates(), emtk.IO(), {}, FormState()
+    spec = {"sections": [GATE_TABLE]}
+    control = _type_into_a_cell(model, spec, io, storage, state)
+    io.mouse_pos = (470.0, 350.0)                   # the pointer has left the table
+    io.key = KEY_RETURN
+    _form_frame(spec, model, state, io, storage)
+    assert model.edits == [("Tau", "lower", 0.75)] and control.editing is None
+
+
+def test_in_a_form_typing_then_a_click_elsewhere_commits():
+    model, io, storage, state = Gates(), emtk.IO(), {}, FormState()
+    spec = {"sections": [GATE_TABLE]}
+    control = _type_into_a_cell(model, spec, io, storage, state)
+    io.mouse_pos = (470.0, 350.0)                   # outside the table
+    io.mouse_clicked[0] = True
+    _form_frame(spec, model, state, io, storage)
+    assert model.edits == [("Tau", "lower", 0.75)] and control.editing is None
+
+
 def test_a_read_only_column_does_not_open():
     model = Gates()
     control = TableBinding(GATE_TABLE, model).control

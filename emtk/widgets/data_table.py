@@ -144,6 +144,7 @@ __all__ = [
     "TableBinding",
     "is_table_section",
     "draw_table",
+    "parse_number",
 ]
 
 #: A bar whose range does not span zero.
@@ -305,6 +306,18 @@ def _is_number(value: Any) -> bool:
     except (TypeError, ValueError):
         return False
     return True
+
+
+def parse_number(text: str) -> float:
+    """A number as typed or as a table shows it.
+
+    Accepts the typographic minus (U+2212) a formatted cell or a pasted
+    value carries, and ``∞``/``−∞`` for an open bound, besides what
+    :func:`float` reads. Raises :class:`ValueError` for anything else.
+    """
+    cleaned = str(text).strip().replace("\u2212", "-").replace("\u221e", "inf")
+    cleaned = cleaned.replace("\u2009", "").replace(" ", "")
+    return float(cleaned)
 
 
 def _sort_key(value: Any) -> tuple:
@@ -1094,7 +1107,7 @@ class DataTable:
         if isinstance(old, (int, float)) and not isinstance(old, bool) or _is_number(old):
             try:
                 value = int(text) if isinstance(old, int) and not isinstance(old, bool) \
-                    else float(text)
+                    else parse_number(text)
             except ValueError:
                 return  # a typo leaves the cell as it was
         if value != old:
@@ -1242,6 +1255,9 @@ class DataTable:
         """Type into a cell or the filter, delete a row, or move the selection."""
         if self.editing is not None:
             if key in (KEY_RETURN, KEY_ENTER):
+                # Text typed in the same frame as Enter came first.
+                if text:
+                    self.editor.field.key(0, text, modifiers)
                 self.commit_edit()
             elif key == KEY_ESCAPE:
                 self.cancel_edit()
@@ -1547,6 +1563,10 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         control.hovered = None
         if io.mouse_clicked[0]:
             control.filter_focused = False
+        # A click anywhere else ends the typing and keeps what was typed, as
+        # Enter does; without it the cell stayed open, and uncommitted.
+        if (io.mouse_clicked[0] or io.mouse_clicked[1]) and control.editing is not None:
+            control.commit_edit()
     if io.mouse_down[0] and (control.bar.needed() or control._hbar_held):
         control.drag(px, py)
     if io.mouse_released[0]:
