@@ -743,3 +743,44 @@ def test_a_column_can_opt_out_of_value_shading():
     control.colour_values = "column"
     assert control.colour_of("row", 2) is None
     assert control.colour_of("value", 2.0) is not None
+
+
+def test_fitted_columns_fill_the_box_and_do_not_scroll_when_they_can_narrow():
+    """Eleven columns in a 630-pixel panel: all shown, values whole, no empty half.
+
+    Declared widths once took the room, the rest fell to the minimum, the sum
+    tipped over the box and the table scrolled -- past its first three columns
+    -- while half the panel stayed empty and every value lost its last digit.
+    """
+    class Wide:
+        def rows(self):
+            return [{"row": i + 1, "owner": "Lifetime (magic angle)", "local": "",
+                     "parameter": name, "value": v, "fixed": False, "lo": 0.001, "hi": 2048.0,
+                     "bounded": True, "error": None, "link": ""}
+                    for i, (name, v) in enumerate([("timeshift", 0.0), ("n0", 2.5)])]
+
+    titles = ("Row", "Owner", "Local", "Parameter", "Value", "Fixed", "Lo", "Hi", "Bounds",
+              "Error", "Link row")
+    columns = [{"key": k, "title": t} for k, t in zip(
+        ("row", "owner", "local", "parameter", "value", "fixed", "lo", "hi", "bounded",
+         "error", "link"), titles)]
+    section = {"type": "custom", "key": "data_table",
+               "options": {"source": "rows", "columns": columns, "fit_columns": True,
+                           "min_column_width": 36}}
+    control = TableBinding(section, Wide()).control
+    painter = draw(control, w=630.0, h=300.0)
+    assert control._hbar_box is None, "the table scrolled although it could narrow"
+    assert control.first_column == 0
+    assert abs(sum(control._widths) - (630.0 - (control.bar.width if control.bar.needed() else 0))) < 1.0
+    for text in ("2048", "0.001", "2.5", "timeshift"):
+        assert text in painter.strings, f"{text} was cut short"
+
+
+def test_fitted_columns_share_spare_room_instead_of_leaving_it_empty():
+    model = Parameters()
+    section = {"type": "custom", "key": "data_table",
+               "options": {"source": "parameter_rows", "fit_columns": True,
+                           "columns": [{"key": "name"}, {"key": "value"}]}}
+    control = TableBinding(section, model).control
+    draw(control, w=600.0, h=200.0)
+    assert sum(control._widths) == pytest.approx(600.0, abs=1.0)

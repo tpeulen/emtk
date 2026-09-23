@@ -71,6 +71,10 @@ table needs them and neither dialect had them:
     a right click on the header opens a list of the columns, each ticked
     while shown; picking one hides or shows it. The hidden set survives a
     rebind, so a source that streams new columns does not undo the choice;
+``fit_columns: true``
+    size the columns to their header and contents whenever the rows change;
+    spare room is shared out, and a table too wide for its box first narrows
+    the columns wider than their header, then scrolls;
 ``status: true``
     a line under the rows: how many are shown (of how many, while a filter
     narrows them) and across how many columns.
@@ -385,6 +389,11 @@ class DataTable:
         self.first_column = 0
         self._fit_pending = False
         self._fitted: dict[str, float] = {}
+        #: Header widths, from the last measure: a column is not squeezed below it.
+        self._title_w: dict[str, float] = {}
+        #: Size the columns to their contents whenever the rows change.
+        self.auto_fit = False
+        self._fitted_for = -1
         self._shown: list[TableColumn] = []
         self._hbar_box: Optional[tuple] = None
         self._hbar_held = False
@@ -611,19 +620,42 @@ class DataTable:
         return None
 
     def _column_widths(self, total: float) -> list[float]:
-        """Widths of every visible column; they fill *total* unless a minimum
-        width or a fit to contents makes them wider (the table then scrolls)."""
+        """Widths of every visible column, filling *total*.
+
+        A column's natural width is its fitted (measured) width, else its
+        declared ``width``; the rest share what is left, never below
+        :attr:`min_column_width`. Room to spare is handed back to the columns
+        in proportion to their width, so a table never leaves the right half of
+        its box empty; a shortfall is taken first from the columns wider than
+        their header, and only what cannot be taken makes the table scroll.
+        """
         columns = self.visible_columns()
-        fixed = sum(self._fitted.get(c.key, c.width) for c in columns
-                    if c.width or c.key in self._fitted)
-        flexible = [c for c in columns if not (c.width or c.key in self._fitted)]
-        share = max(total - fixed, 0.0) / len(flexible) if flexible else 0.0
-        share = max(share, self.min_column_width)
-        widths = [self._fitted.get(c.key, c.width) or share for c in columns]
-        if self.min_column_width > 0.0 or self._fitted:
+        if not columns:
+            return []
+        floor = self.min_column_width
+        natural = []
+        for column in columns:
+            width = self._fitted.get(column.key) or column.width
+            natural.append(max(width, floor) if width else None)
+        known = sum(w for w in natural if w)
+        flexible = sum(1 for w in natural if w is None)
+        share = max((total - known) / flexible, floor, 1.0) if flexible else 0.0
+        widths = [w if w else share for w in natural]
+        size = sum(widths)
+        if size < total and size > 0.0:
+            return [w * total / size for w in widths]
+        if size <= total:
             return widths
-        scale = total / sum(widths) if sum(widths) > total and sum(widths) > 0 else 1.0
-        return [w * scale for w in widths]
+        if not (floor > 0.0 or self._fitted):
+            return [w * total / size for w in widths]
+        # Down to the header (to the contents, for a column of numbers).
+        least = [max(floor, self._title_w.get(c.key, 0.0)) for c in columns]
+        slack = sum(max(w - m, 0.0) for w, m in zip(widths, least))
+        deficit = size - total
+        if slack <= 0.0:
+            return widths
+        take = min(deficit / slack, 1.0)
+        return [w - take * max(w - m, 0.0) for w, m in zip(widths, least)]
 
     def fit_columns(self) -> None:
         """Size every column to its header and the rows in view, on the next draw."""
@@ -634,11 +666,23 @@ class DataTable:
         rows = order[self.bar.top:self.bar.top + max(self._visible, 1) + 50]
         fitted = {}
         for column in self.visible_columns():
-            widest = p.text_width(column.title) + 24.0
+            # The cell margins (6 each side), a little air, and room for the
+            # sort mark only on the column that carries it.
+            mark = p.text_width("▴ ") if column.key == self.sort_key_name else 0.0
+            widest = p.text_width(column.title) + 16.0 + mark
+            self._title_w[column.key] = widest
+            numeric = False
             for index in rows:
-                widest = max(widest, p.text_width(column.text(self.value(index, column.key))) + 14.0)
+                value = self.value(index, column.key)
+                numeric = numeric or (_is_number(value) and not isinstance(value, (bool, _np_bool())))
+                widest = max(widest, p.text_width(column.text(value)) + 14.0)
             fitted[column.key] = widest
+            if numeric:
+                # A number is never shortened to fit: '2048' cut to '20.' is a
+                # different number. Text columns give way instead, and elide.
+                self._title_w[column.key] = widest
         self._fitted = fitted
+        self._fitted_for = self.revision
 
     def scroll_columns(self, steps: int) -> None:
         """Move the leftmost column by *steps* (positive is right)."""
@@ -729,7 +773,7 @@ class DataTable:
         self.bar.clamp(len(order), self._visible)
         bar_w = self.bar.width if self.bar.needed() else 0.0
         list_w = max(w - bar_w, 1.0)
-        if self._fit_pending:
+        if self._fit_pending or (self.auto_fit and self._fitted_for != self.revision):
             self._measure(p, order)
         widths = self._column_widths(list_w)
         wide = sum(widths) > list_w + 0.5
@@ -1178,6 +1222,7 @@ class TableBinding:
             on_context=self._on_context,
             min_column_width=float(merged.get("min_column_width", 0) or 0),
         )
+        self.control.auto_fit = bool(merged.get("fit_columns", False))
         sort = merged.get("sort")
         if isinstance(sort, Mapping) and sort.get("key"):
             self.control.sort_by(str(sort["key"]), bool(sort.get("descending", False)))
