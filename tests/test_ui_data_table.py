@@ -622,3 +622,110 @@ def test_an_expanding_table_leaves_its_reserve_free():
         emtk.end()
     table, button = state.rects["sheet"], state.rects["ok"]
     assert button[1] + button[3] <= 300 and table[3] < 300 - 50 + 1
+
+
+# ---- a parameter table: per-cell rules, muted rows, the column picker -------------------
+
+
+class Parameters:
+    """A fit's parameter table: some values are borrowed, some bounds switched off."""
+
+    def __init__(self):
+        self.rows = [
+            {"name": "a", "value": 1.0, "follower": False, "bounded": True, "lo": 0.0},
+            {"name": "b", "value": 2.0, "follower": True, "bounded": True, "lo": 0.0},
+            {"name": "c", "value": 3.0, "follower": False, "bounded": False, "lo": 0.0},
+        ]
+        self.edits = []
+
+    def parameter_rows(self):
+        return self.rows
+
+    def edit(self, record, key, value):
+        self.edits.append((record["name"], key, value))
+
+    def may_edit(self, record, key):
+        if key == "value":
+            return not record["follower"]
+        if key == "lo":
+            return record["bounded"]
+        return True
+
+
+PARAMETER_TABLE = {
+    "type": "custom", "key": "data_table",
+    "options": {
+        "source": "parameter_rows", "editable": True, "edited_call": "edit",
+        "editable_call": "may_edit", "muted_key": "follower", "status": True,
+        "column_picker": True, "filter": True,
+        "columns": [{"key": "name", "title": "Parameter", "editable": False},
+                    {"key": "value", "title": "Value"}, {"key": "lo", "title": "Lo"}],
+    },
+}
+
+
+def test_a_cell_the_model_refuses_does_not_open():
+    """A follower's value is its master's; a bound counts only while it is on."""
+    model = Parameters()
+    control = TableBinding(PARAMETER_TABLE, model).control
+    draw(control)
+    control.press(*cell(control, 1, 1), clicks=2)
+    assert control.editing is None, "a borrowed value opened for typing"
+    control.press(*cell(control, 2, 2), clicks=2)
+    assert control.editing is None, "a switched-off bound opened for typing"
+    control.press(*cell(control, 0, 1), clicks=2)
+    assert control.editing == (0, "value")
+
+
+def test_a_muted_row_is_drawn_dimmed():
+    from emtk import style
+
+    model = Parameters()
+    control = TableBinding(PARAMETER_TABLE, model).control
+    painter = draw(control)
+    colour = {text[5]: text[6] for text in painter.texts}
+    assert colour["b"] == style.DIM and colour["a"] == style.TEXT
+
+
+def test_the_status_line_counts_rows_and_columns_and_says_when_filtered():
+    model = Parameters()
+    control = TableBinding(PARAMETER_TABLE, model).control
+    assert "3 rows × 3 columns" in draw(control).strings
+    control.filter.set_text("b")
+    assert "1 of 3 rows × 3 columns" in draw(control).strings
+
+
+def test_the_header_opens_a_column_picker_that_hides_and_shows():
+    model = Parameters()
+    spec = {"sections": [PARAMETER_TABLE]}
+    io, storage, state = emtk.IO(), {}, FormState()
+
+    def frame():
+        with emtk.frame(RecordingPainter(), (0, 0, 480, 360), io=io, storage=storage):
+            emtk.begin("form", (0, 0, 480, 360))
+            draw_form(spec, model, state)
+            emtk.end()
+        for i in range(3):
+            io.mouse_clicked[i] = io.mouse_released[i] = False
+
+    frame()
+    control = state.tables["parameter_rows"].control
+    hx, hy, _hw, hh = control._header_box
+    io.mouse_pos = io.mouse_clicked_pos[1] = (hx + 30.0, hy + hh / 2)
+    io.mouse_clicked[1] = io.mouse_down[1] = True
+    frame()
+    io.mouse_down[1] = False
+    frame()
+    panel = control.picker_panel
+    assert panel is not None and panel.open, "a right click on the header opened nothing"
+    assert [row.checked for row in panel.entries] == [True, True, True]
+
+    control.set_column_hidden("lo", True)
+    assert [c.key for c in control.visible_columns()] == ["name", "value"]
+    assert "3 rows × 2 columns" in draw(control).strings
+    TableBinding.refresh(state.tables["parameter_rows"])
+    assert "lo" in control.hidden, "a refresh brought a hidden column back"
+    for key in ("name", "value"):
+        control.set_column_hidden(key, True)
+    assert len(control.visible_columns()) == 1, "the picker hid the last column"
+

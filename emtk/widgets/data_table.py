@@ -58,7 +58,21 @@ table needs them and neither dialect had them:
 ``min_column_width``
     columns never get narrower than this; when they do not fit, the table
     scrolls sideways (a bar under the rows, the horizontal wheel, or shift and
-    the wheel).
+    the wheel);
+``editable_call``
+    ``editable_call(record, key) -> bool``: whether one cell of an editable
+    column may be changed *now* -- a value borrowed from another row, or a
+    bound that only counts while its switch is on, is shown but refused;
+``muted_key``
+    the record field that, when true, draws the row's text dimmed: a row that
+    is there to be read, not acted on (a parameter the fit will not move);
+``column_picker: true``
+    a right click on the header opens a list of the columns, each ticked
+    while shown; picking one hides or shows it. The hidden set survives a
+    rebind, so a source that streams new columns does not undo the choice;
+``status: true``
+    a line under the rows: how many are shown (of how many, while a filter
+    narrows them) and across how many columns.
 
 :meth:`DataTable.fit_columns` sizes the columns to their contents on the next
 draw, and :attr:`DataTable.column_filters` narrows the rows by the text of one
@@ -327,8 +341,28 @@ class DataTable:
         on_delete: Optional[Callable[[int], None]] = None,
         on_context: Optional[Callable[[Optional[int], Optional[str], float, float], None]] = None,
         min_column_width: float = 0.0,
+        cell_editable: Optional[Callable[[int, str], bool]] = None,
+        muted: Optional[Callable[[int], bool]] = None,
+        status: bool = False,
+        column_picker: bool = False,
     ) -> None:
         self.columns: list[TableColumn] = list(columns)
+        #: ``cell_editable(index, key)``: whether an editable column's cell at
+        #: source *index* may be changed now. ``None`` allows every one.
+        self.cell_editable = cell_editable
+        #: ``muted(index)``: whether the row's text is drawn dimmed.
+        self.muted = muted
+        #: Draw the row/column count under the rows.
+        self.show_status = bool(status)
+        #: A right click on the header asks for the column list.
+        self.column_picker = bool(column_picker)
+        #: Keys of the columns the user hid through the picker.
+        self.hidden: set = set()
+        #: Where the header was right-clicked, while the column list is due.
+        self.picker_at: Optional[tuple] = None
+        #: The column list while it is open (a :class:`~.menus.Popup`).
+        self.picker_panel: Any = None
+        self._picker_keys: list = []
         self.on_select = on_select
         self.on_activate = on_activate
         self.on_edit = on_edit
@@ -418,8 +452,24 @@ class DataTable:
         return self.value(index, self.row_key) if self.row_key else index
 
     def visible_columns(self) -> list[TableColumn]:
-        """The columns drawn."""
-        return [c for c in self.columns if c.visible]
+        """The columns drawn: declared visible, and not hidden by the user."""
+        return [c for c in self.columns if c.visible and c.key not in self.hidden]
+
+    def set_column_hidden(self, key: str, hidden: bool) -> None:
+        """Hide or show one column, as the picker does. The last one stays."""
+        if hidden and len([c for c in self.visible_columns() if c.key != key]) == 0:
+            return
+        (self.hidden.add if hidden else self.hidden.discard)(key)
+        self.first_column = 0
+        self.changed()
+
+    def status_text(self) -> str:
+        """``"6 rows × 11 columns"``, or ``"2 of 6 rows × ..."`` while filtered."""
+        shown, total = len(self.order()), self.row_count()
+        rows = f"{shown} of {total} rows" if shown != total else \
+            f"{total} row{'' if total == 1 else 's'}"
+        count = len(self.visible_columns())
+        return f"{rows} × {count} column{'' if count == 1 else 's'}"
 
     def order(self) -> list[int]:
         """Source indices, filtered and sorted as displayed (cached per change)."""
@@ -662,6 +712,8 @@ class DataTable:
             note = str(self.value(index, self.tooltip_key) or "")
         note_lines = 2 if note else 0
         note_h = note_lines * line + (6.0 if note_lines else 0.0)
+        status_h = line * 1.2 if self.show_status else 0.0
+        note_h += status_h
         header_h = line * 1.35
         order = self.order()
         body_top = cursor + header_h
@@ -721,11 +773,15 @@ class DataTable:
         if self._hbar_box is not None:
             self._draw_hbar(p, widths, list_w)
 
+        note_y = body_top + body_h + (self._hbar_box[3] if self._hbar_box else 0.0) + 4.0
         if note_lines:
-            note_y = body_top + body_h + 4.0
             for offset, text in enumerate(_wrap(p, note, w - 8.0, note_lines)):
                 p.text(x + 4.0, note_y + offset * line, w - 8.0, line,
                        ALIGN_VCENTER | ALIGN_LEFT, text, _style.DIM)
+            note_y += note_lines * line + 2.0
+        if self.show_status:
+            p.text(x + 4.0, note_y, w - 8.0, line, ALIGN_VCENTER | ALIGN_LEFT,
+                   self.status_text(), _style.DIM)
 
     def _right_aligned(self, column: TableColumn, order: Sequence[int]) -> bool:
         if column.align_right is not None:
@@ -758,6 +814,7 @@ class DataTable:
         if background is not None:
             p.fill_rect(x, y, sum(self._widths), h, background)
         text_h = min(h, p.line_height() * 1.15)
+        colour = _style.DIM if self.muted is not None and self.muted(index) else _style.TEXT
         col_x = x
         for column, width in zip(columns, self._widths):
             value = self.value(index, column.key)
@@ -782,7 +839,7 @@ class DataTable:
             right = self._right_aligned(column, order)
             p.text(col_x + 6.0, y + 1.0, max(width - 12.0, 1.0), text_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
-                   fit_text(p, column.text(value), width - 12.0), _style.TEXT)
+                   fit_text(p, column.text(value), width - 12.0), colour)
             col_x += width
 
     def _draw_hbar(self, p: Painter, widths: Sequence[float], list_w: float) -> None:
@@ -830,6 +887,12 @@ class DataTable:
     def column_editable(self, key: str) -> bool:
         column = next((c for c in self.columns if c.key == key), None)
         return bool(column is not None and column.editable)
+
+    def can_edit(self, index: int, key: str) -> bool:
+        """Whether cell ``(index, key)`` may be changed now."""
+        if not self.column_editable(key):
+            return False
+        return self.cell_editable is None or bool(self.cell_editable(index, key))
 
     def begin_edit(self, index: int, key: str) -> None:
         """Open cell ``(index, key)`` for typing, filled with its text."""
@@ -912,7 +975,7 @@ class DataTable:
         self._select_position(position)
         index = self.order()[position]
         column = self.column_at(x)
-        if column is not None and column.editable:
+        if column is not None and self.can_edit(index, column.key):
             value = self.value(index, column.key)
             if isinstance(value, (bool, _np_bool())):
                 self._write(index, column.key, not bool(value))
@@ -956,6 +1019,9 @@ class DataTable:
         Returns whether it landed on the table (header or rows).
         """
         on_header = self._inside(self._header_box, x, y)
+        if on_header and self.column_picker:
+            self.picker_at = (x, y)
+            return True
         position = self.row_at(x, y)
         if position is None and not on_header:
             return self._inside(self._body_box, x, y)
@@ -1088,7 +1154,13 @@ class TableBinding:
         #: Height an expanding table leaves free under it, for the rows that follow.
         self.reserve = float(merged.get("reserve", 0) or 0)
         self._declared_columns = list(merged.get("columns") or [])
+        self.editable_call = str(merged.get("editable_call", "") or "")
+        self.muted_key = str(merged.get("muted_key", "") or "")
         self.control = DataTable(
+            cell_editable=self._cell_editable if self.editable_call else None,
+            muted=self._muted if self.muted_key else None,
+            status=bool(merged.get("status", False)),
+            column_picker=bool(merged.get("column_picker", False)),
             on_select=self._on_select,
             on_activate=self._on_activate,
             on_edit=self._on_edit,
@@ -1182,6 +1254,18 @@ class TableBinding:
             return self.control.records[index]
         return index
 
+    def _cell_editable(self, index: int, key: str) -> bool:
+        fn = getattr(self.model, self.editable_call, None)
+        if not callable(fn):
+            return True
+        try:
+            return bool(fn(self.record(index), key))
+        except Exception:  # noqa: BLE001 - a failing rule refuses the edit
+            return False
+
+    def _muted(self, index: int) -> bool:
+        return bool(self.control.value(index, self.muted_key))
+
     def _on_select(self, index: Optional[int]) -> None:
         payload = self.record(index)
         if self.selected_attr:
@@ -1266,8 +1350,39 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     if io.key or io.text:
         if hovered or control.filter_focused or control.editing is not None:
             control.key(int(io.key), io.text, 0)
+    _column_picker(control, name)
     control.draw(ctx.p, *box)
     if hovered:
         tip, part = control.tooltip_at(px, py)
         if tip:
             ctx.set_tooltip(tip, owner=(item_id, part))
+
+
+def _column_picker(control: DataTable, name: str) -> None:
+    """Keep the header's column list up while it is open; apply what is picked."""
+    from .. import overlays
+    from .menus import MenuItem, Popup
+
+    if control.picker_at is not None:
+        keys = [c.key for c in control.columns if c.visible]
+        items = [MenuItem(c.title or c.key, checked=c.key not in control.hidden, checkable=True)
+                 for c in control.columns if c.visible]
+        panel = Popup(items, title="Columns")
+        panel.open_at(*control.picker_at)
+        control.picker_panel, control._picker_keys = panel, keys
+        control.picker_at = None
+    panel = control.picker_panel
+    if panel is None:
+        return
+
+    def close() -> None:
+        control.picker_panel = None
+
+    def picked(item) -> None:
+        index = next((i for i, row in enumerate(panel.entries) if row is item), None)
+        if index is not None and index < len(control._picker_keys):
+            key = control._picker_keys[index]
+            control.set_column_hidden(key, key not in control.hidden)
+        close()
+
+    overlays.popup(("table-picker", name), panel, on_close=close, on_pick=picked)
