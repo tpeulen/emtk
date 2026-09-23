@@ -36,6 +36,14 @@ the line. A ``custom`` section whose ``key`` the host registered in
 :attr:`FormState.custom` is drawn by the host's callback, full width, in its
 place in the form -- a plot between two rows of fields.
 
+Two more of AutoForm's field types are drawn without the host's help: a
+``value`` of ``kind: "color"`` (a ``"#rrggbb"`` string: a swatch that opens a
+picker under the field, and the hex text beside it), and the ``custom``
+``code_editor`` section (``target`` the text attribute; ``options``
+``height``, ``read_only``, ``language``) -- an
+:class:`emtk.widgets.text_editor.TextEditor` bound to the attribute, written
+back on every edit.
+
 Two things a form needs that the dialect
 does not say are asked of the **model**, so the spec stays shared:
 
@@ -63,7 +71,7 @@ from . import im_widgets as _w
 from .flags import InputTextFlags
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
-           "format_value", "parse_value"]
+           "format_value", "parse_value", "parse_colour_text"]
 
 
 #: Section types that hold other sections.
@@ -108,6 +116,12 @@ class FormState:
         self.dropdown_request: tuple | None = None
         self.dropdown_result: dict[str, int] = {}
         self.on_used = on_used
+        #: Colour fields whose picker is open, by name.
+        self.pickers: set[str] = set()
+        #: The text editor of every ``code_editor`` section, by name.
+        self.editors: dict[str, Any] = {}
+        #: The ``code_editor`` that has the keyboard, or ``None``.
+        self.editor_focus: str | None = None
 
     def used(self, name: str) -> None:
         """Report that the user used *name*."""
@@ -214,6 +228,8 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
         model as it was rather than writing zero into it.
     """
     kind = str(section.get("kind", "str")).lower()
+    if kind in ("color", "colour"):
+        return parse_colour_text(text)
     if kind not in ("int", "float"):
         return text
     text = str(text).strip()
@@ -232,6 +248,21 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
     if hi is not None:
         number = min(number, float(hi))
     return int(round(number)) if kind == "int" else number
+
+
+def parse_colour_text(text: Any) -> str | None:
+    """``"#abc"``, ``"aabbcc"`` or ``"#AABBCC"`` as ``"#aabbcc"``; ``None`` if not a colour."""
+    value = str(text or "").strip().lstrip("#").lower()
+    if len(value) == 3:
+        value = "".join(c * 2 for c in value)
+    if len(value) not in (6, 8) or any(c not in "0123456789abcdef" for c in value):
+        return None
+    return "#" + value[:6]
+
+
+def _rgb(text: Any) -> tuple:
+    value = parse_colour_text(text) or "#000000"
+    return tuple(int(value[i:i + 2], 16) for i in (1, 3, 5))
 
 
 def _hidden(section: dict, model: Any) -> bool:
@@ -348,9 +379,19 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     slider = str(section.get("style", "")).lower() == "slider"
     kind = str(section.get("kind", "str")).lower()
 
+    colour = kind in ("color", "colour")
     field_w = width
     if slider:
         field_w = max(40.0, min(90.0, 0.12 * width))
+    if colour:
+        swatch = _core.get_frame_height() * 1.6
+        if _w.color_button(f"##{name}.swatch", (*_rgb(value), 255), 0,
+                           (swatch, _core.get_frame_height())) and not read_only:
+            state.pickers.symmetric_difference_update({name})
+        _remember(state, f"{name}.swatch")
+        _tooltip(section)
+        _w.same_line()
+        field_w = max(width - swatch - 8.0, 30.0)
     shown = state.buffers.get(name, shown_value)
     _w.set_next_item_width(field_w)
     flags = InputTextFlags.ENTER_RETURNS_TRUE | (InputTextFlags.READ_ONLY if read_only else 0)
@@ -368,6 +409,14 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
             parsed = parse_value(typed, section, bounds)
             if parsed is not None:
                 _commit(model, section, parsed, state)
+
+    if colour and name in state.pickers:
+        changed, rgb = _w.color_picker3(f"##{name}.picker", _rgb(value))
+        _remember(state, f"{name}.picker")
+        if changed and not read_only:
+            picked = "#%02x%02x%02x" % tuple(int(c) for c in rgb[:3])
+            if picked != parse_colour_text(value):
+                _commit(model, section, picked, state)
 
     if slider and kind in ("int", "float"):
         lo, hi = bounds
@@ -633,6 +682,10 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             state.custom[section["key"]](section, model, state,
                                          float(_w.get_content_region_avail()[0]))
             continue
+        if kind == "custom" and section.get("key") == "code_editor":
+            flush()
+            _draw_code_editor(section, model, state)
+            continue
         if kind in _CONTAINERS or isinstance(section.get("sections"), list):
             flush()
             if section.get("collapsible"):
@@ -645,6 +698,76 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             continue
         leaves.append(section)
     flush()
+
+
+def _draw_code_editor(section: dict, model: Any, state: FormState) -> None:
+    """AutoForm's ``code_editor``: a text editor over the ``target`` attribute.
+
+    The editor is kept in :attr:`FormState.editors`; the attribute is read
+    every frame (a model that loads a file shows it) and written back when an
+    edit changes the text. A click in the editor gives it the keyboard, a
+    click elsewhere takes it away.
+    """
+    from .widgets.text_editor import LIGHT_PALETTE, TextEditor, shipped_languages
+
+    options = dict(section.get("options") or {})
+    attr = str(section.get("target") or section.get("attr") or "")
+    name = attr or section_name(section) or "code_editor"
+    read_only = bool(options.get("read_only", section.get("read_only", False)))
+    editor = state.editors.get(name)
+    if editor is None:
+        wanted = str(options.get("language", "none")).lower()
+        language = {k.lower(): v for k, v in shipped_languages().items()}.get(wanted)
+        editor = state.editors[name] = TextEditor("", language=language, read_only=read_only)
+        editor._bound_text = None
+        background = _core.get_style().color(_core.Col.WINDOW_BG)
+        if sum(background[:3]) > 3 * 128:
+            editor.palette = LIGHT_PALETTE
+    text = str(getattr(model, attr, "") or "") if attr else ""
+    if text != editor._bound_text:
+        if text != editor.text:
+            editor.set_text(text)
+        editor._bound_text = text
+    if section.get("title"):
+        _w.text(str(section["title"]))
+
+    ctx = _core.get_current_context()
+    avail_w, avail_h = _w.get_content_region_avail()[:2]
+    height = float(options.get("height", section.get("height", 240)))
+    if options.get("expand"):
+        height = max(height, float(avail_h))
+    box = ctx.layout.row(height=height, width=float(avail_w))
+    hovered = ctx.item_add(box, ctx.get_id(f"##code-editor-{name}"))
+    state.rects[name] = tuple(box)
+    io = ctx.io
+    px, py = io.mouse_pos
+    disabled = not _enabled(model, name)
+    if io.mouse_clicked[0]:
+        if hovered and not disabled:
+            state.editor_focus = name
+            clicks = 2 if io.mouse_double_clicked[0] else 1
+            editor.press(px, py, *box, 0, clicks)
+        elif state.editor_focus == name:
+            state.editor_focus = None
+    if hovered and io.mouse_wheel:
+        editor.scroll(-3 if io.mouse_wheel > 0 else 3)
+    if io.mouse_down[0] and state.editor_focus == name:
+        editor.drag(px, py, *box)
+    if io.mouse_released[0]:
+        editor.release()
+    if state.editor_focus == name and (io.key or io.text) and not disabled:
+        from .events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
+
+        modifiers = ((SHIFT_MODIFIER if io.key_shift else 0)
+                     | (CONTROL_MODIFIER if io.key_ctrl else 0)
+                     | (ALT_MODIFIER if io.key_alt else 0)
+                     | (META_MODIFIER if io.key_super else 0))
+        editor.key(int(io.key), io.text, modifiers)
+    editor.draw(ctx.p, *box)
+    if attr and editor.text != editor._bound_text and not read_only:
+        editor._bound_text = editor.text
+        setattr(model, attr, editor.text)
+        state.used(name)
 
 
 def _fold(section: dict, state: FormState) -> bool:

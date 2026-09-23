@@ -326,3 +326,61 @@ def test_a_radio_list_stacks_its_options_and_a_click_picks_one():
     inline = Driver({"sections": [dict(spec["sections"][0], style="radio")]}, Model())
     inline.frame()
     assert abs(inline.state.rects["method.0"][1] - inline.state.rects["method.1"][1]) < 1.0
+
+
+# ------------------------------------------------------------- colour + code editor
+class Styled:
+    def __init__(self):
+        self.colour = "#bb3838"
+        self.script = "plots:\n- type: 1d\n"
+
+
+COLOUR_SPEC = {"sections": [
+    {"type": "value", "attr": "colour", "label": "Title color", "kind": "color"},
+    {"type": "custom", "key": "code_editor", "target": "script",
+     "options": {"height": 120, "language": "none"}},
+]}
+
+
+def test_colour_values_are_parsed_as_hex():
+    assert parse_value("BB3838", {"kind": "color"}) == "#bb3838"
+    assert parse_value("#abc", {"kind": "color"}) == "#aabbcc"
+    assert parse_value("not a colour", {"kind": "color"}) is None
+
+
+def test_a_colour_field_has_a_swatch_that_opens_a_picker():
+    model = Styled()
+    driver = Driver(COLOUR_SPEC, model)
+    driver.frame()
+    assert "colour.swatch" in driver.state.rects and "colour" in driver.state.rects
+    assert any(tuple(call[-1])[:3] == (187, 56, 56) for call in driver.painter.calls
+               if call[0] == "fill_rect" and isinstance(call[-1], tuple))
+    driver.click("colour.swatch")
+    assert "colour" in driver.state.pickers
+    driver.frame()
+    assert "colour.picker" in driver.state.rects
+
+
+def test_typing_a_hex_colour_commits_it():
+    model = Styled()
+    driver = Driver(COLOUR_SPEC, model)
+    driver.frame()
+    driver.state.buffers["colour"] = "#00ff00"
+    driver.type("colour", "")
+    assert model.colour == "#00ff00"
+
+
+def test_a_code_editor_shows_and_writes_back_its_attribute():
+    model = Styled()
+    driver = Driver(COLOUR_SPEC, model)
+    driver.frame()
+    assert "script" in driver.state.rects
+    assert driver.state.editors["script"].text == model.script
+    driver.click("script")
+    assert driver.state.editor_focus == "script"
+    driver.io.text = "x"
+    driver.frame()
+    assert "x" in model.script and model.script != "plots:\n- type: 1d\n"
+    model.script = "loaded: 1\n"
+    driver.frame()
+    assert driver.state.editors["script"].text == "loaded: 1\n"
