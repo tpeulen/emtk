@@ -50,11 +50,17 @@ class Texture:
     ----------
     revision : int
         Incremented on every write. A painter that uploads caches against it.
+    filter : str
+        ``"linear"`` (the default: a photograph scaled smoothly) or
+        ``"nearest"`` -- every texel a sharp block, which is what a picture of
+        *bins* has to look like (a 2-D histogram, a pixel image at high zoom).
+        Set at construction or later; painters read it when they draw.
     """
 
-    __slots__ = ("width", "height", "px", "revision")
+    __slots__ = ("width", "height", "px", "revision", "filter")
 
-    def __init__(self, width: int, height: int, pixels: Sequence[int] | None = None) -> None:
+    def __init__(self, width: int, height: int, pixels: Sequence[int] | None = None,
+                 filter: str = "linear") -> None:
         width, height = int(width), int(height)
         if width <= 0 or height <= 0:
             raise ValueError(
@@ -73,6 +79,9 @@ class Texture:
                     f"{len(self.px)}. A short buffer drawn as-is is a picture "
                     f"of whatever followed it in memory.")
         self.revision = 0
+        if filter not in ("linear", "nearest"):
+            raise ValueError(f"filter must be 'linear' or 'nearest', not {filter!r}")
+        self.filter = filter
 
     # -- writing ----------------------------------------------------------- #
     def touch(self) -> None:

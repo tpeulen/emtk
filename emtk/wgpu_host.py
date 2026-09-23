@@ -367,6 +367,13 @@ class WgpuRenderer:
                     "visibility": wgpu.ShaderStage.FRAGMENT,
                     "sampler": {"type": wgpu.SamplerBindingType.filtering},
                 },
+                # Nearest texel, for textures drawn block by block
+                # (``Texture.filter == "nearest"``: a histogram of bins).
+                {
+                    "binding": 5,
+                    "visibility": wgpu.ShaderStage.FRAGMENT,
+                    "sampler": {"type": wgpu.SamplerBindingType.filtering},
+                },
             ],
         )
         return self._empty_layout, self._layout
@@ -551,6 +558,11 @@ class WgpuRenderer:
                 mag_filter=wgpu.FilterMode.linear,
                 min_filter=wgpu.FilterMode.linear,
             )
+            self._nearest_sampler = device.create_sampler(
+                label="emtk.ui.sampler.nearest",
+                mag_filter=wgpu.FilterMode.nearest,
+                min_filter=wgpu.FilterMode.nearest,
+            )
         uniforms = np.zeros(UNIFORM_FLOATS, dtype=np.float32)
         uniforms[0:2] = (float(width), float(height))
         uniforms[2:4] = (float(self._atlas_size[0]), float(self._atlas_size[1]))
@@ -577,6 +589,7 @@ class WgpuRenderer:
                     {"binding": 2, "resource": self._sampler},
                     {"binding": 3, "resource": self._image_texture.create_view()},
                     {"binding": 4, "resource": self._sampler},
+                    {"binding": 5, "resource": self._nearest_sampler},
                 ],
             )
             self._bind_key = key

@@ -343,7 +343,9 @@ class ImageAtlas:
         tuple or None
             u is :func:`image_u`-encoded; v is a texel row. Both corners
             are inset by half a texel, so a linear sample at the edge of
-            one image cannot reach into the one packed beside it.
+            one image cannot reach into the one packed beside it. A texture
+            whose ``filter`` is ``"nearest"`` is not inset and its v is
+            ``-(1 + row)``: the fragment stage samples it texel by texel.
         """
         width = getattr(handle, "width", None)
         height = getattr(handle, "height", None)
@@ -364,6 +366,15 @@ class ImageAtlas:
         self._placed[id(handle)] = placed
 
         _rev, x, y, w, h = placed
+        if getattr(handle, "filter", "linear") == "nearest":
+            # Sampled texel by texel: the corners are the image's own edges
+            # (no inset, so no texel is shaved off), and v is negated --
+            # ``-(1 + row)`` -- which is how the fragment stage knows to take
+            # the nearest texel instead of blending four.
+            return (
+                (image_u(x, self.width), -(1.0 + y)),
+                (image_u(x + w, self.width), -(1.0 + y + h)),
+            )
         return (
             (image_u(x + 0.5, self.width), y + 0.5),
             (image_u(x + w - 0.5, self.width), y + h - 0.5),

@@ -69,6 +69,7 @@ struct UiUniforms {
 @group(1) @binding(2) var uiSampler : sampler;
 @group(1) @binding(3) var uiTex2 : texture_2d<f32>;
 @group(1) @binding(4) var uiSampler2 : sampler;
+@group(1) @binding(5) var uiSampler3 : sampler;
 
 @vertex
 fn vs_ui(
@@ -106,6 +107,13 @@ fn fs_ui(in : UiOut) -> @location(0) vec4<f32> {
         // `textureSampleLevel` because a varying branch is non-uniform
         // control flow and the implicit-LOD `textureSample` may not enter
         // one; these atlases have no mips, so level 0 is exact.
+        // A negative v is a texture drawn texel by texel (`filter
+        // "nearest"`, `ImageAtlas.region`): v is `-(1 + row)`, sampled with
+        // the nearest-texel sampler so a bin stays a sharp block.
+        if (in.uv.y < -0.5) {
+            let nuv = vec2<f32>(-(in.uv.x) - 1.0, (-(in.uv.y) - 1.0) / ui.atlas2.y);
+            return textureSampleLevel(uiTex2, uiSampler3, nuv, 0.0) * in.colour;
+        }
         let iuv = vec2<f32>(-(in.uv.x) - 1.0, in.uv.y / ui.atlas2.y);
         let texel = textureSampleLevel(uiTex2, uiSampler2, iuv, 0.0);
         return texel * in.colour;

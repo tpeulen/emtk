@@ -537,3 +537,44 @@ def test_the_host_shares_its_renderers_image_atlas(host):
     flat tinted box -- the painter's fallback, which is not an error."""
     widget, _control = host
     assert widget.images is widget.renderer.images
+
+
+def test_a_nearest_texture_draws_sharp_blocks(renderer):
+    """``Texture(filter="nearest")``: a 2x2 checker scaled to 120 px is four
+    solid squares -- no blended band between them, and no texel shaved off
+    the edge. A linear one blends across the middle."""
+    def checker(filter):
+        tex = Texture(2, 2, filter=filter)
+        for y in range(2):
+            for x in range(2):
+                tex.set_pixel(x, y, (255, 255, 255, 255) if (x + y) % 2 == 0
+                              else (0, 0, 0, 255))
+        return tex
+
+    frame = _Frame(renderer)
+    frame.painter.image(20.0, 20.0, 120.0, 120.0, checker("nearest"))
+    frame.painter.image(160.0, 20.0, 120.0, 120.0, checker("linear"))
+    pixels = frame.grab(size=(0, 0, 300, 160))
+    sharp = _luminance(pixels[20:140, 20:140])
+    soft = _luminance(pixels[20:140, 160:280])
+    grey = lambda block: ((block > 30) & (block < 225)).mean()  # noqa: E731
+    assert grey(sharp) < 0.03, "the nearest texture blended its texels"
+    assert grey(soft) > 0.2, "the linear texture did not blend"
+    assert sharp[2, 2] > 225 and sharp[2, 117] < 30      # the corner texels are whole
+
+
+def test_a_nearest_region_is_not_inset_and_says_so_in_v():
+    from emtk.gpu_atlas import image_texel  # noqa: PLC0415
+
+    atlas = ImageAtlas(64, 64)
+    (u0, v0), (u1, v1) = atlas.region(Texture(8, 4, filter="nearest"))
+    assert image_texel(u0, 64) == 0.0 and image_texel(u1, 64) == 8.0
+    assert (v0, v1) == (-1.0, -5.0)
+    (u0, v0), (_u1, _v1) = atlas.region(Texture(8, 4))
+    assert v0 > 0
+
+
+def test_a_texture_filter_is_linear_or_nearest():
+    assert Texture(1, 1).filter == "linear"
+    with pytest.raises(ValueError):
+        Texture(1, 1, filter="cubic")
