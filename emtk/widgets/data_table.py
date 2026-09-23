@@ -60,6 +60,11 @@ table needs them and neither dialect had them:
     columns never get narrower than this; when they do not fit, the table
     scrolls sideways (a bar under the rows, the horizontal wheel, or shift and
     the wheel);
+dotted names
+    every model name above (``source``, the ``*_call`` and ``*_attr``
+    options, ``columns_source``) may be a dotted path into the model --
+    ``"curve_table.rows"`` -- so one form can hold several tables, each an
+    object of its own with the same method names;
 ``editable_call``
     ``editable_call(record, key) -> bool``: whether one cell of an editable
     column may be changed *now* -- a value borrowed from another row, or a
@@ -1396,10 +1401,23 @@ class TableBinding:
 
     # -- reading the model ------------------------------------------------------- #
 
+    def _lookup(self, name: str) -> Any:
+        """The model's attribute *name*; a dotted name walks into it (``table.rows``).
+
+        A dotted name lets one model carry several tables, each an object of
+        its own with the same method names.
+        """
+        target = self.model
+        for part in str(name).split("."):
+            target = getattr(target, part, None)
+            if target is None:
+                return None
+        return target
+
     def _call(self, name: str) -> Any:
         if not name:
             return None
-        value = getattr(self.model, name, None)
+        value = self._lookup(name)
         try:
             return value() if callable(value) else value
         except Exception:  # noqa: BLE001 - a failing source shows an empty table
@@ -1430,7 +1448,7 @@ class TableBinding:
         ``revision`` attribute by that, so an append costs one comparison here.
         """
         if self.expanded_attr:
-            shared = getattr(self.model, self.expanded_attr, None)
+            shared = self._lookup(self.expanded_attr)
             if isinstance(shared, set) and shared is not self.control.expanded:
                 self.control.expanded = shared
         if self.colour_source:
@@ -1475,7 +1493,7 @@ class TableBinding:
         return index
 
     def _cell_editable(self, index: int, key: str) -> bool:
-        fn = getattr(self.model, self.editable_call, None)
+        fn = self._lookup(self.editable_call)
         if not callable(fn):
             return True
         try:
@@ -1490,35 +1508,37 @@ class TableBinding:
         payload = self.record(index)
         if self.selected_attr:
             try:
-                setattr(self.model, self.selected_attr, payload if payload is not None else {})
+                owner, _, attr = self.selected_attr.rpartition(".")
+                setattr(self._lookup(owner) if owner else self.model, attr,
+                        payload if payload is not None else {})
             except Exception:  # noqa: BLE001
                 pass
         if self.selected_call:
-            fn = getattr(self.model, self.selected_call, None)
+            fn = self._lookup(self.selected_call)
             if callable(fn):
                 fn(payload)
 
     def _on_edit(self, index: int, key: str, value: Any) -> None:
         if self.edited_call:
-            fn = getattr(self.model, self.edited_call, None)
+            fn = self._lookup(self.edited_call)
             if callable(fn):
                 fn(self.record(index), key, value)
 
     def _on_delete(self, index: int) -> None:
         if self.delete_call:
-            fn = getattr(self.model, self.delete_call, None)
+            fn = self._lookup(self.delete_call)
             if callable(fn):
                 fn(self.record(index))
 
     def _on_context(self, index: Optional[int], key: Optional[str], x: float, y: float) -> None:
         if self.context_call:
-            fn = getattr(self.model, self.context_call, None)
+            fn = self._lookup(self.context_call)
             if callable(fn):
                 fn(self.record(index), key, (x, y))
 
     def _on_activate(self, index: int) -> None:
         if self.activated_call:
-            fn = getattr(self.model, self.activated_call, None)
+            fn = self._lookup(self.activated_call)
             if callable(fn):
                 fn(self.record(index))
 

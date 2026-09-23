@@ -528,6 +528,24 @@ def test_in_a_form_typing_then_a_click_elsewhere_commits():
     assert model.edits == [("Tau", "lower", 0.75)] and control.editing is None
 
 
+def test_dotted_names_reach_a_table_object_inside_the_model():
+    class Holder:
+        def __init__(self):
+            self.first, self.second = Gates(), Gates()
+
+    holder = Holder()
+    section = {"type": "custom", "key": "data_table", "options": {
+        **GATE_TABLE["options"], "source": "second.gate_rows",
+        "edited_call": "second.edit_gate", "selected_attr": "second.picked"}}
+    binding = TableBinding(section, holder)
+    control = binding.control
+    draw(control)
+    assert control.row_count() == 2
+    control.press(*cell(control, 1, 3))
+    assert holder.second.edits == [("PR", "invert", True)] and holder.first.edits == []
+    assert holder.second.picked["name"] == "PR"
+
+
 def test_a_read_only_column_does_not_open():
     model = Gates()
     control = TableBinding(GATE_TABLE, model).control
