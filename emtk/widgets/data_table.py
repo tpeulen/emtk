@@ -51,7 +51,8 @@ table needs them and neither dialect had them:
 ``colour_source``
     a model attribute (or method) saying how numeric cells are shaded by
     value: ``None`` (not at all), ``"column"`` (each column over its own
-    range) or ``"table"`` (one range for every column). The ramp is a hue sweep
+    range) or ``"table"`` (one range for every column). A column that says
+    ``"shade": false`` is never shaded (a row number, an identifier). The ramp is a hue sweep
     at fixed saturation, as the Qt table's, so the text stays legible;
 ``reserve`` (with ``expand``)
     the height left free under an expanding table, for the rows after it;
@@ -181,6 +182,9 @@ class TableColumn:
     visible: bool = True
     align_right: Optional[bool] = None
     editable: bool = False
+    #: Whether value shading applies to this column; a row number or an
+    #: identifier is a number that has no magnitude worth a colour.
+    shade: bool = True
 
     @classmethod
     def from_spec(cls, spec: Mapping, editable: bool = False) -> "TableColumn":
@@ -203,6 +207,7 @@ class TableColumn:
             visible=bool(spec.get("visible", True)),
             align_right=None if align is None else str(align).lower() == "right",
             editable=bool(spec.get("editable", editable)),
+            shade=bool(spec.get("shade", True)),
         )
 
     def text(self, value: Any) -> str:
@@ -664,6 +669,8 @@ class DataTable:
         ranges: dict = {}
         count = self.row_count()
         for column in self.columns:
+            if not column.shade:
+                continue
             numbers = []
             if self.arrays is not None and column.key in self.arrays:
                 data = self.arrays[column.key]

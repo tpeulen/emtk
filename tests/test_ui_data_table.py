@@ -729,3 +729,17 @@ def test_the_header_opens_a_column_picker_that_hides_and_shows():
         control.set_column_hidden(key, True)
     assert len(control.visible_columns()) == 1, "the picker hid the last column"
 
+
+
+def test_a_column_can_opt_out_of_value_shading():
+    """A row number is a number with no magnitude worth a colour."""
+    model = Parameters()
+    for i, row in enumerate(model.rows):
+        row["row"] = i + 1
+    section = {"type": "custom", "key": "data_table",
+               "options": {"source": "parameter_rows",
+                           "columns": [{"key": "row", "shade": False}, {"key": "value"}]}}
+    control = TableBinding(section, model).control
+    control.colour_values = "column"
+    assert control.colour_of("row", 2) is None
+    assert control.colour_of("value", 2.0) is not None
