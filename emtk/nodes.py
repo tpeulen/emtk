@@ -233,10 +233,19 @@ class NodeShape:
     inside a node and everything to gain from being small enough to read, and
     a box per parameter is mostly padding. Both are node-link diagrams; they
     differ in whether the node has an interior worth showing.
+
+    ``SQUARE`` is the same mark as a rounded square -- a factor graph's other
+    kind of node. A graph of two kinds of thing (variables and the factors over
+    them) needs the two told apart by shape, not only by colour.
     """
 
     BOX = "box"
     DISC = "disc"
+    SQUARE = "square"
+
+
+#: The shapes drawn as a fixed-size mark with a label under it, not as a box.
+MARK_SHAPES = frozenset({NodeShape.DISC, NodeShape.SQUARE})
 
 
 class PinShape:
@@ -1406,7 +1415,7 @@ def begin_node(
     node.radius = float(ctx.style.node_disc_radius if radius is None else radius)
     _node = node
 
-    if shape == NodeShape.DISC:
+    if shape in MARK_SHAPES:
         # A disc's origin is its top-left, as a box's is, so a node keeps the
         # same stored position whichever shape it is drawn as. Anything else
         # would move every node the moment a view switched shape.
@@ -1466,7 +1475,7 @@ def end_node() -> None:
     _end_node_scale(ctx)
 
     zoom = ctx.canvas.zoom
-    if node.shape == NodeShape.DISC:
+    if node.shape in MARK_SHAPES:
         # Exactly the disc: no padding. A disc that reserved padding would
         # hit-test and stick as a square larger than the mark the user sees,
         # which reads as clicks landing on nothing.
@@ -1540,6 +1549,10 @@ def _draw_node_body(ctx: EditorContext, node: _Node) -> None:
     draw.channels_set_current(_CHANNEL_NODE)
     if node.shape == NodeShape.DISC:
         _draw_disc(ctx, draw, node, title_bar)
+        draw.channels_set_current(_CHANNEL_CONTENT)
+        return
+    if node.shape == NodeShape.SQUARE:
+        _draw_square(ctx, draw, node, title_bar)
         draw.channels_set_current(_CHANNEL_CONTENT)
         return
     draw.add_rect_filled((x0, y0), (x1, y1), background, rounding)
@@ -1621,6 +1634,46 @@ def _draw_disc(ctx: EditorContext, draw, node: _Node, colour: tuple) -> None:
 
     if node.label:
         _draw_node_label(ctx, draw, node, centre, radius)
+
+
+def _draw_square(ctx: EditorContext, draw, node: _Node, colour: tuple) -> None:
+    """Paint a square mark: a filled rounded square, a rim, its label under it.
+
+    Parameters
+    ----------
+    ctx : EditorContext
+        The editor.
+    draw : object
+        The drawlist, already on the node channel.
+    node : _Node
+        The node, with its rect measured.
+    colour : tuple
+        Its base colour, from the same slot a disc takes.
+
+    Notes
+    -----
+    Flat, with a lighter top half, rather than lit like a disc: a factor is a
+    relation, not a thing, and shading it as an object makes the two kinds of
+    node read as the same kind in two shapes.
+    """
+    style = ctx.style
+    zoom = ctx.canvas.zoom
+    x0, y0, x1, y1 = node.rect
+    half = (x1 - x0) * 0.5
+    rounding = min(3.0 * zoom, half * 0.4)
+    draw.add_rect_filled((x0, y0), (x1, y1), _shade(colour, 0.8), rounding)
+    draw.add_rect_filled((x0, y0), (x1, y0 + half), colour, rounding)
+
+    rim = style.colors[Col.NODE_OUTLINE]
+    width = style.node_border_thickness
+    if node.id in ctx.selected_nodes:
+        rim, width = style.colors[Col.TITLE_BAR_SELECTED], 3.0
+    elif ctx._hovered_node == node.id:
+        rim, width = style.colors[Col.TITLE_BAR_HOVERED], 2.0
+    draw.add_rect((x0, y0), (x1, y1), rim, rounding, 0, width * zoom)
+
+    if node.label:
+        _draw_node_label(ctx, draw, node, (x0 + half, y0 + half), half)
 
 
 def _draw_shaded_disc(draw, centre: tuple, radius: float,
@@ -1937,7 +1990,7 @@ def _resolve_pin_positions(ctx: EditorContext) -> None:
         if not node.alive:
             continue
         x0, y0, x1, y1 = node.rect
-        if node.shape == NodeShape.DISC:
+        if node.shape in MARK_SHAPES:
             # On the circle's own left and right, at its middle. Using the
             # attribute's vertical centre -- correct for a box, where each
             # attribute is its own row -- would put every one of a disc's pins
@@ -2138,7 +2191,7 @@ def _node_anchor(ctx: EditorContext, pin: _Pin) -> typing.Optional[tuple]:
         return None
     x0, y0, x1, y1 = node.rect
     centre = (0.5 * (x0 + x1), 0.5 * (y0 + y1))
-    if node.shape == NodeShape.DISC:
+    if node.shape in MARK_SHAPES:
         return (centre, 0.5 * (x1 - x0))
     return (centre, 0.5 * min(x1 - x0, y1 - y0))
 

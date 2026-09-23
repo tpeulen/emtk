@@ -1186,3 +1186,50 @@ def test_hover_follows_the_arc_and_not_the_pins():
     io.mouse_pos = mid
     _frame(lambda: _two_discs(ctx), io=io, storage=storage)
     assert nodes.is_link_hovered(ctx) == 1
+
+
+def test_a_square_is_a_mark_the_size_of_a_disc_and_fills_its_corners():
+    """A factor graph's two kinds of node, told apart by shape.
+
+    ``SQUARE`` is laid out, hit-tested and pinned exactly as ``DISC`` is --
+    one mark of twice the radius, pins on its sides -- so a view can switch a
+    node between the two without it moving. What differs is the painted
+    shape, and the corners are where that shows: filled for a square, left
+    to the background for a disc.
+    """
+    ctx = nodes.EditorContext()
+    ctx.style.node_corner_rounding = 0.0
+
+    def build():
+        nodes.begin_node_editor(ctx, box=BOX)
+        shapes = ((1, (40.0, 40.0), nodes.NodeShape.DISC),
+                  (2, (200.0, 40.0), nodes.NodeShape.SQUARE))
+        for index, pos, shape in shapes:
+            nodes.set_node_grid_space_pos(ctx, index, pos)
+            nodes.push_color_style(nodes.Col.TITLE_BAR, (200, 60, 60, 255))
+            nodes.begin_node(index, shape=shape, radius=20.0)
+            nodes.begin_input_attribute(index * 10, nodes.PinShape.NONE)
+            nodes.end_input_attribute()
+            nodes.begin_output_attribute(index * 10 + 1, nodes.PinShape.NONE)
+            nodes.end_output_attribute()
+            nodes.end_node()
+            nodes.pop_color_style()
+        nodes.end_node_editor()
+
+    painter = PixelPainter(BOX[2], BOX[3], background=(0, 0, 0, 255))
+    _frame(build, painter=painter)
+
+    disc, square = ctx._nodes[1].rect, ctx._nodes[2].rect
+    assert disc[2] - disc[0] == square[2] - square[0] == 40.0 * ctx.canvas.zoom
+    assert disc[3] - disc[1] == square[3] - square[1]
+    assert ctx._pins[20].pos[1] == ctx._pins[21].pos[1] == 0.5 * (square[1] + square[3])
+
+    def pixel(x: float, y: float) -> tuple:
+        offset = (int(y) * painter.width + int(x)) * 4
+        return tuple(painter.px[offset:offset + 3])
+
+    # The grid is under both, so "empty" is the colour just outside the mark.
+    corner = lambda r: pixel(r[0] + 3, r[3] - 4)  # noqa: E731
+    outside = lambda r: pixel(r[0] - 3, r[3] - 4)  # noqa: E731
+    assert corner(disc) == outside(disc), "a disc painted its corner"
+    assert corner(square) != outside(square), "a square left its corner empty"
