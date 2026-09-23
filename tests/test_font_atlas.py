@@ -77,3 +77,15 @@ def test_an_unbaked_name_says_what_to_run_rather_than_returning_nothing():
     with pytest.raises(FileNotFoundError) as caught:
         font.load_atlas("no_such_face")
     assert "bake_chrome_atlas" in str(caught.value)
+
+
+def test_the_atlas_writes_greek_and_the_signs_of_a_bound():
+    """A FRET factor is γ, β, α or δ, and an unbounded side is −∞ / ∞."""
+    import json
+    import pathlib
+
+    import emtk
+
+    atlas = pathlib.Path(emtk.__file__).parent / "atlas" / "chrome.json"
+    charset = json.loads(atlas.read_text())["charset"]
+    assert all(c in charset for c in "αβγδτΔ∞−±≤≥→₀²")

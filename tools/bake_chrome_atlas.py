@@ -84,6 +84,12 @@ AA_MARGIN = 2
 #: visible placeholder instead of vanishing -- see `Atlas.cell`.
 _SYMBOLS = "─▴▸▾◀■▶▼…"
 
+#: What a scientific table writes: an unbounded side (``−∞``, ``∞``), a
+#: comparison, an arrow, a sub/superscript index (``R₀``, ``τ²``). Greek is
+#: added below: a FRET factor is γ, β, α or δ, and a missing glyph turns the
+#: name into ``¤``.
+_MATH = "∞−≤≥≈≠√∑∫∂∆→←↑↓⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉"
+
 #: The placeholder for a character with no glyph. In the set by construction,
 #: because a missing glyph that renders as another missing glyph is the bug
 #: twice.
@@ -96,6 +102,9 @@ CHARSET: str = "".join(
         | {chr(c) for c in range(0x00A0, 0x0100)}   # Latin-1 Supplement
         | {chr(c) for c in range(0x0100, 0x0180)}   # Latin Extended-A
         | {"\u20ac", "\u2013", "\u2014", "\u2018", "\u2019", "\u201c", "\u201d"}
+        | {chr(c) for c in range(0x0391, 0x03AA) if c != 0x03A2}   # Greek capitals
+        | {chr(c) for c in range(0x03B1, 0x03CA)}                   # Greek small
+        | set(_MATH)
     )
 )
 
