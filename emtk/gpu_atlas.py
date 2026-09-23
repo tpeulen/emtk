@@ -132,6 +132,20 @@ def image_texel(u: float, width: int) -> float:
 # --------------------------------------------------------------------------- #
 # Lazy imports
 # --------------------------------------------------------------------------- #
+def _ref(handle):
+    """A weak reference to *handle*, or a strong stand-in for one that takes none.
+
+    Either way, calling it gives the handle back while it lives; a weak one
+    gives ``None`` after, which is how the atlas learns a spot is free.
+    """
+    import weakref  # noqa: PLC0415
+
+    try:
+        return weakref.ref(handle)
+    except TypeError:
+        return lambda: handle
+
+
 def _numpy():
     """NumPy, imported on use.
 
@@ -287,10 +301,12 @@ class ImageAtlas:
     the widget so it can be tested with no window and no device at all.
 
     Packing is by **shelf**: a row is opened at the height of the first
-    image placed in it and later images fill along it. It never
-    defragments and never grows. An image that does not fit is declined,
-    and the painter's own fallback draws it as a tinted rectangle -- see
-    :meth:`~.quad_painter.QuadPainter.image`.
+    image placed in it and later images fill along it. The space of an
+    image that has died (or been :meth:`forget`-ten) is reused by the next
+    one that fits, and when the shelves run out the live images are packed
+    again. It never grows. An image that does not fit even then is
+    declined, and the painter's own fallback draws it as a tinted
+    rectangle -- see :meth:`~.quad_painter.QuadPainter.image`.
 
     Examples
     --------
@@ -314,10 +330,17 @@ class ImageAtlas:
         self.width, self.height = int(width), int(height)
         self.pixels = np.zeros((self.height, self.width, 4), dtype=np.uint8)
         self.version = 0
-        #: ``id(handle) -> (revision, x, y, w, h)``. Keyed on identity
+        #: ``id(handle) -> (ref, revision, x, y, w, h)``. Keyed on identity
         #: because a ``Texture`` is mutable and unhashable by value, and
-        #: the caller owns its lifetime.
+        #: the caller owns its lifetime. *ref* is a weak reference to the
+        #: handle (a strong one for a handle that takes none): an id is
+        #: only unique among **live** objects, and a new texture allocated
+        #: where a dead one was gets its id -- and, both at revision 0, its
+        #: stale pixels and its size. ndXplorer makes a new texture per
+        #: redraw of its map and drew an old map, or a blank one, that way.
         self._placed: dict = {}
+        #: Spots whose image died: reused before the shelf grows.
+        self._free: list = []
         self._shelf_x = 0
         self._shelf_y = 0
         self._shelf_h = 0
@@ -354,18 +377,23 @@ class ImageAtlas:
             return None
 
         revision = int(getattr(handle, "revision", 0))
-        placed = self._placed.get(id(handle))
+        key = id(handle)
+        placed = self._placed.get(key)
+        if placed is not None and placed[0]() is not handle:
+            # The id of a handle that has died, now worn by a new one.
+            self._release(key)
+            placed = None
         if placed is None:
             spot = self._place(int(width), int(height))
             if spot is None:
                 return None
-            placed = (revision - 1, *spot)
-        if placed[0] != revision:
-            self._write(placed[1], placed[2], handle)
-            placed = (revision, *placed[1:])
-        self._placed[id(handle)] = placed
+            placed = (_ref(handle), revision - 1, *spot)
+        if placed[1] != revision:
+            self._write(placed[2], placed[3], handle)
+            placed = (placed[0], revision, *placed[2:])
+        self._placed[key] = placed
 
-        _rev, x, y, w, h = placed
+        _ref_, _rev, x, y, w, h = placed
         if getattr(handle, "filter", "linear") == "nearest":
             # Sampled texel by texel: the corners are the image's own edges
             # (no inset, so no texel is shaved off), and v is negated --
@@ -381,8 +409,22 @@ class ImageAtlas:
         )
 
     def forget(self, handle) -> None:
-        """Drop *handle*'s placement. Its texels stay until overwritten."""
-        self._placed.pop(id(handle), None)
+        """Drop *handle*'s placement. Its texels stay until overwritten;
+        its spot is free for the next image that fits."""
+        placed = self._placed.get(id(handle))
+        if placed is not None and placed[0]() is handle:
+            self._release(id(handle))
+
+    def _release(self, key) -> None:
+        """Give the spot of placement *key* back."""
+        placed = self._placed.pop(key, None)
+        if placed is not None:
+            self._free.append(tuple(placed[2:]))
+
+    def _reap(self) -> None:
+        """Release the spots of every image that has died since the last call."""
+        for key in [k for k, p in self._placed.items() if p[0]() is None]:
+            self._release(key)
 
     def dirty_since(self, version: int):
         """``(rectangles, version)`` -- what has changed since *version*.
@@ -436,19 +478,74 @@ class ImageAtlas:
 
     # -- internals ------------------------------------------------------- #
     def _place(self, width: int, height: int):
-        """Reserve ``(x, y, width, height)``, or ``None`` if it will not fit."""
-        if width <= 0 or height <= 0 or width > self.width:
+        """Reserve ``(x, y, width, height)``, or ``None`` if it will not fit.
+
+        In order: the spot of a dead image it fits in (the smallest such),
+        then the shelf, then -- the atlas being full -- a repack of the
+        images still alive (:meth:`_repack`), then no.
+
+        Reuse comes first because the common churn is one picture replaced
+        by another of the same size -- a map redrawn with a new colour
+        scale, a camera frame in a new texture -- and without it every one
+        of those took fresh space until the atlas was full and every image
+        after that drew as a flat tinted box.
+        """
+        if width <= 0 or height <= 0 or width > self.width or height > self.height:
             return None
-        if self._shelf_x + width > self.width:
-            self._shelf_y += self._shelf_h
-            self._shelf_x = 0
-            self._shelf_h = 0
-        if self._shelf_y + height > self.height:
-            return None
-        spot = (self._shelf_x, self._shelf_y, width, height)
-        self._shelf_x += width
-        self._shelf_h = max(self._shelf_h, height)
+        self._reap()
+        spot = self._reuse(width, height)
+        if spot is None:
+            spot = self._shelf(width, height)
+        if spot is None and self._repack():
+            spot = self._shelf(width, height)
         return spot
+
+    def _reuse(self, width: int, height: int):
+        """The smallest free spot *width* x *height* fits in, taken; or ``None``."""
+        best = None
+        for i, (_x, _y, w, h) in enumerate(self._free):
+            if w >= width and h >= height and (best is None or
+                                               w * h < self._free[best][2] * self._free[best][3]):
+                best = i
+        if best is None:
+            return None
+        x, y, _w, _h = self._free.pop(best)
+        return (x, y, width, height)
+
+    def _shelf(self, width: int, height: int):
+        """Space at the end of the shelves; ``None`` -- and nothing moved -- if none."""
+        x, y, h = self._shelf_x, self._shelf_y, self._shelf_h
+        if x + width > self.width:
+            x, y, h = 0, y + h, 0
+        if y + height > self.height:
+            return None
+        self._shelf_x, self._shelf_y, self._shelf_h = x + width, y, max(h, height)
+        return (x, y, width, height)
+
+    def _repack(self) -> bool:
+        """Pack the live images again from the top left; whether anything was freed.
+
+        Only when the shelf is full and there is dead space to win back.
+        The live images move -- each is rewritten at its new spot and so
+        reported dirty -- which a quad already built this frame from the
+        old spot does not know: it may sample the wrong texels for that one
+        frame. Rare, one frame, and self-correcting, against an atlas that
+        otherwise stays full for the rest of the process.
+        """
+        if not self._free:
+            return False
+        live = sorted(self._placed.items(), key=lambda kv: -kv[1][5])
+        self._placed.clear()
+        self._free.clear()
+        self._shelf_x = self._shelf_y = self._shelf_h = 0
+        for key, (ref, _rev, _x, _y, w, h) in live:
+            handle = ref()
+            spot = self._shelf(w, h)
+            if handle is None or spot is None:
+                continue
+            self._write(spot[0], spot[1], handle)
+            self._placed[key] = (ref, int(getattr(handle, "revision", 0)), *spot)
+        return True
 
     def _write(self, x: int, y: int, handle) -> None:
         """Copy *handle*'s pixels in, premultiplying as they go."""

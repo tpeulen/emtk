@@ -247,11 +247,35 @@ class QtPainter:
 
     # -- the interface -----------------------------------------------------
 
-    #: ``id(texture) -> (revision, QImage)``. A live frame is re-uploaded
+    #: ``id(texture) -> (ref, revision, QImage)``. A live frame is re-uploaded
     #: every frame and a colour map almost never, so the QImage is rebuilt
     #: only when the revision moves. Class-level, because a QtPainter is
     #: constructed per paint event and a per-instance cache would never hit.
+    #: *ref* is a weak reference: an id is reused as soon as its texture
+    #: dies, and a new texture at revision 0 would otherwise be drawn as
+    #: the dead one's picture. Dead entries are dropped as new ones come.
     _image_cache: dict = {}
+
+    @classmethod
+    def _qimage(cls, handle, width: int, height: int):
+        """*handle*'s pixels as a ``QImage``, rebuilt only when its revision moves."""
+        import weakref
+
+        from qtpy import QtGui
+
+        key = id(handle)
+        hit = cls._image_cache.get(key)
+        if hit is not None and hit[0]() is handle and hit[1] == handle.revision:
+            return hit[2]
+        # bytes(), not a view: QImage does not own the buffer it is given,
+        # and a bytearray that the application keeps writing would be
+        # repainted mid-frame -- or freed under Qt entirely.
+        img = QtGui.QImage(bytes(handle.px), width, height, width * 4,
+                           QtGui.QImage.Format_RGBA8888)
+        for dead in [k for k, v in cls._image_cache.items() if v[0]() is None]:
+            del cls._image_cache[dead]
+        cls._image_cache[key] = (weakref.ref(handle), handle.revision, img)
+        return img
 
     def image(self, x: float, y: float, w: float, h: float, handle,
               uv0=(0.0, 0.0), uv1=(1.0, 1.0),
@@ -271,18 +295,7 @@ class QtPainter:
             self.fill_rect(x, y, w, h, tint)
             return
 
-        key = id(handle)
-        hit = self._image_cache.get(key)
-        if hit is None or hit[0] != handle.revision:
-            # bytes(), not a view: QImage does not own the buffer it is given,
-            # and a bytearray that the application keeps writing would be
-            # repainted mid-frame -- or freed under Qt entirely.
-            img = QtGui.QImage(bytes(handle.px), handle.width, handle.height,
-                               handle.width * 4,
-                               QtGui.QImage.Format_RGBA8888)
-            self._image_cache[key] = (handle.revision, img)
-        else:
-            img = hit[1]
+        img = self._qimage(handle, handle.width, handle.height)
 
         src = QtCore.QRectF(uv0[0] * handle.width, uv0[1] * handle.height,
                             (uv1[0] - uv0[0]) * handle.width,
@@ -473,14 +486,7 @@ class QtPainter:
         m22 = ((y2 - y0) * (u1 - u0) - (y1 - y0) * (u2 - u0)) / den
         dx = x0 - m11 * u0 - m21 * v0
         dy = y0 - m12 * u0 - m22 * v0
-        key = id(handle)
-        hit = self._image_cache.get(key)
-        if hit is None or hit[0] != handle.revision:
-            img = QtGui.QImage(bytes(handle.px), tw, th, tw * 4,
-                               QtGui.QImage.Format_RGBA8888)
-            self._image_cache[key] = (handle.revision, img)
-        else:
-            img = hit[1]
+        img = self._qimage(handle, tw, th)
         path = QtGui.QPainterPath()
         path.moveTo(QtCore.QPointF(*p0))
         path.lineTo(QtCore.QPointF(*p1))

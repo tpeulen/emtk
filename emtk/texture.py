@@ -22,7 +22,9 @@ and then ``im.image(frame, (w, h))`` draws it, wherever it is running.
 Uploading is not free, and a live frame changes every frame while a colour
 map changes almost never. :attr:`revision` counts writes, so a painter that
 holds a real texture can re-upload only when it has to -- and a painter with
-no state at all can ignore it. Cache on ``(id(texture), texture.revision)``.
+no state at all can ignore it. Cache on ``(id(texture), texture.revision)``
+and check the entry is still *this* texture (a weak reference): an id is
+reused as soon as the texture that had it dies.
 """
 
 from __future__ import annotations
@@ -57,7 +59,10 @@ class Texture:
         Set at construction or later; painters read it when they draw.
     """
 
-    __slots__ = ("width", "height", "px", "revision", "filter")
+    # ``__weakref__``: a host that keeps an uploaded copy (the GPU image
+    # atlas, the Qt painter's QImage cache) holds the texture weakly, to
+    # learn when it has died -- its id then belongs to the next object.
+    __slots__ = ("width", "height", "px", "revision", "filter", "__weakref__")
 
     def __init__(self, width: int, height: int, pixels: Sequence[int] | None = None,
                  filter: str = "linear") -> None:

@@ -108,6 +108,89 @@ def test_the_shelf_wraps_and_then_declines():
     assert atlas.region(Texture(16, 8)) is None  # no third shelf
 
 
+def _solid(width, height, value):
+    texture = Texture(width, height, filter="nearest")
+    texture.fill((value, value, value, 255))
+    return texture
+
+
+def _texels(atlas, texture):
+    """The atlas' copy of *texture*: ``(w, h, first texel's red)``."""
+    _ref, _rev, x, y, w, h = atlas._placed[id(texture)]
+    return w, h, int(atlas.pixels[y, x, 0])
+
+
+def test_a_new_texture_at_a_dead_ones_id_gets_its_own_pixels_and_size():
+    """An id is only unique among live objects. ndXplorer makes a new
+    texture per redraw of its map; one allocated where a dead one was got
+    its id, both were at revision 0, and the atlas handed back the dead
+    map -- at the dead map's size. The allocator is not deterministic, so
+    the reuse is played here the way it happens: the dead one's entry
+    under the new one's id."""
+    import gc
+
+    atlas = ImageAtlas(64, 64)
+    old = _solid(8, 4, 200)
+    atlas.region(old)
+    entry = atlas._placed.pop(id(old))
+    del old
+    gc.collect()
+    new = _solid(4, 4, 50)
+    atlas._placed[id(new)] = entry
+    assert atlas.region(new) is not None
+    assert _texels(atlas, new) == (4, 4, 50)
+
+
+def test_textures_replaced_over_and_over_never_fill_the_atlas():
+    """A map redrawn with a new colour scale is a new texture each time.
+    Every one used to take fresh space, until the atlas was full and the
+    map drew as a blank tinted box for the rest of the session."""
+    import gc
+
+    atlas = ImageAtlas(64, 64)
+    live = None
+    for i in range(500):
+        size = (16, 16) if i % 3 else (20, 12)
+        live = _solid(*size, i % 250 + 1)
+        assert atlas.region(live) is not None, f"declined at redraw {i}"
+        assert _texels(atlas, live) == (*size, i % 250 + 1)
+        gc.collect()
+
+
+def test_a_forgotten_spot_is_reused():
+    atlas = ImageAtlas(16, 16)
+    first, second = _solid(16, 8, 10), _solid(16, 8, 20)
+    atlas.region(first)
+    atlas.region(second)
+    atlas.forget(first)
+    third = _solid(16, 8, 30)
+    assert atlas.region(third) is not None
+    assert _texels(atlas, third) == (16, 8, 30)
+    assert _texels(atlas, second) == (16, 8, 20)
+
+
+def test_a_full_atlas_packs_its_live_images_again():
+    """Dead space no newcomer fits in by itself is won back by packing
+    what is still alive from the top left; the live images keep their
+    pixels."""
+    import gc
+
+    atlas = ImageAtlas(16, 16)
+    keep = _solid(4, 4, 70)
+    atlas.region(keep)
+    dead = [_solid(4, 4, 1) for _ in range(3)]      # the rest of the top shelf
+    for texture in dead:
+        atlas.region(texture)
+    tall = _solid(16, 12, 2)                        # the rest of the atlas
+    assert atlas.region(tall) is not None
+    del dead, tall
+    gc.collect()
+    wide = _solid(12, 12, 90)                       # fits no dead spot alone
+    assert atlas.region(wide) is not None
+    assert _texels(atlas, wide) == (12, 12, 90)
+    assert _texels(atlas, keep) == (4, 4, 70)
+
+
 def test_a_handle_that_is_not_a_texture_is_declined_rather_than_guessed_at():
     assert ImageAtlas(32, 32).region("just a string") is None
     assert ImageAtlas(32, 32).region(object()) is None
