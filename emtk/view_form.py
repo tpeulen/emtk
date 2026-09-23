@@ -927,8 +927,9 @@ def _segments(label_w: list, need_w: list, avail: float, spacing: float,
 
     One run when the line fits. Otherwise the line is cut at the columns in
     *breaks* first (a section's ``wrap_before``: where the spec would rather
-    it broke), the pieces packed greedily left to right, and a piece still
-    too wide cut wherever it must. The cut is the same for every line of the
+    it broke), the pieces packed into as few lines as greedy packing needs and
+    as even as can be (:func:`_balance`), and a piece still too wide cut
+    wherever it must. The cut is the same for every line of the
     grid, so columns stay aligned after a wrap; a column wider than *avail*
     on its own gets a run of its own.
     """
@@ -958,9 +959,48 @@ def _segments(label_w: list, need_w: list, avail: float, spacing: float,
     if current:
         pieces.append(current)
     runs = []
-    for run in pack(pieces):
+    for run in _balance(pack(pieces), pieces, width, avail):
         runs.extend(pack([[c] for c in run]) if width(run) > avail + 0.5 else [run])
     return runs
+
+
+def _balance(runs: list, pieces: list, width: Callable, avail: float) -> list:
+    """*pieces* cut into as many lines as the greedy *runs*, the widest as
+    narrow as it can be.
+
+    Greedy packing fills the first lines and leaves the last one short -- four
+    buttons alone on a toolbar's second line, the rest of it empty. The same
+    number of lines, cut so they are as even as the breaks allow, leaves every
+    line's flexible controls something to share instead. A line only ever
+    holds several pieces when they fit *avail*.
+    """
+    n, k = len(pieces), len(runs)
+    if k < 2 or k >= n:
+        return runs
+    greedy = max(width(run) for run in runs)
+    best: dict = {}
+
+    def cut(start: int, lines: int):
+        """``(widest, lines)`` for ``pieces[start:]`` in *lines* lines, or None."""
+        key = (start, lines)
+        if key not in best:
+            answer = None
+            ends = [n] if lines == 1 else range(start + 1, n - lines + 2)
+            for end in ends:
+                line = [c for piece in pieces[start:end] for c in piece]
+                if end - start > 1 and width(line) > avail + 0.5:
+                    break
+                rest = (0.0, []) if lines == 1 else cut(end, lines - 1)
+                if rest is None:
+                    continue
+                widest = max(width(line), rest[0])
+                if answer is None or widest < answer[0] - 0.5:
+                    answer = (widest, [line] + rest[1])
+            best[key] = answer
+        return best[key]
+
+    even = cut(0, k)
+    return even[1] if even is not None and even[0] <= greedy + 0.5 else runs
 
 
 def _share(run: list, label_w: list, fixed_w: list, min_w: list, weight: list,

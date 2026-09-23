@@ -720,3 +720,21 @@ def test_a_slider_without_a_field_writes_its_value_on_itself_and_types_on_double
     io.key = 0
     driver.frame()
     assert model.series == 7
+
+
+def test_a_wrapped_line_is_cut_evenly_not_greedily():
+    """Greedy packing leaves the last line short (a button alone, the rest of
+    the line dead); the same number of lines cut evenly fills both."""
+    from emtk.view_form import _segments
+
+    label_w = [0.0] * 4
+    need_w = [100.0, 100.0, 100.0, 60.0]
+    # pieces [0], [1], [2], [3]: greedy fits three on a 330 line, one on the next
+    runs = _segments(label_w, need_w, 330.0, 8.0, frozenset({1, 2, 3}))
+    assert runs == [[0, 1], [2, 3]]
+    # never two pieces on a line wider than the room
+    wide = [100.0, 400.0, 100.0, 100.0]
+    runs = _segments(label_w, wide, 330.0, 8.0, frozenset({1, 2, 3}))
+    assert [c for run in runs for c in run] == [0, 1, 2, 3]
+    for run in runs:
+        assert len(run) == 1 or sum(wide[c] for c in run) + 8.0 * (len(run) - 1) <= 330.5
