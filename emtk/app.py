@@ -45,6 +45,7 @@ import importlib
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from .font import DEFAULT_FONT_PT
 from .events import (
     ALT_MODIFIER,
     CONTROL_MODIFIER,
@@ -238,7 +239,7 @@ class ControlSurface(Surface):
         0-255 RGB(A) cleared to before the control draws.
     """
 
-    def __init__(self, control, font_pt: float = 9.0,
+    def __init__(self, control, font_pt: float = DEFAULT_FONT_PT,
                  background: tuple = (30, 32, 38)) -> None:
         self.control = control
         self.font_pt = float(font_pt)

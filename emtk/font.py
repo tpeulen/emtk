@@ -29,8 +29,11 @@ MISSING_GLYPH = "\u00a4"
 #: once, by whatever turns logical pixels into device ones.
 PX_PER_PT = 96.0 / 72.0
 
-#: The interface font's point size when a host is not told one.
-DEFAULT_FONT_PT = 9.0
+#: The interface font's point size when a host is not told one: the size the
+#: atlas is baked at, so glyphs are drawn 1:1. It was 9 pt, which scaled every
+#: glyph of the 8 pt bake by 1.125 -- text a size larger than an embedder that
+#: draws the bake as is, and soft, as any upscaled bitmap is.
+DEFAULT_FONT_PT = 8.0
 
 #: Where the baked atlas lives.
 ATLAS_DIR = pathlib.Path(__file__).resolve().parent / "atlas"

@@ -46,6 +46,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from .font import DEFAULT_FONT_PT
+
 __all__ = ["ControlHost", "make_control_host", "host_class"]
 
 #: The built class, cached. Rebuilding it per widget would give every host its
@@ -102,7 +104,7 @@ def host_class():
         def __init__(
             self,
             control,
-            font_pt: float = 9.0,
+            font_pt: float = DEFAULT_FONT_PT,
             background: tuple = (30, 32, 38),
             on_change: Callable[[object], None] | None = None,
             parent=None,
@@ -179,11 +181,34 @@ def host_class():
             return (float(event.x()), float(event.y()))
 
         # -- input -------------------------------------------------------- #
+        def _rich(self, name: str):
+            """The control's rich pointer hook *name*, when it has all four.
+
+            The classic contract (``press``/``drag``/``hover``/``release``/
+            ``scroll``) knows one button, so a right click arrived as a left
+            one and a middle-button pan did not arrive at all. A control that
+            speaks :class:`emtk.app.ImApp`'s ``pointer_press``/``pointer_move``/
+            ``pointer_release``/``wheel`` is given every button, as the GPU
+            hosts give it; Qt's button and modifier codes are emtk's
+            (:mod:`emtk.events`), so they pass through unchanged.
+            """
+            control = self.control
+            if all(callable(getattr(control, hook, None)) for hook in
+                   ("pointer_press", "pointer_move", "pointer_release", "wheel")):
+                return getattr(control, name)
+            return None
+
         def mousePressEvent(self, event) -> None:  # noqa: N802
             """Forward a press, with the modifier mask Qt already agrees on."""
+            px, py = self._point(event)
+            rich = self._rich("pointer_press")
+            if rich is not None:
+                rich(px, py, int(event.button()), int(event.modifiers()), 1)
+                self._pressed = True
+                self._notify()
+                return
             press = getattr(self.control, "press", None)
             if callable(press):
-                px, py = self._point(event)
                 press(px, py, *self._box(), int(event.modifiers()), 1)
                 self._pressed = True
                 self._notify()
@@ -195,15 +220,26 @@ def host_class():
             -- which is exactly the arrangement this package's docstring asks
             for: anything the chrome has no feed for arrives as an argument.
             """
+            px, py = self._point(event)
+            rich = self._rich("pointer_press")
+            if rich is not None:
+                rich(px, py, int(event.button()), int(event.modifiers()), 2)
+                self._pressed = True
+                self._notify()
+                return
             press = getattr(self.control, "press", None)
             if callable(press):
-                px, py = self._point(event)
                 press(px, py, *self._box(), int(event.modifiers()), 2)
                 self._notify()
 
         def mouseMoveEvent(self, event) -> None:  # noqa: N802
             """Forward a drag while a button is down, a hover otherwise."""
             px, py = self._point(event)
+            rich = self._rich("pointer_move")
+            if rich is not None:
+                rich(px, py, int(event.buttons()), int(event.modifiers()))
+                self.update()
+                return
             if self._pressed:
                 drag = getattr(self.control, "drag", None)
                 if callable(drag):
@@ -218,6 +254,12 @@ def host_class():
         def mouseReleaseEvent(self, event) -> None:  # noqa: N802
             """Forward the button coming up."""
             self._pressed = False
+            rich = self._rich("pointer_release")
+            if rich is not None:
+                px, py = self._point(event)
+                rich(px, py, int(event.button()), int(event.modifiers()))
+                self._notify()
+                return
             release = getattr(self.control, "release", None)
             if callable(release):
                 release()
@@ -225,14 +267,22 @@ def host_class():
 
         def wheelEvent(self, event) -> None:  # noqa: N802
             """Forward a wheel notch as three rows, the usual Qt convention."""
-            scroll = getattr(self.control, "scroll", None)
-            if not callable(scroll):
-                return
             delta = (
                 event.angleDelta().y()
                 if hasattr(event, "angleDelta")
                 else event.delta()
             )
+            rich = self._rich("wheel")
+            if rich is not None:
+                # Notches, up positive -- Dear ImGui's sign, and Qt's.
+                point = event.position() if hasattr(event, "position") else event.pos()
+                rich(float(point.x()), float(point.y()), delta / 120.0,
+                     int(event.modifiers()))
+                self.update()
+                return
+            scroll = getattr(self.control, "scroll", None)
+            if not callable(scroll):
+                return
             scroll(-3 if delta > 0 else 3)
             self.update()
 

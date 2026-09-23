@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from .font import DEFAULT_FONT_PT
 from .painter import (
     ALIGN_HCENTER,
     ALIGN_LEFT,
@@ -24,10 +25,6 @@ from .painter import (
 )
 
 __all__ = ["QtPainter", "png_decode", "image_bytes"]
-
-#: Point size of the chrome's font. Read from ``InternalGui.FONT_PT`` by the
-#: caller; repeated here only as the fallback for a painter built standalone.
-DEFAULT_FONT_PT = 9
 
 
 def qt_point_size(font_pt: float, device=None) -> float:

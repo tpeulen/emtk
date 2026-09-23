@@ -89,6 +89,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from .font import DEFAULT_FONT_PT
 from .gpu_atlas import (
     ATTRIBUTES,
     BAKED_FONT_PT,
@@ -350,7 +351,7 @@ class WgpuRenderer:
             self._device = default_device()
         return self._device
 
-    def painter(self, font_pt: float = 9.0, scale: float = 1.0):
+    def painter(self, font_pt: float = DEFAULT_FONT_PT, scale: float = 1.0):
         """A :class:`~.quad_painter.QuadPainter` wired to this renderer.
 
         Parameters
@@ -885,7 +886,7 @@ def wgpu_host_class():
         def __init__(
             self,
             control,
-            font_pt: float = 9.0,
+            font_pt: float = DEFAULT_FONT_PT,
             background: tuple = (30, 32, 38),
             on_change: Callable[[object], None] | None = None,
             images=None,
