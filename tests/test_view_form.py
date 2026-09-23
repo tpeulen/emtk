@@ -738,3 +738,27 @@ def test_a_wrapped_line_is_cut_evenly_not_greedily():
     assert [c for run in runs for c in run] == [0, 1, 2, 3]
     for run in runs:
         assert len(run) == 1 or sum(wide[c] for c in run) + 8.0 * (len(run) - 1) <= 330.5
+
+
+def test_an_info_line_reads_a_method_or_a_property():
+    """``source`` may name a method or a plain attribute; both are shown."""
+    import emtk
+    from emtk.testing import RecordingPainter
+    from emtk.view_form import FormState, draw_form
+
+    class Model:
+        hint = "from a property"
+
+        def note(self):
+            return "from a method"
+
+    spec = {"sections": [{"type": "info", "source": "hint"},
+                         {"type": "info", "source": "note"},
+                         {"type": "info", "source": "missing", "text": "the fallback"}]}
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 400, 300), io=emtk.IO(), storage={}):
+        emtk.begin("form", (0, 0, 400, 300))
+        draw_form(spec, Model(), FormState())
+        emtk.end()
+    shown = " ".join(painter.strings)
+    assert "from a property" in shown and "from a method" in shown and "the fallback" in shown

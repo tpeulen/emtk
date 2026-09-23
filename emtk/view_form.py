@@ -881,8 +881,11 @@ def _draw_control(section: dict, model: Any, state: FormState, width: float) -> 
     elif kind == "info":
         source = section.get("source")
         text = section.get("text", "")
-        if source and callable(getattr(model, source, None)):
-            text = getattr(model, source)()
+        if source:
+            # A method, or a plain attribute / property holding the text.
+            value = getattr(model, source, None)
+            value = value() if callable(value) else value
+            text = text if value is None else value
         _w.text_wrapped(str(text))
 
 
