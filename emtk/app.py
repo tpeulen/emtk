@@ -429,7 +429,11 @@ class ImApp:
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
         self.io.key = int(key)
-        self.io.text = str(text or "")
+        # Appended, not replaced: characters arrive one event each and a host
+        # draws on demand, so several can land before the frame that spends
+        # them (a page's frame takes a while in Pyodide) -- a replace kept
+        # only the last and fast typing lost letters.
+        self.io.text += str(text or "")
         self._modifiers(int(modifiers))
         # Honest about consumption: only while a widget holds the keyboard
         # (a focused text field), as ImGui's WantCaptureKeyboard says -- as of

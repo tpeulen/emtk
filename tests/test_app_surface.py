@@ -178,6 +178,25 @@ def test_imapp_is_also_a_classic_control():
     assert app.io.text == "a" and app.io.key_shift
 
 
+def test_keys_typed_between_two_frames_all_reach_the_frame():
+    """A host draws on demand, and a frame in a page is slow: "gates" typed
+    quickly arrives as five key events before one frame. The frame must see
+    all five letters, and the next frame none of them."""
+    import emtk
+
+    seen = []
+
+    def gui():
+        seen.append(emtk.get_io().text)
+
+    app = ImApp(gui)
+    for letter in "gates":
+        app.key(0, letter, 0)
+    _frame(app)
+    _frame(app)
+    assert seen == ["gates", ""]
+
+
 def test_the_implot_demo_is_an_app():
     from emtk.implot_demo import make_app
 
