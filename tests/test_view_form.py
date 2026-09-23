@@ -384,3 +384,54 @@ def test_a_code_editor_shows_and_writes_back_its_attribute():
     model.script = "loaded: 1\n"
     driver.frame()
     assert driver.state.editors["script"].text == "loaded: 1\n"
+
+
+def test_a_spin_value_steps_with_its_arrows_and_the_wheel():
+    """style "spin": arrows at the field's right edge; up adds a step, down
+    takes one; the wheel over the field does the same; bounds hold."""
+    from emtk.view_form import spin_step
+
+    spec = {"sections": [
+        {"type": "value", "attr": "restarts", "label": "Bins", "kind": "int", "style": "spin",
+         "minimum": 0, "maximum": 3},
+        {"type": "value", "attr": "don_value", "label": "Min", "kind": "float",
+         "style": "spin"},
+    ]}
+    model = Model()
+    model.don = True
+    model.don_value = 6.0
+    driver = Driver(spec, model)
+    driver.frame()
+    x, y, w, h = driver.state.rects["restarts.stepper"]
+    assert x > driver.state.rects["restarts"][0] + driver.state.rects["restarts"][2] - 1
+
+    def click(px, py):
+        io = driver.io
+        io.mouse_pos = io.mouse_clicked_pos[0] = (px, py)
+        io.mouse_down[0] = io.mouse_clicked[0] = True
+        driver.frame()
+        io.mouse_down[0] = False
+        io.mouse_released[0] = True
+        driver.frame()
+
+    click(x + w / 2, y + h * 0.25)
+    assert model.restarts == 3
+    click(x + w / 2, y + h * 0.25)
+    assert model.restarts == 3                       # the maximum holds
+    click(x + w / 2, y + h * 0.75)
+    assert model.restarts == 2
+    fx, fy, fw, fh = driver.state.rects["don_value"]
+    driver.io.mouse_pos = (fx + 5, fy + fh / 2)
+    driver.io.mouse_wheel = -1.0
+    driver.frame()
+    assert model.don_value == 5.9
+    assert spin_step(0.05, {"kind": "float"}) == 0.001
+    assert spin_step(3, {"kind": "int"}) == 1.0
+    assert spin_step(1.0, {"kind": "float", "step": 0.25}) == 0.25
+
+
+def test_a_value_without_spin_has_no_arrows():
+    driver = Driver({"sections": [{"type": "value", "attr": "restarts", "kind": "int"}]},
+                    Model())
+    driver.frame()
+    assert "restarts.stepper" not in driver.state.rects

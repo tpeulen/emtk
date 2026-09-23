@@ -26,7 +26,9 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
 ``call``), ``choice`` (``options``, ``labels``, ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
-``info``, and the two table dialects -- ``table`` and ``custom``
+``info``, ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
+and the wheel over it, step by ``step`` or by :func:`spin_step`), and the two
+table dialects -- ``table`` and ``custom``
 ``data_table`` (:mod:`emtk.widgets.data_table`), one full-width row each --
 and no key of its own. A container with ``collapsible: true`` draws AutoForm's
 fold -- a header line that opens and closes it, closed at first when it says
@@ -71,7 +73,7 @@ from . import im_widgets as _w
 from .flags import InputTextFlags
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
-           "format_value", "parse_value", "parse_colour_text"]
+           "format_value", "parse_value", "parse_colour_text", "spin_step"]
 
 
 #: Section types that hold other sections.
@@ -392,12 +394,29 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _tooltip(section)
         _w.same_line()
         field_w = max(width - swatch - 8.0, 30.0)
+    spin = (str(section.get("style", "")).lower() == "spin" and kind in ("int", "float")
+            and not read_only)
+    stepper_w = _core.get_frame_height() * 0.75 if spin else 0.0
     shown = state.buffers.get(name, shown_value)
-    _w.set_next_item_width(field_w)
+    _w.set_next_item_width(max(field_w - stepper_w, 20.0))
     flags = InputTextFlags.ENTER_RETURNS_TRUE | (InputTextFlags.READ_ONLY if read_only else 0)
     entered, text = _w.input_text(f"##{name}", shown, str(section.get("placeholder", "")), flags)
     _remember(state, f"{name}.edit" if slider else name)
     _tooltip(section)
+    if spin:
+        field_hovered = _w.is_item_hovered()
+        delta = _stepper(name, stepper_w)
+        _remember(state, f"{name}.stepper")
+        wheel = _core.get_io().mouse_wheel
+        if not delta and wheel and (field_hovered or _w.is_item_hovered()):
+            delta = 1 if wheel > 0 else -1
+        if delta and value is not None:
+            state.buffers.pop(name, None)
+            stepped = parse_value(format_value(float(value) + delta * spin_step(value, section),
+                                               section), section, bounds)
+            if stepped is not None and stepped != value:
+                _commit(model, section, stepped, state)
+            return
     text = text.replace("\r", "").replace("\n", "")
     if text != shown:
         state.buffers[name] = text
@@ -433,6 +452,59 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _tooltip(section)
         if changed and new != current and not read_only:
             _commit(model, section, new, state)
+
+
+def spin_step(value: Any, section: dict) -> float:
+    """How far one click of a spin box's arrows moves *value*.
+
+    The section's ``step`` when it names one. Otherwise ``1`` for an ``int``
+    and, for a ``float``, one tenth of the value's decade (``6`` steps by
+    ``0.1``, ``0.05`` by ``0.001``) -- a step that is always visible in the
+    number and never jumps it past its own scale.
+    """
+    step = section.get("step")
+    if step:
+        return float(step)
+    if str(section.get("kind", "")).lower() == "int":
+        return 1.0
+    number = abs(float(value or 0.0))
+    if number == 0.0 or not math.isfinite(number):
+        return 0.1
+    return 10.0 ** (math.floor(math.log10(number)) - 1)
+
+
+def _stepper(name: str, width: float) -> int:
+    """The up/down arrows of a spin box, stacked at the field's right edge.
+
+    Returns ``+1`` or ``-1`` on the frame an arrow is clicked, else ``0``.
+    """
+    ctx = _core.get_current_context()
+    _w.same_line(0.0, 0.0)
+    height = _core.get_frame_height()
+    box = ctx.layout.row(height=height, width=width)
+    x, y, w, h = box
+    draw = _core.get_window_draw_list()
+    style = ctx.style
+    delta = 0
+    for sign, top in ((1, y), (-1, y + h / 2.0)):
+        half = (x, top, w, h / 2.0)
+        hovered, held, pressed = ctx.button_behavior(half, ctx.get_id(f"##{name}.step{sign}"))
+        colour = _w._col(_core.Col.BUTTON_ACTIVE if held else
+                         _core.Col.BUTTON_HOVERED if hovered else _core.Col.FRAME_BG)
+        draw.add_rect_filled((x, top), (x + w, top + h / 2.0), colour)
+        cx, cy, s = x + w / 2.0, top + h / 4.0, min(w, h / 2.0) * 0.28
+        ink = _w._col(_core.Col.TEXT)
+        if sign > 0:
+            draw.add_triangle_filled((cx - s, cy + s * 0.6), (cx + s, cy + s * 0.6),
+                                     (cx, cy - s * 0.6), ink)
+        else:
+            draw.add_triangle_filled((cx - s, cy - s * 0.6), (cx + s, cy - s * 0.6),
+                                     (cx, cy + s * 0.6), ink)
+        if pressed:
+            delta = sign
+    ctx._last_item = box
+    ctx._last_id = ctx.get_id(f"##{name}.stepper")
+    return delta
 
 
 def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> None:
