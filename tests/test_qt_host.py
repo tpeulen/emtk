@@ -74,3 +74,43 @@ def test_the_qimage_cache_does_not_hand_a_new_texture_a_dead_ones_picture(qt_app
     image = QtPainter._qimage(new, 3, 1)
     assert (image.width(), image.height()) == (3, 1)
     assert image.pixelColor(0, 0).blue() == 255
+
+
+def test_an_im_app_gets_every_button_and_the_wheel(qt_app):
+    """A right click is a right click, and a middle-button drag reaches the app.
+
+    The classic contract carries one button, so under Qt an :class:`ImApp`
+    saw a right click as a left one (a context menu opened *and* the row under
+    it was pressed) and never saw the middle button a node editor pans with.
+    """
+    from qtpy import QtCore, QtGui
+
+    from emtk.app import ImApp
+    from emtk.qt_host import ControlHost
+
+    app = ImApp(lambda: None)
+    host = ControlHost(app)
+    host.resize(200, 120)
+
+    def mouse(kind, button, buttons):
+        event = QtGui.QMouseEvent(kind, QtCore.QPointF(30.0, 40.0), button, buttons,
+                                  QtCore.Qt.NoModifier)
+        QtCore.QCoreApplication.sendEvent(host, event)
+
+    mouse(QtCore.QEvent.MouseButtonPress, QtCore.Qt.RightButton, QtCore.Qt.RightButton)
+    assert app.io.mouse_clicked[1] and not app.io.mouse_clicked[0]
+    mouse(QtCore.QEvent.MouseButtonRelease, QtCore.Qt.RightButton, QtCore.Qt.NoButton)
+    assert app.io.mouse_released[1]
+
+    mouse(QtCore.QEvent.MouseButtonPress, QtCore.Qt.MiddleButton, QtCore.Qt.MiddleButton)
+    assert app.io.mouse_down[2]
+    mouse(QtCore.QEvent.MouseButtonRelease, QtCore.Qt.MiddleButton, QtCore.Qt.NoButton)
+    assert not app.io.mouse_down[2]
+
+    wheel = QtGui.QWheelEvent(QtCore.QPointF(30.0, 40.0), QtCore.QPointF(30.0, 40.0),
+                              QtCore.QPoint(0, 0), QtCore.QPoint(0, 120),
+                              QtCore.Qt.NoButton, QtCore.Qt.NoModifier,
+                              QtCore.Qt.NoScrollPhase, False)
+    QtCore.QCoreApplication.sendEvent(host, wheel)
+    assert app.io.mouse_wheel == 1.0, "one notch up is +1, as in Dear ImGui"
+    host.close()
