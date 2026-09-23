@@ -468,6 +468,28 @@ def test_delete_removes_the_selected_row_through_the_model():
     assert model.deleted == ["PR"]
 
 
+def test_select_all_marks_every_row_and_delete_removes_them_last_first():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.select_all()
+    assert control.selected_indices() == [0, 1]
+    painter = draw(control)
+    assert painter is not None
+    control.key(KEY_DELETE)
+    assert model.deleted == ["PR", "Tau"]
+    assert control.selected_indices() == []
+
+
+def test_a_click_after_select_all_selects_one_row_again():
+    model = Gates()
+    control = TableBinding(GATE_TABLE, model).control
+    draw(control)
+    control.select_all()
+    control.press(*cell(control, 1, 0))
+    assert control.selected_indices() == [1]
+
+
 def test_the_table_draws_in_the_installed_palette():
     from emtk import style
 

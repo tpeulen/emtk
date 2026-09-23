@@ -312,6 +312,9 @@ class DataTable:
         self.filter = TextInput("", "", placeholder="filter")
         self.filter_focused = False
         self.selected_key: Any = None
+        #: Keys of rows selected *besides* :attr:`selected_key` (Select All);
+        #: a click on a row or a move of the selection clears them.
+        self.also_selected: set = set()
         self.hovered: Optional[int] = None
         self.bar = ScrollBar()
         self.revision = 0
@@ -414,6 +417,20 @@ class DataTable:
                 return True
         self.selected_key = None
         return False
+
+    def select_all(self) -> None:
+        """Select every row (the rows the filter shows), without notifying."""
+        order = self.order()
+        self.also_selected = {self.key_of(i) for i in order}
+        if order and self.selected_key not in self.also_selected:
+            self.selected_key = self.key_of(order[0])
+
+    def selected_indices(self) -> list[int]:
+        """Source indices of every selected row, in source order."""
+        keys = set(self.also_selected)
+        if self.selected_key is not None:
+            keys.add(self.selected_key)
+        return [i for i in range(self.row_count()) if self.key_of(i) in keys]
 
     def sort_by(self, key: str, descending: Optional[bool] = None) -> None:
         """Sort by column *key*; without *descending*, the same key flips."""
@@ -553,7 +570,8 @@ class DataTable:
     def _draw_row(self, p: Painter, position: int, index: int, columns, order, x: float,
                   y: float, h: float) -> None:
         key = self.key_of(index)
-        if self.selected_key is not None and key == self.selected_key:
+        if (self.selected_key is not None and key == self.selected_key) \
+                or key in self.also_selected:
             background = _style.ROW_SEL
         elif position == self.hovered:
             background = _style.HEADER
@@ -713,6 +731,7 @@ class DataTable:
         key = self.key_of(index)
         changed = key != self.selected_key
         self.selected_key = key
+        self.also_selected = set()
         self._scroll_to(position)
         if changed and self.on_select is not None:
             self.on_select(index)
@@ -752,11 +771,15 @@ class DataTable:
         if not order:
             return False
         if key in (KEY_DELETE, KEY_BACKSPACE):
-            index = self.selected_index()
-            if index is None or self.on_delete is None:
+            indices = self.selected_indices()
+            if not indices or self.on_delete is None:
                 return False
-            self.on_delete(index)
+            # Last first, so a source that renumbers on delete keeps the
+            # earlier indices valid.
+            for index in reversed(indices):
+                self.on_delete(index)
             self.selected_key = None
+            self.also_selected = set()
             return True
         current = next((pos for pos, i in enumerate(order)
                         if self.key_of(i) == self.selected_key), None)
