@@ -29,7 +29,9 @@ chosen. Added, because the applications that need a dialog need them: the
 filter chooser MATLAB's ``uigetfile`` and Qt's ``getOpenFileName`` both have
 (its index comes back as :attr:`FileDialog.filter_index`, which is how a caller
 tells a ``.mat`` session from a ``.mat`` dataset), multi-selection, and a
-file-name field in save mode that appends the filter's extension.
+file-name field in save mode that appends the filter's extension, and a
+folder mode -- Qt's ``getExistingDirectory`` -- for an application that opens
+a folder rather than a file (a burst-analysis folder, a working folder).
 """
 from __future__ import annotations
 
@@ -80,8 +82,11 @@ class FileDialog:
     title : str
         What the dialog is for; also the action button's caption when
         ``action`` is not given.
-    mode : {"open", "save"}
-        Choose existing files, or name one to write.
+    mode : {"open", "save", "folder"}
+        Choose existing files, name one to write, or choose a folder. In
+        folder mode only folders are listed: a click selects one, a double
+        click enters it, and the action takes the selected folder -- or the
+        folder being shown when none is selected.
     filters : sequence of (str, sequence of str), or str
         ``(label, patterns)`` pairs, or a Qt-style filter string. Patterns are
         shell globs matched case-insensitively against the file *name*, so a
@@ -116,8 +121,8 @@ class FileDialog:
                  directory: str | None = None, filename: str = "",
                  multiselect: bool = False, action: str | None = None,
                  rows: int = 12) -> None:
-        if mode not in ("open", "save"):
-            raise ValueError(f"mode must be 'open' or 'save', not {mode!r}")
+        if mode not in ("open", "save", "folder"):
+            raise ValueError(f"mode must be 'open', 'save' or 'folder', not {mode!r}")
         self.title = title
         self.mode = mode
         self.filters = (parse_filters(filters) if isinstance(filters, str)
@@ -128,7 +133,7 @@ class FileDialog:
         self.directory = start if os.path.isdir(start) else os.path.expanduser("~")
         self.filename = filename
         self.multiselect = bool(multiselect) and mode == "open"
-        self.action = action or ("Save" if mode == "save" else "Open")
+        self.action = action or {"save": "Save", "folder": "Choose"}.get(mode, "Open")
         self.rows = max(1, int(rows))
         self.selection: list[str] = []
         self.error = ""
@@ -159,10 +164,11 @@ class FileDialog:
                 continue
             if os.path.isdir(os.path.join(self.directory, name)):
                 folders.append(name)
-            elif self.matches(name):
+            elif self.mode != "folder" and self.matches(name):
                 files.append(name)
         self.folders, self.files = folders, files
-        self.selection = [name for name in self.selection if name in files]
+        keep = folders if self.mode == "folder" else files
+        self.selection = [name for name in self.selection if name in keep]
         if self._listed is None or self._listed[0] != self.directory:
             self.page = 0
         self._listed = key
@@ -239,6 +245,8 @@ class FileDialog:
                         name += pattern[1:]
                         break
             return [os.path.join(self.directory, name)]
+        if self.mode == "folder" and not self.selection:
+            return [self.directory]
         return [os.path.join(self.directory, name) for name in self.selection]
 
     def choose(self) -> list[str] | None:
@@ -257,6 +265,9 @@ class FileDialog:
             return None
         if self.mode == "open" and not all(os.path.isfile(p) for p in paths):
             self.error = "No such file."
+            return None
+        if self.mode == "folder" and not all(os.path.isdir(p) for p in paths):
+            self.error = "No such folder."
             return None
         self.error = ""
         return paths
@@ -283,7 +294,14 @@ class FileDialog:
         self.page = min(self.page, pages - 1)
         start = self.page * self.rows
         for name, is_folder in entries[start:start + self.rows]:
-            if is_folder:
+            if is_folder and self.mode == "folder" and name != "..":
+                picked = _w.selectable(f"[{name}]##folder:{name}", name in self.selection)
+                if _w.is_item_hovered() and _w.is_mouse_double_clicked(0):
+                    self.enter(name)
+                    return None
+                if picked:
+                    self.selection = [name]
+            elif is_folder:
                 label = f"[{name}]##folder:{name}"
                 if _w.selectable(label, False):
                     self.enter(name)
@@ -316,15 +334,18 @@ class FileDialog:
             _w.set_next_item_width(-1.0)
             _changed, name = _w.input_text("##file-dialog-name", self.filename, "file name")
             self.filename = name.replace("\r", "").replace("\n", "")
+        elif self.mode == "folder":
+            _w.text_disabled(self.chosen()[0])
         else:
             shown = ", ".join(self.selection) if self.selection else "(nothing selected)"
             _w.text_disabled(shown)
 
-        labels = [label for label, _patterns in self.filters]
-        changed, index = _w.combo("##file-dialog-filter", self.filter_index, labels)
-        if changed and index != self.filter_index:
-            self.filter_index = index
-            self.refresh()
+        if self.mode != "folder":
+            labels = [label for label, _patterns in self.filters]
+            changed, index = _w.combo("##file-dialog-filter", self.filter_index, labels)
+            if changed and index != self.filter_index:
+                self.filter_index = index
+                self.refresh()
 
         if _w.button(self.action, (90.0, 0.0)):
             result = self.choose()

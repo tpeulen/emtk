@@ -150,3 +150,39 @@ def test_long_listings_page(tmp_path):
     drive.click("next >")
     drive.frame()      # the button fires on release, after that frame's listing
     assert "f20.dat" in drive.painter.strings
+
+
+def test_folder_mode_lists_folders_and_takes_the_one_selected(folder):
+    (folder / "sub" / "inner").mkdir()
+    dialog = FileDialog("Burst analysis folder", mode="folder", directory=str(folder))
+    driver = _Driver(dialog)
+    driver.frame()
+    assert "a.dat" not in driver.painter.strings
+    assert "[sub]" in driver.painter.strings and "Choose" in driver.painter.strings
+    driver.click("[sub]")
+    assert dialog.selection == ["sub"]
+    assert driver.click("Choose") == [str(folder / "sub")]
+
+
+def test_folder_mode_takes_the_folder_shown_when_none_is_selected(folder):
+    dialog = FileDialog("Working path", mode="folder", directory=str(folder))
+    driver = _Driver(dialog)
+    driver.click("[sub]", double=True)                  # a double click enters
+    assert dialog.directory == str(folder / "sub")
+    assert driver.click("Choose") == [str(folder / "sub")]
+
+
+def test_folder_mode_refuses_a_folder_that_went_away(folder):
+    dialog = FileDialog("x", mode="folder", directory=str(folder))
+    dialog.selection = ["gone"]
+    assert dialog.choose() is None and dialog.error == "No such folder."
+
+
+def test_a_click_that_navigates_away_does_not_hold_the_pointer(folder):
+    """The entered folder's entry is gone on the release; the next click works."""
+    dialog = FileDialog("Open", directory=str(folder))
+    driver = _Driver(dialog)
+    driver.click("[sub]")
+    assert dialog.directory == str(folder / "sub")
+    driver.click("[..]")
+    assert dialog.directory == str(folder)

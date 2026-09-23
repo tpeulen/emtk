@@ -513,6 +513,7 @@ class Context:
         self.active_id_previous_frame = self.active_id
         self.hovered_id = None
         self.hovered_id_allow_overlap = False
+        self._active_id_alive = False
         self.hovered_window = self.find_hovered_window(*self.io.mouse_pos)
         for window in self.windows:
             window.was_active, window.active = window.active, False
@@ -533,6 +534,14 @@ class Context:
             self.nav_id = self.nav_ring[at % len(self.nav_ring)]
             self.storage["__nav_id__"] = self.nav_id
         self.nav_request = 0
+        # ImGui's ``ActiveIdIsAlive``: an active item that was not submitted
+        # this frame is gone (a list entry that navigated away on its own
+        # click). With no button held there is no drag it could be part of,
+        # so it lets go -- otherwise it would hold the pointer and every other
+        # item would refuse the next click.
+        if (self.active_id is not None and not getattr(self, "_active_id_alive", True)
+                and not any(self.io.mouse_down)):
+            self.clear_active_id()
         self.io.want_capture_keyboard = self.nav_id is not None
         self.io.want_capture_mouse = self.hovered_window is not None
         self.io.end_event()
@@ -718,6 +727,8 @@ class Context:
         self._last_id = item_id
         if item_id is not None:
             self.nav_add(item_id)
+            if item_id == self.active_id:
+                self._active_id_alive = True
         return self.item_hoverable(box, item_id)
 
     def item_hoverable(self, box: Rect, item_id: Any = None) -> bool:
