@@ -65,7 +65,8 @@ What the user can do:
 
 :meth:`DockManager.state` / :meth:`DockManager.restore` are the whole layout
 -- floating boxes, what is docked where, tab order, the selected tabs, split
-ratios, visibility -- as a JSON-able dict, and a :class:`LayoutStore` passed
+ratios, visibility, and the application's own values (:meth:`DockManager.set_extra`)
+-- as a JSON-able dict, and a :class:`LayoutStore` passed
 as ``store`` loads it at start and saves it after every change.
 
 Everything is in logical pixels, the space :func:`emtk.frame` lays out in;
@@ -629,6 +630,9 @@ GRIP = 14.0
 HINT_BAND = 3.0
 
 
+_MISSING = object()
+
+
 def _hit(px: float, py: float, rect: Optional[Rect]) -> bool:
     if rect is None:
         return False
@@ -693,6 +697,9 @@ class DockManager:
         self._title_h = 20.0
         #: The layout changed since it was last written; flushed by :meth:`draw`.
         self._dirty = False
+        #: The application's own layout values (a splitter inside a window, a
+        #: panel's size), kept and saved with the layout: :meth:`set_extra`.
+        self.extras: Dict[str, Any] = {}
 
     # ------------------------------------------------------------ the tree
     def _index(self, node: Node, path: str) -> None:
@@ -902,6 +909,23 @@ class DockManager:
         self.splits[split].ratio = min(max(float(ratio), 0.02), 0.98)
         self._dirty = True
 
+    def extra(self, key: str, default: Any = None) -> Any:
+        """The application's layout value *key* (:meth:`set_extra`), or *default*."""
+        return self.extras.get(key, default)
+
+    def set_extra(self, key: str, value: Any) -> None:
+        """Keep a JSON-able layout value of the application's own -- where the
+        user dragged a splitter inside a window, say -- with the layout.
+
+        It is saved with the rest (:meth:`state`, the store) when it changes,
+        restored by :meth:`restore` and forgotten by :meth:`reset`, so the
+        application reads it back with :meth:`extra` and falls back to its
+        default.
+        """
+        if self.extras.get(key, _MISSING) != value:
+            self.extras[key] = value
+            self._dirty = True
+
     # --------------------------------------------------------------- state
     def state(self) -> dict:
         """The whole layout as a JSON-able dict (see :meth:`restore`)."""
@@ -932,6 +956,7 @@ class DockManager:
             "regions": regions,
             "windows": windows,
             "z": [k for k in self.z],
+            "extras": dict(self.extras),
         }
 
     def to_json(self) -> str:
@@ -965,6 +990,9 @@ class DockManager:
                     self.selected[name] = chosen
         z = [k for k in (state.get("z") or []) if k in self.z]
         self.z = z + [k for k in self.z if k not in z]
+        extras = state.get("extras")
+        if isinstance(extras, dict):
+            self.extras = dict(extras)
         self._dirty = False
 
     @classmethod
@@ -1036,6 +1064,7 @@ class DockManager:
         would bring the bad layout back on the next run.
         """
         self._saved = {}
+        self.extras = {}
         for name, ratio in self._default_ratios.items():
             self.splits[name].ratio = ratio
         for name in self.tabs:

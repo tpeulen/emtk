@@ -544,3 +544,23 @@ def test_a_dialog_drawn_after_the_docks_takes_the_click_however_early_it_opened(
     app.draw(RecordingPainter(), *BOX)
     assert clicks == ["dialog"]
     assert docks.region_of("form") == "left"          # the tab under it was not hit
+
+
+def test_an_apps_own_layout_values_are_saved_restored_and_reset(tmp_path):
+    """``set_extra`` keeps a value of the application's -- a splitter inside a
+    window -- with the layout: saved on change, read back next run, forgotten
+    by reset."""
+    store = LayoutStore("t", path=tmp_path / "layout.json")
+    docks, _ = make(store=store)
+    host = Driver(docks)
+    assert docks.extra("plot.split", 120.0) == 120.0
+    docks.set_extra("plot.split", 96.0)
+    host.frame()
+    assert store.load()["extras"] == {"plot.split": 96.0}
+    again, _ = make(store=LayoutStore("t", path=tmp_path / "layout.json"))
+    assert again.load() and again.extra("plot.split") == 96.0
+    assert again.state()["extras"] == {"plot.split": 96.0}
+    again.set_extra("plot.split", 96.0)          # no change: nothing to write
+    assert not again.flush()
+    again.reset()
+    assert again.extra("plot.split", 120.0) == 120.0 and not store.load()
