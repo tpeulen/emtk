@@ -676,7 +676,7 @@ def checkbox(label: str, value: bool) -> tuple[bool, bool]:
         ctx.draw.add_line((mark[0] + height * 0.45, mark[1] + height - pad),
                           (mark[0] + height - pad, mark[1] + pad), _col(Col.CHECK_MARK), 2.0)
     if shown:
-        ctx.draw.add_text((mark[0] + height + ctx.style.item_inner_spacing[0], box[1]),
+        ctx.draw.add_text((mark[0] + height + ctx.style.item_inner_spacing[0], box[1] + ctx.style.frame_padding[1]),
                           _col(Col.TEXT), shown)
     return (pressed, (not value) if pressed else value)
 
@@ -851,7 +851,7 @@ def selectable(label: str, selected: bool = False, size=None) -> bool:
     if selected or hovered:
         ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                                  _col(Col.HEADER) if selected else _col(Col.HEADER_HOVERED), 0.0)
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]), _col(Col.TEXT),
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
                       _visible_label(label))
     return pressed
 
@@ -925,7 +925,7 @@ def collapsing_header(label: str, open_: Optional[bool] = None) -> bool:
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON),
                              ctx.style.frame_rounding)
     arrow = "v" if is_open else ">"
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]), _col(Col.TEXT),
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
                       f"{arrow} {_visible_label(label)}")
     return is_open
 
@@ -1152,7 +1152,7 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
     # Clipped to the field, as the reference's InputText is: a value longer
     # than its box used to run over whatever stood beside it.
     ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]),
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
                       _col(Col.TEXT) if value else _col(Col.TEXT_DISABLED), shown)
     if focused:
         caret = box[0] + ctx.style.frame_padding[0] + ctx.draw.calc_text_size(value)[0]
@@ -1572,7 +1572,7 @@ def begin_menu(label: str, enabled: bool = True) -> bool:
     if hovered or is_open:
         ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                                  _col(Col.HEADER_HOVERED if hovered else Col.HEADER), 0.0)
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]),
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
                       _col(Col.TEXT if enabled else Col.TEXT_DISABLED), shown)
     if is_open:
         ctx.push_id(label)
@@ -1596,7 +1596,7 @@ def menu_item(label: str, shortcut: str = "", selected: bool = False,
                                  _col(Col.HEADER_HOVERED), 0.0)
     colour = _col(Col.TEXT if enabled else Col.TEXT_DISABLED)
     mark = "* " if selected else "  "
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]), colour,
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), colour,
                       mark + _visible_label(label))
     if shortcut:
         width = ctx.draw.calc_text_size(shortcut)[0]
@@ -1631,7 +1631,7 @@ def begin_tab_item(label: str) -> bool:
     selected = store.setdefault("selected", shown) == shown
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              _col(Col.TAB_SELECTED if selected else Col.TAB), 0.0)
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]), _col(Col.TEXT),
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
                       shown)
     same_line()
     return selected
@@ -1654,7 +1654,7 @@ def begin_combo(label: str, preview: str) -> bool:
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              _col(Col.FRAME_BG_HOVERED if hovered else Col.FRAME_BG),
                              ctx.style.frame_rounding)
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]), _col(Col.TEXT),
+    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
                       str(preview))
     if store.get("open"):
         ctx.push_id(label)
@@ -2986,7 +2986,7 @@ def plot_lines(label: str, values, overlay: str = "", size=None) -> None:
               for i, v in enumerate(points)]
         ctx.draw.add_polyline(xy, _col(Col.PLOT_LINES), 0, 1.0)
     if overlay:
-        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]),
+        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
                           _col(Col.TEXT), overlay)
     # Drawn, not submitted. A label added with `text()` becomes an item of its
     # own, and then `is_item_hovered()` after a plot asks about the *label* --
@@ -3019,7 +3019,7 @@ def plot_histogram(label: str, values, overlay: str = "", size=None) -> None:
                 (box[0] + (index + 1) * width - 1.0, box[1] + box[3]),
                 _col(Col.PLOT_HISTOGRAM), 0.0)
     if overlay:
-        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]),
+        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
                           _col(Col.TEXT), overlay)
 
 
@@ -4177,7 +4177,7 @@ def begin_docked(name: str, dock_id: int = 0) -> bool:
                                  _col(Col.TAB_SELECTED if selected
                                       else (Col.HEADER_HOVERED if hovered else Col.TAB)),
                                  0.0)
-        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]),
+        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
                           _col(Col.TEXT), shown)
 
     on_top = node["selected"] == key

@@ -233,3 +233,21 @@ def test_a_long_value_is_clipped_to_its_field():
         emtk.end()
     clips = [c for c in painter.calls if c[0] == "push_clip"]
     assert any(abs(c[3] - 40.0) < 0.5 for c in clips)
+
+
+def test_text_sits_in_the_middle_of_its_frame():
+    """A field's text is inset by frame_padding.y, as a button's is centred:
+    it was drawn against the frame's top edge."""
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 300, 120)) as ctx:
+        emtk.begin("w", (0, 0, 300, 120))
+        emtk.input_text("##f", "value")
+        field = ctx.get_item_rect()
+        emtk.checkbox("label", False)
+        box = ctx.get_item_rect()
+        emtk.end()
+    pad = ctx.style.frame_padding[1]
+    value = next(t for t in painter.texts if t[5] == "value")
+    label = next(t for t in painter.texts if t[5] == "label")
+    assert abs(value[1] - (field[1] + pad)) < 0.5
+    assert abs(label[1] - (box[1] + pad)) < 0.5
