@@ -646,8 +646,10 @@ class DockManager:
     store : LayoutStore, optional
         Loaded by :meth:`load` and written after every change the user makes.
     on_change : callable, optional
-        ``on_change(manager)`` after every change the user makes (a drop, a
-        close, a resize let go, a split let go, a tab chosen).
+        ``on_change(manager)`` once a frame in which the layout changed -- by
+        the user (a drop, a close, a resize or a split let go, a tab chosen)
+        or by the application (:meth:`show`, :meth:`hide`, :meth:`focus`,
+        :meth:`dock`, ...). The store is written at the same moment.
     snapping : bool
         Whether dragged windows snap to the edges and to each other.
     name : str
@@ -689,6 +691,8 @@ class DockManager:
         self._hint_edges: Tuple[str, ...] = ()
         self._hint_keys: set = set()
         self._title_h = 20.0
+        #: The layout changed since it was last written; flushed by :meth:`draw`.
+        self._dirty = False
 
     # ------------------------------------------------------------ the tree
     def _index(self, node: Node, path: str) -> None:
@@ -825,6 +829,7 @@ class DockManager:
         win.anchor = None
         if select:
             self.selected[region] = key
+        self._dirty = True
 
     def undock(self, key: str, box: Optional[Rect] = None) -> None:
         """Float *key*, at *box* or where it last floated."""
@@ -836,6 +841,7 @@ class DockManager:
             win.box = self._undocked_box(region)
         self._forget(key)
         self.z.append(key)
+        self._dirty = True
 
     def _undocked_box(self, region: Optional[str]) -> Rect:
         bx, by, bw, bh = self.box if self.box[2] > 0 else (0.0, 0.0, 800.0, 600.0)
@@ -848,9 +854,11 @@ class DockManager:
 
     def show(self, key: str) -> None:
         self.windows[key].visible = True
+        self._dirty = True
 
     def hide(self, key: str) -> None:
         self.windows[key].visible = False
+        self._dirty = True
 
     def toggle(self, key: str) -> bool:
         """Show a hidden window (on top) or hide a shown one; returns visibility.
@@ -862,6 +870,7 @@ class DockManager:
         win = self.windows[key]
         if win.visible and self.is_shown(key):
             win.visible = False
+            self._dirty = True
         else:
             self.focus(key)
         return win.visible
@@ -880,6 +889,7 @@ class DockManager:
             self.selected[region] = key
         else:
             self.raise_window(key)
+        self._dirty = True
 
     def raise_window(self, key: str) -> None:
         if key in self.z and self.z[-1] != key:
@@ -888,6 +898,7 @@ class DockManager:
 
     def set_ratio(self, split: str, ratio: float) -> None:
         self.splits[split].ratio = min(max(float(ratio), 0.02), 0.98)
+        self._dirty = True
 
     # --------------------------------------------------------------- state
     def state(self) -> dict:
@@ -952,6 +963,7 @@ class DockManager:
                     self.selected[name] = chosen
         z = [k for k in (state.get("z") or []) if k in self.z]
         self.z = z + [k for k in self.z if k not in z]
+        self._dirty = False
 
     @classmethod
     def from_json(cls, text: str, layout: Optional[Node] = None, **kwargs) -> "DockManager":
@@ -961,6 +973,13 @@ class DockManager:
         return manager
 
     def _apply_entry(self, win: DockWindow, entry: dict) -> None:
+        dirty = self._dirty
+        try:
+            self._apply(win, entry)
+        finally:
+            self._dirty = dirty
+
+    def _apply(self, win: DockWindow, entry: dict) -> None:
         box = entry.get("box")
         if isinstance(box, (list, tuple)) and len(box) == 4:
             try:
@@ -1035,8 +1054,21 @@ class DockManager:
                 self.z.append(key)
         if self.store is not None:
             self.store.clear()
+        self._dirty = False
 
     def _changed(self) -> None:
+        """The layout changed: written (and announced) at the end of the frame."""
+        self._dirty = True
+
+    def flush(self) -> bool:
+        """Write a changed layout to the store and tell ``on_change``, now.
+
+        :meth:`draw` calls it at the end of every frame, so a change is saved
+        once however many steps made it. Returns whether there was one.
+        """
+        if not self._dirty:
+            return False
+        self._dirty = False
         if self.store is not None:
             self.save()
         if self.on_change is not None:
@@ -1044,6 +1076,7 @@ class DockManager:
                 self.on_change(self)
             except Exception:  # noqa: BLE001 - a listener must not break the frame
                 logger.exception("emtk.docking: on_change failed")
+        return True
 
     # -------------------------------------------------------------- layout
     def _present(self, node: Node, force: Optional[str] = None) -> bool:
@@ -1307,6 +1340,9 @@ class DockManager:
         """
         ctx = _core.get_current_context()
         io = ctx.io
+        # The windows submitted before this call -- the application's own,
+        # under the docks -- and so the ones the docks must hit-test in front of.
+        before = {id(w) for w in ctx.windows if w.active}
         self._title_h = float(ctx.p.line_height() + ctx.style.frame_padding[1] * 2.0)
         self._follow_box(box)
         self._update_drag(ctx)
@@ -1350,22 +1386,25 @@ class DockManager:
         submitted.append(overlay)
         self._draw_overlay(ctx)
         ctx.end()
-        self._sync_order(ctx, submitted)
+        self._sync_order(ctx, submitted, before)
+        if self._drag is None:
+            self.flush()
 
-    def _sync_order(self, ctx, names: List[str]) -> None:
+    def _sync_order(self, ctx, names: List[str], before: set) -> None:
         """Put this manager's windows in :mod:`emtk.im`'s display list in drawing order.
 
         The list is what hit-testing walks, so it must say what the screen
-        says: a raised window is drawn last *and* hit first. Only this
-        manager's own slots are permuted -- a dialog the application draws
-        after it keeps its place in front.
+        says: a raised window is drawn last *and* hit first. The manager's
+        windows go right after those submitted before it (*before*, ids) and
+        ahead of everything else -- a dialog the application draws after the
+        docks is in front of them however early it was first opened.
         """
         wanted = set(names)
-        slots = [i for i, w in enumerate(ctx.windows) if w.name in wanted]
-        by_name = {ctx.windows[i].name: ctx.windows[i] for i in slots}
-        ordered = [by_name[n] for n in names if n in by_name]
-        for i, window in zip(slots, ordered):
-            ctx.windows[i] = window
+        by_name = {w.name: w for w in ctx.windows if w.name in wanted}
+        mine = [by_name[n] for n in names if n in by_name]
+        earlier = [w for w in ctx.windows if w.name not in wanted and id(w) in before]
+        later = [w for w in ctx.windows if w.name not in wanted and id(w) not in before]
+        ctx.windows[:] = earlier + mine + later
 
     def _draw_splitters(self, ctx) -> None:
         io = ctx.io

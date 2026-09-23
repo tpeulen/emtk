@@ -502,3 +502,45 @@ def test_the_windows_draw_through_pillow_as_the_tk_frame_does():
     x, y, w, _h = docks.window("log").frame
     assert pixels[int(y) + 3, int(x + w / 2)].sum() > 0
     assert {key for key, _box in log} >= {"form", "plot", "notes", "log"}
+
+
+def test_view_changes_are_saved_too_not_only_drags(tmp_path):
+    store = LayoutStore("t", path=tmp_path / "layout.json")
+    docks, _ = make(store=store)
+    host = Driver(docks)
+    docks.hide("form")                   # the app's View menu, say
+    host.frame()
+    assert store.load()["windows"]["form"]["visible"] is False
+    docks.focus("form")
+    host.frame()
+    assert store.load()["windows"]["form"]["visible"] is True
+    again, _ = make(store=LayoutStore("t", path=tmp_path / "layout.json"))
+    assert again.load() and again.is_visible("form")
+
+
+def test_a_dialog_drawn_after_the_docks_takes_the_click_however_early_it_opened():
+    docks, _ = make()
+    clicks = []
+    state = {"dialog": True}
+
+    def gui():
+        # The dialog exists before the docks' windows do, then is drawn after them.
+        if state["dialog"] and not docks.region_boxes:
+            im.begin("dialog", (100.0, 100.0, 300.0, 200.0))
+            im.end()
+        docks.draw(BOX)
+        im.begin("dialog", (100.0, 100.0, 300.0, 200.0))
+        im.set_cursor_screen_pos((120.0, 120.0))
+        if im.button("dialog button", (200.0, 40.0)):
+            clicks.append("dialog")
+        im.end()
+
+    app = ImApp(gui)
+    for _ in range(2):
+        app.draw(RecordingPainter(), *BOX)
+    app.pointer_press(150.0, 130.0, LEFT_BUTTON, 0, 1)
+    app.draw(RecordingPainter(), *BOX)
+    app.pointer_release(150.0, 130.0, LEFT_BUTTON)
+    app.draw(RecordingPainter(), *BOX)
+    assert clicks == ["dialog"]
+    assert docks.region_of("form") == "left"          # the tab under it was not hit
