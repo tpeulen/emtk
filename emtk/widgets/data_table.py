@@ -77,7 +77,21 @@ table needs them and neither dialect had them:
     the columns wider than their header, then scrolls;
 ``status: true``
     a line under the rows: how many are shown (of how many, while a filter
-    narrows them) and across how many columns.
+    narrows them) and across how many columns;
+``tree_key`` (with ``row_key``)
+    rows form a tree: a record's ``tree_key`` field names its parent's
+    ``row_key`` (empty for a top-level row). A row with children draws a
+    disclosure triangle in the first column; a click on it (a double click
+    on the row, or Right/Left) expands or collapses it. Children stay under
+    their parent whatever the sort, are indented a step per level, and are
+    shown while a filter matches them or their parent;
+``expanded_attr``
+    a model attribute holding the ``set`` of expanded row keys. The table
+    reads and writes that set, so the model can open a row itself and the
+    choice survives a rebind; without one the table keeps its own.
+
+A cell whose text is shortened to fit its column shows the whole text as its
+tooltip.
 
 :meth:`DataTable.fit_columns` sizes the columns to their contents on the next
 draw, and :attr:`DataTable.column_filters` narrows the rows by the text of one
@@ -110,9 +124,11 @@ from ..keys import (
     KEY_ENTER,
     KEY_ESCAPE,
     KEY_HOME,
+    KEY_LEFT,
     KEY_PAGE_DOWN,
     KEY_PAGE_UP,
     KEY_RETURN,
+    KEY_RIGHT,
     KEY_UP,
 )
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
@@ -335,6 +351,8 @@ class DataTable:
     """
 
     WHEEL_ROWS = 3
+    #: Indent per tree level, and the room of the disclosure triangle.
+    TREE_INDENT = 14.0
 
     def __init__(
         self,
@@ -354,8 +372,17 @@ class DataTable:
         muted: Optional[Callable[[int], bool]] = None,
         status: bool = False,
         column_picker: bool = False,
+        tree_key: str = "",
     ) -> None:
         self.columns: list[TableColumn] = list(columns)
+        #: Record field naming a row's parent (its ``row_key``); ``""``: a flat table.
+        self.tree_key = str(tree_key or "")
+        #: Keys of the expanded rows of a tree.
+        self.expanded: set = set()
+        self._depth: dict = {}
+        self._has_children: set = set()
+        #: ``(source index, column key) -> full text`` of the cells drawn shortened.
+        self._elided: dict = {}
         #: ``cell_editable(index, key)``: whether an editable column's cell at
         #: source *index* may be changed now. ``None`` allows every one.
         self.cell_editable = cell_editable
@@ -489,7 +516,8 @@ class DataTable:
         """Source indices, filtered and sorted as displayed (cached per change)."""
         wanted = (self.revision, self.row_count(), self.filter.text, self.sort_key_name,
                   self.descending, tuple(c.key for c in self.columns),
-                  tuple(sorted(self.column_filters.items())))
+                  tuple(sorted(self.column_filters.items())),
+                  frozenset(self.expanded) if self.tree_key else None)
         if wanted == self._order_for:
             return self._order
         count = self.row_count()
@@ -519,9 +547,77 @@ class DataTable:
             present.sort(key=lambda item: item[0], reverse=self.descending)
             keyed = present + missing
             indices = [i for _, i in keyed]
+        if self.tree_key:
+            filtering = bool(needle) or any(str(t).strip() for t in self.column_filters.values())
+            indices = self._tree_order(indices, filtering)
         self._order = indices
         self._order_for = wanted
         return indices
+
+    def _tree_order(self, kept: Sequence[int], filtering: bool) -> list[int]:
+        """*kept* (filtered, sorted) as a tree: children under their parent.
+
+        Siblings keep the sorted order; a row is shown while its parent is
+        expanded, or, while a filter is on, when it or a descendant matches.
+        """
+        count = self.row_count()
+        by_key = {self.key_of(i): i for i in range(count)}
+        parent_of: dict = {}
+        for i in range(count):
+            pk = self.value(i, self.tree_key)
+            if pk not in (None, "") and pk in by_key and by_key[pk] != i:
+                parent_of[i] = by_key[pk]
+        self._has_children = {self.key_of(i) for i in parent_of.values()}
+        keep = set(kept)
+        if filtering:
+            for i in list(keep):
+                seen = set()
+                while i in parent_of and i not in seen:
+                    seen.add(i)
+                    i = parent_of[i]
+                    keep.add(i)
+        rank = {i: n for n, i in enumerate(kept)}
+        children: dict = {}
+        roots = []
+        for i in sorted(keep, key=lambda i: (rank.get(i, len(rank)), i)):
+            (children.setdefault(parent_of[i], []) if i in parent_of else roots).append(i)
+        out: list[int] = []
+        depth: dict = {}
+        stack = [(i, 0) for i in reversed(roots)]
+        while stack:
+            i, level = stack.pop()
+            if i in depth:
+                continue
+            out.append(i)
+            depth[i] = level
+            if filtering or self.key_of(i) in self.expanded:
+                stack.extend((c, level + 1) for c in reversed(children.get(i, ())))
+        self._depth = depth
+        return out
+
+    def is_parent(self, index: int) -> bool:
+        """Whether the row at source *index* has children (a tree only)."""
+        return bool(self.tree_key) and self.key_of(index) in self._has_children
+
+    def depth_of(self, index: int) -> int:
+        """Tree level of the row at source *index* (0 at the top)."""
+        return int(self._depth.get(index, 0)) if self.tree_key else 0
+
+    def set_expanded(self, key: Any, expanded: bool) -> None:
+        """Open or close the row identified by *key*."""
+        (self.expanded.add if expanded else self.expanded.discard)(key)
+
+    def toggle(self, index: int) -> bool:
+        """Flip a parent row open or closed; ``False`` for a row without children."""
+        if not self.is_parent(index):
+            return False
+        key = self.key_of(index)
+        self.set_expanded(key, key not in self.expanded)
+        return True
+
+    def _indent(self, index: int) -> float:
+        """Room before the first column's text: the level, and the triangle."""
+        return (self.depth_of(index) + 1) * self.TREE_INDENT if self.tree_key else 0.0
 
     def selected_index(self) -> Optional[int]:
         """Source index of the selected row, or ``None``."""
@@ -599,10 +695,14 @@ class DataTable:
             if column is not None and column.tooltip:
                 return (column.tooltip, ("header", column.key))
             return ("", None)
-        if self.tooltip_key:
-            position = self.row_at(x, y)
-            if position is not None:
-                index = self.order()[position]
+        position = self.row_at(x, y)
+        if position is not None:
+            index = self.order()[position]
+            column = self.column_at(x)
+            full = self._elided.get((index, column.key)) if column is not None else None
+            if full:
+                return (full, ("cell", index, column.key))
+            if self.tooltip_key:
                 note = str(self.value(index, self.tooltip_key) or "")
                 if note:
                     return (note, ("row", index))
@@ -665,6 +765,7 @@ class DataTable:
         self._fit_pending = False
         rows = order[self.bar.top:self.bar.top + max(self._visible, 1) + 50]
         fitted = {}
+        first = next(iter(self.visible_columns()), None)
         for column in self.visible_columns():
             # The cell margins (6 each side), a little air, and room for the
             # sort mark only on the column that carries it.
@@ -675,7 +776,8 @@ class DataTable:
             for index in rows:
                 value = self.value(index, column.key)
                 numeric = numeric or (_is_number(value) and not isinstance(value, (bool, _np_bool())))
-                widest = max(widest, p.text_width(column.text(value)) + 14.0)
+                indent = self._indent(index) if column is first else 0.0
+                widest = max(widest, p.text_width(column.text(value)) + 14.0 + indent)
             fitted[column.key] = widest
             if numeric:
                 # A number is never shortened to fit: '2048' cut to '20.' is a
@@ -813,6 +915,7 @@ class DataTable:
 
         p.stroke_rect(x, body_top, list_w, body_h, _style.BORDER, _style.TABLE_ROW_BG)
         p.push_clip(x, body_top, list_w, body_h)
+        self._elided = {}
         top = self.bar.top
         row_y = body_top
         for position in range(top, min(top + self._visible + 1, len(order))):
@@ -867,8 +970,15 @@ class DataTable:
         text_h = min(h, p.line_height() * 1.15)
         colour = _style.DIM if self.muted is not None and self.muted(index) else _style.TEXT
         col_x = x
+        tree_column = columns[0] if self.tree_key and self.first_column == 0 and columns else None
         for column, width in zip(columns, self._widths):
             value = self.value(index, column.key)
+            indent = 0.0
+            if column is tree_column:
+                indent = self._indent(index)
+                if self.is_parent(index):
+                    self._draw_disclosure(p, col_x + indent - self.TREE_INDENT + 3.0, y, h,
+                                          self.key_of(index) in self.expanded)
             if self.editing == (index, column.key):
                 self._draw_editor(p, col_x, y, width, h)
                 col_x += width
@@ -887,10 +997,13 @@ class DataTable:
                 inner = width - 8.0
                 p.fill_rect(col_x + 4.0 + start * inner, y + h - bar_h - 2.0,
                             max((end - start) * inner, 1.0), bar_h, colour)
-            right = self._right_aligned(column, order)
-            p.text(col_x + 6.0, y + 1.0, max(width - 12.0, 1.0), text_h,
-                   ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
-                   fit_text(p, column.text(value), width - 12.0), colour)
+            right = self._right_aligned(column, order) and not indent
+            text = column.text(value)
+            shown = fit_text(p, text, width - 12.0 - indent)
+            if shown != text:
+                self._elided[(index, column.key)] = text
+            p.text(col_x + 6.0 + indent, y + 1.0, max(width - 12.0 - indent, 1.0), text_h,
+                   ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT), shown, colour)
             col_x += width
 
     def _draw_hbar(self, p: Painter, widths: Sequence[float], list_w: float) -> None:
@@ -909,6 +1022,17 @@ class DataTable:
         count = len(self.visible_columns())
         fraction = min(max((x - bx) / max(bw, 1e-6), 0.0), 1.0)
         self.first_column = int(round(fraction * max(count - 1, 0)))
+
+    def _draw_disclosure(self, p: Painter, x: float, y: float, h: float, open_: bool) -> None:
+        """The ▸ / ▾ of a parent row, drawn as a triangle (no glyph needed)."""
+        side = min(self.TREE_INDENT - 6.0, h * 0.5)
+        cy = y + h / 2.0
+        if open_:
+            p.fill_triangle((x, cy - side * 0.35), (x + side, cy - side * 0.35),
+                            (x + side / 2.0, cy + side * 0.5), _style.TEXT)
+        else:
+            p.fill_triangle((x + side * 0.15, cy - side / 2.0), (x + side * 0.15, cy + side / 2.0),
+                            (x + side * 0.95, cy), _style.TEXT)
 
     @staticmethod
     def _draw_check(p: Painter, x: float, y: float, w: float, h: float, on: bool) -> None:
@@ -1026,6 +1150,9 @@ class DataTable:
         self._select_position(position)
         index = self.order()[position]
         column = self.column_at(x)
+        if self.is_parent(index) and self._on_disclosure(index, x):
+            self.toggle(index)
+            return True
         if column is not None and self.can_edit(index, column.key):
             value = self.value(index, column.key)
             if isinstance(value, (bool, _np_bool())):
@@ -1034,9 +1161,18 @@ class DataTable:
             if clicks > 1:
                 self.begin_edit(index, column.key)
                 return True
+        if clicks > 1 and self.is_parent(index):
+            self.toggle(index)
         if clicks > 1 and self.on_activate is not None:
             self.on_activate(index)
         return True
+
+    def _on_disclosure(self, index: int, x: float) -> bool:
+        """Whether *x* falls on the triangle of the row at source *index*."""
+        if self.first_column != 0 or self._header_box is None or not self._widths:
+            return False
+        left = self._header_box[0] + self._indent(index) - self.TREE_INDENT
+        return left <= x <= left + self.TREE_INDENT + 4.0
 
     def _select_position(self, position: int) -> None:
         order = self.order()
@@ -1129,6 +1265,12 @@ class DataTable:
             return True
         current = next((pos for pos, i in enumerate(order)
                         if self.key_of(i) == self.selected_key), None)
+        if key in (KEY_LEFT, KEY_RIGHT) and self.tree_key and current is not None:
+            index = order[current]
+            if not self.is_parent(index):
+                return False
+            self.set_expanded(self.key_of(index), key == KEY_RIGHT)
+            return True
         moves = {KEY_UP: -1, KEY_DOWN: 1, KEY_PAGE_UP: -self._visible, KEY_PAGE_DOWN: self._visible}
         if key in moves:
             if current is None:
@@ -1206,12 +1348,14 @@ class TableBinding:
         self.reserve = float(merged.get("reserve", 0) or 0)
         self._declared_columns = list(merged.get("columns") or [])
         self.editable_call = str(merged.get("editable_call", "") or "")
+        self.expanded_attr = str(merged.get("expanded_attr", "") or "")
         self.muted_key = str(merged.get("muted_key", "") or "")
         self.control = DataTable(
             cell_editable=self._cell_editable if self.editable_call else None,
             muted=self._muted if self.muted_key else None,
             status=bool(merged.get("status", False)),
             column_picker=bool(merged.get("column_picker", False)),
+            tree_key=str(merged.get("tree_key", "") or ""),
             on_select=self._on_select,
             on_activate=self._on_activate,
             on_edit=self._on_edit,
@@ -1265,6 +1409,10 @@ class TableBinding:
         computation streams -- is noticed by its length, and one that carries a
         ``revision`` attribute by that, so an append costs one comparison here.
         """
+        if self.expanded_attr:
+            shared = getattr(self.model, self.expanded_attr, None)
+            if isinstance(shared, set) and shared is not self.control.expanded:
+                self.control.expanded = shared
         if self.colour_source:
             mode = self._call(self.colour_source)
             self.control.colour_values = str(mode) if mode in ("column", "table") else None
