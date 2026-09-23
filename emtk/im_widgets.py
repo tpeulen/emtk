@@ -34,6 +34,14 @@ from .im_core import (BackendFlags, ButtonFlags, Col, ConfigFlags,
                       ItemFlags, get_current_context)
 
 
+def _frame_border(ctx, box) -> None:
+    """``RenderFrameBorder``: the outline ``style.frame_border_size`` asks for."""
+    size = ctx.style.frame_border_size
+    if size > 0.0:
+        ctx.draw.add_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
+                          _col(Col.BORDER), ctx.style.frame_rounding, 0, size)
+
+
 def _col(which):
     """The style colour, read *now* so ``push_style_color`` reaches it.
 
@@ -620,6 +628,7 @@ def button(label: str, size=None) -> bool:
     colour = _col(Col.BUTTON_ACTIVE) if held else (_col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON))
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              colour, ctx.style.frame_rounding)
+    _frame_border(ctx, box)
     if shown:
         tw, th = ctx.draw.calc_text_size(shown)
         ctx.draw.add_text((box[0] + (box[2] - tw) * 0.5,
@@ -659,6 +668,7 @@ def checkbox(label: str, value: bool) -> tuple[bool, bool]:
     ctx.draw.add_rect_filled((mark[0], mark[1]), (mark[0] + height, mark[1] + height),
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
+    _frame_border(ctx, mark)
     if value:
         pad = height * 0.28
         ctx.draw.add_line((mark[0] + pad, mark[1] + height * 0.5),
@@ -1137,13 +1147,18 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0) -> tuple[
         _col(Col.FRAME_BG_ACTIVE) if focused
         else (_col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG)),
         ctx.style.frame_rounding)
+    _frame_border(ctx, box)
     shown = value if (value or not hint) else hint
+    # Clipped to the field, as the reference's InputText is: a value longer
+    # than its box used to run over whatever stood beside it.
+    ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
     ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1]),
                       _col(Col.TEXT) if value else _col(Col.TEXT_DISABLED), shown)
     if focused:
         caret = box[0] + ctx.style.frame_padding[0] + ctx.draw.calc_text_size(value)[0]
         ctx.draw.add_line((caret, box[1] + 2.0), (caret, box[1] + box[3] - 2.0),
                           _col(Col.TEXT), 1.0)
+    ctx.draw.pop_clip_rect()
     label_shown = _visible_label(label)
     if label_shown:
         ctx.draw.add_text((box[0] + box[2] + ctx.style.item_inner_spacing[0], box[1]),

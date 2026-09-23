@@ -330,6 +330,10 @@ class Style:
     item_spacing: tuple[float, float] = (8.0, 4.0)
     item_inner_spacing: tuple[float, float] = (4.0, 4.0)
     frame_rounding: float = 0.0
+    #: ``FrameBorderSize``: an outline in ``Col.BORDER`` around buttons, check
+    #: boxes and fields. Zero (the dark theme) draws none; a light desktop
+    #: theme needs it, since a white field on a pale window has no edge.
+    frame_border_size: float = 0.0
     grab_min_size: float = 12.0
     grab_rounding: float = 0.0
     #: What ``BeginDisabled`` multiplies colours by, as ``ImGuiStyle`` does.

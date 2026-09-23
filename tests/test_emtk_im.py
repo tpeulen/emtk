@@ -12,6 +12,8 @@ import math
 
 import pytest
 
+import emtk
+
 np = pytest.importorskip("numpy")   # optional: emtk itself needs none
 
 from emtk.drawlist import DRAW_FLAGS_CLOSED, DrawList
@@ -203,3 +205,31 @@ def test_enter_returns_true_accepts_every_spelling_of_enter(enter):
     io.key = enter
     frame()
     assert seen["changed"] is True
+
+
+def test_frame_border_size_outlines_buttons_and_fields():
+    from emtk.im_core import Col, Style
+
+    style = Style()
+    style.frame_border_size = 1.0
+    style.colors[Col.BORDER] = (9, 8, 7, 255)
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 300, 120), style=style):
+        emtk.begin("w", (0, 0, 300, 120))
+        emtk.button("Go")
+        emtk.input_text("##f", "text")
+        emtk.checkbox("on", True)
+        emtk.end()
+    outlines = [c for c in painter.calls if c[0] == "stroke_rect" and tuple(c[5])[:3] == (9, 8, 7)]
+    assert len(outlines) == 3
+
+
+def test_a_long_value_is_clipped_to_its_field():
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, 300, 120)):
+        emtk.begin("w", (0, 0, 300, 120))
+        emtk.set_next_item_width(40.0)
+        emtk.input_text("##f", "a value far longer than forty pixels")
+        emtk.end()
+    clips = [c for c in painter.calls if c[0] == "push_clip"]
+    assert any(abs(c[3] - 40.0) < 0.5 for c in clips)

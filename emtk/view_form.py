@@ -305,6 +305,18 @@ def _label(text: str, width: float = 0.0) -> None:
     _w.dummy(max(width, tw), fh)
 
 
+def _id(label: str, name: str) -> str:
+    """``label##name``, safe for a label ending in ``#``.
+
+    ``"log #" + "##" + name`` would read as ``###`` -- ImGui's "replace the
+    id" marker -- and show "log ". A trailing space keeps the two apart.
+    """
+    label = str(label)
+    if label.endswith("#"):
+        label += " "
+    return f"{label}##{name}"
+
+
 def _remember(state: FormState, name: str) -> None:
     rect = _core.get_current_context().get_item_rect()
     if name and rect is not None:
@@ -378,22 +390,49 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
         for i, label in enumerate(labels):
             if i:
                 _w.same_line()
-            if _w.radio_button(f"{label}##{name}{i}", i == index) and i != index:
+            if _w.radio_button(_id(label, f"{name}{i}"), i == index) and i != index:
                 _commit(model, section, values[i], state)
         _remember(state, name)
         return
     caption = labels[index] if labels else ""
-    if _w.button(f"{caption}  v##{name}", (width, 0.0)) and labels:
+    if _combo_field(f"##choice-{name}", caption, width) and labels:
         state.dropdown_request = (name, tuple(_core.get_current_context().get_item_rect()),
                                   list(labels), index)
     _remember(state, name)
     _tooltip(section)
 
 
+def _combo_field(item_id: str, caption: str, width: float) -> bool:
+    """A closed combo box: the current choice left-aligned, a down arrow at the
+    right, as a desktop toolkit draws one. True on the click that opens it."""
+    ctx = _core.get_current_context()
+    height = _core.get_frame_height()
+    box = ctx.layout.row(height=height, width=width)
+    hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(item_id))
+    x, y, w, h = box
+    draw = _core.get_window_draw_list()
+    style = ctx.style
+    draw.add_rect_filled((x, y), (x + w, y + h),
+                         _w._col(_core.Col.FRAME_BG_HOVERED if hovered else _core.Col.FRAME_BG),
+                         style.frame_rounding)
+    _w._frame_border(ctx, box)
+    arrow = h * 0.32
+    ax = x + w - style.frame_padding[0] - arrow * 1.4
+    draw.push_clip_rect((x, y), (ax, y + h))
+    tw, th = _w.calc_text_size(caption)[:2]
+    draw.add_text((x + style.frame_padding[0], y + (h - th) / 2.0), _w._col(_core.Col.TEXT),
+                  caption)
+    draw.pop_clip_rect()
+    cy = y + h / 2.0
+    draw.add_triangle_filled((ax, cy - arrow * 0.45), (ax + arrow * 1.2, cy - arrow * 0.45),
+                             (ax + arrow * 0.6, cy + arrow * 0.45), _w._col(_core.Col.TEXT))
+    return pressed
+
+
 def _draw_toggle(section: dict, model: Any, state: FormState, label: str) -> None:
     name = section_name(section)
     value = bool(getattr(model, section.get("attr", ""), False)) if section.get("attr") else False
-    changed, new = _w.checkbox(f"{label}##{name}", value)
+    changed, new = _w.checkbox(_id(label, name), value)
     _remember(state, name)
     _tooltip(section)
     if changed:
@@ -411,7 +450,7 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
             _w.same_line()
         action = str(item.get("action", ""))
         _w.begin_disabled(not _enabled(model, action))
-        pressed = _w.button(f"{item.get('label', action)}##{action}", (button_w, 0.0))
+        pressed = _w.button(_id(item.get('label', action), action), (button_w, 0.0))
         _remember(state, action)
         if item.get("description"):
             _w.set_item_tooltip(str(item["description"]))

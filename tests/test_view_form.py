@@ -275,3 +275,26 @@ def test_labels_take_the_style_text_colour():
         emtk.end()
     colours = [t[6] for t in painter.texts if t[5] == "Restarts"]
     assert colours and all(tuple(c)[:3] == (1, 2, 3) for c in colours)
+
+
+def test_a_label_ending_in_a_hash_keeps_it():
+    """"log #" + "##name" must not read as ImGui's "###" id marker."""
+    class M:
+        log_counts = False
+
+    spec = {"sections": [{"type": "toggle", "attr": "log_counts", "label": "log #"}]}
+    driver = Driver(spec, M())
+    driver.frame()
+    assert any(s.strip() == "log #" for s in driver.painter.strings)
+
+
+def test_a_choice_is_drawn_as_a_combo_box():
+    """The current option left-aligned in the field; a click asks for the list."""
+    driver = Driver({"sections": [{"type": "choice", "attr": "method", "label": "Threshold",
+                                   "options": ["Manual", "Auto"]}]}, Model())
+    driver.frame()
+    x, y, w, h = driver.state.rects["method"]
+    text = next(t for t in driver.painter.texts if t[5] == "Manual")
+    assert text[0] < x + 10.0                       # left-aligned, not centred
+    driver.click("method")
+    assert driver.state.dropdown_request[2] == ["Manual", "Auto"]
