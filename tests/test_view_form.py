@@ -236,6 +236,33 @@ def test_a_collapsible_panel_folds_and_remembers():
     assert driver.state.rects["series"][1] > driver.state.rects["restarts"][1]
 
 
+def test_a_fold_header_is_compact_left_aligned_and_its_buttons_sit_close():
+    """A fold is a text line plus a little padding -- shorter than a field --
+    with its title at the left; the buttons of one row are an inner spacing
+    apart, and a label an inner spacing from its field."""
+    spec = {"sections": [
+        {"type": "panel", "title": "Axes", "collapsible": True, "sections": [
+            {"type": "value", "attr": "restarts", "label": "Restarts", "kind": "int"},
+            {"type": "button_row", "buttons": [{"label": "Ok", "action": "ok"},
+                                               {"label": "Cancel", "action": "cancel"}]},
+        ]},
+    ]}
+    driver = Driver(spec, Model())
+    driver.frame()
+    line = RecordingPainter.LINE_H
+    inner = emtk.Style().item_inner_spacing[0]
+    fold = driver.state.rects["Axes.fold"]
+    field = driver.state.rects["restarts"]
+    assert fold[3] < field[3]
+    assert fold[3] == line + 2 * 2.0                     # a text line + 2 x 2 px
+    tx = next(t[0] for t in driver.painter.texts if t[5] == "Axes")
+    assert tx < fold[0] + 30.0                           # left-aligned, not centred
+    ok, cancel = driver.state.rects["ok"], driver.state.rects["cancel"]
+    assert abs(cancel[0] - (ok[0] + ok[2]) - inner) < 0.5
+    label_w = len("Restarts") * RecordingPainter.GLYPH_W
+    assert abs(field[0] - fold[0] - label_w - inner) < 1.0
+
+
 def test_a_declared_width_fixes_the_control():
     spec = {"sections": [{"type": "panel", "n_col": 3, "sections": [
         {"type": "choice", "attr": "method", "label": "x:", "options": ["Manual", "Auto"]},

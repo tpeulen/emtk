@@ -660,7 +660,9 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
     buttons = [item for item in section.get("buttons") or [] if not _hidden(item, model)]
     if not buttons:
         return
-    spacing = _core.get_style().item_spacing[0]
+    # The buttons of one row belong together: ImGui's inner spacing, as
+    # between the parts of one widget, not the item spacing between widgets.
+    spacing = _core.get_style().item_inner_spacing[0]
     labels = [_button_label(item, model) for item in buttons]
     natural = [_button_natural(label) for label in labels]
     for line in _flow(natural, width, spacing):
@@ -672,7 +674,7 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
             button_w = max(natural[i] + (room - need) / len(line), 30.0) \
                 if need <= room else room
             if k:
-                _w.same_line()
+                _w.same_line(0.0, spacing)
             action = str(item.get("action", ""))
             _w.begin_disabled(not _enabled(model, action))
             pressed = _w.button(_id(labels[i], action), (button_w, 0.0))
@@ -766,7 +768,7 @@ def _min_width(section: dict, model: Any = None) -> float:
         if not buttons:
             return 0.0
         return sum(_button_natural(_button_label(item, model)) for item in buttons) \
-            + style.item_spacing[0] * (len(buttons) - 1)
+            + style.item_inner_spacing[0] * (len(buttons) - 1)
     chars = section.get("min_chars", MIN_CHARS.get(kind))
     if chars is None:
         return 30.0
@@ -928,6 +930,7 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
     n_col = max(1, int(n_col))
     rows = [leaves[i:i + n_col] for i in range(0, len(leaves), n_col)]
     spacing = _core.get_style().item_spacing[0]
+    inner = _core.get_style().item_inner_spacing[0]
     label_w = [0.0] * n_col
     fixed_w = [0.0] * n_col
     min_w = [0.0] * n_col
@@ -939,7 +942,8 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
                 breaks.add(c)
             text = _label_of(section)
             if text:
-                label_w[c] = max(label_w[c], _w.calc_text_size(text)[0] + spacing)
+                # a label sits an inner spacing from its own field
+                label_w[c] = max(label_w[c], _w.calc_text_size(text)[0] + inner)
             fixed_w[c] = max(fixed_w[c], _fixed_width(section, model))
             weight[c] = max(weight[c], _weight(section))
             if _weight(section) > 0:
@@ -1132,31 +1136,42 @@ def _draw_code_editor(section: dict, model: Any, state: FormState) -> None:
 def _fold(section: dict, state: FormState) -> bool:
     """A collapsible container's header line; returns whether it is open.
 
-    The header spans the line, its title centred behind a triangle that points
-    right when folded and down when open, as AutoForm draws a collapsible box.
+    A compact header in the spirit of ImGui's ``CollapsingHeader``: the whole
+    line is the button, a triangle (right when folded, down when open) and the
+    title sit at its left, and it is a text line plus a little padding tall --
+    lighter than a field, so it reads as a heading rather than as a control.
+    Its background is the style's ``HEADER`` colour at a fraction of its
+    alpha, stronger under the pointer and while held; a section's
+    ``description`` is its tooltip.
     """
     title = str(section.get("title", ""))
     is_open = state.folds.get(title, not bool(section.get("collapsed", False)))
     ctx = _core.get_current_context()
-    height = _core.get_frame_height() + 4.0
+    style = _core.get_style()
+    pad_y = max(style.frame_padding[1] - 1.0, 1.0)
+    height = _core.get_text_line_height() + 2.0 * pad_y
     box = ctx.layout.row(height=height)
-    hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(f"##fold-{title}"))
+    hovered, held, pressed = ctx.button_behavior(box, ctx.get_id(f"##fold-{title}"))
     if pressed:
         is_open = not is_open
         state.folds[title] = is_open
         state.used(f"{title}.fold")
     state.rects[f"{title}.fold"] = tuple(box)
+    _tooltip(section)
     x, y, w, h = box
-    style = _core.get_style()
     draw = _core.get_window_draw_list()
-    fill = style.color(_core.Col.BUTTON_HOVERED if hovered else _core.Col.BUTTON)
-    draw.add_rect_filled((x, y), (x + w, y + h), fill, style.frame_rounding)
-    draw.add_rect((x, y), (x + w, y + h), style.color(_core.Col.BORDER), style.frame_rounding)
+    role, share = ((_core.Col.HEADER_ACTIVE, 0.5) if held else
+                   (_core.Col.HEADER_HOVERED, 0.45) if hovered else
+                   (_core.Col.HEADER, 0.6))
+    colour = tuple(style.color(role))
+    alpha = colour[3] if len(colour) > 3 else 255
+    draw.add_rect_filled((x, y), (x + w, y + h),
+                         (*colour[:3], int(round(alpha * share))), style.frame_rounding)
     text_colour = style.color(_core.Col.TEXT)
-    tw, th = _w.calc_text_size(title)[:2]
-    mark = th * 0.55
-    gap = mark * 0.9
-    left = x + max((w - tw - mark - gap) / 2.0, 4.0)
+    th = _w.calc_text_size(title)[1]
+    mark = th * 0.5
+    gap = style.item_inner_spacing[0] + 1.0
+    left = x + style.frame_padding[0]
     cy = y + h / 2.0
     if is_open:
         draw.add_triangle_filled((left, cy - mark * 0.4), (left + mark, cy - mark * 0.4),
