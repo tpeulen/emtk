@@ -24,7 +24,8 @@ window:
 It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``hidden_when``), ``value`` (``kind`` int/float/str, ``minimum``, ``maximum``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
-``call``), ``choice`` (``options``, ``labels``, ``options_source``,
+``call``; a slider with ``"field": false`` is the slider alone, its value
+written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
 ``info``, ``progress`` (a bar over a fraction, indeterminate while it is
 ``None``), ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
@@ -82,6 +83,7 @@ from . import im_core as _core
 from . import im_widgets as _w
 from . import overlays as _overlays
 from .flags import InputTextFlags
+from .keys import KEY_ESCAPE
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
            "format_value", "parse_value", "parse_colour_text", "spin_step"]
@@ -127,6 +129,8 @@ class FormState:
         self.editors: dict[str, Any] = {}
         #: The ``code_editor`` that has the keyboard, or ``None``.
         self.editor_focus: str | None = None
+        #: Sliders without a field (``"field": false``) being typed into, by name.
+        self.typing: set[str] = set()
 
     def used(self, name: str) -> None:
         """Report that the user used *name*."""
@@ -397,6 +401,9 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     slider = str(section.get("style", "")).lower() == "slider"
     kind = str(section.get("kind", "str")).lower()
 
+    if slider and section.get("field") is False and kind in ("int", "float"):
+        _draw_bare_slider(section, model, state, width, value, bounds)
+        return
     colour = kind in ("color", "colour")
     field_w = width
     if slider:
@@ -469,6 +476,72 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _tooltip(section)
         if changed and new != current and not read_only:
             _commit(model, section, new, state)
+
+
+def _slider_format(section: dict, kind: str) -> str:
+    """The printf format a slider writes its value with: the field's spelling."""
+    suffix = str(section.get("suffix") or "").replace("%", "%%")
+    if kind == "int":
+        return "%d" + suffix
+    decimals = section.get("decimals")
+    return ("%%.%df" % int(decimals) if decimals is not None else "%g") + suffix
+
+
+def _draw_bare_slider(section: dict, model: Any, state: FormState, width: float,
+                      value: Any, bounds: tuple) -> None:
+    """A slider with no field beside it (``"field": false``): one control.
+
+    The slider writes its value (and ``suffix``) on itself, so a field showing
+    the same number is not needed; a **double click** turns it into a field for
+    typing an exact value, committed on Enter or a click elsewhere (Escape
+    leaves it as it was). Its rectangle is ``<name>.slider``, and
+    ``<name>.edit`` while it is typed into.
+    """
+    name = section_name(section)
+    kind = str(section.get("kind", "int")).lower()
+    read_only = bool(section.get("read_only"))
+    io = _core.get_io()
+    if name in state.typing and not read_only:
+        first = name not in state.buffers
+        typed = state.buffers.setdefault(name, "")
+        if first:
+            _w.set_keyboard_focus_here()
+        _w.set_next_item_width(width)
+        entered, text = _w.input_text(f"##{name}.typed", typed, format_value(value, section),
+                                      InputTextFlags.ENTER_RETURNS_TRUE)
+        _remember(state, f"{name}.edit")
+        _tooltip(section)
+        state.buffers[name] = text.replace("\r", "").replace("\n", "")
+        away = io.mouse_clicked[0] and not _w.is_item_hovered() and not first
+        if io.key == KEY_ESCAPE:
+            state.typing.discard(name)
+            state.buffers.pop(name, None)
+        elif entered or away:
+            state.typing.discard(name)
+            parsed = parse_value(state.buffers.pop(name), section, bounds)
+            if parsed is not None and parsed != value:
+                _commit(model, section, parsed, state)
+        return
+    lo, hi = bounds
+    lo = 0.0 if lo is None else float(lo)
+    hi = lo if hi is None else max(float(hi), lo)
+    current = value if value is not None else lo
+    fmt = _slider_format(section, kind)
+    _w.set_next_item_width(max(width, 20.0))
+    if kind == "int":
+        changed, new = _w.slider_int(f"##{name}.slider", int(current), int(lo), int(hi), fmt)
+    else:
+        changed, new = _w.slider_float(f"##{name}.slider", float(current), lo, hi, fmt)
+    _remember(state, f"{name}.slider")
+    _tooltip(section)
+    if read_only:
+        return
+    if _w.is_item_hovered() and io.mouse_double_clicked[0]:
+        state.typing.add(name)
+        state.buffers.pop(name, None)
+        return
+    if changed and new != current:
+        _commit(model, section, new, state)
 
 
 def spin_step(value: Any, section: dict) -> float:

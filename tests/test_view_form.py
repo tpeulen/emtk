@@ -665,3 +665,48 @@ def test_a_path_shows_its_end_at_rest():
         emtk.end()
     shown = [t for t in painter.strings if "#30" in t]
     assert shown and shown[0].startswith("…"), painter.strings
+
+
+def test_a_slider_without_a_field_writes_its_value_on_itself_and_types_on_double_click():
+    """``"field": false``: one control, not a field and a slider showing the
+    same number. The value (and its suffix) is on the slider; a double click
+    makes it a field, Enter commits, Escape leaves it."""
+    spec = {"sections": [{"type": "value", "attr": "series", "label": "Step", "kind": "int",
+                          "style": "slider", "field": False, "suffix": " fps"}]}
+    model = Model()
+    model.series = 4
+    driver = Driver(spec, model)
+    driver.frame()
+    rects = driver.state.rects
+    assert "series.slider" in rects and "series.edit" not in rects
+    assert "4 fps" in driver.painter.strings
+    # the slider spans the line the field and slider shared
+    assert rects["series.slider"][2] > 300
+
+    x, y, w, h = rects["series.slider"]
+    io = driver.io
+    io.mouse_pos = io.mouse_clicked_pos[0] = (x + w / 2, y + h / 2)
+    io.mouse_double_clicked[0] = True
+    driver.frame()
+    io.mouse_double_clicked[0] = False
+    driver.frame()
+    assert "series.edit" in driver.state.rects and model.series == 4
+    io.text = "7"
+    driver.frame()
+    io.text = ""
+    io.key = 0x01000004                     # Enter
+    driver.frame()
+    io.key = 0
+    driver.frame()
+    assert model.series == 7 and "series.slider" in driver.state.rects
+
+    io.mouse_double_clicked[0] = True
+    driver.frame()
+    io.mouse_double_clicked[0] = False
+    io.text = "9"
+    driver.frame()
+    io.text, io.key = "", 0x01000000         # Escape
+    driver.frame()
+    io.key = 0
+    driver.frame()
+    assert model.series == 7
