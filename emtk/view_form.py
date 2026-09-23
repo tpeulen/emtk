@@ -42,7 +42,8 @@ as wide as its labels), none narrower than ``min_width`` pixels or
 give every control its minimum **wraps** -- at a leaf marked ``wrap_before``
 if it has one -- and a button row too narrow for its labels wraps its
 buttons, so a narrow window shows every control whole instead of clipping.
-A ``value`` with ``elide: "start"`` shows the end of a long text (a path). A ``custom`` section whose ``key`` the host registered in
+A wrapped line starts under the first control, past its label, unless the
+container says ``"wrap_indent": false`` (a toolbar). A ``value`` with ``elide: "start"`` shows the end of a long text (a path). A ``custom`` section whose ``key`` the host registered in
 :attr:`FormState.custom` is drawn by the host's callback, full width, in its
 place in the form -- a plot between two rows of fields.
 
@@ -988,7 +989,8 @@ def _share(run: list, label_w: list, fixed_w: list, min_w: list, weight: list,
     return widths
 
 
-def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
+def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
+               indent_wraps: bool = True) -> None:
     """Lay leaf sections out ``n_col`` to a line, **aligned in columns**.
 
     Every label of a column is as wide as the column's widest, and every control
@@ -998,7 +1000,10 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
     Controls with no ``width`` share the room left by weight, none narrower
     than :func:`_min_width`. When a line cannot give every control that
     much, it **wraps**: its columns continue on the next line (the same cut on
-    every line of the grid), and each part shares its own line.
+    every line of the grid), and each part shares its own line. A continuation
+    starts under the first control, past the first label -- unless
+    *indent_wraps* is false (a container's ``"wrap_indent": false``: a toolbar,
+    whose lines all start at the left edge).
     """
     n_col = max(1, int(n_col))
     rows = [leaves[i:i + n_col] for i in range(0, len(leaves), n_col)]
@@ -1028,7 +1033,7 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
     for k, run in enumerate(runs):
         # A continuation whose first column has no label starts under the
         # first run's first control, not under its label.
-        indent = label_w[0] if k and not label_w[run[0]] else 0.0
+        indent = label_w[0] if (k and indent_wraps and not label_w[run[0]]) else 0.0
         least = sum(label_w[c] + need_w[c] for c in run) + spacing * (len(run) - 1)
         if indent + least > avail + 0.5:
             indent = 0.0
@@ -1082,7 +1087,7 @@ def _draw_table_section(section: dict, model: Any, state: FormState) -> None:
 
 
 def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int = 1,
-                  titles: bool = True) -> None:
+                  titles: bool = True, indent_wraps: bool = True) -> None:
     """Draw a list of sections into the current window.
 
     Parameters
@@ -1097,12 +1102,15 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
         Fields per line for the simple sections (AutoForm's ``n_col``).
     titles : bool
         Draw a nested panel's title as a caption line.
+    indent_wraps : bool
+        Start a wrapped line under the first control rather than at the left
+        edge (:func:`_draw_grid`); a container's ``wrap_indent`` sets it.
     """
     leaves: list = []
 
     def flush() -> None:
         if leaves:
-            _draw_grid(list(leaves), model, state, n_col)
+            _draw_grid(list(leaves), model, state, n_col, indent_wraps)
             leaves.clear()
 
     for section in sections or ():
@@ -1130,7 +1138,8 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             elif titles and section.get("title"):
                 _w.text(str(section["title"]))
             draw_sections(section.get("sections") or [], model, state,
-                          int(section.get("n_col") or 1), titles)
+                          int(section.get("n_col") or 1), titles,
+                          bool(section.get("wrap_indent", True)))
             continue
         leaves.append(section)
     flush()

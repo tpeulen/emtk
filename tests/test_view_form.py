@@ -640,6 +640,16 @@ def test_the_continuation_line_starts_under_the_controls():
     assert abs(rects["bins"][0] - rects["x_name"][0]) < 1.0
 
 
+def test_a_toolbar_row_wraps_to_the_left_edge():
+    """``"wrap_indent": false``: a toolbar's lines all start at the left edge,
+    none indented under the first label into a dead strip."""
+    spec = {"sections": [dict(AXIS_ROW["sections"][0], wrap_indent=False)]}
+    rects = _draw_at(spec, AxisModel(), 170).rects
+    assert rects["bins"][1] > rects["x_name"][1]
+    assert rects["bins"][0] < rects["x_name"][0] - 1.0
+    assert rects["bins"][0] <= 10.0
+
+
 def test_a_button_row_too_narrow_for_its_labels_wraps_them():
     spec = {"sections": [{"type": "button_row", "buttons": [
         {"label": "Screenshot", "action": "a"}, {"label": "Data", "action": "b"},
