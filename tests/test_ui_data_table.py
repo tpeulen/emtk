@@ -510,3 +510,89 @@ def test_a_palette_name_must_exist():
 
     with pytest.raises(KeyError):
         style.use_palette({"TEXTT": (0, 0, 0)})
+
+
+# -- right click, value shading, column filters, sideways scrolling ------------- #
+class Sheet:
+    """A wide table of numbers, with a context menu and a shading switch."""
+
+    def __init__(self, columns=3, rows=4):
+        self.arrays = {f"c{j}": [float(i * (j + 1)) for i in range(rows)] for j in range(columns)}
+        self.menus = []
+        self.shading = None
+
+    def sheet(self):
+        return self.arrays
+
+    def open_menu(self, record, key, where):
+        self.menus.append((record, key))
+
+    def shade(self):
+        return self.shading
+
+
+def sheet_section(**options):
+    return {"type": "custom", "key": "data_table",
+            "options": dict({"source": "sheet", "context_call": "open_menu",
+                             "colour_source": "shade"}, **options)}
+
+
+def test_a_right_click_selects_the_row_and_reports_row_and_column():
+    model = Sheet()
+    control = TableBinding(sheet_section(), model).control
+    draw(control)
+    x, y = cell(control, 2, 1)
+    assert control.context(x, y)
+    assert model.menus == [(2, "c1")]              # arrays: the record is the index
+    assert control.selected_indices() == [2]
+    hx = control._header_box[0] + 3
+    control.context(hx, control._header_box[1] + 3)
+    assert model.menus[-1] == (None, "c0")         # the header: a column, no row
+
+
+def test_numeric_cells_are_shaded_by_column_or_by_table():
+    model = Sheet()
+    binding = TableBinding(sheet_section(), model)
+    control = binding.control
+    assert control.colour_of("c0", 1.0) is None     # off until the model says
+    model.shading = "column"
+    binding.refresh()
+    top, bottom = control.colour_of("c0", 3.0), control.colour_of("c0", 0.0)
+    assert top is not None and bottom is not None and top != bottom
+    assert control.colour_of("c2", 9.0) == top      # each column's own maximum
+    model.shading = "table"
+    binding.refresh()
+    assert control.colour_of("c0", 3.0) != control.colour_of("c2", 9.0)
+    assert control.colour_of("c0", "text") is None
+
+
+def test_a_column_filter_narrows_the_rows():
+    model = Sheet()
+    control = TableBinding(sheet_section(), model).control
+    control.column_filters = {"c1": "4"}
+    assert control.order() == [2]                  # c1 = 0, 2, 4, 6
+
+
+def test_a_table_wider_than_its_box_scrolls_sideways():
+    model = Sheet(columns=12)
+    control = TableBinding(sheet_section(min_column_width=80), model).control
+    draw(control)
+    assert control._hbar_box is not None
+    first = control.column_at(control._header_box[0] + 3).key
+    control.scroll_columns(3)
+    draw(control)
+    assert first == "c0" and control.column_at(control._header_box[0] + 3).key == "c3"
+    bx, by, bw, bh = control._hbar_box
+    control.press(bx + bw - 1, by + bh / 2)        # the bar's right end: the last column
+    control.release()
+    assert control.first_column == 11
+
+
+def test_fit_columns_sizes_to_the_contents():
+    control = DataTable([TableColumn("a", title="A"), TableColumn("b", title="B")])
+    control.set_records([{"a": "a much longer cell than the title", "b": "x"}])
+    draw(control)
+    even = list(control._widths)
+    control.fit_columns()
+    draw(control)
+    assert control._widths[0] > control._widths[1] and even[0] == even[1]

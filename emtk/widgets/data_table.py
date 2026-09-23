@@ -42,7 +42,25 @@ table needs them and neither dialect had them:
     Escape cancels, a click elsewhere commits). The new value is written into
     a mutable record and handed to ``edited_call(record, key, value)``;
 ``delete_call``
-    called with the selected record when Delete (or Backspace) is pressed.
+    called with the selected record when Delete (or Backspace) is pressed;
+``context_call``
+    called as ``context_call(record, key, (x, y))`` on a right click: the row
+    under the pointer (selected first; ``None`` on the header) and the column
+    key. The model opens its own menu there -- a painter has no popup of its
+    own;
+``colour_source``
+    a model attribute (or method) saying how numeric cells are shaded by
+    value: ``None`` (not at all), ``"column"`` (each column over its own
+    range) or ``"table"`` (one range for every column). The ramp is a hue sweep
+    at fixed saturation, as the Qt table's, so the text stays legible;
+``min_column_width``
+    columns never get narrower than this; when they do not fit, the table
+    scrolls sideways (a bar under the rows, the horizontal wheel, or shift and
+    the wheel).
+
+:meth:`DataTable.fit_columns` sizes the columns to their contents on the next
+draw, and :attr:`DataTable.column_filters` narrows the rows by the text of one
+column each (``{key: text}``), on top of the filter box.
 
 A ``True``/``False`` cell is drawn as a check box whether or not it is
 editable. Colours are read from :mod:`emtk.style` as the table draws, so a
@@ -216,6 +234,20 @@ class TableColumn:
         return (0.0, at(number), BAR_COLOUR)
 
 
+def _ramp(fraction: float) -> tuple:
+    """The value shade: blue at a range's top to green at its bottom, half opaque.
+
+    Hue sweeps 0.66 -> 0.99 at saturation 0.7 and value 1.0 (the Qt table's
+    ramp), so the cell text stays readable on every shade.
+    """
+    import colorsys
+
+    fraction = min(max(float(fraction), 0.0), 1.0)
+    hue = (0.66 + 0.33 * fraction) % 1.0
+    r, g, b = colorsys.hsv_to_rgb(hue, 0.7, 1.0)
+    return (int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5), 110)
+
+
 def _np_bool():
     """numpy's bool type when numpy is loaded, for ``isinstance`` checks."""
     import sys
@@ -291,12 +323,30 @@ class DataTable:
         row_scale: float = 1.45,
         on_edit: Optional[Callable[[int, str, Any], None]] = None,
         on_delete: Optional[Callable[[int], None]] = None,
+        on_context: Optional[Callable[[Optional[int], Optional[str], float, float], None]] = None,
+        min_column_width: float = 0.0,
     ) -> None:
         self.columns: list[TableColumn] = list(columns)
         self.on_select = on_select
         self.on_activate = on_activate
         self.on_edit = on_edit
         self.on_delete = on_delete
+        self.on_context = on_context
+        #: ``None``, ``"column"`` or ``"table"``: how numeric cells are shaded.
+        self.colour_values: Optional[str] = None
+        self._colour_ranges: dict = {}
+        self._colour_for: tuple = ()
+        #: ``{column key: text}``: rows whose cell in that column contains it.
+        self.column_filters: dict[str, str] = {}
+        #: Narrowest a column is drawn; wider tables scroll sideways.
+        self.min_column_width = float(min_column_width)
+        #: Index (among the visible columns) of the leftmost column drawn.
+        self.first_column = 0
+        self._fit_pending = False
+        self._fitted: dict[str, float] = {}
+        self._shown: list[TableColumn] = []
+        self._hbar_box: Optional[tuple] = None
+        self._hbar_held = False
         #: ``(source index, column key)`` of the cell being typed into.
         self.editing: Optional[tuple] = None
         self.editor = TextInput("", "")
@@ -372,7 +422,8 @@ class DataTable:
     def order(self) -> list[int]:
         """Source indices, filtered and sorted as displayed (cached per change)."""
         wanted = (self.revision, self.row_count(), self.filter.text, self.sort_key_name,
-                  self.descending, tuple(c.key for c in self.columns))
+                  self.descending, tuple(c.key for c in self.columns),
+                  tuple(sorted(self.column_filters.items())))
         if wanted == self._order_for:
             return self._order
         count = self.row_count()
@@ -384,6 +435,13 @@ class DataTable:
                 i for i in indices
                 if any(needle in c.text(self.value(i, c.key)).lower() for c in columns)
             ]
+        by_key = {c.key: c for c in self.columns}
+        for key, text in self.column_filters.items():
+            needle_c = str(text).strip().lower()
+            column = by_key.get(key)
+            if not needle_c or column is None:
+                continue
+            indices = [i for i in indices if needle_c in column.text(self.value(i, key)).lower()]
         if self.sort_key_name is not None:
             name = self.sort_key_name
             keyed = [(_sort_key(self.value(i, name)), i) for i in indices]
@@ -467,20 +525,97 @@ class DataTable:
         if self._header_box is None:
             return None
         edge = self._header_box[0]
-        for column, width in zip(self.visible_columns(), self._widths):
+        for column, width in zip(self._shown, self._widths):
             if edge <= x < edge + width:
                 return column
             edge += width
         return None
 
     def _column_widths(self, total: float) -> list[float]:
+        """Widths of every visible column; they fill *total* unless a minimum
+        width or a fit to contents makes them wider (the table then scrolls)."""
         columns = self.visible_columns()
-        fixed = sum(c.width for c in columns if c.width)
-        flexible = [c for c in columns if not c.width]
+        fixed = sum(self._fitted.get(c.key, c.width) for c in columns
+                    if c.width or c.key in self._fitted)
+        flexible = [c for c in columns if not (c.width or c.key in self._fitted)]
         share = max(total - fixed, 0.0) / len(flexible) if flexible else 0.0
-        widths = [c.width if c.width else share for c in columns]
+        share = max(share, self.min_column_width)
+        widths = [self._fitted.get(c.key, c.width) or share for c in columns]
+        if self.min_column_width > 0.0 or self._fitted:
+            return widths
         scale = total / sum(widths) if sum(widths) > total and sum(widths) > 0 else 1.0
         return [w * scale for w in widths]
+
+    def fit_columns(self) -> None:
+        """Size every column to its header and the rows in view, on the next draw."""
+        self._fit_pending = True
+
+    def _measure(self, p: Painter, order: Sequence[int]) -> None:
+        self._fit_pending = False
+        rows = order[self.bar.top:self.bar.top + max(self._visible, 1) + 50]
+        fitted = {}
+        for column in self.visible_columns():
+            widest = p.text_width(column.title) + 24.0
+            for index in rows:
+                widest = max(widest, p.text_width(column.text(self.value(index, column.key))) + 14.0)
+            fitted[column.key] = widest
+        self._fitted = fitted
+
+    def scroll_columns(self, steps: int) -> None:
+        """Move the leftmost column by *steps* (positive is right)."""
+        count = len(self.visible_columns())
+        self.first_column = max(0, min(self.first_column + int(steps), max(count - 1, 0)))
+
+    def colour_of(self, key: str, value: Any) -> Optional[tuple]:
+        """The shade of a numeric cell, or ``None`` (see :attr:`colour_values`)."""
+        if self.colour_values not in ("column", "table") or not _is_number(value) \
+                or isinstance(value, (bool, _np_bool())):
+            return None
+        number = float(value)
+        if number != number:
+            return None
+        wanted = (self.revision, self.row_count(), self.colour_values,
+                  tuple(c.key for c in self.columns))
+        if wanted != self._colour_for:
+            self._colour_for = wanted
+            self._colour_ranges = self._value_ranges()
+        span = self._colour_ranges.get("*" if self.colour_values == "table" else key)
+        if span is None:
+            return None
+        lo, hi = span
+        fraction = 0.5 if not hi > lo else (hi - number) / (hi - lo)
+        return _ramp(fraction)
+
+    def _value_ranges(self) -> dict:
+        ranges: dict = {}
+        count = self.row_count()
+        for column in self.columns:
+            numbers = []
+            if self.arrays is not None and column.key in self.arrays:
+                data = self.arrays[column.key]
+                try:
+                    import numpy as np
+
+                    array = np.asarray(data)
+                    if array.dtype.kind in "fiu":
+                        finite = array[np.isfinite(array)] if array.dtype.kind == "f" else array
+                        if finite.size:
+                            ranges[column.key] = (float(finite.min()), float(finite.max()))
+                        continue
+                except (ImportError, TypeError, ValueError):
+                    pass
+            for index in range(count):
+                value = self.value(index, column.key)
+                if _is_number(value) and not isinstance(value, (bool, _np_bool())):
+                    number = float(value)
+                    if number == number:
+                        numbers.append(number)
+            if numbers:
+                ranges[column.key] = (min(numbers), max(numbers))
+        if ranges:
+            ranges["*"] = (min(lo for lo, _ in ranges.values()),
+                           max(hi for _, hi in ranges.values()))
+        return ranges
 
     # -- drawing ------------------------------------------------------------------- #
 
@@ -511,12 +646,28 @@ class DataTable:
         self.bar.clamp(len(order), self._visible)
         bar_w = self.bar.width if self.bar.needed() else 0.0
         list_w = max(w - bar_w, 1.0)
-        columns = self.visible_columns()
-        self._widths = self._column_widths(list_w)
+        if self._fit_pending:
+            self._measure(p, order)
+        widths = self._column_widths(list_w)
+        wide = sum(widths) > list_w + 0.5
+        if wide:
+            hbar_h = self.bar.width
+            body_h = max(body_h - hbar_h, row_h)
+            self._visible = max(int(body_h // row_h), 1)
+            self.bar.clamp(len(order), self._visible)
+            self._hbar_box = (x, body_top + body_h, list_w, hbar_h)
+        else:
+            self.first_column = 0
+            self._hbar_box = None
+        self.first_column = max(0, min(self.first_column, max(len(widths) - 1, 0)))
+        columns = self.visible_columns()[self.first_column:]
+        self._shown = columns
+        self._widths = widths[self.first_column:]
         self._header_box = (x, cursor, list_w, header_h)
         self._body_box = (x, body_top, list_w, body_h)
 
         p.stroke_rect(x, cursor, list_w, header_h, _style.BORDER, _style.HEADER_BG)
+        p.push_clip(x, cursor, list_w, header_h)
         col_x = x
         for position, (column, width) in enumerate(zip(columns, self._widths)):
             right = self._right_aligned(column, order)
@@ -531,6 +682,7 @@ class DataTable:
             if position:
                 p.fill_rect(col_x, cursor + 3.0, 1.0, header_h - 6.0, _style.BORDER)
             col_x += width
+        p.pop_clip()
 
         p.stroke_rect(x, body_top, list_w, body_h, _style.BORDER, _style.TABLE_ROW_BG)
         p.push_clip(x, body_top, list_w, body_h)
@@ -542,6 +694,8 @@ class DataTable:
         p.pop_clip()
         if bar_w:
             self.bar.draw(p, x + list_w, body_top, body_h)
+        if self._hbar_box is not None:
+            self._draw_hbar(p, widths, list_w)
 
         if note_lines:
             note_y = body_top + body_h + 4.0
@@ -591,6 +745,9 @@ class DataTable:
                 self._draw_check(p, col_x, y, width, h, bool(value))
                 col_x += width
                 continue
+            shade = self.colour_of(column.key, value)
+            if shade is not None:
+                p.fill_rect(col_x, y, width, h, shade)
             bar = column.bar(value)
             if bar is not None:
                 start, end, colour = bar
@@ -603,6 +760,23 @@ class DataTable:
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
                    fit_text(p, column.text(value), width - 12.0), _style.TEXT)
             col_x += width
+
+    def _draw_hbar(self, p: Painter, widths: Sequence[float], list_w: float) -> None:
+        """The sideways scrollbar: the thumb covers the columns in view."""
+        bx, by, bw, bh = self._hbar_box
+        p.fill_rect(bx, by, bw, bh, _style.TABLE_ROW_BG_ALT)
+        total = max(sum(widths), 1.0)
+        start = sum(widths[:self.first_column])
+        span = max(bw * min(list_w / total, 1.0), 12.0)
+        at = bx + (bw - span) * min(start / max(total - list_w, 1.0), 1.0)
+        p.fill_rect(at, by + 1.0, span, max(bh - 2.0, 1.0),
+                    _style.CHECK_MARK if self._hbar_held else _style.DIM)
+
+    def _hbar_to(self, x: float) -> None:
+        bx, _by, bw, _bh = self._hbar_box
+        count = len(self.visible_columns())
+        fraction = min(max((x - bx) / max(bw, 1e-6), 0.0), 1.0)
+        self.first_column = int(round(fraction * max(count - 1, 0)))
 
     @staticmethod
     def _draw_check(p: Painter, x: float, y: float, w: float, h: float, on: bool) -> None:
@@ -699,6 +873,10 @@ class DataTable:
         self.filter_focused = False
         if self.bar.needed() and self.bar.press(x, y):
             return True
+        if self._inside(self._hbar_box, x, y):
+            self._hbar_held = True
+            self._hbar_to(x)
+            return True
         if self._inside(self._header_box, x, y):
             column = self.column_at(x)
             if column is not None:
@@ -738,11 +916,35 @@ class DataTable:
 
     def drag(self, x: float, y: float, *_box: Any) -> bool:
         """Continue a scrollbar drag."""
+        if self._hbar_held and self._hbar_box is not None:
+            self._hbar_to(x)
+            return True
         return self.bar.drag(y)
 
     def release(self, *_args: Any, **_kw: Any) -> None:
         """End a scrollbar drag."""
+        self._hbar_held = False
         self.bar.release()
+
+    def context(self, x: float, y: float) -> bool:
+        """A right click: select the row under it and report row and column.
+
+        Returns whether it landed on the table (header or rows).
+        """
+        on_header = self._inside(self._header_box, x, y)
+        position = self.row_at(x, y)
+        if position is None and not on_header:
+            return self._inside(self._body_box, x, y)
+        index = None
+        if position is not None:
+            if self.editing is not None:
+                self.commit_edit()
+            self._select_position(position)
+            index = self.order()[position]
+        column = self.column_at(x)
+        if self.on_context is not None:
+            self.on_context(index, column.key if column is not None else None, x, y)
+        return True
 
     def hover(self, x: float, y: float, *_box: Any) -> None:
         """Track the row under the pointer."""
@@ -851,6 +1053,8 @@ class TableBinding:
         self.activated_call = str(merged.get("activated_call", "") or "")
         self.edited_call = str(merged.get("edited_call", "") or "")
         self.delete_call = str(merged.get("delete_call", "") or "")
+        self.context_call = str(merged.get("context_call", "") or "")
+        self.colour_source = str(merged.get("colour_source", "") or "")
         self.editable = bool(merged.get("editable", False))
         self.height = float(merged.get("height", 240) or 240)
         self.expand = bool(merged.get("expand", False))
@@ -863,6 +1067,8 @@ class TableBinding:
             filter_box=bool(merged.get("filter", False)),
             tooltip_key=str(merged.get("tooltip_key", "") or ""),
             row_key=str(merged.get("row_key", "") or ""),
+            on_context=self._on_context,
+            min_column_width=float(merged.get("min_column_width", 0) or 0),
         )
         sort = merged.get("sort")
         if isinstance(sort, Mapping) and sort.get("key"):
@@ -906,6 +1112,9 @@ class TableBinding:
         computation streams -- is noticed by its length, and one that carries a
         ``revision`` attribute by that, so an append costs one comparison here.
         """
+        if self.colour_source:
+            mode = self._call(self.colour_source)
+            self.control.colour_values = str(mode) if mode in ("column", "table") else None
         data = self._call(self.source)
         size = None
         if data is not None:
@@ -968,6 +1177,12 @@ class TableBinding:
             if callable(fn):
                 fn(self.record(index))
 
+    def _on_context(self, index: Optional[int], key: Optional[str], x: float, y: float) -> None:
+        if self.context_call:
+            fn = getattr(self.model, self.context_call, None)
+            if callable(fn):
+                fn(self.record(index), key, (x, y))
+
     def _on_activate(self, index: int) -> None:
         if self.activated_call:
             fn = getattr(self.model, self.activated_call, None)
@@ -1002,14 +1217,19 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         control.hover(px, py)
         if io.mouse_clicked[0]:
             control.press(px, py, *box, 0, 2 if io.mouse_double_clicked[0] else 1)
-        if io.mouse_wheel:
+        if io.mouse_clicked[1]:
+            control.context(px, py)
+        wheel_h = getattr(io, "mouse_wheel_h", 0.0) or (io.mouse_wheel if io.key_shift else 0.0)
+        if wheel_h and control._hbar_box is not None:
+            control.scroll_columns(-1 if wheel_h > 0 else 1)
+        elif io.mouse_wheel:
             control.scroll(-int(io.mouse_wheel) * DataTable.WHEEL_ROWS or
                            (-DataTable.WHEEL_ROWS if io.mouse_wheel > 0 else DataTable.WHEEL_ROWS))
     else:
         control.hovered = None
         if io.mouse_clicked[0]:
             control.filter_focused = False
-    if io.mouse_down[0] and control.bar.needed():
+    if io.mouse_down[0] and (control.bar.needed() or control._hbar_held):
         control.drag(px, py)
     if io.mouse_released[0]:
         control.release()
