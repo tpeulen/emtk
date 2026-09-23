@@ -308,3 +308,21 @@ def test_a_suffix_is_written_after_the_number_and_read_back():
     assert parse_value("12", section) == 12
     assert parse_value("99fps", section) == 60
     assert format_value("text", {"kind": "str", "suffix": " fps"}) == "text"
+
+
+def test_a_radio_list_stacks_its_options_and_a_click_picks_one():
+    """``style: radio_list`` draws one radio per line (options that are
+    sentences do not fit on one); each option's rect is ``<name>.<i>``."""
+    model = Model()
+    spec = {"sections": [{"type": "choice", "attr": "method", "style": "radio_list",
+                          "options": ["Manual", "Auto", "Other"]}]}
+    driver = Driver(spec, model)
+    driver.frame()
+    rects = [driver.state.rects[f"method.{i}"] for i in range(3)]
+    assert rects[0][1] < rects[1][1] < rects[2][1]
+    assert abs(rects[0][0] - rects[2][0]) < 1.0
+    driver.click("method.2")
+    assert model.method == "Other"
+    inline = Driver({"sections": [dict(spec["sections"][0], style="radio")]}, Model())
+    inline.frame()
+    assert abs(inline.state.rects["method.0"][1] - inline.state.rects["method.1"][1]) < 1.0

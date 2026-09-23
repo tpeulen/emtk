@@ -25,7 +25,7 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``hidden_when``), ``value`` (``kind`` int/float/str, ``minimum``, ``maximum``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
 ``call``), ``choice`` (``options``, ``labels``, ``options_source``,
-``style`` ``"radio"``, ``call``), ``toggle``, ``toggle_row``, ``button_row``,
+``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
 ``info``, and the two table dialects -- ``table`` and ``custom``
 ``data_table`` (:mod:`emtk.widgets.data_table`), one full-width row each --
 and no key of its own. A container with ``collapsible: true`` draws AutoForm's
@@ -396,12 +396,16 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
         if 0 <= picked < len(values) and picked != index:
             _commit(model, section, values[picked], state)
             index = picked
-    if str(section.get("style", "")).lower() == "radio":
+    style = str(section.get("style", "")).lower()
+    if style in ("radio", "radio_list"):
+        # "radio" puts the buttons on one line (AutoForm's inline radios);
+        # "radio_list" stacks them, one per line, for options that are sentences.
         for i, label in enumerate(labels):
-            if i:
+            if i and style == "radio":
                 _w.same_line()
             if _w.radio_button(_id(label, f"{name}{i}"), i == index) and i != index:
                 _commit(model, section, values[i], state)
+            _remember(state, f"{name}.{i}")
         _remember(state, name)
         return
     caption = labels[index] if labels else ""
