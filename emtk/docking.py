@@ -846,8 +846,10 @@ class DockManager:
     def _undocked_box(self, region: Optional[str]) -> Rect:
         bx, by, bw, bh = self.box if self.box[2] > 0 else (0.0, 0.0, 800.0, 600.0)
         rect = self.region_boxes.get(region) if region else None
-        w = min(rect[2] if rect else 360.0, max(bw * 0.45, 200.0))
-        h = min(rect[3] if rect else 260.0, max(bh * 0.6, 150.0))
+        # A third of the box across and under half of it down: a floated panel
+        # is something to glance at beside the rest, not a second main window.
+        w = min(rect[2] if rect else 360.0, max(bw * 0.3, 240.0))
+        h = min(rect[3] if rect else 260.0, max(bh * 0.45, 180.0))
         x = rect[0] + 24.0 if rect else bx + 40.0
         y = rect[1] + 24.0 if rect else by + 40.0
         return (x, y, w, h)
