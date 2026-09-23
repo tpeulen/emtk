@@ -435,3 +435,66 @@ def test_a_value_without_spin_has_no_arrows():
                     Model())
     driver.frame()
     assert "restarts.stepper" not in driver.state.rects
+
+
+def test_special_text_stands_for_the_minimum():
+    section = {"kind": "int", "minimum": -1, "maximum": 64, "special_text": "All cores"}
+    assert format_value(-1, section) == "All cores"
+    assert format_value(4, section) == "4"
+    assert parse_value("all cores", section) == -1
+    assert parse_value("8", section) == 8
+
+
+class Runner:
+    def __init__(self):
+        self.running = False
+        self.count = 0
+        self.fraction = None
+        self.log = []
+
+    def run(self):
+        self.log.append("run")
+
+    def stop(self):
+        self.log.append("stop")
+
+    def columns_label(self):
+        return f"Columns ({self.count})"
+
+    def status(self):
+        return "Running…"
+
+
+RUN_SPEC = {"sections": [
+    {"type": "button_row", "buttons": [
+        {"label": "Run", "action": "run", "hidden_when": {"attr": "running", "equals": "true"}},
+        {"label": "Stop", "action": "stop",
+         "hidden_when": {"attr": "running", "equals": "false"}},
+        {"label": "Columns", "action": "pick", "label_source": "columns_label"},
+    ]},
+    {"type": "progress", "attr": "fraction", "text_source": "status"},
+]}
+
+
+def test_a_button_can_hide_and_take_its_label_from_the_model():
+    model = Runner()
+    model.count = 3
+    driver = Driver(RUN_SPEC, model)
+    driver.frame()
+    assert "Run" in driver.painter.strings and "Stop" not in driver.painter.strings
+    assert "Columns (3)" in driver.painter.strings
+    model.running = True
+    driver.frame()
+    assert "Stop" in driver.painter.strings and "Run" not in driver.painter.strings
+    driver.click("stop")
+    assert model.log == ["stop"]
+
+
+def test_a_progress_bar_is_determinate_or_sweeps():
+    model = Runner()
+    driver = Driver(RUN_SPEC, model)
+    driver.frame()                       # None: indeterminate, still draws its text
+    assert "Running…" in driver.painter.strings
+    model.fraction = 0.5
+    driver.frame()
+    assert "Running…" in driver.painter.strings

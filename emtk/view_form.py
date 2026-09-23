@@ -26,7 +26,8 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
 ``call``), ``choice`` (``options``, ``labels``, ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
-``info``, ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
+``info``, ``progress`` (a bar over a fraction, indeterminate while it is
+``None``), ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
 and the wheel over it, step by ``step`` or by :func:`spin_step`), and the two
 table dialects -- ``table`` and ``custom``
 ``data_table`` (:mod:`emtk.widgets.data_table`), one full-width row each --
@@ -171,7 +172,9 @@ def format_value(value: Any, section: dict) -> str:
 
     ``decimals`` fixes the digits; ``style: "scientific"`` writes an exponent;
     neither gives the shortest faithful spelling (``0.05``, ``100``). A
-    ``suffix`` (AutoForm's, ``" fps"``) is written after a number.
+    ``suffix`` (AutoForm's, ``" fps"``) is written after a number. A
+    ``special_text`` stands for the ``minimum`` (a spin box's special value
+    text: ``-1`` reads "All cores", ``0`` "Auto"), and typing it sets it.
 
     Parameters
     ----------
@@ -187,6 +190,13 @@ def format_value(value: Any, section: dict) -> str:
     kind = str(section.get("kind", "str")).lower()
     if value is None:
         return ""
+    special = section.get("special_text")
+    if special and kind in ("int", "float") and section.get("minimum") is not None:
+        try:
+            if float(value) == float(section["minimum"]):
+                return str(special)
+        except (TypeError, ValueError):
+            pass
     suffix = str(section.get("suffix") or "") if kind in ("int", "float") else ""
     return _format_number(value, section, kind) + suffix
 
@@ -235,6 +245,10 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
     if kind not in ("int", "float"):
         return text
     text = str(text).strip()
+    special = str(section.get("special_text") or "").strip()
+    if special and text.lower() == special.lower() and section.get("minimum") is not None:
+        lo = section["minimum"] if bounds is None or bounds[0] is None else bounds[0]
+        return int(round(float(lo))) if kind == "int" else float(lo)
     suffix = str(section.get("suffix") or "").strip()
     if suffix and text.endswith(suffix):
         text = text[:-len(suffix)].strip()
@@ -575,7 +589,7 @@ def _draw_toggle(section: dict, model: Any, state: FormState, label: str) -> Non
 
 
 def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> None:
-    buttons = list(section.get("buttons") or [])
+    buttons = [item for item in section.get("buttons") or [] if not _hidden(item, model)]
     if not buttons:
         return
     spacing = 8.0
@@ -584,8 +598,12 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
         if i:
             _w.same_line()
         action = str(item.get("action", ""))
+        label = item.get("label", action)
+        source = item.get("label_source")
+        if source and callable(getattr(model, source, None)):
+            label = str(getattr(model, source)())
         _w.begin_disabled(not _enabled(model, action))
-        pressed = _w.button(_id(item.get('label', action), action), (button_w, 0.0))
+        pressed = _w.button(_id(label, action), (button_w, 0.0))
         _remember(state, action)
         if item.get("description"):
             _w.set_item_tooltip(str(item["description"]))
@@ -648,12 +666,49 @@ def _draw_control(section: dict, model: Any, state: FormState, width: float) -> 
             _draw_toggle(dict(item, type="toggle"), model, state, str(item.get("label", "")))
     elif kind == "button_row":
         _draw_buttons(section, model, state, width)
+    elif kind == "progress":
+        _draw_progress(section, model, width)
     elif kind == "info":
         source = section.get("source")
         text = section.get("text", "")
         if source and callable(getattr(model, source, None)):
             text = getattr(model, source)()
         _w.text_wrapped(str(text))
+
+
+def _draw_progress(section: dict, model: Any, width: float) -> None:
+    """A ``progress`` section: a bar over ``attr`` (a fraction in ``[0, 1]``).
+
+    ``None`` is *indeterminate*: a block that sweeps the bar, as a busy
+    indicator does, while the work cannot say how far it is. ``text_source``
+    names a model method whose text is written over the bar.
+    """
+    value = getattr(model, section.get("attr", ""), None) if section.get("attr") else None
+    if callable(value):
+        value = value()
+    text = ""
+    source = section.get("text_source")
+    if source and callable(getattr(model, source, None)):
+        text = str(getattr(model, source)() or "")
+    height = _core.get_frame_height()
+    if value is not None:
+        _w.progress_bar(float(value), (width, height), text)
+        return
+    x, y = _w.get_cursor_screen_pos()
+    _w.progress_bar(0.0, (width, height), "")
+    block = max(width * 0.25, 10.0)
+    phase = (_core.get_time() * 0.8) % 1.0
+    left = x + (width + block) * phase - block
+    draw = _core.get_window_draw_list()
+    draw.push_clip_rect((x, y), (x + width, y + height))
+    draw.add_rect_filled((left, y), (left + block, y + height),
+                         _core.get_style().color(_core.Col.SLIDER_GRAB),
+                         _core.get_style().frame_rounding)
+    draw.pop_clip_rect()
+    if text:
+        tw, th = _w.calc_text_size(text)[:2]
+        draw.add_text((x + (width - tw) / 2.0, y + (height - th) / 2.0),
+                      _core.get_style().color(_core.Col.TEXT), text)
 
 
 def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int) -> None:
