@@ -142,6 +142,11 @@ class IO:
     #: ``io.WantCaptureMouse`` / ``WantCaptureKeyboard``.
     want_capture_mouse: bool = False
     want_capture_keyboard: bool = False
+    #: Seconds from this frame until the next one is due although no event
+    #: arrives -- a tooltip whose delay runs out then -- or ``None``. Set by
+    #: :meth:`Context.end_frame` from :meth:`Context.request_frame_at`; a host
+    #: reads it (:func:`emtk.app.next_frame_in`) and schedules one wake-up.
+    next_frame_in: Optional[float] = None
 
     def begin_frame(self, now: Optional[float] = None) -> None:
         # ``NewFrame``: ``MouseDelta = MousePos - MousePosPrev``, then
@@ -340,6 +345,13 @@ class Style:
     grab_rounding: float = 0.0
     #: What ``BeginDisabled`` multiplies colours by, as ``ImGuiStyle`` does.
     disabled_alpha: float = 0.6
+    #: Seconds the pointer rests on an item before its tooltip shows.
+    tooltip_delay: float = 0.5
+    #: Seconds after a tooltip was last shown in which the next item's
+    #: tooltip shows at once (the "warm" state of desktop toolkits).
+    tooltip_grace: float = 0.6
+    #: Widest a tooltip's text runs before it wraps, in logical pixels.
+    tooltip_max_width: float = 360.0
     colors: dict = field(default_factory=_default_colors)
 
     def color(self, which, default=(200, 200, 200, 255)):
@@ -463,8 +475,16 @@ class Context:
         self.hovered_id: Any = None
         self.active_id: Any = self.storage.get("__active_id__")
         self.frame_requested = False
+        #: The earliest :attr:`IO.now` a frame is due at without an event
+        #: (:meth:`request_frame_at`), or ``None``.
+        self.frame_due_at: Optional[float] = None
         self._popups: dict = self.storage.setdefault("__popups__", {})
         self.tooltip: Optional[str] = None
+        #: The item :attr:`tooltip` belongs to: what "the pointer rests on
+        #: the same item" compares (:mod:`emtk.tooltip`).
+        self.tooltip_owner: Any = None
+        #: Where the tooltip was drawn this frame, or ``None``.
+        self.box_tooltip: Optional[Rect] = None
         #: `g.HoveredId` from the frame before. ImGui answers "is this item
         #: hovered" from the id claimed *this* frame, but a widget submitted
         #: before the pointer moved needs last frame's answer; ImGui keeps both
@@ -545,6 +565,11 @@ class Context:
         the frame drew.
         """
         self.draw_overlays()
+        # Last, over everything -- the overlays included.
+        from . import tooltip as _tooltip  # noqa: PLC0415
+        _tooltip.update(self)
+        self.io.next_frame_in = (None if self.frame_due_at is None
+                                 else max(self.frame_due_at - self.io.now, 0.0))
         if self.nav_request and self.nav_ring:
             if self.nav_id in self.nav_ring:
                 at = self.nav_ring.index(self.nav_id) + self.nav_request
@@ -1326,12 +1351,38 @@ class Context:
     def end_popup(self) -> None:
         pass
 
-    def set_tooltip(self, text: str) -> None:
+    def set_tooltip(self, text: str, owner: Any = None) -> None:
+        """This frame's tooltip, belonging to *owner* (the hovered item by default).
+
+        Only one tooltip shows. A second call for the same item adds a line
+        (a combo's full caption, then its description); one for another item
+        replaces it. When and where it shows is :mod:`emtk.tooltip`'s.
+        """
+        if text is None or str(text) == "":
+            return
+        text = str(text)
+        if owner is None:
+            owner = self.hovered_id if self.hovered_id is not None else ("text", text)
+        if self.tooltip and owner == self.tooltip_owner:
+            if text not in self.tooltip.split("\n"):
+                self.tooltip = f"{self.tooltip}\n{text}"
+            return
         self.tooltip = text
+        self.tooltip_owner = owner
 
     def request_frame(self) -> None:
         """Ask the host for another draw soon (an animation, a held button)."""
         self.frame_requested = True
+
+    def request_frame_at(self, when: float) -> None:
+        """Ask for one frame at :attr:`IO.now` *when*, though nothing happens.
+
+        Not a stream of frames: the frame's end turns the earliest such
+        request into :attr:`IO.next_frame_in` and a host sleeps until then.
+        """
+        when = float(when)
+        if self.frame_due_at is None or when < self.frame_due_at:
+            self.frame_due_at = when
 
 
 # --------------------------------------------------------------------------- #

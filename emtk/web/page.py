@@ -10,7 +10,8 @@ calling WebGPU through :mod:`emtk.gpu.browser`.
 
 Each handler returns whether a frame is due, and the page asks for one with
 ``requestAnimationFrame`` only then -- a page draws on demand, and keeps a
-frame loop going only while :meth:`WebPage.animating` says so.
+frame loop going only while :meth:`WebPage.animating` says so -- or one
+timer, when :meth:`WebPage.wake_in` asks for a single frame later.
 
 This module is importable anywhere (it names ``js`` only inside the calls a
 page makes), which is what lets the translation be tested without a browser.
@@ -198,6 +199,18 @@ class WebPage:
             return bool(self.surface.animating())
         except Exception:  # noqa: BLE001 - a broken clock is not animating
             return False
+
+    def wake_in(self) -> float:
+        """Seconds until the app wants one frame without an event, else ``-1``.
+
+        ``boot.js`` asks after every frame that is not :meth:`animating` and
+        sets one ``setTimeout`` (see :func:`emtk.app.next_frame_in`). A number
+        rather than ``None``, which crosses into JavaScript as ``undefined``.
+        """
+        from ..app import next_frame_in  # noqa: PLC0415
+
+        delay = next_frame_in(self.surface)
+        return -1.0 if delay is None else float(delay)
 
     def resize(self, css_width: float, css_height: float, dpr: float = 0.0) -> bool:
         """Take a new canvas size in CSS pixels; resize the backing store.

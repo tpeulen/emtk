@@ -117,15 +117,21 @@ mount(js.emtkCanvas, _emtk_app_spec)
     jspi && typeof fn.callPromising === "function" ? await fn.callPromising(...args) : fn(...args);
 
   // Draw on demand, and keep a frame loop only while Python is animating.
+  // An idle app can still ask for *one* frame later (a tooltip waiting out
+  // its delay): `page.wake_in()` seconds, one timer, replaced by every frame.
   let frame = null;
+  let wake = null;
   const redraw = () => {
     if (frame !== null) return;
     frame = requestAnimationFrame(() => {
       frame = null;
+      if (wake !== null) { clearTimeout(wake); wake = null; }
       page.draw();
       const title = page.title();
       if (title && document.title !== title) document.title = title;
-      if (page.animating()) redraw();
+      if (page.animating()) { redraw(); return; }
+      const due = page.wake_in();
+      if (due >= 0) wake = setTimeout(() => { wake = null; redraw(); }, due * 1000);
     });
   };
   // The loop above is only ever *started* by an event; an animation can begin

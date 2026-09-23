@@ -143,6 +143,20 @@ def host_class():
             animating = getattr(self.control, "animating", None)
             if callable(animating) and animating():
                 QtCore.QTimer.singleShot(16, self.update)
+                return
+            # Or one frame later, though nothing happens -- a tooltip's
+            # delay. One timer, restarted: never a stream of frames.
+            from .app import next_frame_in
+
+            delay = next_frame_in(self.control)
+            if delay is not None:
+                if getattr(self, "_wake", None) is None:
+                    self._wake = QtCore.QTimer(self)
+                    self._wake.setSingleShot(True)
+                    self._wake.timeout.connect(self.update)
+                self._wake.start(max(int(delay * 1000.0 + 0.5), 1))
+            elif getattr(self, "_wake", None) is not None:
+                self._wake.stop()
 
         def _box(self) -> tuple[float, float, float, float]:
             """The box the control is drawn in: the whole widget."""

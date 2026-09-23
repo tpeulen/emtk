@@ -163,3 +163,39 @@ def test_the_window_takes_the_controls_title(host):
     host.control.window_title = "ndX -- m000.bur"
     host.paint()
     assert host.root.title() == "ndX -- m000.bur"
+
+
+def test_an_idle_app_gets_one_paint_when_its_tooltip_is_due():
+    """``next_frame_in`` becomes one ``after`` -- replaced, never stacked."""
+    pytest.importorskip("PIL.ImageTk", reason="the Tk host presents through Pillow's ImageTk")
+    tk = pytest.importorskip("tkinter")
+    if qt_application_exists():
+        pytest.skip("a QApplication already owns this process; Tk cannot share it")
+    try:
+        root = tk.Tk()
+    except tk.TclError as e:
+        pytest.skip("no display for Tk: %s" % e)
+    root.withdraw()
+    from emtk import im
+    from emtk.app import ImApp
+    from emtk.tk_host import TkHost
+
+    def gui():
+        im.button("Hover me")
+        im.set_item_tooltip("a tooltip")
+
+    app = ImApp(gui)
+    host = TkHost(app, size=(200, 80), root=root)
+    try:
+        host.paint()
+        assert host._wake is None
+        app.hover(20.0, 12.0)
+        host.paint()
+        first = host._wake
+        assert first is not None
+        host.paint()
+        assert host._wake is not None and host._wake != first
+        assert root.tk.call("after", "info").count(host._wake) == 1
+        assert first not in root.tk.call("after", "info"), "the older one was cancelled"
+    finally:
+        host.close()

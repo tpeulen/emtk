@@ -30,9 +30,9 @@ table needs them and neither dialect had them:
 ``filter: true``
     a filter box above the rows, matching any cell;
 ``tooltip_key``
-    the record field holding a row's longer description. The Qt table shows
-    it as a tooltip; a painter has no tooltips, so this table shows the
-    selected row's under the rows;
+    the record field holding a row's longer description: the tooltip of the
+    row under the pointer, as in the Qt table, and the selected row's shown
+    under the rows;
 ``row_key``
     the record field that identifies a row, so a selection survives rows
     streaming in above it. Without one, a row is its position in the source;
@@ -521,6 +521,28 @@ class DataTable:
             return None
         position = self.bar.top + int((y - by) // max(self._row_h, 1e-6))
         return position if 0 <= position < len(self.order()) else None
+
+    def tooltip_at(self, x: float, y: float) -> tuple[str, Any]:
+        """``(text, part)`` of the tooltip under a point of the last draw.
+
+        A header shows its column's ``tooltip`` (or ``description``); a row
+        shows its ``tooltip_key`` field. ``part`` tells one header or row from
+        the next, so moving between them is moving between items. ``("",
+        None)`` where there is none.
+        """
+        if self._inside(self._header_box, x, y):
+            column = self.column_at(x)
+            if column is not None and column.tooltip:
+                return (column.tooltip, ("header", column.key))
+            return ("", None)
+        if self.tooltip_key:
+            position = self.row_at(x, y)
+            if position is not None:
+                index = self.order()[position]
+                note = str(self.value(index, self.tooltip_key) or "")
+                if note:
+                    return (note, ("row", index))
+        return ("", None)
 
     def column_at(self, x: float) -> Optional[TableColumn]:
         """The column under an x position of the last draw."""
@@ -1216,7 +1238,8 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     h = float(height) if height is not None else (
         max(float(avail_h) - binding.reserve, 60.0) if binding.expand else binding.height)
     box = ctx.layout.row(height=h, width=w)
-    hovered = ctx.item_add(box, ctx.get_id(f"##table-{name}"))
+    item_id = ctx.get_id(f"##table-{name}")
+    hovered = ctx.item_add(box, item_id)
     control = binding.control
     io = ctx.io
     px, py = io.mouse_pos
@@ -1244,3 +1267,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         if hovered or control.filter_focused or control.editing is not None:
             control.key(int(io.key), io.text, 0)
     control.draw(ctx.p, *box)
+    if hovered:
+        tip, part = control.tooltip_at(px, py)
+        if tip:
+            ctx.set_tooltip(tip, owner=(item_id, part))

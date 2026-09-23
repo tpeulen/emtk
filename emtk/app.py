@@ -62,6 +62,7 @@ __all__ = [
     "load_app",
     "as_surface",
     "window_title",
+    "next_frame_in",
     "WHEEL_ROWS",
 ]
 
@@ -84,6 +85,34 @@ def window_title(app) -> str | None:
     if callable(title):
         title = title()
     return None if title is None else str(title)
+
+
+def next_frame_in(app) -> float | None:
+    """Seconds until *app* wants a frame although no event arrives, or ``None``.
+
+    What a host asks after each frame that was not :meth:`~Surface.animating`
+    -- a tooltip waiting out its delay says "in 0.4 s" -- and answers with
+    **one** timer: an idle window sleeps until then, and then draws once.
+
+    An app says so with a ``next_frame_in()`` method; an app that runs
+    :func:`emtk.frame` over an :class:`~emtk.im_core.IO` it keeps as ``io``
+    (:class:`ImApp`, and any control built the same way) is read from that,
+    which :meth:`~emtk.im_core.Context.end_frame` fills in.
+
+    Hosts: :mod:`.native` (the canvas loop's ``call_later``), :mod:`.web`
+    (``setTimeout`` in ``boot.js``), :mod:`.tk_host` (``after``) and
+    :mod:`.qt_host` (a single-shot ``QTimer``).
+    """
+    hook = getattr(app, "next_frame_in", None)
+    try:
+        if callable(hook):
+            value = hook()
+        else:
+            io = getattr(app, "io", None)
+            value = getattr(io, "next_frame_in", None) if io is not None else None
+        return None if value is None else max(float(value), 0.0)
+    except Exception:  # noqa: BLE001 - a broken clock asks for nothing
+        return None
 
 
 class Surface:
@@ -138,6 +167,14 @@ class Surface:
     def animating(self) -> bool:
         """Whether frames are wanted continuously (a movie, a live plot)."""
         return False
+
+    def next_frame_in(self) -> float | None:
+        """Seconds until one frame is due though no event arrives, or ``None``.
+
+        See :func:`next_frame_in`. A host asks after a frame that was not
+        :meth:`animating`, and wakes once then.
+        """
+        return None
 
     # -- input ----------------------------------------------------------- #
     def on_pointer_press(self, x: float, y: float, button: int, modifiers: int,
@@ -257,6 +294,9 @@ class ControlSurface(Surface):
         hook = self._hook("animating")
         return bool(hook()) if hook is not None else False
 
+    def next_frame_in(self) -> float | None:
+        return next_frame_in(self.control)
+
     # -- input ----------------------------------------------------------- #
     def on_pointer_press(self, x, y, button, modifiers, double=False) -> bool:
         clicks = 2 if double else 1
@@ -367,6 +407,10 @@ class ImApp:
 
     def animating(self) -> bool:
         return self.continuous or self.wants_frame
+
+    def next_frame_in(self) -> float | None:
+        """When the last frame asked to be drawn again (a tooltip's delay)."""
+        return self.io.next_frame_in
 
     # -- the rich hooks (ControlSurface) --------------------------------- #
     @staticmethod

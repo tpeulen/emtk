@@ -562,10 +562,15 @@ class NativeHost:
         An already-built canvas (a test's offscreen one). No window is opened.
     device : object, optional
         A ``GPUDevice``; :func:`emtk.wgpu_host.default_device` otherwise.
+    loop : object, optional
+        Something with ``call_later(delay, callback, *args)`` for the
+        wake-ups an idle app asks for (:func:`emtk.app.next_frame_in`); the
+        canvas' own loop by default.
     """
 
     def __init__(self, app, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
-                 backend: str | None = None, canvas=None, device=None) -> None:
+                 backend: str | None = None, canvas=None, device=None,
+                 loop=None) -> None:
         from .app import as_surface  # noqa: PLC0415
 
         self.app = app
@@ -579,6 +584,12 @@ class NativeHost:
             self._loop = None
             self.backend = type(canvas).__module__.rsplit(".", 1)[-1]
         self.canvas = canvas
+        self._wake_loop = loop
+        #: Bumped by every frame: a wake-up queued before it is stale (the
+        #: loop cannot cancel one), so only the latest can draw.
+        self._wake_generation = 0
+        #: How many wake-ups were scheduled -- what a test counts.
+        self.wakeups = 0
         if device is None:
             from .wgpu_host import default_device  # noqa: PLC0415
 
@@ -606,7 +617,29 @@ class NativeHost:
             return
         self.surface.render(self.context.get_current_texture().create_view())
         self._retitle()
+        self._wake_generation += 1
         if self.surface.animating():
+            self.canvas.request_draw()
+            return
+        from .app import next_frame_in  # noqa: PLC0415
+
+        delay = next_frame_in(self.surface)
+        if delay is not None:
+            self._schedule_wake(delay)
+
+    def _schedule_wake(self, delay: float) -> None:
+        """One draw after *delay* seconds, unless a frame comes first."""
+        loop = self._wake_loop or self._loop or _default_loop()
+        if loop is None:
+            return
+        try:
+            loop.call_later(float(delay), self._wake, self._wake_generation)
+        except Exception:  # noqa: BLE001 - a missed wake is a late tooltip
+            return
+        self.wakeups += 1
+
+    def _wake(self, generation: int) -> None:
+        if generation == self._wake_generation:
             self.canvas.request_draw()
 
     def _retitle(self) -> None:

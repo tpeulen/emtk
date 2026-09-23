@@ -256,6 +256,7 @@ class TkHost:
         self._item = None
         self._pressed = False
         self._scheduled = None   # a pending "paint soon" after an event
+        self._wake = None        # a pending paint the app asked for (next_frame_in)
         self._timer = None
         self._closed = False
         self.frames = 0
@@ -299,7 +300,7 @@ class TkHost:
         if self._closed:
             return
         self._closed = True
-        for pending in (self._timer, self._scheduled):
+        for pending in (self._timer, self._scheduled, self._wake):
             if pending is not None:
                 try:
                     self.root.after_cancel(pending)
@@ -342,7 +343,30 @@ class TkHost:
         title = window_title(self.control)
         if title is not None and title != self.root.title():
             self.root.title(title)
+        self._schedule_wake()
         return frame
+
+    def _schedule_wake(self) -> None:
+        """One paint when the app's :func:`~emtk.app.next_frame_in` runs out.
+
+        The tick paints every :attr:`interval_ms` anyway; this makes the
+        wake-up land on time rather than up to one interval late.
+        """
+        from .app import next_frame_in  # noqa: PLC0415
+
+        if self._wake is not None:
+            try:
+                self.root.after_cancel(self._wake)
+            except self._tk.TclError:
+                pass
+            self._wake = None
+        delay = next_frame_in(self.control)
+        if delay is not None and not self._closed:
+            self._wake = self.root.after(max(int(delay * 1000.0 + 0.5), 1), self._woken)
+
+    def _woken(self) -> None:
+        self._wake = None
+        self.paint()
 
     def _font_scale(self) -> float:
         """:attr:`font_pt` as a multiple of the baked atlas, as the GPU hosts take it."""
