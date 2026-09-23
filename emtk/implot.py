@@ -1245,6 +1245,7 @@ def _render_background(plot) -> None:
             _render_grid_lines_y(ax.ticker, plot.plot_rect, ax.color_maj, ax.color_min,
                                  style.major_grid_size[1], style.minor_grid_size[1])
     pr = plot.plot_rect
+    fr = plot.frame_rect
     for i in range(I.NUM_X_AXES):
         ax = plot.x_axis(i)
         if not ax.enabled:
@@ -1264,7 +1265,8 @@ def _render_background(plot) -> None:
                                       - tk.level * (txt_height + style.label_padding[1])) if opp
                                      else style.label_padding[1] + tk.level * (txt_height + style.label_padding[1]))
                 if tk.show_label and tk.text and pr[0] - 1 <= tk.pixel_pos <= pr[2] + 1:
-                    _add_text((tk.pixel_pos - 0.5 * tk.label_size[0], datum), ax.color_txt, tk.text)
+                    _add_text((_inside(tk.pixel_pos - 0.5 * tk.label_size[0], tk.label_size[0],
+                                       fr[0], fr[2]), datum), ax.color_txt, tk.text)
     for i in range(I.NUM_Y_AXES):
         ax = plot.y_axis(i)
         if not ax.enabled:
@@ -1283,7 +1285,22 @@ def _render_background(plot) -> None:
                 datum = ax.datum1 + (style.label_padding[0] if opp
                                      else -style.label_padding[0] - tk.label_size[0])
                 if tk.show_label and tk.text and pr[1] - 1 <= tk.pixel_pos <= pr[3] + 1:
-                    _add_text((datum, tk.pixel_pos - 0.5 * tk.label_size[1]), ax.color_txt, tk.text)
+                    _add_text((datum, _inside(tk.pixel_pos - 0.5 * tk.label_size[1],
+                                              tk.label_size[1], fr[1], fr[3])),
+                              ax.color_txt, tk.text)
+
+
+def _inside(start: float, size: float, lo: float, hi: float) -> float:
+    """A tick label's start, moved inside ``[lo, hi]`` when it would stick out.
+
+    emtk's own: a label centred on the first or last tick of a plot with no
+    padding overhangs the frame by half its width and is cut by whatever is
+    drawn beside the plot. Shifted in, it stays whole and stays next to its
+    tick. A label wider than the frame keeps its centred place.
+    """
+    if size >= hi - lo:
+        return start
+    return min(max(start, lo), hi - size)
 
 
 def _axis_background(plot, ax) -> None:

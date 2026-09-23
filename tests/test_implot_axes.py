@@ -404,3 +404,31 @@ def test_the_obsolete_set_next_styles_still_style_the_next_item():
     assert line.line_color == (255, 0, 0, 255) and line.line_weight == 3.0
     assert scatter.marker == implot.MARKER_DIAMOND and scatter.marker_size == 5.0
     assert scatter.marker_fill_color[:3] == (0, 0, 255)
+
+
+def test_edge_tick_labels_stay_inside_the_frame():
+    """With no plot padding the first and last tick sit on the frame edge;
+    their labels are moved in rather than cut."""
+    import emtk
+    from emtk import implot
+    from emtk.testing import RecordingPainter
+
+    painter = RecordingPainter()
+    frame = {}
+    with emtk.frame(painter, (0, 0, 400, 200)):
+        emtk.begin("w", (0, 0, 400, 200))
+        implot.push_style_var(implot.STYLE_VAR_PLOT_PADDING, (0.0, 0.0))
+        emtk.set_cursor_screen_pos((50.0, 20.0))
+        implot.begin_plot("##p", (300.0, 150.0), implot.FLAGS_CANVAS_ONLY)
+        implot.setup_axis_limits(implot.AXIS_X1, 0.0, 6.0, implot.COND_ALWAYS)
+        implot.setup_axis_limits(implot.AXIS_Y1, 0.0, 1.0, implot.COND_ALWAYS)
+        implot.plot_line("l", [0.0, 6.0], [0.0, 1.0])
+        frame["rect"] = implot.get_plot_pos(), implot.get_plot_size()
+        implot.end_plot()
+        implot.pop_style_var()
+        emtk.end()
+    labels = {t[5]: t for t in painter.texts if t[5] in ("0", "6")}
+    assert set(labels) == {"0", "6"}
+    (px, _py), (pw, _ph) = frame["rect"]
+    assert labels["0"][0] >= 50.0 - 0.5
+    assert labels["6"][0] + labels["6"][2] <= 50.0 + 300.0 + 0.5
