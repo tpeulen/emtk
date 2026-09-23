@@ -155,13 +155,22 @@ def test_a_toggle_writes_its_attribute_and_enables_what_depends_on_it():
     assert model.don_value == 5.0
 
 
-def test_a_choice_asks_the_host_for_its_list_and_takes_the_pick():
+def _drawn_last(painter, string):
+    """Where *string* was last drawn: the list is drawn over the form."""
+    return next(t for t in reversed(painter.texts) if t[5] == string)
+
+
+def test_a_choice_opens_its_own_list_and_takes_the_pick():
     model = Model()
     driver = Driver(SPEC, model)
     driver.click("method")
-    name, _rect, labels, index = driver.state.dropdown_request
-    assert (name, labels, index) == ("method", ["Manual", "Auto"], 0)
-    driver.state.dropdown_result["method"] = 1
+    x, y, w, h = _drawn_last(driver.painter, "Auto")[:4]
+    field = driver.state.rects["method"]
+    assert y >= field[1] + field[3] - 0.5, "the list opens below its field"
+    driver.io.mouse_pos = driver.io.mouse_clicked_pos[0] = (x + 2.0, y + h / 2.0)
+    driver.io.mouse_down[0] = driver.io.mouse_clicked[0] = True
+    driver.frame()
+    driver.io.mouse_down[0], driver.io.mouse_released[0] = False, True
     driver.frame()
     assert model.method == "Auto"
     driver.frame()
@@ -297,7 +306,7 @@ def test_a_choice_is_drawn_as_a_combo_box():
     text = next(t for t in driver.painter.texts if t[5] == "Manual")
     assert text[0] < x + 10.0                       # left-aligned, not centred
     driver.click("method")
-    assert driver.state.dropdown_request[2] == ["Manual", "Auto"]
+    assert driver.painter.strings[-2:] == ["Manual", "Auto"], "the list, drawn last"
 
 
 def test_a_long_choice_is_cut_with_an_ellipsis_before_the_arrow():

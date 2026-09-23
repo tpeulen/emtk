@@ -47,15 +47,17 @@ def test_the_style_selector_switches_the_palette():
     _run(gui, io=io, storage=storage)
     dark = state["window_bg"]
 
+    def click(x, y):
+        io.mouse_pos = io.mouse_clicked_pos[0] = (x, y)
+        io.mouse_down[0] = io.mouse_clicked[0] = True
+        _run(gui, io=io, storage=storage)
+        io.mouse_down[0], io.mouse_released[0] = False, True
+        return _run(gui, io=io, storage=storage)
+
     box = state["box"]
-    io.mouse_pos = (box[0] + 2, box[1] + 2)
-    io.mouse_down[0] = io.mouse_clicked[0] = True
-    io.mouse_clicked_pos[0] = io.mouse_pos
-    _run(gui, io=io, storage=storage)
-    io.mouse_clicked[0] = False
-    io.mouse_down[0] = False
-    io.mouse_released[0] = True
-    _run(gui, io=io, storage=storage)
+    painter = click(box[0] + 2, box[1] + 2)          # opens the list
+    light = next(t for t in reversed(painter.texts) if t[5] == "Light")
+    click(light[0] + 2, light[1] + light[3] / 2)     # picks; the next frame applies it
     assert state["window_bg"] != dark, "the style selector changed nothing"
 
 

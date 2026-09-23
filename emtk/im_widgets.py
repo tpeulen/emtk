@@ -925,7 +925,6 @@ def combo(label: str, current: int, items: Sequence[str],
                           _col(Col.TEXT), visible)
     _overlays.combo_list(item_id, [str(item) for item in items], current,
                          below=frame if pressed and items else None)
-    ctx._last_item, ctx._last_id = frame, item_id
     return (changed, current)
 
 

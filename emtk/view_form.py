@@ -65,9 +65,11 @@ does not say are asked of the **model**, so the spec stays shared:
 
 Typing follows the edit-box convention of the desktop toolkits a port comes
 from: the text is edited freely and **committed** on Enter or when the pointer
-goes down elsewhere, then parsed, clamped and written. A choice opens a list the
-host draws above everything (:attr:`FormState.dropdown_request`), because an
-immediate-mode frame has no overlay of its own.
+goes down elsewhere, then parsed, clamped and written. A choice opens its list
+itself, as an overlay over everything the frame drew (:mod:`emtk.overlays`):
+below the field or flipped above it, as wide as its longest option, inside the
+frame, scrolled when long, with the keyboard and type-to-find. The host draws
+and routes nothing for it.
 """
 from __future__ import annotations
 
@@ -77,6 +79,7 @@ from typing import Any
 
 from . import im_core as _core
 from . import im_widgets as _w
+from . import overlays as _overlays
 from .flags import InputTextFlags
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
@@ -97,12 +100,6 @@ class FormState:
     rects : dict
         Screen rectangle of every drawn field or action, by name -- what a
         guided tour spotlights and what a test clicks.
-    dropdown_request : tuple or None
-        ``(name, rect, labels, index)`` of a choice whose list should open; the
-        host draws the list and puts the picked index in
-        :attr:`dropdown_result`.
-    dropdown_result : dict
-        Picked index per choice name, consumed on the next frame.
     on_used : callable or None
         ``on_used(name)`` after a field is committed or an action pressed.
     tables : dict
@@ -122,8 +119,6 @@ class FormState:
         self.custom: dict[str, Callable[[dict, Any, "FormState", float], None]] = {}
         self.buffers: dict[str, str] = {}
         self.rects: dict[str, tuple] = {}
-        self.dropdown_request: tuple | None = None
-        self.dropdown_result: dict[str, int] = {}
         self.on_used = on_used
         #: Colour fields whose picker is open, by name.
         self.pickers: set[str] = set()
@@ -533,11 +528,6 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
     values, labels = _options(section, model)
     current = getattr(model, section.get("attr", ""), None) if section.get("attr") else None
     index = next((i for i, v in enumerate(values) if str(v) == str(current)), 0)
-    if name in state.dropdown_result:
-        picked = state.dropdown_result.pop(name)
-        if 0 <= picked < len(values) and picked != index:
-            _commit(model, section, values[picked], state)
-            index = picked
     style = str(section.get("style", "")).lower()
     if style in ("radio", "radio_list"):
         # "radio" puts the buttons on one line (AutoForm's inline radios);
@@ -550,10 +540,16 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
             _remember(state, f"{name}.{i}")
         _remember(state, name)
         return
+    ctx = _core.get_current_context()
+    key = (ctx.get_id(f"##choice-{name}"), id(state))
+    picked = _overlays.take_choice(key)
+    if picked is not None and 0 <= picked < len(values) and picked != index:
+        _commit(model, section, values[picked], state)
+        index = picked
     caption = labels[index] if labels else ""
-    if _combo_field(f"##choice-{name}", caption, width) and labels:
-        state.dropdown_request = (name, tuple(_core.get_current_context().get_item_rect()),
-                                  list(labels), index)
+    clicked = _combo_field(f"##choice-{name}", caption, width)
+    field = tuple(ctx.get_item_rect())
+    _overlays.combo_list(key, list(labels), index, below=field if clicked else None)
     _remember(state, name)
     _tooltip(section)
 

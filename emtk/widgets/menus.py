@@ -44,20 +44,28 @@ What was deliberately skipped
   clock and a hover feed, and emtk has neither here. Submenus open on
   **press**. :attr:`MenuItem.hovered` is a plain attribute a host may set if it
   has hover information; nothing in this module reads a clock.
-* **Keyboard navigation.** The reference's menus are fully navigable, through a
-  global input context. Introducing one would be a second paradigm beside the
-  retained controls, so keys are left to the host.
-* **Scrolling.** A menu taller than the viewport is placed by
-  :func:`best_popup_pos` and clipped; the panel's inline menus page through a
-  too-tall menu instead, and that behaviour belongs with them until a host asks
-  for it here.
+* **Keyboard navigation of bar menus.** The reference's menus are fully
+  navigable, through a global input context. A :class:`Popup` takes keys
+  through :meth:`Popup.key` (up, down, Enter, Escape, type-to-find), which is
+  what a combo's list and a context menu need; a :class:`MenuBar` leaves keys
+  to the host.
+
+A :class:`Popup` taller than its viewport is capped to it and **scrolls** (the
+wheel, a scrollbar, the keyboard), and one opened under a field
+(:meth:`Popup.open_below`) is the list of a combo box: as wide as the field and
+its widest row, below it or flipped above it, never outside the viewport.
+:mod:`emtk.overlays` draws one over an immediate-mode frame and feeds it the
+frame's input.
 """
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from typing import NamedTuple, Union
 
 from .. import style
+from ..keys import (KEY_DOWN, KEY_END, KEY_ENTER, KEY_ESCAPE, KEY_HOME, KEY_PAGE_DOWN,
+                    KEY_PAGE_UP, KEY_RETURN, KEY_UP)
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 
 __all__ = [
@@ -67,6 +75,9 @@ __all__ = [
     "ROW_SCALE",
     "MARK_SCALE",
     "SEPARATOR_SCALE",
+    "SCROLLBAR_W",
+    "WHEEL_ROWS",
+    "FIND_TIMEOUT",
     "best_popup_pos",
     "PopupPress",
     "MenuItem",
@@ -96,6 +107,15 @@ MARK_SCALE = 1.2
 
 #: A separator row's height, as a multiple of a normal row's.
 SEPARATOR_SCALE = 0.5
+
+#: Width of a scrolling popup's scrollbar, in logical pixels.
+SCROLLBAR_W = 10.0
+
+#: Rows one notch of the wheel scrolls a popup by.
+WHEEL_ROWS = 3
+
+#: Seconds between two letters typed into a popup that still extend one search.
+FIND_TIMEOUT = 1.0
 
 #: Stands in for the reference's ``FLT_MAX`` in a rectangle that is unbounded
 #: on one axis. A real number rather than ``inf`` because an unbounded viewport
@@ -224,6 +244,46 @@ class PopupPress(NamedTuple):
 
 #: The answer when a press had nothing to do with a control at all.
 _IGNORED = PopupPress(None, False, False)
+
+
+def _ellipsize(p: Painter, text: str, room: float) -> str:
+    """*text*, or its longest prefix plus "…" that fits in *room*.
+
+    Half a pixel of slack, as :func:`emtk.style.fit_text` has, so a row sized
+    to exactly its label does not lose its last letter to float arithmetic.
+    """
+    if p.text_width(text) <= room + 0.5:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if p.text_width(text[:mid].rstrip() + "…") <= room + 0.5:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…" if lo else "…"
+
+
+def _wrap(p: Painter, text: str, room: float) -> list[str]:
+    """*text* broken into lines no wider than *room*: at spaces where it can,
+    mid-word where a word alone is wider."""
+    lines: list[str] = []
+    line = ""
+    for word in text.split(" "):
+        trial = f"{line} {word}" if line else word
+        if p.text_width(trial) <= room or not line and len(word) <= 1:
+            line = trial
+            continue
+        if line:
+            lines.append(line)
+        line = ""
+        for char in word:
+            if line and p.text_width(line + char) > room:
+                lines.append(line)
+                line = ""
+            line += char
+    lines.append(line)
+    return lines
 
 
 def _columns_width(label_w: float, shortcut_w: float, mark_w: float) -> float:
@@ -515,20 +575,14 @@ class MenuItem:
         if self.hovered and self.enabled:
             p.fill_rect(x + 1.0, y, max(w - 2.0, 1.0), h, style.HEADER_HOVERED)
 
-        shortcut_w = max(
-            self.column_shortcut_width,
-            p.text_width(self.shortcut) if self.shortcut else 0.0,
-        )
+        shortcut_w = self._shortcut_width(p)
         mark_left = x + w - PAD - mark_w
         shortcut_right = mark_left - SPACING
-        room = shortcut_right - (x + PAD)
-        if shortcut_w > 0.0:
-            room -= shortcut_w + SPACING
-        room = max(room, 1.0)
+        room = self.label_room(p, w)
 
         colour = style.TEXT if self.enabled else style.TEXT_DISABLED
         p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
-               style.fit_text(p, self.label, room), colour)
+               _ellipsize(p, self.label, room), colour)
 
         if self.shortcut:
             dim = style.DIM if self.enabled else style.with_alpha(style.TEXT_DISABLED, 140)
@@ -542,6 +596,22 @@ class MenuItem:
             side = mark_w * 0.5
             p.fill_rect(mark_left + (mark_w - side) * 0.5, y + (h - side) * 0.5,
                         side, side, style.CHECK_MARK)
+
+    def _shortcut_width(self, p: Painter) -> float:
+        return max(self.column_shortcut_width,
+                   p.text_width(self.shortcut) if self.shortcut else 0.0)
+
+    def label_room(self, p: Painter, w: float) -> float:
+        """How wide the label may be drawn in a row *w* wide."""
+        room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING
+        shortcut_w = self._shortcut_width(p)
+        if shortcut_w > 0.0:
+            room -= shortcut_w + SPACING
+        return max(room, 1.0)
+
+    def cut(self, p: Painter, w: float) -> bool:
+        """Whether the label does not fit a row *w* wide, and ends in "…"."""
+        return p.text_width(self.label) > self.label_room(p, w) + 0.5
 
     def draw_row(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the row alone, without anything that hangs off it.
@@ -780,6 +850,11 @@ class Menu:
         # "▸" and not ">": the baked atlas has this one, and it is the marker
         # the panel's inline menus already use.
         p.text(x, y, max(w - PAD, 1.0), h, ALIGN_VCENTER | ALIGN_RIGHT, "▸", colour)
+
+    def cut(self, p: Painter, w: float) -> bool:
+        """Whether the label does not fit a row *w* wide."""
+        room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING
+        return p.text_width(self.label) > room + 0.5
 
     def draw_panel(
         self, p: Painter, row_x: float, row_y: float, row_w: float, row_h: float
@@ -1022,13 +1097,29 @@ class MenuBar:
 
 
 class Popup:
-    """A free-floating panel anchored at a point, dismissed by a press outside.
+    """A free-floating panel, dismissed by a press outside.
 
     Unlike every other control here, the box handed to :meth:`draw` is **not**
-    where the popup goes -- it is the viewport the popup must stay inside. The
-    popup's own position is :attr:`anchor`, and :func:`best_popup_pos` moves it
-    off that anchor as far as it must to keep the whole panel on screen: down
-    and right by preference, up and left near the far corner.
+    where the popup goes -- it is the viewport the popup must stay inside. A
+    popup is put up one of two ways:
+
+    * :meth:`open_at` -- at a point (a context menu at the pointer).
+      :func:`best_popup_pos` moves it off that point as far as it must to keep
+      the whole panel on screen: down and right by preference, up and left near
+      the far corner.
+    * :meth:`open_below` -- under a field (the list of a combo box). The panel
+      is at least as wide as the field and as wide as its widest row; it drops
+      below the field when it fits there, flips above when it fits there, and
+      otherwise is shifted, as tall as the viewport allows, to cover what it
+      must. It never leaves the viewport, on either axis.
+
+    A panel taller than the viewport is capped to it and **scrolls**: the
+    wheel (:meth:`wheel`), a scrollbar on its right edge (:meth:`press`,
+    :meth:`drag`, :meth:`release`) and the keyboard (:meth:`key`: up, down,
+    Home, End, Page up/down, Enter, Escape, and type-to-find -- letters typed
+    in quick succession jump to the first row that starts with them). A row
+    too long even for the viewport ends in "…" and shows its whole text in a
+    tooltip while it is highlighted.
 
     Parameters
     ----------
@@ -1040,10 +1131,20 @@ class Popup:
     Attributes
     ----------
     open : bool
-        Whether the panel is up. Opened with :meth:`open_at`.
+        Whether the panel is up.
     anchor : tuple of float or None
         Where it was asked to appear. ``None`` centres it in the viewport, which
         is what the reference does for modals.
+    below : tuple of float or None
+        The field ``(x, y, w, h)`` it drops from, after :meth:`open_below`.
+    min_width : float
+        The narrowest the panel may be (the field's width, for a combo).
+    scroll : float
+        How far the rows are scrolled, in logical pixels.
+    highlight : int or None
+        Index into :attr:`entries` of the row under the pointer or the keyboard.
+    tooltip : str or None
+        The whole text of the highlighted row when the row had to be cut.
     modal : bool
         False here; see :class:`PopupModal`.
     """
@@ -1056,11 +1157,40 @@ class Popup:
         self.title = str(title)
         self.open = False
         self.anchor: tuple[float, float] | None = None
+        self.below: tuple[float, float, float, float] | None = None
+        self.min_width = 0.0
         self.last_dir: str | None = None
+        self.scroll = 0.0
+        self.highlight: int | None = None
+        self.tooltip: str | None = None
+        #: The clock type-to-find reads; a test swaps it for a fake one.
+        self.clock = time.monotonic
         self._panel: tuple[float, float, float, float] | None = None
+        self._view: tuple[float, float, float, float] | None = None
         self._rows: list[Row] = []
+        self._row_h = 0.0
+        self._max_scroll = 0.0
+        self._bar: tuple[float, float, float, float] | None = None
+        self._thumb: tuple[float, float, float, float] | None = None
+        self._grab: float | None = None
+        self._reveal: tuple[int, bool] | None = None
+        self._pointer: tuple[float, float] | None = None
+        self._rehover = False
+        self._find = ("", -1.0e9)
 
     # ------------------------------------------------------------------ #
+    def _reset(self) -> None:
+        self.last_dir = None
+        self.scroll = 0.0
+        self.tooltip = None
+        self._grab = None
+        self._pointer = None
+        self._find = ("", -1.0e9)
+        for entry in self.entries:
+            if entry is not None:
+                entry.hovered = False
+        self.open = True
+
     def open_at(self, x: float | None = None, y: float | None = None) -> None:
         """Put the panel up at a point.
 
@@ -1070,18 +1200,47 @@ class Popup:
             Where. Omit both to centre it in the viewport.
         """
         self.anchor = None if x is None or y is None else (float(x), float(y))
-        self.last_dir = None
-        self.open = True
+        self.below = None
+        self.highlight = None
+        self._reveal = None
+        self._reset()
+
+    def open_below(self, field: Sequence[float], current: int | None = None) -> None:
+        """Put the panel up as the list of the field ``(x, y, w, h)``.
+
+        Parameters
+        ----------
+        field : sequence of float
+            The closed control the list belongs to: the panel is at least as
+            wide, and drops below it (or flips above it).
+        current : int, optional
+            Index into :attr:`entries` of the current choice: highlighted, and
+            scrolled into view when the panel first draws.
+        """
+        fx, fy, fw, fh = (float(v) for v in field)
+        self.below = (fx, fy, fw, fh)
+        self.anchor = (fx, fy + fh)
+        self.min_width = fw
+        self._reset()
+        valid = current is not None and 0 <= current < len(self.entries) \
+            and self.entries[current] is not None
+        self.highlight = int(current) if valid else None
+        self._reveal = (int(current), True) if valid else None
+        if valid:
+            self.entries[current].hovered = True
 
     def close(self) -> None:
         """Put the panel away, and every submenu in it."""
         self.open = False
+        self._grab = None
+        self.tooltip = None
         for entry in self.entries:
             if isinstance(entry, Menu):
                 entry.close()
 
     def panel_size(self, p: Painter) -> tuple[float, float]:
-        """Measure the ``(width, height)`` the panel needs for its entries.
+        """Measure the ``(width, height)`` the panel needs for its entries,
+        before any viewport caps it.
 
         Parameters
         ----------
@@ -1096,12 +1255,29 @@ class Popup:
         width, height, _row_h, _title_h, _shortcut_w = _panel_metrics(
             p, self.entries, self.title
         )
-        return (width, height)
+        return (max(width, self.min_width), height)
 
     @property
     def panel_rect(self) -> tuple[float, float, float, float] | None:
         """Where the panel was last painted, as ``(x, y, w, h)``, or ``None``."""
         return self._panel
+
+    @property
+    def view_rect(self) -> tuple[float, float, float, float] | None:
+        """The part of the panel the rows scroll in, as last painted."""
+        return self._view
+
+    @property
+    def max_scroll(self) -> float:
+        """How far the rows can scroll; zero when they all fit."""
+        return self._max_scroll
+
+    def row_rect(self, index: int) -> tuple[float, float, float, float] | None:
+        """Where entry *index* was last painted (scrolled), or ``None``."""
+        for entry, rect in self._rows:
+            if entry is not None and entry is self.entries[index]:
+                return rect
+        return None
 
     def contains(self, x: float, y: float) -> bool:
         """Whether a point is on the panel or on an open submenu of it.
@@ -1126,6 +1302,42 @@ class Popup:
         )
 
     # ------------------------------------------------------------------ #
+    def place(self, p: Painter, x: float, y: float, w: float, h: float
+              ) -> tuple[float, float, float, float]:
+        """The panel's ``(x, y, w, h)`` inside the viewport ``(x, y, w, h)``.
+
+        Never outside the viewport: taller than it, the panel is capped to it
+        (and scrolls); wider than it, the panel is the viewport's width (and
+        its longest rows end in "…").
+        """
+        width, height, _row_h, _title_h, _shortcut_w = _panel_metrics(
+            p, self.entries, self.title
+        )
+        pan_h = min(height, h)
+        if height > h + 0.5:
+            width += SCROLLBAR_W
+        pan_w = min(max(width, self.min_width), w)
+        right, bottom = x + w, y + h
+        if self.below is not None:
+            fx, fy, _fw, fh = self.below
+            if fy + fh + pan_h <= bottom + 0.5:
+                pos_y = fy + fh                       # below the field
+            elif fy - pan_h >= y - 0.5:
+                pos_y = fy - pan_h                    # flipped above it
+            else:                                     # shifted to fit
+                pos_y = style.clamp(fy + fh, y, bottom - pan_h)
+            pos_x = style.clamp(fx, x, right - pan_w)
+            return (pos_x, max(pos_y, y), pan_w, pan_h)
+        if self.anchor is None:
+            ref = (x + (w - pan_w) * 0.5, y + (h - pan_h) * 0.5)
+        else:
+            ref = self.anchor
+        avoid = (ref[0], ref[1], ref[0], ref[1])
+        pos_x, pos_y, self.last_dir = best_popup_pos(
+            ref, (pan_w, pan_h), (x, y, right, bottom), avoid, self.last_dir
+        )
+        return (pos_x, pos_y, pan_w, pan_h)
+
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the popup inside a viewport.
 
@@ -1142,19 +1354,161 @@ class Popup:
         if self.modal:
             p.fill_rect(x, y, w, h, style.MODAL_DIM_BG)
 
-        width, height = self.panel_size(p)
-        if self.anchor is None:
-            ref = (x + (w - width) * 0.5, y + (h - height) * 0.5)
-        else:
-            ref = self.anchor
-        avoid = (ref[0], ref[1], ref[0], ref[1])
-        pos_x, pos_y, self.last_dir = best_popup_pos(
-            ref, (width, height), (x, y, x + w, y + h), avoid, self.last_dir
+        pos_x, pos_y, width, height = self.place(p, x, y, w, h)
+        _nat_w, nat_h, row_h, title_h, _shortcut_w = _panel_metrics(
+            p, self.entries, self.title
         )
+        self._row_h = row_h
         self._panel = (pos_x, pos_y, width, height)
-        self._rows = _lay_rows(p, pos_x, pos_y, width, self.entries, self.title,
-                               (x + w, y + h))
-        _paint_panel(p, pos_x, pos_y, width, height, self._rows, self.title)
+        view = (pos_x, pos_y + PAD + title_h, width, max(height - 2.0 * PAD - title_h, 0.0))
+        self._view = view
+        content = nat_h - 2.0 * PAD - title_h
+        self._max_scroll = max(content - view[3], 0.0)
+        bar_w = SCROLLBAR_W if self._max_scroll > 0.0 else 0.0
+        row_w = width - bar_w
+        if self._reveal is not None:
+            index, centre = self._reveal
+            self._reveal = None
+            self._reveal_row(p, index, centre, view[3])
+        self.scroll = style.clamp(self.scroll, 0.0, self._max_scroll)
+        self._rows = _lay_rows(p, pos_x, pos_y - self.scroll, row_w, self.entries,
+                               self.title, (x + w, y + h))
+        for index, entry in enumerate(self.entries):
+            if entry is not None:
+                entry.hovered = index == self.highlight
+
+        p.stroke_rect(pos_x, pos_y, width, height, style.BORDER, style.POPUP_BG)
+        if self.title:
+            p.text(pos_x + PAD, pos_y + PAD, max(width - 2.0 * PAD, 1.0), row_h,
+                   ALIGN_VCENTER | ALIGN_LEFT,
+                   style.fit_text(p, self.title, width - 2.0 * PAD), style.GOLD, bold=True)
+        p.push_clip(*view)
+        try:
+            for entry, rect in self._rows:
+                if rect[1] + rect[3] < view[1] or rect[1] > view[1] + view[3]:
+                    continue
+                if entry is None:
+                    rule_y = rect[1] + rect[3] * 0.5
+                    p.fill_rect(rect[0] + PAD, rule_y, max(rect[2] - 2.0 * PAD, 1.0),
+                                1.0, style.SEPARATOR)
+                    continue
+                entry.draw_row(p, *rect)
+        finally:
+            p.pop_clip()
+        self._draw_scrollbar(p, view, content)
+
+        for entry, rect in self._rows:
+            if isinstance(entry, Menu) and entry.open:
+                entry.draw_panel(p, *rect)
+        self._draw_tooltip(p, x, y, w, h)
+
+    def _reveal_row(self, p: Painter, index: int, centre: bool, view_h: float) -> None:
+        """Scroll so entry *index* is in view: centred, or just inside an edge."""
+        _w, _h, row_h, _title_h, _sw = _panel_metrics(p, self.entries, self.title)
+        top = 0.0
+        for entry in self.entries[:index]:
+            top += row_h * SEPARATOR_SCALE if entry is None else row_h
+        if centre:
+            self.scroll = top - (view_h - row_h) * 0.5
+        elif top < self.scroll:
+            self.scroll = top
+        elif top + row_h > self.scroll + view_h:
+            self.scroll = top + row_h - view_h
+
+    def _draw_scrollbar(self, p: Painter, view, content: float) -> None:
+        self._bar = self._thumb = None
+        if self._max_scroll <= 0.0 or view[3] <= 0.0:
+            return
+        bar = (view[0] + view[2] - SCROLLBAR_W, view[1], SCROLLBAR_W, view[3])
+        self._bar = bar
+        p.fill_rect(*bar, style.SCROLLBAR_BG)
+        span = max(bar[3] * view[3] / max(content, 1.0), min(16.0, bar[3]))
+        at = bar[1] + (bar[3] - span) * (self.scroll / self._max_scroll)
+        self._thumb = (bar[0] + 2.0, at, SCROLLBAR_W - 4.0, span)
+        grabbed = self._grab is not None
+        hovered = self._pointer is not None and style.hit(*self._pointer, *self._thumb)
+        colour = (style.SCROLLBAR_GRAB_ACTIVE if grabbed
+                  else style.SCROLLBAR_GRAB_HOVERED if hovered else style.SCROLLBAR_GRAB)
+        p.fill_rect(*self._thumb, colour)
+
+    def _draw_tooltip(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
+        """The whole text of a highlighted row that had to be cut, under it."""
+        self.tooltip = None
+        if self.highlight is None or self._view is None:
+            return
+        entry = self.entries[self.highlight]
+        rect = self.row_rect(self.highlight)
+        if entry is None or rect is None or not entry.cut(p, rect[2]):
+            return
+        self.tooltip = entry.label
+        room = max(w - 2.0 * PAD, 1.0)
+        lines = _wrap(p, entry.label, room)
+        line_h = p.line_height()
+        tip_w = min(max(p.text_width(line) for line in lines) + 2.0 * PAD, w)
+        tip_h = line_h * len(lines) + PAD
+        tip_x = style.clamp(rect[0] + PAD, x, x + w - tip_w)
+        tip_y = rect[1] + rect[3] + 2.0
+        if tip_y + tip_h > y + h:
+            tip_y = rect[1] - tip_h - 2.0
+        tip_y = style.clamp(tip_y, y, y + h - tip_h)
+        p.stroke_rect(tip_x, tip_y, tip_w, tip_h, style.BORDER, style.POPUP_BG)
+        for i, line in enumerate(lines):
+            p.text(tip_x + PAD, tip_y + PAD * 0.5 + i * line_h, tip_w - 2.0 * PAD, line_h,
+                   ALIGN_VCENTER | ALIGN_LEFT, line, style.TEXT)
+
+    # ------------------------------------------------------------------ #
+    def _row_at(self, x: float, y: float) -> int | None:
+        """Index of the entry whose row is under ``(x, y)``, inside the view."""
+        if self._view is None or not style.hit(x, y, *self._view):
+            return None
+        if self._bar is not None and style.hit(x, y, *self._bar):
+            return None
+        for entry, rect in self._rows:
+            if entry is not None and style.hit(x, y, *rect):
+                return self.entries.index(entry)
+        return None
+
+    def hover(self, x: float, y: float) -> None:
+        """The pointer moved to ``(x, y)``: highlight the row under it.
+
+        A pointer that has not moved leaves the highlight alone, so the
+        keyboard's highlight survives the next frame.
+        """
+        if not self.open or (self._pointer == (x, y) and not self._rehover):
+            return
+        first, self._pointer = self._pointer is None, (x, y)
+        self._rehover = False
+        if first:
+            # Where the pointer rests as the list opens is not a choice: a
+            # list shifted over its own field would otherwise trade the
+            # current row's highlight for whatever row landed under it.
+            return
+        index = self._row_at(x, y)
+        if index is not None:
+            self.highlight = index
+
+    def wheel(self, x: float, y: float, steps: float) -> bool:
+        """Scroll by *steps* notches (positive: up). True when over the panel."""
+        if not self.contains(x, y):
+            return False
+        self.scroll = style.clamp(self.scroll - float(steps) * WHEEL_ROWS * self._row_h,
+                                  0.0, self._max_scroll)
+        self._rehover = True          # the rows moved under a resting pointer
+        return True
+
+    def drag(self, x: float, y: float) -> bool:
+        """Move the scrollbar's thumb while it is held. True when it was."""
+        if self._grab is None or self._bar is None or self._thumb is None:
+            return False
+        travel = self._bar[3] - self._thumb[3]
+        if travel > 0.0:
+            self.scroll = style.clamp((y - self._grab - self._bar[1]) / travel
+                                      * self._max_scroll, 0.0, self._max_scroll)
+        return True
+
+    def release(self) -> None:
+        """Let go of the scrollbar's thumb."""
+        self._grab = None
 
     def press(
         self,
@@ -1186,8 +1540,22 @@ class Popup:
         if not self.open:
             return _IGNORED
 
+        if self._bar is not None and style.hit(x, y, *self._bar):
+            thumb = self._thumb
+            if thumb is not None and thumb[1] <= y <= thumb[1] + thumb[3]:
+                self._grab = y - thumb[1]
+            else:
+                page = self._view[3] if self._view is not None else 0.0
+                step = -page if thumb is not None and y < thumb[1] else page
+                self.scroll = style.clamp(self.scroll + step, 0.0, self._max_scroll)
+            return PopupPress(None, True, False)
         if self._rows:
-            result = _route(self._rows, x, y)
+            in_view = self._view is not None and style.hit(x, y, *self._view)
+            rows = self._rows if in_view else [
+                (entry, rect) for entry, rect in self._rows
+                if isinstance(entry, Menu) and entry.open
+            ]
+            result = _route(rows, x, y)
             if result.item is not None:
                 self.close()
                 return PopupPress(result.item, True, True)
@@ -1197,6 +1565,84 @@ class Popup:
             return PopupPress(None, True, False)
 
         return self._press_outside()
+
+    # ------------------------------------------------------------------ #
+    def _navigable(self) -> list[int]:
+        return [i for i, entry in enumerate(self.entries)
+                if entry is not None and entry.enabled]
+
+    def _go(self, index: int | None) -> None:
+        if index is not None:
+            self.highlight = index
+            self._reveal = (index, False)
+
+    def key(self, key: int, text: str = "") -> PopupPress:
+        """Process a key while the popup is up.
+
+        Up/Down move the highlight (Home/End to the ends, Page up/down by a
+        page), Enter activates the highlighted row, Escape closes the popup,
+        and letters jump to the first row starting with what was typed.
+
+        Returns
+        -------
+        PopupPress
+            ``item`` is the row Enter activated. Every key is consumed.
+        """
+        if not self.open:
+            return _IGNORED
+        rows = self._navigable()
+        at = rows.index(self.highlight) if self.highlight in rows else None
+        page = max(int(self._view[3] // self._row_h) - 1, 1) if self._view and self._row_h else 8
+        if key == KEY_ESCAPE:
+            self.close()
+            return PopupPress(None, True, True)
+        if key in (KEY_RETURN, KEY_ENTER):
+            if self.highlight is None:
+                return PopupPress(None, True, False)
+            entry = self.entries[self.highlight]
+            if isinstance(entry, Menu):
+                entry.open = entry.enabled
+                return PopupPress(None, True, False)
+            if entry is not None and entry.enabled:
+                if entry.checkable:
+                    entry.toggle()
+                self.close()
+                return PopupPress(entry, True, True)
+            return PopupPress(None, True, False)
+        moves = {KEY_DOWN: 1, KEY_UP: -1, KEY_PAGE_DOWN: page, KEY_PAGE_UP: -page}
+        if rows and key in moves:
+            step = moves[key]
+            if at is None:
+                at = -1 if step > 0 else len(rows)
+            self._go(rows[max(0, min(len(rows) - 1, at + step))])
+        elif rows and key == KEY_HOME:
+            self._go(rows[0])
+        elif rows and key == KEY_END:
+            self._go(rows[-1])
+        elif text and text.isprintable():
+            self._type_to_find(text, rows)
+        return PopupPress(None, True, False)
+
+    def _type_to_find(self, text: str, rows: list[int]) -> None:
+        """Jump to the first row starting with the letters typed lately.
+
+        Letters typed within :data:`FIND_TIMEOUT` of each other extend one
+        search ("ra" finds "ratio" rather than "red"); the same letter typed
+        again, when nothing starts with the doubled prefix, steps to the next
+        row starting with that letter, as native lists do.
+        """
+        now = self.clock()
+        typed, when = self._find
+        typed = (typed if now - when <= FIND_TIMEOUT else "") + text.lower()
+        self._find = (typed, now)
+        labels = {i: self.entries[i].label.lower() for i in rows}
+        match = next((i for i in rows if labels[i].startswith(typed)), None)
+        if match is None and len(set(typed)) == 1:
+            first = [i for i in rows if labels[i].startswith(typed[0])]
+            if first:
+                later = [i for i in first if self.highlight is None or i > self.highlight]
+                match = (later or first)[0]
+        self._go(match)
 
     def _press_outside(self) -> PopupPress:
         """Report what a press that missed the panel does.

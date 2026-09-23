@@ -509,6 +509,14 @@ class Context:
         self._window_stack: list[_Window] = []
         self.current_window: Optional[_Window] = None
         self.clip_rect: Rect = box
+        #: This frame's overlays: ``(key, draw)`` pairs run by
+        #: :meth:`draw_overlays` after everything else -- see :meth:`add_overlay`.
+        self._overlays: list[tuple[Any, Callable[["Context"], bool]]] = []
+        #: The pointer and keys held back from the frame while an overlay is
+        #: open, handed to the overlays when they run.
+        self._overlay_input: Optional[dict] = None
+        #: True while :meth:`draw_overlays` runs.
+        self.in_overlay = False
 
     # -- the frame ------------------------------------------------------------ #
     def new_frame(self, now: Optional[float] = None) -> None:
@@ -520,6 +528,7 @@ class Context:
         self.hovered_id = None
         self.hovered_id_allow_overlap = False
         self._active_id_alive = False
+        self.hold_input_for_overlays()
         self.hovered_window = self.find_hovered_window(*self.io.mouse_pos)
         for window in self.windows:
             window.was_active, window.active = window.active, False
@@ -531,7 +540,11 @@ class Context:
         The move happens *after* submission because the ring is the order the
         items were submitted in -- Tab pressed on this frame lands on the next
         item of this frame's list, and the next frame draws it focused.
+
+        The overlays (:meth:`add_overlay`) are drawn first: over everything
+        the frame drew.
         """
+        self.draw_overlays()
         if self.nav_request and self.nav_ring:
             if self.nav_id in self.nav_ring:
                 at = self.nav_ring.index(self.nav_id) + self.nav_request
@@ -548,8 +561,9 @@ class Context:
         if (self.active_id is not None and not getattr(self, "_active_id_alive", True)
                 and not any(self.io.mouse_down)):
             self.clear_active_id()
-        self.io.want_capture_keyboard = self.nav_id is not None
-        self.io.want_capture_mouse = self.hovered_window is not None
+        overlay_open = bool(self.storage.get("__overlays_open__"))
+        self.io.want_capture_keyboard = self.nav_id is not None or overlay_open
+        self.io.want_capture_mouse = self.hovered_window is not None or overlay_open
         self.io.end_event()
 
     # -- keyboard navigation --------------------------------------------- #
@@ -1211,6 +1225,91 @@ class Context:
         self.layout.advance(box[2], box[3])
         return box
 
+    # -- overlays ------------------------------------------------------------ #
+    #
+    # emtk draws as it goes, so "over everything" can only mean "after
+    # everything": an overlay is a draw callback queued during the frame and
+    # run at its end, on top of whatever the windows drew, clipped to the
+    # frame. It is what a combo's list and a context menu are
+    # (:mod:`emtk.overlays`), and why no host has to draw them.
+    #
+    # While one is open it owns the input, as a popup does in Dear ImGui
+    # (``IsWindowContentHoverable`` is false under a popup): the next frame
+    # starts with the pointer and the keys *held back* from everything else --
+    # nothing under the list hovers, a click outside it closes it without
+    # reaching what is behind, and the wheel scrolls the list and not the
+    # panel under it -- and the overlays get them back when they run.
+    def add_overlay(self, key: Any, draw: Callable[["Context"], bool]) -> None:
+        """Queue ``draw(ctx)`` to run after everything else this frame.
+
+        *draw* returns whether the overlay is still open; an open one is
+        submitted again next frame by whoever owns it, and holds that frame's
+        input (see :meth:`hold_input_for_overlays`). One that is not
+        submitted is gone.
+        """
+        self._overlays.append((key, draw))
+
+    def overlay_open(self) -> bool:
+        """Whether an overlay was open at the end of the last frame."""
+        return bool(self.storage.get("__overlays_open__"))
+
+    def hold_input_for_overlays(self) -> None:
+        """Hold this frame's pointer and keys back for the open overlays.
+
+        Called by :meth:`new_frame`. The frame then sees no pointer (it is
+        ``(-1, -1)``), no clicks, releases, wheel or keys; :meth:`draw_overlays`
+        puts them back for the overlays, and the pointer back for the host.
+        """
+        self._overlay_input = None
+        if not self.overlay_open():
+            return
+        io = self.io
+        self._overlay_input = {
+            "mouse_pos": tuple(io.mouse_pos),
+            "mouse_clicked": list(io.mouse_clicked),
+            "mouse_released": list(io.mouse_released),
+            "mouse_double_clicked": list(io.mouse_double_clicked),
+            "mouse_wheel": io.mouse_wheel,
+            "mouse_wheel_h": io.mouse_wheel_h,
+            "key": io.key,
+            "text": io.text,
+        }
+        io.mouse_pos = (-1.0, -1.0)
+        io.mouse_clicked = [False, False, False]
+        io.mouse_released = [False, False, False]
+        io.mouse_double_clicked = [False, False, False]
+        io.mouse_wheel = io.mouse_wheel_h = 0.0
+        io.key, io.text = 0, ""
+
+    def draw_overlays(self) -> None:
+        """Run this frame's overlays, over everything, with the input held back.
+
+        Called by :meth:`end_frame`. Each runs outside every window, with a
+        fresh layout over the frame's box and the clip reset to it.
+        """
+        held, self._overlay_input = self._overlay_input, None
+        if held is not None:
+            for name, value in held.items():
+                setattr(self.io, name, value)
+        queued, self._overlays = self._overlays, []
+        still_open: list = []
+        if queued:
+            saved = (self.layout, self.clip_rect, self.current_window)
+            self.current_window = None
+            self.clip_rect = self.box
+            self.layout = Layout(self.p, *self.box, style=self.layout.style)
+            self.p.push_clip(*self.box)
+            self.in_overlay = True
+            try:
+                for key, draw in queued:
+                    if draw(self):
+                        still_open.append(key)
+            finally:
+                self.in_overlay = False
+                self.p.pop_clip()
+                self.layout, self.clip_rect, self.current_window = saved
+        self.storage["__overlays_open__"] = still_open
+
     # -- popups and tooltips ------------------------------------------------------- #
     def open_popup(self, name: str) -> None:
         self._popups[name] = True
@@ -1345,7 +1444,9 @@ class ImWidget(Control):
         if self._painter is None or self._box is None:
             return None
         ctx = Context(self._painter, self._box, io=self.io, style=self.style, storage=self.storage)
+        ctx.hold_input_for_overlays()
         result = self.fn(ctx, *self.args, **self.kwargs)
+        ctx.draw_overlays()
         self.result = result
         self.tooltip = ctx.tooltip
         self.wants_frame = ctx.frame_requested
