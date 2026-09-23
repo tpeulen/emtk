@@ -408,8 +408,8 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _tooltip(section)
         _w.same_line()
         field_w = max(width - swatch - 8.0, 30.0)
-    spin = (str(section.get("style", "")).lower() == "spin" and kind in ("int", "float")
-            and not read_only)
+    spin = ((str(section.get("style", "")).lower() == "spin" or bool(section.get("spin")))
+            and kind in ("int", "float") and not read_only)
     stepper_w = _core.get_frame_height() * 0.75 if spin else 0.0
     shown = state.buffers.get(name, shown_value)
     _w.set_next_item_width(max(field_w - stepper_w, 20.0))

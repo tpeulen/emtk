@@ -498,3 +498,21 @@ def test_a_progress_bar_is_determinate_or_sweeps():
     model.fraction = 0.5
     driver.frame()
     assert "Running…" in driver.painter.strings
+
+
+def test_spin_true_adds_arrows_to_a_scientific_value():
+    spec = {"sections": [{"type": "value", "attr": "don_value", "kind": "float",
+                          "style": "scientific", "decimals": 2, "spin": True}]}
+    model = Model()
+    model.don, model.don_value = True, 85.9
+    driver = Driver(spec, model)
+    driver.frame()
+    x, y, w, h = driver.state.rects["don_value.stepper"]
+    io = driver.io
+    io.mouse_pos = io.mouse_clicked_pos[0] = (x + w / 2, y + h * 0.25)
+    io.mouse_down[0] = io.mouse_clicked[0] = True
+    driver.frame()
+    io.mouse_down[0] = False
+    io.mouse_released[0] = True
+    driver.frame()
+    assert abs(model.don_value - 86.9) < 1e-9
