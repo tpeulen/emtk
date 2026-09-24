@@ -447,8 +447,9 @@ def set_next_item_allow_overlap() -> None:
     get_current_context().set_next_item_allow_overlap()
 
 
-def is_item_hovered() -> bool:
-    return get_current_context().is_item_hovered()
+def is_item_hovered(allow_when_disabled: bool = False) -> bool:
+    """``IsItemHovered``; a disabled item only with *allow_when_disabled*."""
+    return get_current_context().is_item_hovered(allow_when_disabled)
 
 
 def is_item_active() -> bool:
@@ -1056,8 +1057,10 @@ def checkbox_flags(label: str, flags: int, flags_value: int) -> tuple[bool, int]
 
 
 def set_item_tooltip(s: str) -> None:
-    """``ImGui::SetItemTooltip``: a tooltip, if the last item is hovered."""
-    if is_item_hovered():
+    """``ImGui::SetItemTooltip``: a tooltip, if the last item is hovered --
+    disabled or not (ImGui's tooltip hover flags allow disabled items, so a
+    disabled control can say why it is disabled)."""
+    if is_item_hovered(allow_when_disabled=True):
         set_tooltip(s)
 
 

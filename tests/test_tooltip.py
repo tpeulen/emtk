@@ -477,3 +477,32 @@ def test_the_qt_host_arms_one_single_shot_timer(qt_app):
     timer = getattr(host, "_wake", None)
     assert timer is not None and timer.isActive() and timer.isSingleShot()
     assert 0 < timer.interval() <= 500
+
+
+def test_a_disabled_item_still_says_why_in_its_tooltip():
+    """ImGui sets the hovered id of a disabled item and its tooltips allow
+    disabled items (``ImGuiHoveredFlags_AllowWhenDisabled``): a greyed-out
+    control can say why it is greyed out. It still neither hovers nor fires."""
+    seen = {"pressed": False}
+
+    def gui():
+        im.set_cursor_pos((20.0, 20.0))
+        im.begin_disabled(True)
+        seen["pressed"] |= im.button("Off")
+        seen["hovered"] = im.is_item_hovered()
+        seen["for_tooltip"] = im.is_item_hovered(allow_when_disabled=True)
+        clock.rects["off"] = clock._rect()
+        im.set_item_tooltip("unavailable: no lifetime column")
+        im.end_disabled()
+
+    clock = _Clock(gui=gui, style=core.Style(tooltip_delay=0.0))
+    _start(clock)
+    clock.move("off")
+    ctx = clock.frame(2.0)
+    assert ctx.tooltip == "unavailable: no lifetime column"
+    assert not seen["hovered"] and seen["for_tooltip"]
+    clock.io.mouse_down[0] = True
+    clock.frame(2.1)
+    clock.io.mouse_down[0] = False
+    ctx = clock.frame(2.2)
+    assert not seen["pressed"] and ctx.active_id is None

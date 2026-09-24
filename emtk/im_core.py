@@ -471,6 +471,7 @@ class Context:
         self.layout = Layout(painter, *box, style=layout_style)
         self._ids: list[Any] = []
         self._last_item: Optional[Rect] = None
+        self._last_item_disabled = False
         self._last_id: Any = None
         self._child: list[tuple[Layout, Rect]] = []
         self.hovered_id: Any = None
@@ -771,6 +772,7 @@ class Context:
         """
         self._last_item = box
         self._last_id = item_id
+        self._last_item_disabled = bool(self.item_flags & ItemFlags.DISABLED)
         if item_id is not None:
             self.nav_add(item_id)
             if item_id == self.active_id:
@@ -794,8 +796,7 @@ class Context:
             None, self.current_window,
         ):
             return False
-        if self.item_flags & ItemFlags.DISABLED:
-            return False
+        disabled = bool(self.item_flags & ItemFlags.DISABLED)
         if self.io.mouse_pos == (-1.0, -1.0) or not hit(*self.io.mouse_pos, *box):
             return False
         if not self._overlaps_clip(box):
@@ -809,6 +810,12 @@ class Context:
             return False
         self.hovered_id = key
         self.hovered_id_allow_overlap = False
+        if disabled:
+            # ImGui: "when disabled we'll return false but still set HoveredId",
+            # so a disabled item can still say why it is disabled in its
+            # tooltip (`IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)`),
+            # while it neither hovers, holds nor fires.
+            return False
         return True
 
     def set_next_item_allow_overlap(self) -> None:
@@ -822,7 +829,14 @@ class Context:
         x, y, w, h = box
         return not (x > cx + cw or x + w < cx or y > cy + ch or y + h < cy)
 
-    def is_item_hovered(self) -> bool:
+    def is_item_hovered(self, allow_when_disabled: bool = False) -> bool:
+        """``IsItemHovered``: the pointer is on the last item.
+
+        A disabled item is not hovered unless *allow_when_disabled*
+        (``ImGuiHoveredFlags_AllowWhenDisabled``, which tooltips use).
+        """
+        if self._last_item_disabled and not allow_when_disabled:
+            return False
         key = self._last_id if self._last_id is not None else self._last_item
         return key is not None and self.hovered_id == key
 
