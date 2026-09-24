@@ -24,6 +24,7 @@ viewer is a licence for the code to do the same next week.
 from __future__ import annotations
 
 import ast
+import os
 import pathlib
 import subprocess
 import sys
@@ -297,9 +298,22 @@ def test_there_are_examples():
     assert _examples(), f"no examples under {EXAMPLES}"
 
 
+#: Seconds an example gets. Each draws a frame or two; one still running after
+#: this is waiting for a user who is not there.
+EXAMPLE_TIMEOUT = 120
+
+
 @pytest.mark.parametrize("example", [p.name for p in _examples()])
 def test_every_example_runs(example):
-    """Run it. An example that does not run is documentation that is wrong."""
+    """Run it. An example that does not run is documentation that is wrong.
+
+    Headless: an example that opens a window (``emtk.native``) would otherwise
+    get a real one wherever glfw and a display are there, and pump its loop
+    until somebody closes it -- the run never returns. On the offscreen canvas
+    the native host draws one frame and exits, which is what is checked here.
+    """
+    env = {**os.environ, "EMTK_CANVAS": "offscreen"}
     out = subprocess.run([sys.executable, str(EXAMPLES / example)], cwd=ROOT,
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, env=env,
+                         timeout=EXAMPLE_TIMEOUT)
     assert out.returncode == 0, out.stderr[-3000:]

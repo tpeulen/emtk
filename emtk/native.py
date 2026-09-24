@@ -716,7 +716,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             save_png(args.screenshot, pixels.shape[1], pixels.shape[0],
                      pixels.reshape(-1).tobytes())
             print(args.screenshot)
-        elif not args.screenshot:
+        elif not (backend or os.environ.get("EMTK_CANVAS", "").strip()):
+            # Asked for offscreen (a headless run) is not a missing backend.
             print("no interactive rendercanvas backend (pip install glfw); "
                   "rendered one frame offscreen", file=sys.stderr)
         return 0
