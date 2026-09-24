@@ -321,7 +321,7 @@ def parse_number(text: str) -> float:
     :func:`float` reads. Raises :class:`ValueError` for anything else.
     """
     cleaned = str(text).strip().replace("\u2212", "-").replace("\u221e", "inf")
-    cleaned = cleaned.replace("\u2009", "").replace(" ", "")
+    cleaned = "".join(cleaned.split())  # a thin space between digit groups
     return float(cleaned)
 
 
