@@ -63,14 +63,14 @@ def exported(tree: ast.Module) -> list[str]:
             elif isinstance(sub, ast.Name) and sub.id in aliases:
                 source = INIT.parent / (aliases[sub.id].replace(".", "/") + ".py")
                 if source.exists():
-                    names += exported(ast.parse(source.read_text()))
+                    names += exported(ast.parse(source.read_text(encoding="utf-8")))
     return names
 
 
 def name_map() -> dict[str, str]:
     out: dict[str, str] = {}
     for m in family_modules():
-        tree = ast.parse((INIT.parent / (m.replace(".", "/") + ".py")).read_text())
+        tree = ast.parse((INIT.parent / (m.replace(".", "/") + ".py")).read_text(encoding="utf-8"))
         for name in exported(tree):
             out.setdefault(name, m)
     return out
@@ -85,7 +85,7 @@ def render(mapping: dict[str, str]) -> str:
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    text = INIT.read_text()
+    text = INIT.read_text(encoding="utf-8")
     block = re.search(r"_NAME_TO_MODULE: dict\[str, str\] = \{\n(?:.*?\n)?\}\n", text, re.S)
     fresh = render(name_map())
     if block is None:
@@ -96,7 +96,7 @@ def main(argv=None) -> int:
             return 0
         print("emtk name map is stale: run tools/gen_names.py")
         return 1
-    INIT.write_text(text[: block.start()] + fresh + text[block.end():])
+    INIT.write_text(text[: block.start()] + fresh + text[block.end():], encoding="utf-8")
     print(f"wrote {fresh.count(chr(10)) - 2} names")
     return 0
 

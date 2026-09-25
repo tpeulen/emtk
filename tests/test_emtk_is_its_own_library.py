@@ -98,7 +98,7 @@ def test_the_prose_names_no_application_either():
             continue
         hits = [
             line.strip()
-            for line in path.read_text().splitlines()
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines()
             if "chimol" in line.lower() and "github.com/tpeulen/chimol" not in line
         ]
         if hits:

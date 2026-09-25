@@ -101,7 +101,7 @@ _NOT_DRAWN = {
 }
 
 _CONTROL_MODULES = sorted(
-    str(p.relative_to(_EMTK)) for p in _EMTK.rglob("*.py") if p.name != "__init__.py"
+    p.relative_to(_EMTK).as_posix() for p in _EMTK.rglob("*.py") if p.name != "__init__.py"
 )
 
 
