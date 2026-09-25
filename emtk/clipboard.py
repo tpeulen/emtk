@@ -94,9 +94,12 @@ def paste() -> str:
     try:
         from . import im_widgets  # noqa: PLC0415
 
-        return im_widgets.get_clipboard_text()
+        text = im_widgets.get_clipboard_text()
+        if text:
+            return text
     except Exception:  # noqa: BLE001 - no frame running
-        return ""
+        pass
+    return _last[1]
 
 
 def commands() -> list[list[str]]:
