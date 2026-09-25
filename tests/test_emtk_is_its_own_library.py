@@ -316,7 +316,13 @@ def test_every_example_runs(example):
     out = subprocess.run([sys.executable, str(EXAMPLES / example)], cwd=ROOT,
                          capture_output=True, text=True, env=env,
                          timeout=EXAMPLE_TIMEOUT)
-    if out.returncode != 0 and ("No module named 'wgpu'" in out.stderr or "No module named 'rendercanvas'" in out.stderr):
-        pytest.skip(f"optional dependency not installed for {example}")
+    if out.returncode != 0 and (
+        "No module named 'wgpu'" in out.stderr
+        or "No module named 'rendercanvas'" in out.stderr
+        or "Request adapter failed" in out.stderr
+        or "No suitable graphics adapter found" in out.stderr
+    ):
+        pytest.skip(f"optional dependency / GPU adapter not available for {example}")
     assert out.returncode == 0, out.stderr[-3000:]
+
 

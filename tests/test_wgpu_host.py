@@ -147,9 +147,12 @@ def renderer():
     from emtk.wgpu_host import WgpuRenderer  # noqa: PLC0415
 
     try:
-        return WgpuRenderer()
+        r = WgpuRenderer()
+        _ = r.device
+        return r
     except Exception as exc:  # pragma: no cover - a machine with no GPU
         pytest.skip(f"no usable wgpu adapter here: {exc}")
+
 
 
 class _Frame:
