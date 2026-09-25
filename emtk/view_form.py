@@ -424,6 +424,9 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     shown = state.buffers.get(name, shown_value)
     _w.set_next_item_width(max(field_w - stepper_w, 20.0))
     flags = InputTextFlags.ENTER_RETURNS_TRUE | (InputTextFlags.READ_ONLY if read_only else 0)
+    if kind in ("int", "float"):
+        # A number is replaced, not extended, as ImGui's InputScalar does.
+        flags |= InputTextFlags.AUTO_SELECT_ALL
     entered, text = _w.input_text(f"##{name}", shown, str(section.get("placeholder", "")), flags,
                                   elide_start=str(section.get("elide", "")).lower() == "start")
     _remember(state, f"{name}.edit" if slider else name)
