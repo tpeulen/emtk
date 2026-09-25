@@ -216,22 +216,38 @@ def buttons_from_dom(buttons) -> int:
     return mask
 
 
-def modifiers_from_canvas(modifiers) -> int:
+def modifiers_from_canvas(modifiers, mac: bool | None = None) -> int:
     """Pack ``rendercanvas``' modifier names into an engine mask.
 
     Parameters
     ----------
     modifiers : iterable of str
         ``("Shift", "Control", ...)`` as the canvas reports them.
+    mac : bool, optional
+        Whether this is a Mac; :func:`emtk.keys.mac_behaviors` by default.
 
     Returns
     -------
     int
-        A mask of the ``*_MODIFIER`` constants.
+        A mask of the ``*_MODIFIER`` constants. On a Mac glfw's Super
+        (``"Meta"``) is Command, the primary modifier, so it is reported as
+        ``CONTROL_MODIFIER`` and Control as ``META_MODIFIER`` -- Qt's
+        convention, which every host follows (:mod:`emtk.keys`).
     """
+    if mac is None:
+        from .keys import mac_behaviors  # noqa: PLC0415
+
+        mac = mac_behaviors()
     mask = NO_MODIFIER
     for name in modifiers or ():
         mask |= _CANVAS_MODIFIERS.get(str(name), 0)
+    if mac:
+        swapped = mask & ~(CONTROL_MODIFIER | META_MODIFIER)
+        if mask & CONTROL_MODIFIER:
+            swapped |= META_MODIFIER
+        if mask & META_MODIFIER:
+            swapped |= CONTROL_MODIFIER
+        mask = swapped
     return mask
 
 

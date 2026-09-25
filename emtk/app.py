@@ -473,12 +473,16 @@ class ImApp:
         return 0
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        from .keys import typed_text  # noqa: PLC0415
+
         self.io.key = int(key)
         # Appended, not replaced: characters arrive one event each and a host
         # draws on demand, so several can land before the frame that spends
         # them (a page's frame takes a while in Pyodide) -- a replace kept
-        # only the last and fast typing lost letters.
-        self.io.text += str(text or "")
+        # only the last and fast typing lost letters. A shortcut's letter
+        # (Cmd+A arrives from a browser with text "a") types nothing.
+        self.io.text += typed_text(text, modifiers)
+        self.io.key_events.append((int(key), str(text or ""), int(modifiers)))
         self._modifiers(int(modifiers))
         # Honest about consumption: only while a widget holds the keyboard
         # (a focused text field), as ImGui's WantCaptureKeyboard says -- as of

@@ -42,8 +42,9 @@ import os
 import sys
 from collections.abc import Callable, Sequence
 
-from .events import NO_BUTTON, button_from_canvas, modifiers_from_canvas
-from .keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN, key_from_dom
+from .events import (CONTROL_MODIFIER, META_MODIFIER, NO_BUTTON, button_from_canvas,
+                     modifiers_from_canvas)
+from .keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN, key_from_dom, letter_of
 
 __all__ = [
     "CHAR_BACKENDS",
@@ -484,10 +485,17 @@ class CanvasEvents:
         text = self.key_text(event)
         key = key_from_dom(name)
         modifiers = modifiers_from_canvas(event.get("modifiers"))
+        # A shortcut names its letter: glfw's key name is the only place it is
+        # (the char event types nothing while Command or Ctrl is held).
+        chord = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER))
+        if chord and not key and letter_of(0, name):
+            key = ord(letter_of(0, name))
         self._deliver("on_key_press", key, text, modifiers)
         # Only keys that *do* something repeated: a held Escape must not fire
-        # a hundred times.
-        if key not in (KEY_ESCAPE, KEY_ENTER, KEY_RETURN) and (text or key):
+        # a hundred times, and nor may Cmd+V -- macOS sends no key-up for a
+        # key released while Command is held, so its repeat would never stop.
+        if (key not in (KEY_ESCAPE, KEY_ENTER, KEY_RETURN) and (text or key)
+                and not (chord and letter_of(key, ""))):
             self._start_key_repeat(key, text, modifiers)
 
     def _on_char(self, event: dict) -> None:

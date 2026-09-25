@@ -39,6 +39,17 @@ from emtk.native import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _pc_modifiers():
+    """These tests speak the Windows/Linux spelling of the modifiers; the Mac's
+    Command-is-Control swap is tests/test_text_shortcuts.py's."""
+    from emtk import keys as _keys
+
+    _keys.set_mac_behaviors(False)
+    yield
+    _keys.set_mac_behaviors(None)
+
+
 class _Canvas:
     """A canvas that records handlers and reports the backend we want."""
 

@@ -124,6 +124,14 @@ class IO:
     #: The key delivered this event (a ``emtk.keys`` constant or a character code), else 0.
     key: int = 0
     text: str = ""
+    #: Every key since the last frame, in order, as ``(key, text, modifiers)``
+    #: -- ImGui's input queue. :attr:`key` keeps only the last one, and a text
+    #: field fed faster than it draws (a page in Pyodide) needs them all:
+    #: Cmd+A then "x" is a replace, "x" then Cmd+A is not.
+    key_events: list = field(default_factory=list)
+    #: ``io.WantTextInput``: a text field had the keyboard last frame. A page
+    #: reads it to decide whether Cmd+C/X/V are a field's or the browser's.
+    want_text_input: bool = False
     delta_time: float = 1.0 / 60.0
     now: float = 0.0
     frame_count: int = 0
@@ -191,6 +199,7 @@ class IO:
         self.mouse_wheel_h = 0.0
         self.key = 0
         self.text = ""
+        self.key_events = []
 
     def mouse_drag_delta(self, button: int = 0) -> tuple[float, float]:
         ox, oy = self.mouse_clicked_pos[button]
@@ -1562,8 +1571,11 @@ class ImWidget(Control):
         return self._replay()
 
     def key(self, key: int, text: str = "", modifiers: int = 0):
+        from .keys import typed_text  # noqa: PLC0415
+
         self.io.key = int(key)
-        self.io.text = text
+        self.io.text = typed_text(text, modifiers)
+        self.io.key_events = [(int(key), str(text or ""), int(modifiers))]
         self._modifiers(modifiers)
         return self._replay()
 

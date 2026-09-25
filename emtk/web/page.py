@@ -21,7 +21,8 @@ from __future__ import annotations
 import pathlib
 
 from ..events import button_from_dom, buttons_from_dom
-from ..keys import key_from_dom, modifiers_from_dom
+from ..events import CONTROL_MODIFIER, META_MODIFIER
+from ..keys import key_from_dom, letter_of, modifiers_from_dom
 
 __all__ = [
     "DROP_DIR",
@@ -272,9 +273,12 @@ class WebPage:
         into ``preventDefault``. ``KeyboardEvent.key`` is layout-aware and
         already shifted, so *text* passes through untouched.
         """
-        return bool(self.surface.on_key_press(
-            key_from_dom(name), str(text or ""),
-            modifiers_from_dom(bool(ctrl), bool(shift), bool(alt), bool(meta))))
+        modifiers = modifiers_from_dom(bool(ctrl), bool(shift), bool(alt), bool(meta))
+        code = key_from_dom(name)
+        # A shortcut names its letter; a DOM event has it only as ``key``.
+        if not code and modifiers & (CONTROL_MODIFIER | META_MODIFIER) and letter_of(0, name):
+            code = ord(letter_of(0, name))
+        return bool(self.surface.on_key_press(code, str(text or ""), modifiers))
 
     # -- files ----------------------------------------------------------- #
     def open_path(self, path: str) -> bool:

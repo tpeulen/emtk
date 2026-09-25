@@ -49,7 +49,11 @@ __all__ = [
     "KEY_TAB",
     "KEY_UP",
     "key_from_dom",
+    "letter_of",
+    "mac_behaviors",
     "modifiers_from_dom",
+    "set_mac_behaviors",
+    "typed_text",
 ]
 
 #: ``Qt.Key_*``. Return and Enter are distinct -- Enter is the numeric keypad's
@@ -170,13 +174,114 @@ def key_from_dom(name: str) -> int:
     return _DOM_KEYS.get(str(name), 0)
 
 
-def modifiers_from_dom(ctrl: bool, shift: bool, alt: bool, meta: bool) -> int:
+# --------------------------------------------------------------------------- #
+# The primary modifier
+# --------------------------------------------------------------------------- #
+#
+# One convention on every host: once a host has translated its event,
+# ``CONTROL_MODIFIER`` (``io.key_ctrl``) is the *primary* modifier -- Command
+# on a Mac, Ctrl elsewhere -- and ``META_MODIFIER`` (``io.key_super``) is the
+# other one: the physical Control key on a Mac, Win/Super elsewhere. That is
+# Qt's macOS convention (and so Tk's, which copies it) and Dear ImGui's
+# (``ConfigMacOSXBehaviors`` swaps Cmd and Ctrl), so "Ctrl+A" in a shortcut
+# table means Cmd-A on a Mac and nobody tests for two keys. The hosts whose
+# toolkits do not swap -- glfw through rendercanvas, the browser -- swap here.
+#
+# *Which* platform is the client's: in a page it is the browser's
+# ``navigator``, not the server's ``sys.platform``.
+_mac_override: bool | None = None
+_mac_detected: bool | None = None
+
+
+def _detect_mac() -> bool:
+    import sys  # noqa: PLC0415
+
+    if sys.platform == "darwin":
+        return True
+    if sys.platform != "emscripten":
+        return False
+    try:
+        import js  # type: ignore[import-not-found]  # noqa: PLC0415 - Pyodide
+    except ImportError:
+        return False
+    nav = getattr(js, "navigator", None)
+    names = []
+    for getter in (lambda: nav.userAgentData.platform, lambda: nav.platform,
+                   lambda: nav.userAgent):
+        try:
+            names.append(str(getter() or ""))
+        except Exception:  # noqa: BLE001 - an attribute this browser lacks
+            continue
+    return any(tag in n.lower() for n in names for tag in ("mac", "iphone", "ipad"))
+
+
+def mac_behaviors() -> bool:
+    """Whether text editing follows the Mac's conventions (the client's platform).
+
+    Command is the primary modifier, Option moves by word, Command-arrows go
+    to the line's ends, and Control-A / Control-E are Emacs' line start and
+    end -- as a Cocoa text field does. Elsewhere Ctrl moves by word and
+    Ctrl+Y redoes.
+    """
+    global _mac_detected
+    if _mac_override is not None:
+        return _mac_override
+    if _mac_detected is None:
+        _mac_detected = _detect_mac()
+    return _mac_detected
+
+
+def set_mac_behaviors(flag: bool | None) -> None:
+    """Force the Mac conventions on or off; ``None`` goes back to detecting them."""
+    global _mac_override
+    _mac_override = None if flag is None else bool(flag)
+
+
+def letter_of(key: int, text: str = "") -> str:
+    """The letter or digit a shortcut names, lower case, else ``""``.
+
+    Qt (and Tk, which copies it) reports ``Qt.Key_A`` -- the *uppercase*
+    ordinal -- emtk's own :data:`KEY_A` is the lowercase one, and a browser
+    or glfw may give no code at all, only the typed *text*. All three mean
+    the same shortcut.
+    """
+    key = int(key or 0)
+    if 65 <= key <= 90 or 97 <= key <= 122 or 48 <= key <= 57:
+        return chr(key).lower()
+    text = str(text or "")
+    if len(text) == 1 and text.isascii() and text.isalnum():
+        return text.lower()
+    return ""
+
+
+def typed_text(text: str, modifiers: int) -> str:
+    """What a key event *types*: its text, unless a shortcut modifier is held.
+
+    A browser reports Cmd+A with ``key == "a"``, and a text field that took
+    that as typing inserted an "a". Ctrl+Alt is AltGr off a Mac, which types
+    (``@`` on a German layout), so it is kept there.
+    """
+    from .events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER  # noqa: PLC0415
+
+    modifiers = int(modifiers or 0)
+    mac = mac_behaviors()
+    if modifiers & CONTROL_MODIFIER and not (not mac and modifiers & ALT_MODIFIER):
+        return ""
+    if mac and modifiers & META_MODIFIER:
+        return ""
+    return str(text or "")
+
+
+def modifiers_from_dom(ctrl: bool, shift: bool, alt: bool, meta: bool,
+                       mac: bool | None = None) -> int:
     """Pack a DOM event's four modifier booleans into an engine mask.
 
     Parameters
     ----------
     ctrl, shift, alt, meta : bool
         ``KeyboardEvent.ctrlKey`` and friends.
+    mac : bool, optional
+        Whether the client is a Mac; :func:`mac_behaviors` by default.
 
     Returns
     -------
@@ -185,13 +290,14 @@ def modifiers_from_dom(ctrl: bool, shift: bool, alt: bool, meta: bool) -> int:
 
     Notes
     -----
-    ``metaKey`` is Command on a Mac, where it -- not Control -- is what a
-    line-editing shortcut is bound to. It is reported separately rather than
-    folded into Control, and the command line accepts either, because a browser
-    on Linux sends ``ctrlKey`` for the same intent.
+    ``metaKey`` is Command on a Mac, the primary modifier, so there it is
+    reported as ``CONTROL_MODIFIER`` and ``ctrlKey`` as ``META_MODIFIER`` --
+    the convention every host follows (see above).
     """
     from .events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
 
+    if mac_behaviors() if mac is None else mac:
+        ctrl, meta = meta, ctrl
     mask = 0
     if ctrl:
         mask |= CONTROL_MODIFIER

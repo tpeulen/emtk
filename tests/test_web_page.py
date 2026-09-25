@@ -25,6 +25,17 @@ from emtk.keys import KEY_ESCAPE, KEY_LEFT, KEY_RETURN
 from emtk.web.page import DROP_DIR, MOUNT_DIR, WebPage, mount, wheel_steps_from_dom
 
 
+@pytest.fixture(autouse=True)
+def _pc_modifiers():
+    """These tests speak the Windows/Linux spelling of the modifiers; the Mac's
+    Command-is-Control swap is tests/test_text_shortcuts.py's."""
+    from emtk import keys as _keys
+
+    _keys.set_mac_behaviors(False)
+    yield
+    _keys.set_mac_behaviors(None)
+
+
 class _Recorder(Surface):
     def __init__(self):
         self.calls = []
