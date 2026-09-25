@@ -52,6 +52,65 @@ async function copyDropped(item, dir, FS) {
 }
 // </copy-dropped>
 
+// <clipboard> -- tests/test_web_clipboard.py runs this block under node.
+// Copy, cut and paste reach the app through the DOM's own clipboard events.
+// A page cannot read the clipboard synchronously (`navigator.clipboard.
+// readText` is a promise behind a permission prompt), but a `paste` event
+// carries the text, and a `copy`/`cut` event takes it -- both need nothing
+// but the keystroke. So Cmd/Ctrl+C/X/V are *not* forwarded as keys from
+// `keydown`: the browser's default runs, raises the event, and the event
+// delivers the shortcut (`page.copy`, `page.paste`) with its text. The
+// default is prevented only when the app took the shortcut, so a copy in a
+// real DOM control, or one the app has no use for, stays the browser's. If no
+// event follows (a browser that raises none), the key is delivered plain.
+function isMacClient(nav) {
+  const n = nav || {};
+  const names = [(n.userAgentData && n.userAgentData.platform) || "", n.platform || "",
+                 n.userAgent || ""];
+  return names.some((name) => /mac|iphone|ipad/i.test(name));
+}
+
+function clipboardShortcut(event, mac) {
+  const primary = mac ? event.metaKey : event.ctrlKey;
+  if (!primary || event.altKey) return null;
+  const letter = (event.key || "").toLowerCase();
+  return letter === "c" || letter === "x" || letter === "v" ? letter : null;
+}
+
+function forwardClipboard(target, page, redraw, isFormControl) {
+  let pending = null;       // a clipboard keystroke waiting for its DOM event
+  const settle = () => { pending = null; };
+  target.addEventListener("copy", (event) => onCopy(event, false));
+  target.addEventListener("cut", (event) => onCopy(event, true));
+  function onCopy(event, cut) {
+    if (isFormControl(event.target)) return;
+    settle();
+    const text = page.copy(cut);
+    if (text !== undefined && text !== null) {
+      event.clipboardData.setData("text/plain", String(text));
+      event.preventDefault();
+    }
+    redraw();
+  }
+  target.addEventListener("paste", (event) => {
+    if (isFormControl(event.target)) return;
+    settle();
+    const data = event.clipboardData;
+    const text = data ? data.getData("text/plain") : "";
+    if (page.paste(text || "")) event.preventDefault();
+    redraw();
+  });
+  // Called by `keydown`: true when the key is the clipboard's to deliver.
+  return function divert(event, deliver) {
+    if (!clipboardShortcut(event, isMacClient(globalThis.navigator))) return false;
+    const mine = {};
+    pending = mine;
+    setTimeout(() => { if (pending === mine) { pending = null; deliver(); } }, 0);
+    return true;
+  };
+}
+// </clipboard>
+
 async function boot() {
   const canvas = document.getElementById("view");
   const dpr0 = window.devicePixelRatio || 1;
@@ -194,10 +253,17 @@ mount(js.emtkCanvas, _emtk_app_spec)
   // it goes in on the suspendable stack with its default prevented first.
   // Every other key is answered synchronously, so whether it was consumed can
   // decide `preventDefault` -- browser shortcuts stay the browser's.
+  const isFormControl = (el) => {
+    const tag = (el && el.tagName) || "";
+    return tag === "INPUT" || tag === "TEXTAREA" || Boolean(el && el.isContentEditable);
+  };
+  const divertClipboard = forwardClipboard(document, page, redraw, isFormControl);
   window.addEventListener("keydown", async (event) => {
-    const tag = (event.target && event.target.tagName) || "";
-    if (tag === "INPUT" || tag === "TEXTAREA" || event.target?.isContentEditable) return;
+    if (isFormControl(event.target)) return;
     const args = [event.key, event.key.length === 1 ? event.key : "", ...mods(event)];
+    // Cmd/Ctrl+C/X/V: the browser's copy/cut/paste event delivers it, with
+    // the clipboard's text (see forwardClipboard) -- no preventDefault here.
+    if (divertClipboard(event, () => { if (page.key(...args)) redraw(); })) return;
     let consumed;
     if (event.key === "Enter") {
       event.preventDefault();

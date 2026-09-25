@@ -25,7 +25,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 
-__all__ = ["copy", "paste", "receive", "set_hook", "commands", "paste_commands",
+__all__ = ["copy", "paste", "receive", "holding", "set_hook", "commands", "paste_commands",
            "use_tk", "use_glfw",
            "last_copied"]
 
@@ -83,10 +83,16 @@ def use_glfw(window=None) -> bool:
     return True
 
 
-def receive(text: str) -> None:
-    """Hold *text* as the clipboard for the next :func:`paste` (a DOM paste)."""
+def receive(text: str | None) -> None:
+    """Hold *text* as the clipboard for the next :func:`paste` (a DOM paste);
+    ``None`` drops what is held."""
     global _received
-    _received = str(text)
+    _received = None if text is None else str(text)
+
+
+def holding() -> bool:
+    """Whether a received paste is still waiting for its :func:`paste`."""
+    return _received is not None
 
 
 def last_copied() -> tuple[int, str]:

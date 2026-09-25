@@ -280,6 +280,43 @@ class WebPage:
             code = ord(letter_of(0, name))
         return bool(self.surface.on_key_press(code, str(text or ""), modifiers))
 
+    # -- the clipboard --------------------------------------------------- #
+    def _shortcut(self, letter: str) -> bool:
+        """Deliver Cmd/Ctrl+*letter* (already the primary modifier) and run the
+        frame that spends it -- an immediate-mode app only acts in a frame, and
+        the clipboard event wants its answer now."""
+        consumed = bool(self.surface.on_key_press(ord(letter), "", CONTROL_MODIFIER))
+        try:
+            self.draw()
+        except Exception:  # noqa: BLE001 - no canvas (a test's stand-in): the key stands
+            pass
+        return consumed
+
+    def copy(self, cut: bool = False):
+        """The DOM's ``copy`` (or ``cut``) event: the text the app copied, else ``None``.
+
+        ``boot.js`` puts the text on the event's ``clipboardData`` and prevents
+        the default only when there is one, so a copy the app does not take is
+        still the browser's.
+        """
+        from .. import clipboard  # noqa: PLC0415
+
+        before = clipboard.last_copied()[0]
+        self._shortcut("x" if cut else "c")
+        count, text = clipboard.last_copied()
+        return text if count != before else None
+
+    def paste(self, text: str) -> bool:
+        """The DOM's ``paste`` event, with its ``text/plain``: held for the
+        paste the delivered Cmd/Ctrl+V asks for. Returns whether it was taken."""
+        from .. import clipboard  # noqa: PLC0415
+
+        clipboard.receive(str(text or ""))
+        self._shortcut("v")
+        taken = not clipboard.holding()
+        clipboard.receive(None)               # unclaimed: never a later paste's
+        return taken
+
     # -- files ----------------------------------------------------------- #
     def open_path(self, path: str) -> bool:
         """A file ``boot.js`` wrote to Pyodide's filesystem (a drop)."""
