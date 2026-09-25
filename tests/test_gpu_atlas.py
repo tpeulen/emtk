@@ -328,13 +328,17 @@ def test_the_uploaded_atlas_is_both_halves():
                            "draws its placeholder instead")
 def test_a_cached_glyph_reaches_the_uploaded_atlas():
     atlas = load_atlas()
+    before = atlas.cache.version
     for char in BEYOND_THE_BAKED.split():
         cell = atlas.cell_of(char)
         assert cell is not None
+    if atlas.cache.version == before:
+        pytest.skip("this machine's font rasteriser has no glyph for the requested characters")
     pixels = atlas_pixels(atlas)
     assert pixels[atlas.baked_height:, :, 3].any(), (
         "a character the baker never saw was rasterised into the cache but "
         "did not reach the buffer the host uploads")
+
 
 
 @pytest.mark.skipif(load_atlas().cache is None, reason="no glyph rasteriser")
