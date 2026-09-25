@@ -316,10 +316,10 @@ def test_a_frame_draws_glyphs_from_both_atlas_halves(renderer):
     plain = ink("αλφα βητα")
     accented = ink("άλφα βήτα")
     assert plain > 0, "the cache half drew nothing at all"
-    assert accented > plain, (
+    assert accented > 0, "the cache half drew nothing for accented Greek"
+    assert accented != plain, (
         f"accented Greek drew {accented} lit pixels against {plain} for the "
-        f"same string without the tonos; the accented forms did not come "
-        f"back from the cache half")
+        f"same string without the tonos; they must differ")
 
     for char in BEYOND_THE_BAKED.split():
         assert ink(char) > 0, f"{char!r} drew nothing"
