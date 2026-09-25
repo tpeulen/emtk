@@ -32,6 +32,10 @@ def _no_system_clipboard(monkeypatch):
     monkeypatch.setattr(clipboard, "commands", lambda: [])
     monkeypatch.setattr(clipboard, "paste_commands", lambda: [])
     monkeypatch.setattr(clipboard, "_received", None)
+    # A host built by an earlier test (Qt, Tk) routes the clipboard through
+    # itself for good; each test starts without one.
+    monkeypatch.setattr(clipboard, "_hook", None)
+    monkeypatch.setattr(clipboard, "_paste_hook", None)
 
 
 @pytest.fixture(scope="session")
