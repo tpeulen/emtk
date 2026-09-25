@@ -137,6 +137,46 @@ number into, with optional ``-``/``+`` buttons and a printf format that
 decides both how the value is shown and how the typed string is read back.
 Also carries ``InputTextMultiline`` and ``InputTextWithHint``.
 
+Text editing shortcuts
+----------------------
+
+Every emtk text entry -- ``im.input_text`` and view-form fields, a combo
+list's filter, DataTable cells and filter, the retained inputs -- edits
+through :class:`emtk.widgets.text_field.TextField`, so the shortcuts are the
+same everywhere; the code editor follows the same table. Hosts deliver the
+*primary* modifier as ``CONTROL_MODIFIER`` (``io.key_ctrl``): Command on a
+Mac (the browser's client, read from ``navigator``), Ctrl elsewhere;
+``emtk.keys.mac_behaviors()`` says which, ``set_mac_behaviors()`` forces it.
+
+=====================  ======================  ==========================
+action                 Mac                     Windows / Linux
+=====================  ======================  ==========================
+select all             Cmd+A                   Ctrl+A
+copy / cut / paste     Cmd+C / X / V           Ctrl+C / X / V
+undo                   Cmd+Z                   Ctrl+Z
+redo                   Cmd+Shift+Z             Ctrl+Y, Ctrl+Shift+Z
+word left / right      Option+Left / Right     Ctrl+Left / Right
+line start / end       Cmd+Left / Right,       Home / End
+                       Home / End, Ctrl+A / E
+delete word            Option+Backspace        Ctrl+Backspace / Delete
+delete to line start   Cmd+Backspace           --
+=====================  ======================  ==========================
+
+Shift with any movement extends the selection, typing or pasting replaces
+it, Backspace and Delete remove it; a click places the caret, a drag
+selects, a double click selects a word and a triple click everything. On a
+Mac Control-A/E/B/F/D/H/K keep their Emacs meaning, as in a Cocoa field --
+so Control-A is line start there, not select all. The command line is a
+readline prompt and keeps Ctrl/Cmd+A as line start on every platform.
+
+The clipboard is :mod:`emtk.clipboard` (``copy`` / ``paste``): Qt hosts use
+``QClipboard``, the Tk host its root, a glfw window glfw's clipboard, other
+native windows ``pbcopy``/``pbpaste``, ``wl-copy``/``xclip`` or ``clip``/
+``Get-Clipboard``. In a page ``boot.js`` lets the browser raise its
+``copy``/``cut``/``paste`` events for Cmd/Ctrl+C/X/V and forwards them with
+their text (``WebPage.copy`` / ``WebPage.paste``), preventing the browser's
+default only when the app took the shortcut.
+
 Colour
 ------
 

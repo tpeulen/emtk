@@ -43,8 +43,9 @@ standard library, so a frozen application carries Tcl/Tk (a few megabytes)
 instead of a Qt binding. Tk owns the window, the event loop and the
 clipboard and draws nothing itself. Keys and modifiers are translated into
 the Qt values :mod:`emtk.keys` uses, including Qt's macOS convention that
-Command reports as Control, so a control written against the Qt host moves
-across unchanged::
+Command reports as Control -- the convention every emtk host follows (glfw
+and the browser swap Command and Control on a Mac to match), so a control
+written against the Qt host moves across unchanged::
 
     from emtk.tk_host import TkHost
 
