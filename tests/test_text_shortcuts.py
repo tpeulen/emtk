@@ -225,3 +225,45 @@ def test_input_text_caret_moves_and_inserts_in_the_middle(mac):
 def test_clipboard_round_trips_through_the_hook(board):
     assert clipboard.copy("x y")
     assert clipboard.paste() == "x y"
+
+
+def test_input_text_double_click_selects_a_word_and_triple_click_all(mac):
+    d = _Driver("alpha beta")
+    d.frame()
+    x = 4.0 + 7.0 * 7                 # inside "beta" (RecordingPainter: 7 px a glyph)
+    d.click(x)
+    d.click(x)
+    d.key(0, "B")
+    assert d.value == "alpha B"
+    d.click(x)
+    d.click(x)
+    d.click(x)
+    d.key(0, "z")
+    assert d.value == "z"
+
+
+def test_input_text_triple_click_waits_on_the_clock(mac):
+    d = _Driver("alpha beta")
+    d.frame()
+    d.click(200.0)
+    d.app.io.now += 5.0               # the fake clock: too slow for a double click
+    d.click(200.0)
+    d.key(0, "!")
+    assert d.value == "alpha beta!"
+
+
+def test_input_text_drag_selects(mac):
+    from emtk.events import LEFT_BUTTON
+
+    d = _Driver("abcdef")
+    d.frame()
+    x, y, _w, _h = d.box
+    pad = 4.0
+    d.app.pointer_press(x + pad + 1, y + 4, LEFT_BUTTON, 0, 1)
+    d.frame()
+    d.app.pointer_move(x + pad + 7 * 3, y + 4, LEFT_BUTTON, 0)
+    d.frame()
+    d.app.pointer_release(x + pad + 7 * 3, y + 4, LEFT_BUTTON, 0)
+    d.frame()
+    d.key(KEY_BACKSPACE)
+    assert d.value == "def"

@@ -599,6 +599,8 @@ class Context:
             self.clear_active_id()
         overlay_open = bool(self.storage.get("__overlays_open__"))
         self.io.want_capture_keyboard = self.nav_id is not None or overlay_open
+        self.io.want_text_input = bool(getattr(self, "_want_text_input", False))
+        self._want_text_input = False
         self.io.want_capture_mouse = self.hovered_window is not None or overlay_open
         self.io.end_event()
 

@@ -145,7 +145,8 @@ def test_typing_into_a_focused_field_reaches_the_value():
 
     frames = Frames(gui)
     frames.draw()
-    frames.click(state["box"])              # focus it
+    x, y, w, h = state["box"]
+    frames.click((x + w - 8.0, y, 8.0, h))  # focus it, the caret after the text
     frames.io.text = ", world!"
     frames.draw()
     assert state["text"] == "Hello, world!"

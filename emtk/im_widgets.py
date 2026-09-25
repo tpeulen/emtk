@@ -1114,12 +1114,18 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
                elide_start: bool = False) -> tuple[bool, str]:
     """``ImGui::InputText``: the field, edited by the keys in ``io``.
 
-    A port gets the box, the caret and the text; the *keys* come from
-    ``io.key`` and ``io.text``, which is where the host puts them.
+    A port gets the box, the caret, a selection and the text; the *keys* come
+    from ``io.key_events`` (else ``io.key`` and ``io.text``), which is where
+    the host puts them. The editing is :class:`emtk.widgets.text_field.
+    TextField`'s, so the platform's shortcuts (select all, copy/cut/paste
+    through :mod:`emtk.clipboard`, undo/redo, word and line movement) work
+    here as in every emtk field; the mouse places the caret, drags a
+    selection, and a double / triple click selects a word / everything.
 
     ``flags`` accepts ``im.InputTextFlags`` bits: ``CHARS_HEXADECIMAL`` and
     ``CHARS_DECIMAL`` filter what is typed, ``READ_ONLY`` forbids editing,
-    ``ALWAYS_OVERWRITE`` replaces the last character, and
+    ``AUTO_SELECT_ALL`` selects the whole value when a click focuses it,
+    ``ALWAYS_OVERWRITE`` types over the character at the caret, and
     ``ENTER_RETURNS_TRUE`` makes the changed flag report the Enter key.
 
     *value* may also be a C ``char`` buffer -- a list, NUL-terminated --
@@ -1147,7 +1153,9 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     item_id = ctx.get_id(label)
     hovered, _held, pressed = ctx.button_behavior(box, item_id)
     focus = ctx.state(("focus",))
-    if pressed:
+    # Focused on the *down* edge, so the same press places the caret (or
+    # starts a drag-select) -- ButtonBehavior's press fires on the release.
+    if pressed or (hovered and ctx.io.mouse_clicked[0]):
         focus["id"] = item_id
         set_nav_id(item_id)
     elif ctx.io.mouse_clicked[0] and not hovered and focus.get("id") == item_id:
@@ -1155,23 +1163,23 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     # ...or the keyboard put the focus here, which is what Tab is for.
     focused = focus.get("id") == item_id or ctx.is_nav_focused(item_id)
 
-    if flags & _ITF.CHARS_HEXADECIMAL:
-        typed = "".join(c for c in ctx.io.text if c in "0123456789abcdefABCDEF")
-    elif flags & _ITF.CHARS_DECIMAL:
-        typed = "".join(c for c in ctx.io.text if c in "-+.0123456789")
+    field, st = _field_state(ctx, item_id, value, focused)
+    pad = ctx.style.frame_padding[0]
+    room = box[2] - 2.0 * pad
+    width = lambda s_: ctx.draw.calc_text_size(s_)[0]  # noqa: E731
+    origin = box[0] + pad - (st["scroll"] if focused else 0.0)
+    if focused:
+        _field_mouse(ctx, field, st, hovered, origin, width,
+                     bool(flags & _ITF.AUTO_SELECT_ALL))
+        entered = _field_keys(ctx, field, flags, read_only)
+        ctx._want_text_input = True
     else:
-        typed = ctx.io.text
-
-    changed = False
-    if focused and typed and not read_only:
-        if flags & _ITF.ALWAYS_OVERWRITE and value:
-            value, changed = value[:-1] + typed, True
-        else:
-            value, changed = value + typed, True
-    if focused and ctx.io.key in (_BACKSPACE, _DELETE) and value and not read_only:
-        value, changed = value[:-1], True
+        entered = False
+    changed = field.text != value
+    value = field.text
     if enter_returns:
-        changed = focused and ctx.io.key in _ENTER_KEYS and bool(typed or value)
+        changed = focused and entered and bool(value)
+    st["seen"] = value
 
     ctx.draw.add_rect_filled(
         (box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
@@ -1180,20 +1188,30 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         ctx.style.frame_rounding)
     _frame_border(ctx, box)
     shown = value if (value or not hint) else hint
-    pad = ctx.style.frame_padding[0]
-    room = box[2] - 2.0 * pad
-    text_w = ctx.draw.calc_text_size(shown)[0]
-    # Scrolled so the end -- the caret -- is in the field while typing.
-    shift = max(text_w - room, 0.0) if (focused and value) else 0.0
+    text_w = width(shown)
+    if focused:             # scrolled so the caret stays in the field
+        caret_px = width(value[:field.cursor])
+        scroll = min(st["scroll"], max(text_w - room, 0.0))
+        scroll = min(max(scroll, caret_px - room), caret_px)
+        st["scroll"] = max(scroll, 0.0)
+    else:
+        st["scroll"] = 0.0
+    origin = box[0] + pad - st["scroll"]
     if value and elide_start and not focused and text_w > room:
         shown = _elide_start(ctx, value, room)
     # Clipped to the field, as the reference's InputText is: a value longer
     # than its box used to run over whatever stood beside it.
     ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
-    ctx.draw.add_text((box[0] + pad - shift, box[1] + ctx.style.frame_padding[1]),
+    if focused and field.has_selection():
+        lo, hi = field.selection()
+        from .style import TEXT_SELECTED_BG  # noqa: PLC0415
+        ctx.draw.add_rect_filled((origin + width(value[:lo]), box[1] + 2.0),
+                                 (origin + width(value[:hi]), box[1] + box[3] - 2.0),
+                                 TEXT_SELECTED_BG)
+    ctx.draw.add_text((origin, box[1] + ctx.style.frame_padding[1]),
                       _col(Col.TEXT) if value else _col(Col.TEXT_DISABLED), shown)
     if focused:
-        caret = box[0] + pad - shift + ctx.draw.calc_text_size(value)[0]
+        caret = origin + width(value[:field.cursor])
         ctx.draw.add_line((caret, box[1] + 2.0), (caret, box[1] + box[3] - 2.0),
                           _col(Col.TEXT), 1.0)
     ctx.draw.pop_clip_rect()
@@ -1202,6 +1220,113 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         ctx.draw.add_text((box[0] + box[2] + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), label_shown)
     return (changed, value)
+
+
+#: Seconds within which a second press counts toward a double or triple click.
+_MULTI_CLICK_S = 0.4
+
+
+def _field_state(ctx, item_id, value: str, focused: bool):
+    """The :class:`TextField` behind an ``input_text``, kept in step with *value*.
+
+    Unfocused, the field is whatever the caller passes. Focused, it is what
+    was typed -- unless the caller changed the value since the last frame
+    (a Reset button), which is taken as it is.
+    """
+    from .widgets.text_field import TextField  # noqa: PLC0415
+
+    st = ctx.state(("input_text_field", item_id))
+    field = st.get("field")
+    if field is None:
+        field = st["field"] = TextField()
+        st.update(scroll=0.0, clicks=0, click_t=-1.0, drag=False, seen=None, had=False,
+                  had_before=False)
+    if not focused or st.get("seen") != value:
+        if field.text != value:
+            field.set_text(value)
+    if focused and not st["had"] and not ctx.io.mouse_clicked[0]:
+        field.select_all()          # Tab into a field selects it, as ImGui does
+    st["had_before"], st["had"] = st["had"], focused
+    return field, st
+
+
+def _field_mouse(ctx, field, st, hovered: bool, origin: float, width,
+                 auto_select_all: bool = False) -> None:
+    """Click places the caret, shift-click extends, drag selects, a double
+    click selects a word and a triple click everything. With
+    *auto_select_all* (``AUTO_SELECT_ALL``) the click that focuses the field
+    selects it whole, so typing replaces a number rather than extending it."""
+    io = ctx.io
+    if auto_select_all and not st["had_before"] and io.mouse_clicked[0]:
+        field.select_all()
+        st.update(clicks=1, click_t=io.now, drag=False)
+        return
+
+    def index_at(x: float) -> int:
+        if x < origin:
+            return len(field.text)
+        best, best_d = 0, abs(x - origin)
+        for i in range(1, len(field.text) + 1):
+            d = abs(x - (origin + width(field.text[:i])))
+            if d < best_d:
+                best, best_d = i, d
+        return best
+
+    if hovered and io.mouse_clicked[0]:
+        at = index_at(io.mouse_pos[0])
+        quick = io.now - st["click_t"] <= _MULTI_CLICK_S
+        st["clicks"] = st["clicks"] + 1 if quick else 1
+        if io.mouse_double_clicked[0]:
+            st["clicks"] = max(st["clicks"], 2)
+        st["click_t"] = io.now
+        st["drag"] = st["clicks"] == 1
+        if st["clicks"] >= 3:
+            field.select_all()
+        elif st["clicks"] == 2:
+            field.select_word_at(at)
+        else:
+            field.move(at, extend=io.key_shift)
+    elif st["drag"] and io.mouse_down[0]:
+        field.move(index_at(io.mouse_pos[0]), extend=True)
+    if not io.mouse_down[0]:
+        st["drag"] = False
+
+
+def _field_keys(ctx, field, flags: int, read_only: bool) -> bool:
+    """Feed this frame's keys to *field*; returns whether Enter was among them."""
+    from .flags import InputTextFlags as _ITF  # noqa: PLC0415
+
+    io = ctx.io
+    events = list(io.key_events)
+    if not events and (io.key or io.text):
+        mods = _current_modifiers(io)
+        events = [(io.key, io.text, mods)]
+    entered = False
+    for key, text, mods in events:
+        if key in _ENTER_KEYS:
+            entered = True
+            continue
+        if flags & _ITF.CHARS_HEXADECIMAL:
+            text = "".join(c for c in text if c in "0123456789abcdefABCDEF")
+        elif flags & _ITF.CHARS_DECIMAL:
+            text = "".join(c for c in text if c in "-+.0123456789eE")
+        if not key and not text:
+            continue
+        if flags & _ITF.ALWAYS_OVERWRITE and text and not field.has_selection():
+            field.move(field.cursor + len(text), extend=True)
+        before = (field.text, field.cursor, field.anchor)
+        field.key(key, text, mods)
+        if read_only and field.text != before[0]:
+            field.text = before[0]
+            field.cursor = min(before[1], len(field.text))
+    return entered
+
+
+def _current_modifiers(io) -> int:
+    from .events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER  # noqa: PLC0415
+
+    return ((CONTROL_MODIFIER if io.key_ctrl else 0) | (SHIFT_MODIFIER if io.key_shift else 0)
+            | (ALT_MODIFIER if io.key_alt else 0) | (META_MODIFIER if io.key_super else 0))
 
 
 def _elide_start(ctx, text: str, room: float) -> str:

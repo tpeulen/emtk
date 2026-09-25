@@ -131,14 +131,14 @@ def test_fields_packed_by_n_col_share_a_line():
 def test_typing_commits_on_enter_and_clamps():
     model = Model()
     driver = Driver(SPEC, model)
-    driver.type("restarts", "0")  # typed after the existing "2" -> "20", clamped to 10
+    driver.type("restarts", "20")  # replaces the selected "2" (AUTO_SELECT_ALL), clamped to 10
     assert model.restarts == 10
 
 
 def test_nothing_is_written_until_the_edit_is_committed():
     model = Model()
     driver = Driver(SPEC, model)
-    driver.type("restarts", "5", enter=False)
+    driver.type("restarts", "25", enter=False)
     assert model.restarts == 2
     driver.click("don")          # the pointer goes down elsewhere: commit
     assert model.restarts == 10  # "25" clamped

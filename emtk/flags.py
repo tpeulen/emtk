@@ -86,7 +86,7 @@ InputTextFlags = _bits(
     "AutoSelectAll", "EnterReturnsTrue", "CallbackCompletion", "CallbackHistory",
     "AlwaysOverwrite", "ReadOnly", "Password", "NoUndoRedo",
     # emtk implements (im.input_text): CharsHexadecimal, CharsDecimal,
-    # ReadOnly, AlwaysOverwrite, EnterReturnsTrue.
+    # ReadOnly, AlwaysOverwrite, EnterReturnsTrue, AutoSelectAll.
 )
 
 Cond = _bits("Always", "Once", "FirstUseEver", "Appearing")
