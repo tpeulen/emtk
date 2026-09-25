@@ -138,7 +138,9 @@ from ..keys import (
 )
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 from ..style import fit_text
+from ..events import SHIFT_MODIFIER
 from .basic import ScrollBar, TextInput
+from .text_field import index_at, paint as paint_field
 
 __all__ = [
     "BAR_COLOUR",
@@ -446,6 +448,11 @@ class DataTable:
         self.editing: Optional[tuple] = None
         self.editor = TextInput("", "")
         self._editor_box: Optional[tuple] = None
+        #: Caret x positions of the cell editor and the filter, from the last
+        #: draw: a click there places the caret, a drag selects.
+        self._editor_xs: list = []
+        self._filter_xs: list = []
+        self._field_drag = None
         self.show_filter = bool(filter_box)
         self.tooltip_key = str(tooltip_key or "")
         self.row_key = str(row_key or "")
@@ -970,11 +977,15 @@ class DataTable:
         field = self.filter.field
         p.stroke_rect(x, y, w, h, _style.GOLD if self.filter_focused else _style.BORDER, _style.TRACK_BG)
         p.push_clip(x, y, w, h)
-        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-               field.text or field.placeholder, _style.TEXT if field.text else _style.DIM)
-        if self.filter_focused:
-            caret = x + 4.0 + p.text_width(field.text[: field.cursor])
-            p.fill_rect(caret, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
+        if field.text:
+            self._filter_xs = paint_field(p, field, x, y, w, h, _style.TEXT,
+                                          _style.GOLD if self.filter_focused else None)
+        else:
+            p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
+                   field.placeholder, _style.DIM)
+            self._filter_xs = [x + 4.0]
+            if self.filter_focused:
+                p.fill_rect(x + 4.0, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
         p.pop_clip()
 
     def _draw_row(self, p: Painter, position: int, index: int, columns, order, x: float,
@@ -1073,10 +1084,7 @@ class DataTable:
         self._editor_box = (x, y, w, h)
         p.stroke_rect(x + 1.0, y + 1.0, w - 2.0, h - 2.0, _style.CHECK_MARK, _style.FRAME_BG)
         p.push_clip(x + 1.0, y + 1.0, w - 2.0, h - 2.0)
-        p.text(x + 5.0, y, max(w - 10.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, field.text,
-               _style.TEXT)
-        caret = x + 5.0 + p.text_width(field.text[: field.cursor])
-        p.fill_rect(caret, y + h * 0.2, 1.0, h * 0.6, _style.TEXT)
+        self._editor_xs = paint_field(p, field, x + 1.0, y, w - 2.0, h, _style.TEXT, _style.TEXT)
         p.pop_clip()
 
     # -- editing ------------------------------------------------------------------- #
@@ -1147,11 +1155,15 @@ class DataTable:
         returns whether the press landed on the table.
         """
         clicks = int(kw.get("clicks", box[5] if len(box) > 5 else 1) or 1)
+        shift = bool(int(box[4] if len(box) > 4 else kw.get("modifiers", 0) or 0) & SHIFT_MODIFIER)
         if self.editing is not None:
             if self._inside(self._editor_box, x, y):
+                self._press_field(self.editor.field, self._editor_xs, x, clicks, shift)
                 return True
             self.commit_edit()
         if self._inside(self._filter_box, x, y):
+            if self.filter_focused:
+                self._press_field(self.filter.field, self._filter_xs, x, clicks, shift)
             self.filter_focused = True
             return True
         self.filter_focused = False
@@ -1210,7 +1222,26 @@ class DataTable:
         if changed and self.on_select is not None:
             self.on_select(index)
 
+    def _press_field(self, field, xs, x: float, clicks: int, shift: bool) -> None:
+        """A press in the cell editor or the filter: caret, word, or all."""
+        at = index_at(xs, x)
+        self._field_drag = None
+        if clicks >= 3:
+            field.select_all()
+        elif clicks == 2:
+            field.select_word_at(at)
+        else:
+            field.move(at, extend=shift)
+            self._field_drag = (field, xs)
+
     def drag(self, x: float, y: float, *_box: Any) -> bool:
+        if self._field_drag is not None:
+            field, xs = self._field_drag
+            field.move(index_at(xs, x), extend=True)
+            return True
+        return self._drag_table(x, y, *_box)
+
+    def _drag_table(self, x: float, y: float, *_box: Any) -> bool:
         """Continue a scrollbar drag."""
         if self._hbar_held and self._hbar_box is not None:
             self._hbar_to(x)
@@ -1218,6 +1249,10 @@ class DataTable:
         return self.bar.drag(y)
 
     def release(self, *_args: Any, **_kw: Any) -> None:
+        self._field_drag = None
+        self._release_table(*_args, **_kw)
+
+    def _release_table(self, *_args: Any, **_kw: Any) -> None:
         """End a scrollbar drag."""
         self._hbar_held = False
         self.bar.release()

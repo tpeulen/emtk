@@ -1324,13 +1324,14 @@ class Context:
             "mouse_wheel_h": io.mouse_wheel_h,
             "key": io.key,
             "text": io.text,
+            "key_events": list(io.key_events),
         }
         io.mouse_pos = (-1.0, -1.0)
         io.mouse_clicked = [False, False, False]
         io.mouse_released = [False, False, False]
         io.mouse_double_clicked = [False, False, False]
         io.mouse_wheel = io.mouse_wheel_h = 0.0
-        io.key, io.text = 0, ""
+        io.key, io.text, io.key_events = 0, "", []
 
     def draw_overlays(self) -> None:
         """Run this frame's overlays, over everything, with the input held back.

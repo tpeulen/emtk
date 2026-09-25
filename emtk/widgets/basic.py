@@ -1234,13 +1234,15 @@ class TextInput:
             left = x + label_w
             box_w = max(w - label_w, 1.0)
         p.stroke_rect(left, y, box_w, h, _BORDER, _TRACK_BG)
-        shown = self.field.text or self.field.placeholder
-        colour = _TEXT if self.field.text else _DIM
         p.push_clip(left, y, box_w, h)
-        p.text(left + 4.0, y, max(box_w - 8.0, 1.0), h,
-               ALIGN_VCENTER | ALIGN_LEFT, shown, colour)
-        caret_x = left + 4.0 + p.text_width(self.field.text[: self.field.cursor])
-        p.fill_rect(caret_x, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _GOLD)
+        if self.field.text:
+            from .text_field import paint  # noqa: PLC0415
+
+            paint(p, self.field, left, y, box_w, h, _TEXT, _GOLD)
+        else:
+            p.text(left + 4.0, y, max(box_w - 8.0, 1.0), h,
+                   ALIGN_VCENTER | ALIGN_LEFT, self.field.placeholder, _DIM)
+            p.fill_rect(left + 4.0, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _GOLD)
         p.pop_clip()
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:

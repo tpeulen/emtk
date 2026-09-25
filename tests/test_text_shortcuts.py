@@ -267,3 +267,96 @@ def test_input_text_drag_selects(mac):
     d.frame()
     d.key(KEY_BACKSPACE)
     assert d.value == "def"
+
+
+# -- the combo list's filter ---------------------------------------------- #
+def _combo():
+    from test_overlays import TAUS, Form, Model, _spec
+
+    form = Form(Model(TAUS), _spec())
+    return form, form.open()
+
+
+def _send(form, key, text="", mods=0):
+    form.io.key_events = [(key, text, mods)]
+    form.io.key, form.io.text = key, keys.typed_text(text, mods)
+    return form.frame()
+
+
+def test_combo_filter_select_all_copy_paste_undo(mac, board):
+    form, panel = _combo()
+    for ch in "tau":
+        _send(form, ord(ch.upper()), ch)
+    assert panel.query == "tau"
+    _send(form, ord("A"), "a", CMD)
+    assert panel.filter_field.selected_text() == "tau"
+    _send(form, ord("C"), "c", CMD)
+    assert board["text"] == "tau"
+    _send(form, 0, "g")
+    assert panel.query == "g" and panel.open
+    _send(form, ord("Z"), "z", CMD)
+    assert panel.query == "tau"
+    _send(form, KEY_END)                    # the list's End, not the field's
+    _send(form, ord("A"), "a", CMD)
+    _send(form, ord("V"), "v", CMD)
+    assert panel.query == "tau"
+    _send(form, KEY_LEFT)
+    _send(form, 0, "X")
+    assert panel.query == "taXu"
+
+
+def test_combo_filter_word_delete_and_shift_select(mac):
+    form, panel = _combo()
+    for ch in "tau green":
+        _send(form, 0, ch)
+    _send(form, KEY_BACKSPACE, "", ALT if mac else CMD)
+    assert panel.query == "tau "
+    _send(form, KEY_LEFT, "", SHIFT)
+    _send(form, KEY_LEFT, "", SHIFT)
+    _send(form, KEY_BACKSPACE)
+    assert panel.query == "ta"
+
+
+# -- a DataTable cell editor ---------------------------------------------- #
+def _table():
+    from emtk.widgets.data_table import DataTable, TableColumn
+
+    edits = []
+    table = DataTable([TableColumn("name", editable=True)],
+                      on_edit=lambda i, k, v: edits.append((i, k, v)))
+    table.set_records([{"name": "donor"}, {"name": "acceptor"}])
+    return table, edits
+
+
+def test_data_table_cell_editor_shortcuts(mac, board):
+    from emtk.keys import KEY_RETURN
+
+    table, edits = _table()
+    table.begin_edit(0, "name")
+    assert table.key(ord("A"), "a", CMD)
+    table.key(ord("X"), "x", CMD)
+    assert board["text"] == "donor" and table.editor.text == ""
+    table.key(ord("V"), "v", CMD)
+    table.key(ord("V"), "v", CMD)
+    assert table.editor.text == "donordonor"
+    table.key(KEY_LEFT, "", CMD if mac else 0)  # Cmd+Left on a Mac: the line's start
+    if not mac:
+        table.key(KEY_HOME)
+    table.key(0, "#")
+    table.key(ord("Z"), "z", CMD)
+    assert table.editor.text == "donordonor"
+    table.key(ord("Z"), "z", CMD | SHIFT)
+    table.key(KEY_RETURN)
+    assert edits == [(0, "name", "#donordonor")]
+
+
+def test_data_table_cell_editor_mouse(mac):
+    table, _edits = _table()
+    painter = RecordingPainter()
+    table.draw(painter, 0, 0, 300, 200)
+    table.begin_edit(1, "name")
+    table.draw(painter, 0, 0, 300, 200)
+    x, y, w, h = table._editor_box
+    table.press(x + 10, y + 2, 0, 0, 300, 200, 0, 2)       # a double click: the word
+    table.key(0, "Q")
+    assert table.editor.text == "Q"

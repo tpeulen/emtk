@@ -67,6 +67,7 @@ from typing import NamedTuple, Union
 from .. import style
 from ..keys import (KEY_BACKSPACE, KEY_DOWN, KEY_END, KEY_ENTER, KEY_ESCAPE, KEY_HOME, KEY_PAGE_DOWN,
                     KEY_PAGE_UP, KEY_RETURN, KEY_UP)
+from .text_field import TextField
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 
 __all__ = [
@@ -1245,7 +1246,13 @@ class Popup:
         self.highlight: int | None = None
         self.tooltip: str | None = None
         self.filterable = False
-        self.query = ""
+        #: The filter field's editor: caret, selection, the shortcuts and the
+        #: clipboard of every emtk field (:class:`~.text_field.TextField`).
+        self.filter_field = TextField()
+        self._applied = ""
+        self._filter_xs: list[float] = []
+        self._filter_click = (-1.0, 0)
+        self._filter_drag = False
         self._panel: tuple[float, float, float, float] | None = None
         self._view: tuple[float, float, float, float] | None = None
         self._rows: list[Row] = []
@@ -1264,7 +1271,8 @@ class Popup:
         self.last_dir = None
         self.scroll = 0.0
         self.tooltip = None
-        self.query = ""
+        self.filter_field.set_text("")
+        self._applied = ""
         self._grab = None
         self._pointer = None
         for entry in self.entries:
@@ -1540,13 +1548,24 @@ class Popup:
             p.text(x + PAD + 2.0, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
                    _ellipsize(p, FILTER_PLACEHOLDER, room), style.DIM)
             return
-        text = self.query
-        while len(text) > 1 and p.text_width(text) > room - 2.0:
-            text = text[1:]                     # a long filter shows its end
+        field = self.filter_field
+        full, at = field.text, field.cursor
+        start = 0                               # scrolled so the caret shows
+        while start < at and p.text_width(full[start:at]) > room - 2.0:
+            start += 1
+        text = full[start:]
+        left = x + PAD
+        self._filter_xs = [left - p.text_width(full[i:start]) if i < start
+                           else left + p.text_width(full[start:i]) for i in range(len(full) + 1)]
         p.push_clip(x, y, w, h)
         try:
-            p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, text, style.TEXT)
-            caret = min(x + PAD + p.text_width(text) + 1.0, x + w - 2.0)
+            if field.has_selection():
+                lo, hi = field.selection()
+                sx = max(self._filter_xs[lo], left)
+                p.fill_rect(sx, y + 2.0, max(self._filter_xs[hi] - sx, 0.0),
+                            max(h - 4.0, 1.0), style.TEXT_SELECTED_BG)
+            p.text(left, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, text, style.TEXT)
+            caret = min(self._filter_xs[at] + 1.0 if at > start else left, x + w - 2.0)
             p.fill_rect(caret, y + 3.0, 1.0, max(h - 6.0, 1.0), style.TEXT)
         finally:
             p.pop_clip()
@@ -1653,8 +1672,33 @@ class Popup:
         self._rehover = True          # the rows moved under a resting pointer
         return True
 
+    def _filter_index(self, x: float) -> int:
+        xs = self._filter_xs or [0.0]
+        return min(range(len(xs)), key=lambda i: abs(xs[i] - x))
+
+    def _press_filter(self, x: float, shift: bool = False) -> None:
+        """A click places the filter's caret, a double click selects a word,
+        a triple click all of it; a drag from it selects."""
+        import time  # noqa: PLC0415
+
+        now = time.monotonic()
+        last, count = self._filter_click
+        count = count + 1 if now - last <= 0.4 else 1
+        self._filter_click = (now, count)
+        at = self._filter_index(x)
+        self._filter_drag = count == 1
+        if count >= 3:
+            self.filter_field.select_all()
+        elif count == 2:
+            self.filter_field.select_word_at(at)
+        else:
+            self.filter_field.move(at, extend=shift)
+
     def drag(self, x: float, y: float) -> bool:
         """Move the scrollbar's thumb while it is held. True when it was."""
+        if self._filter_drag:
+            self.filter_field.move(self._filter_index(x), extend=True)
+            return True
         if self._grab is None or self._bar is None or self._thumb is None:
             return False
         travel = self._bar[3] - self._thumb[3]
@@ -1664,8 +1708,9 @@ class Popup:
         return True
 
     def release(self) -> None:
-        """Let go of the scrollbar's thumb."""
+        """Let go of the scrollbar's thumb (or the filter's drag-select)."""
         self._grab = None
+        self._filter_drag = False
 
     def press(
         self,
@@ -1697,6 +1742,9 @@ class Popup:
         if not self.open:
             return _IGNORED
 
+        if self._filter_rect is not None and style.hit(x, y, *self._filter_rect):
+            self._press_filter(x)
+            return PopupPress(None, True, False)
         if self._bar is not None and style.hit(x, y, *self._bar):
             thumb = self._thumb
             if thumb is not None and thumb[1] <= y <= thumb[1] + thumb[3]:
@@ -1728,13 +1776,24 @@ class Popup:
         return [i for i in self.shown()
                 if self.entries[i] is not None and self.entries[i].enabled]
 
+    @property
+    def query(self) -> str:
+        """What is typed into the filter field."""
+        return self.filter_field.text
+
+    @query.setter
+    def query(self, value: str) -> None:
+        self.set_query(value)
+
     def set_query(self, query: str) -> None:
         """Filter the list by *query*: the first match is highlighted and the
         list scrolls to its top; cleared, the highlight stays and is shown."""
         query = str(query)
-        if query == self.query:
+        if query != self.filter_field.text:
+            self.filter_field.set_text(query)
+        if query == self._applied:
             return
-        self.query = query
+        self._applied = query
         rows = self._navigable()
         if query.strip():
             self.highlight = rows[0] if rows else None
@@ -1750,14 +1809,16 @@ class Popup:
             self.highlight = index
             self._reveal = (index, False)
 
-    def key(self, key: int, text: str = "") -> PopupPress:
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> PopupPress:
         """Process a key while the popup is up.
 
         Up/Down move the highlight (Home/End to the ends, Page up/down by a
         page) and Enter activates the highlighted row. With a filter field,
-        typed text and Backspace edit the filter, and Escape clears a filter
-        before it closes the popup; without one, Escape closes it and text is
-        ignored.
+        every other key edits the filter as any emtk field is edited --
+        Left/Right, Backspace/Delete, select all, copy/cut/paste, undo, word
+        movement (:class:`~.text_field.TextField`) -- and Escape clears a
+        filter before it closes the popup; without one, Escape closes it and
+        text is ignored.
 
         Returns
         -------
@@ -1775,9 +1836,6 @@ class Popup:
                 return PopupPress(None, True, False)
             self.close()
             return PopupPress(None, True, True)
-        if self.filterable and key == KEY_BACKSPACE:
-            self.set_query(self.query[:-1])
-            return PopupPress(None, True, False)
         if key in (KEY_RETURN, KEY_ENTER):
             if self.highlight is None:
                 return PopupPress(None, True, False)
@@ -1801,10 +1859,10 @@ class Popup:
             self._go(rows[0])
         elif rows and key == KEY_END:
             self._go(rows[-1])
-        elif self.filterable and text:
-            typed = "".join(ch for ch in text if ch.isprintable())
-            if typed:
-                self.set_query(self.query + typed)
+        elif self.filterable and (key or text):
+            consumed = self.filter_field.key(key, text, modifiers)
+            self.set_query(self.filter_field.text)
+            return PopupPress(None, bool(consumed), False)
         return PopupPress(None, True, False)
 
     def _press_outside(self) -> PopupPress:

@@ -45,7 +45,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-__all__ = ["TextField"]
+__all__ = ["TextField", "index_at", "paint"]
 
 _UNDO_DEPTH = 100
 
@@ -347,3 +347,40 @@ class TextField:
     def _changed(self) -> None:
         if self.on_change is not None:
             self.on_change(self.text)
+
+
+def paint(p, field: TextField, x: float, y: float, w: float, h: float, colour,
+          caret_colour=None, pad: float = 4.0) -> list[float]:
+    """Draw *field* in a box: its selection, its text and (with *caret_colour*)
+    the caret, scrolled so the caret is inside. Clipped by the caller.
+
+    Returns the x of every caret position, ``len(text) + 1`` of them, for
+    :func:`index_at` to turn a click into a place in the text.
+    """
+    from ..painter import ALIGN_LEFT, ALIGN_VCENTER  # noqa: PLC0415
+    from ..style import TEXT_SELECTED_BG  # noqa: PLC0415
+
+    text, at = field.text, field.cursor
+    room = max(w - 2.0 * pad, 1.0)
+    start = 0
+    while caret_colour is not None and start < at and p.text_width(text[start:at]) > room - 1.0:
+        start += 1
+    left = x + pad
+    xs = [left - p.text_width(text[i:start]) if i < start
+          else left + p.text_width(text[start:i]) for i in range(len(text) + 1)]
+    if caret_colour is not None and field.has_selection():
+        lo, hi = field.selection()
+        sx = max(xs[lo], x)
+        p.fill_rect(sx, y + 2.0, max(min(xs[hi], x + w) - sx, 0.0), max(h - 4.0, 1.0),
+                    TEXT_SELECTED_BG)
+    p.text(left, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, text[start:], colour)
+    if caret_colour is not None:
+        p.fill_rect(xs[at], y + h * 0.2, 1.0, h * 0.6, caret_colour)
+    return xs
+
+
+def index_at(xs: list[float], x: float) -> int:
+    """The caret position nearest *x*, given :func:`paint`'s positions."""
+    if not xs:
+        return 0
+    return min(range(len(xs)), key=lambda i: abs(xs[i] - x))

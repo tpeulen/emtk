@@ -49,7 +49,7 @@ from ..style import (
     format_value,
     hit,
 )
-from .text_field import TextField
+from .text_field import TextField, paint as paint_field
 
 __all__ = [
     "trim_decorations",
@@ -314,11 +314,9 @@ class InputScalar:
     The reference activates the field with the whole buffer selected
     (``ImGuiInputTextFlags_AutoSelectAll``), so the first keystroke *replaces*
     the number rather than appending to it -- typing ``7`` into a field showing
-    ``1.000`` must not produce ``1.0007``. ``TextField`` has no selection, so
-    what is modelled here is that behaviour rather than the mechanism:
-    :attr:`select_all` is set on activation and the first key resolves it --
-    printable text replaces the buffer, backspace empties it, and a movement key
-    collapses the caret to the end it points at.
+    ``1.000`` must not produce ``1.0007``. The field's own selection does it:
+    :attr:`select_all` says whether the whole buffer is selected, and every
+    shortcut of :class:`~emtk.widgets.text_field.TextField` works here too.
     """
 
     def __init__(
@@ -341,11 +339,22 @@ class InputScalar:
         self.v_max = v_max
         self.field = TextField()
         self.editing = False
-        #: Whether the buffer counts as wholly selected; see the class notes.
-        self.select_all = False
         self.value = self._bounded(value)
         #: ``(field_x, field_w, button_size)`` from the last :meth:`draw`.
         self._box: tuple[float, float, float] | None = None
+
+    @property
+    def select_all(self) -> bool:
+        """Whether the whole (non-empty) buffer is selected; see the class notes."""
+        f = self.field
+        return bool(f.text) and f.selection() == (0, len(f.text))
+
+    @select_all.setter
+    def select_all(self, on: bool) -> None:
+        if on:
+            self.field.select_all()
+        else:
+            self.field.move(self.field.cursor)
 
     # ------------------------------------------------------------------ #
     def _cast(self, value: float) -> float:
@@ -393,8 +402,8 @@ class InputScalar:
     def begin_edit(self) -> str:
         """Make the box editable, seeded with the current value, wholly selected."""
         self.editing = True
-        self.select_all = True
         self.field.set_text(self.edit_text())
+        self.select_all = True
         return self.field.text
 
     def commit(self) -> float:
@@ -409,13 +418,11 @@ class InputScalar:
             return self.value
         self.value = self._bounded(apply_from_text(self.field.text, self.value, self.fmt))
         self.editing = False
-        self.select_all = False
         return self.value
 
     def cancel(self) -> float:
         """Stop editing and throw the typed string away."""
         self.editing = False
-        self.select_all = False
         return self.value
 
     def insert(self, text: str) -> str:
@@ -426,10 +433,7 @@ class InputScalar:
         """
         if not self.editing:
             self.begin_edit()
-        if self.select_all:
-            self.field.clear()
-            self.select_all = False
-        self.field.key(0, str(text))
+        self.field.insert(str(text), typing=True)
         return self.field.text
 
     def backspace(self) -> str:
@@ -438,10 +442,6 @@ class InputScalar:
             return ""
         from ..keys import KEY_BACKSPACE
 
-        if self.select_all:
-            self.field.clear()
-            self.select_all = False
-            return self.field.text
         self.field.key(KEY_BACKSPACE)
         return self.field.text
 
@@ -466,15 +466,7 @@ class InputScalar:
         """
         if not self.editing:
             return False
-        from ..keys import (
-            KEY_BACKSPACE,
-            KEY_DELETE,
-            KEY_ENTER,
-            KEY_ESCAPE,
-            KEY_HOME,
-            KEY_LEFT,
-            KEY_RETURN,
-        )
+        from ..keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN
 
         if key in (KEY_RETURN, KEY_ENTER):
             self.commit()
@@ -482,19 +474,6 @@ class InputScalar:
         if key == KEY_ESCAPE:
             self.cancel()
             return True
-        if self.select_all:
-            # Resolve the selection the way the key that arrived would.
-            clean = "".join(ch for ch in str(text) if ch >= " " and ch != "\x7f")
-            if clean:
-                self.insert(clean)
-                return True
-            if key in (KEY_BACKSPACE, KEY_DELETE):
-                self.backspace()
-                return True
-            self.select_all = False
-            if key in (KEY_LEFT, KEY_HOME):
-                self.field.cursor = 0
-                return True
         return self.field.key(key, text, modifiers)
 
     # ------------------------------------------------------------------ #
@@ -537,12 +516,11 @@ class InputScalar:
         p.stroke_rect(left, y, field_w, h, BORDER,
                       FRAME_BG_ACTIVE if self.editing else FRAME_BG)
         p.push_clip(left, y, field_w, h)
-        shown = self.field.text if self.editing else self.display_text()
-        p.text(left + 4.0, y, max(field_w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-               shown, TEXT if self.editing else GOLD)
         if self.editing:
-            caret_x = left + 4.0 + p.text_width(self.field.text[: self.field.cursor])
-            p.fill_rect(caret_x, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, GOLD)
+            paint_field(p, self.field, left, y, field_w, h, TEXT, GOLD)
+        else:
+            p.text(left + 4.0, y, max(field_w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
+                   self.display_text(), GOLD)
         p.pop_clip()
 
         if button:

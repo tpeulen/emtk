@@ -111,10 +111,20 @@ def _run(ctx, state: dict) -> bool:
             panel.close()
         if io.mouse_released[0]:
             panel.release()
-        if io.key or io.text:
-            result = panel.key(io.key, io.text)
+        # Every key since the last frame, in order, with its modifiers: the
+        # filter is a text field, and Cmd+A then "x" is not "x" then Cmd+A.
+        from .im_widgets import _current_modifiers  # noqa: PLC0415
+
+        events = list(io.key_events) or (
+            [(io.key, io.text, _current_modifiers(io))] if (io.key or io.text) else [])
+        for key, text, modifiers in events:
+            if not panel.open:
+                break
+            result = panel.key(key, text, modifiers)
             if result.item is not None:
                 state["picked"] = result.item
+        if panel.open and panel.filterable:
+            ctx._want_text_input = True
     if panel.open:
         panel.draw(ctx.p, x, y, w, h)
         return True
