@@ -1952,8 +1952,12 @@ class TextEditor:
 
     # -- clipboard ------------------------------------------------------ #
     def copy(self) -> str:
-        """Copy every selection; returns what was copied."""
+        """Copy every selection, to the system clipboard too; returns it."""
         self.clipboard = self.selected_text()
+        if self.clipboard:
+            from .. import clipboard  # noqa: PLC0415
+
+            clipboard.copy(self.clipboard)
         return self.clipboard
 
     def cut(self) -> str:
@@ -1968,8 +1972,12 @@ class TextEditor:
         return text
 
     def paste(self, text: str | None = None) -> None:
-        """Insert the clipboard (or *text*) at every caret."""
-        self.insert(self.clipboard if text is None else text)
+        """Insert the system clipboard (or *text*) at every caret."""
+        if text is None:
+            from .. import clipboard  # noqa: PLC0415
+
+            text = clipboard.paste() or self.clipboard
+        self.insert(text)
 
     def undo(self) -> bool:
         """Undo one transaction."""
@@ -2438,16 +2446,25 @@ class TextEditor:
             KEY_UP,
         )
 
-        shift = bool(modifiers & SHIFT_MODIFIER)
-        # Command on a Mac, Control elsewhere -- either is accepted, as the
-        # command line accepts either, because the same intent arrives spelled
-        # two ways depending on the host.
-        command = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER))
-        alt = bool(modifiers & ALT_MODIFIER)
-        word = alt or (command and not _is_mac_style(modifiers))
+        from ..keys import letter_of, mac_behaviors
 
-        if command and text:
-            letter = text.lower()
+        shift = bool(modifiers & SHIFT_MODIFIER)
+        # The primary modifier -- Command on a Mac, Ctrl elsewhere -- arrives
+        # as CONTROL_MODIFIER from every host (emtk.keys); on a Mac the
+        # physical Control key is META_MODIFIER, Emacs' Control-A / -E.
+        mac = mac_behaviors()
+        alt = bool(modifiers & ALT_MODIFIER)
+        altgr = bool(modifiers & CONTROL_MODIFIER) and alt and not mac and bool(text)
+        command = bool(modifiers & CONTROL_MODIFIER) and not altgr
+        macctrl = mac and bool(modifiers & META_MODIFIER)
+        word = alt if mac else command
+        line = command and mac          # Cmd+Left/Right: the line's ends
+
+        letter = letter_of(key, text) or (text if text == "/" else "")
+        if macctrl and letter in ("a", "e"):
+            (self.move_home if letter == "a" else self.move_end)(shift, False)
+            return True
+        if command and letter:
             if letter == "a":
                 self.select_all()
                 return True
@@ -2463,7 +2480,7 @@ class TextEditor:
             if letter == "z":
                 self.redo() if shift else self.undo()
                 return True
-            if letter == "y":
+            if letter == "y" and not mac:
                 self.redo()
                 return True
             if letter == "d":
@@ -2496,16 +2513,22 @@ class TextEditor:
                 )
             return True
         if key == KEY_LEFT:
-            self.move_left(shift, word)
+            self.move_home(shift, False) if line else self.move_left(shift, word)
             return True
         if key == KEY_RIGHT:
-            self.move_right(shift, word)
+            self.move_end(shift, False) if line else self.move_right(shift, word)
             return True
         if key == KEY_UP:
-            self.move_lines(down=False) if alt else self.move_up(shift)
+            if line:
+                self.move_home(shift, True)     # Cmd+Up: the document's start
+            else:
+                self.move_lines(down=False) if alt else self.move_up(shift)
             return True
         if key == KEY_DOWN:
-            self.move_lines(down=True) if alt else self.move_down(shift)
+            if line:
+                self.move_end(shift, True)
+            else:
+                self.move_lines(down=True) if alt else self.move_down(shift)
             return True
         if key == KEY_PAGE_UP:
             self.move_up(shift, max(self.visible_lines - 1, 1))
@@ -2524,7 +2547,7 @@ class TextEditor:
             return True
 
         typed = "".join(ch for ch in str(text) if ch >= " " and ch != "\x7f")
-        if typed and not command:
+        if typed and not command and not macctrl:
             self._type(typed)
         return True
 
@@ -2853,16 +2876,3 @@ class TextEditor:
                 TEXT if one.main else (200, 200, 210),
             )
 
-
-def _is_mac_style(modifiers: int) -> bool:
-    """Whether the modifier mask carries Command rather than Control.
-
-    On a Mac, Command is the shortcut modifier and **Option** is the
-    word-movement one; elsewhere Control is both. Reading the mask is how the
-    editor tells which convention it is being driven under, instead of asking
-    the platform -- which would be wrong in the browser build, where the host
-    is the one that knows.
-    """
-    from ..events import META_MODIFIER
-
-    return bool(modifiers & META_MODIFIER)

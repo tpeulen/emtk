@@ -346,7 +346,7 @@ class CommandLine:
 
         control = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER))
         if control:
-            return self._control_key(text)
+            return self._control_key(text, key)
 
         if key in (KEY_RETURN, KEY_ENTER):
             self.submit()
@@ -399,17 +399,33 @@ class CommandLine:
         # fall through to the viewport's letter shortcuts.
         return key != 0
 
-    def _control_key(self, text: str) -> bool:
+    def _control_key(self, text: str, key: int = 0) -> bool:
         """Handle the ctrl/command shortcuts. Returns whether one applied.
 
         The readline set, minus what a one-line editor cannot use. ``ctrl+W``
         deletes the word behind the caret, which is the one an ordinary
-        backspace cannot replace.
+        backspace cannot replace. This is a *prompt*, so ctrl+A is readline's
+        line start here on every platform, not select-all; ctrl/cmd+V pastes
+        the system clipboard (:mod:`emtk.clipboard`) and ctrl/cmd+C copies
+        the line.
         """
+        from ..keys import letter_of  # noqa: PLC0415
+
         # Qt reports ctrl+A as the control character \x01 rather than as "a".
         letter = (text or "").lower()
         if len(letter) == 1 and letter < " ":
             letter = chr(ord(letter) + 96)
+        letter = letter_of(key, letter) if not letter.isalpha() else letter
+        if letter in ("v", "c"):
+            from .. import clipboard  # noqa: PLC0415
+
+            if letter == "v":
+                pasted = clipboard.paste().replace("\r", " ").replace("\n", " ")
+                if pasted:
+                    self.insert(pasted)
+            elif self.text:
+                clipboard.copy(self.text)
+            return True
         if letter == "a":
             self.cursor = 0
             return True

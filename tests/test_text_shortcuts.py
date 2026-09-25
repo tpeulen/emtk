@@ -360,3 +360,35 @@ def test_data_table_cell_editor_mouse(mac):
     table.press(x + 10, y + 2, 0, 0, 300, 200, 0, 2)       # a double click: the word
     table.key(0, "Q")
     assert table.editor.text == "Q"
+
+
+# -- the text / code editor ------------------------------------------------ #
+def test_text_editor_shortcuts_follow_the_platform(mac, board):
+    from emtk.widgets.text_editor import TextEditor
+
+    ed = TextEditor()
+    ed.set_text("alpha beta")
+    ed.key(ord("A"), "", CMD)                 # Qt's uppercase code, no text
+    ed.key(ord("C"), "", CMD)
+    assert board["text"] == "alpha beta"
+    ed.key(KEY_END)
+    ed.key(KEY_LEFT, "", ALT if mac else CMD)  # a word back
+    ed.key(0, "X")
+    assert ed.text == "alpha Xbeta"
+    board["text"] = "!"
+    ed.key(ord("V"), "v", CMD)
+    assert ed.text == "alpha X!beta"
+    if mac:
+        ed.key(ord("A"), "a", MACCTRL)        # Emacs: the line's start
+        ed.key(0, "^")
+        assert ed.text == "^alpha X!beta"
+
+
+def test_the_prompt_pastes_the_clipboard(mac, board):
+    from emtk.widgets.command_line import CommandLine
+
+    line = CommandLine()
+    line.set_focus(True)
+    board["text"] = "fit all"
+    line.key(ord("V"), "v", CMD)
+    assert line.text == "fit all"

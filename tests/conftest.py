@@ -21,6 +21,19 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _no_system_clipboard(monkeypatch):
+    """No test reaches the real clipboard: a copy in a text-field test would
+    otherwise pbcopy over whatever the person running the suite had copied.
+    What is copied stays in process (``emtk.clipboard.last_copied``), and a
+    test that wants the command path patches ``commands`` itself."""
+    from emtk import clipboard
+
+    monkeypatch.setattr(clipboard, "commands", lambda: [])
+    monkeypatch.setattr(clipboard, "paste_commands", lambda: [])
+    monkeypatch.setattr(clipboard, "_received", None)
+
+
 @pytest.fixture(scope="session")
 def qt_app():
     """A Qt application for the tests that exercise the Qt painter.
