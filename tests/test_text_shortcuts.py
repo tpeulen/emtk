@@ -1,0 +1,227 @@
+"""Text-editing shortcuts and the clipboard, in every emtk text entry.
+
+The convention (see :mod:`emtk.keys`): after a host has translated its
+event, ``CONTROL_MODIFIER`` / ``io.key_ctrl`` is the *primary* modifier --
+Command on a Mac, Ctrl elsewhere -- and ``META_MODIFIER`` / ``io.key_super``
+is the other one (the physical Control key on a Mac, Win/Super elsewhere).
+That is Qt's convention on macOS and Dear ImGui's (``ConfigMacOSXBehaviors``
+swaps Cmd and Ctrl), so a shortcut test is one test on every host.
+"""
+from __future__ import annotations
+
+import pytest
+
+import emtk
+from emtk import clipboard, keys
+from emtk.events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
+from emtk.keys import (
+    KEY_BACKSPACE, KEY_END, KEY_HOME, KEY_LEFT, KEY_RIGHT,
+)
+from emtk.testing import RecordingPainter
+from emtk.widgets.text_field import TextField
+
+CMD = CONTROL_MODIFIER            # the primary modifier, normalised
+SHIFT = SHIFT_MODIFIER
+ALT = ALT_MODIFIER
+MACCTRL = META_MODIFIER           # the physical Control key on a Mac
+
+
+@pytest.fixture(params=[True, False], ids=["mac", "pc"])
+def mac(request):
+    keys.set_mac_behaviors(request.param)
+    yield request.param
+    keys.set_mac_behaviors(None)
+
+
+@pytest.fixture
+def board():
+    """A fake system clipboard, through the host hook."""
+    held = {"text": ""}
+    clipboard.set_hook(lambda t: held.__setitem__("text", t), lambda: held["text"])
+    yield held
+    clipboard.set_hook(None)
+
+
+def chord(field, letter, mods=CMD):
+    """A shortcut as a host delivers it: the letter's key code and its text."""
+    return field.key(ord(letter), letter, mods)
+
+
+# -- the host translation ------------------------------------------------ #
+def test_the_browser_on_a_mac_reports_command_as_the_primary_modifier():
+    assert keys.modifiers_from_dom(False, False, False, True, mac=True) == CONTROL_MODIFIER
+    assert keys.modifiers_from_dom(True, False, False, False, mac=True) == META_MODIFIER
+    assert keys.modifiers_from_dom(True, False, False, False, mac=False) == CONTROL_MODIFIER
+
+
+def test_glfw_on_a_mac_reports_command_as_the_primary_modifier():
+    from emtk.events import modifiers_from_canvas
+
+    assert modifiers_from_canvas(("Meta",), mac=True) == CONTROL_MODIFIER
+    assert modifiers_from_canvas(("Control",), mac=True) == META_MODIFIER
+    assert modifiers_from_canvas(("Control",), mac=False) == CONTROL_MODIFIER
+
+
+# -- the one-line editor ------------------------------------------------- #
+def test_select_all_then_typing_replaces(mac):
+    f = TextField()
+    f.set_text("hello")
+    chord(f, "a")
+    assert f.selected_text() == "hello"
+    f.key(0, "x")
+    assert (f.text, f.cursor) == ("x", 1)
+
+
+def test_a_shortcut_types_nothing(mac):
+    f = TextField()
+    f.set_text("abc")
+    for letter in "acvzy":
+        chord(f, letter)
+    assert f.text == "abc"
+
+
+def test_copy_cut_paste_round_trip(mac, board):
+    f = TextField()
+    f.set_text("one two")
+    chord(f, "a")
+    chord(f, "c")
+    assert board["text"] == "one two"
+    f.key(KEY_END, "", 0)
+    chord(f, "v")
+    assert f.text == "one twoone two"
+    chord(f, "a")
+    chord(f, "x")
+    assert (f.text, board["text"]) == ("", "one twoone two")
+
+
+def test_undo_and_redo(mac):
+    f = TextField()
+    for ch in "abc":
+        f.key(0, ch)
+    f.key(KEY_BACKSPACE)
+    assert f.text == "ab"
+    chord(f, "z")
+    assert f.text == "abc"
+    if mac:
+        chord(f, "z", CMD | SHIFT)
+    else:
+        chord(f, "y")
+    assert f.text == "ab"
+    chord(f, "z")
+    chord(f, "z", CMD | SHIFT)          # both spellings redo off a Mac
+    assert f.text == "ab"
+
+
+def test_word_navigation(mac):
+    f = TextField()
+    f.set_text("alpha beta gamma")
+    word = ALT if mac else CMD
+    f.key(KEY_LEFT, "", word)
+    assert f.cursor == len("alpha beta ")
+    f.key(KEY_LEFT, "", word | SHIFT)
+    assert f.selected_text() == "beta "
+    f.key(KEY_RIGHT, "", word)
+    assert f.cursor in (len("alpha beta"), len("alpha beta "))   # end of word, or next
+
+
+def test_line_start_and_end(mac):
+    f = TextField()
+    f.set_text("abc")
+    if mac:
+        f.key(KEY_LEFT, "", CMD)
+        assert f.cursor == 0
+        f.key(KEY_RIGHT, "", CMD | SHIFT)
+        assert f.selected_text() == "abc"
+        # Emacs, as Cocoa fields do: Control-A / Control-E.
+        chord(f, "a", MACCTRL)
+        assert f.cursor == 0 and not f.has_selection()
+        chord(f, "e", MACCTRL)
+        assert f.cursor == 3
+    f.key(KEY_HOME)
+    assert f.cursor == 0
+    f.key(KEY_END, "", SHIFT)
+    assert f.selected_text() == "abc"
+
+
+def test_shift_arrows_extend_and_backspace_deletes_the_selection(mac):
+    f = TextField()
+    f.set_text("abcd")
+    f.key(KEY_LEFT, "", SHIFT)
+    f.key(KEY_LEFT, "", SHIFT)
+    assert f.selected_text() == "cd"
+    f.key(KEY_BACKSPACE)
+    assert (f.text, f.cursor) == ("ab", 2)
+
+
+# -- im.input_text -------------------------------------------------------- #
+class _Driver:
+    """An :class:`emtk.app.ImApp` driven the way a host drives it."""
+
+    def __init__(self, value="hello world"):
+        from emtk.app import ImApp
+
+        self.value = value
+        self.box = None
+        self.app = ImApp(self.gui)
+        self.app.io.wall_clock = False
+
+    def gui(self):
+        from emtk.im_core import get_current_context
+
+        emtk.begin("w", (0, 0, 400, 80))
+        _changed, self.value = emtk.input_text("##f", self.value)
+        self.box = get_current_context().get_item_rect()
+        emtk.end()
+
+    def frame(self):
+        self.app.draw(RecordingPainter(), 0, 0, 400, 80)
+
+    def click(self, dx=4.0, clicks=1):
+        from emtk.events import LEFT_BUTTON
+
+        x, y, _w, _h = self.box
+        self.app.pointer_press(x + dx, y + 4, LEFT_BUTTON, 0, clicks)
+        self.frame()
+        self.app.pointer_release(x + dx, y + 4, LEFT_BUTTON, 0)
+        self.frame()
+
+    def key(self, key, text="", mods=0):
+        self.app.key(key, text, mods)
+        self.frame()
+
+
+def test_input_text_select_all_and_type(mac):
+    d = _Driver()
+    d.frame()
+    d.click()
+    d.key(ord("a"), "a", CMD)
+    d.key(0, "Z")
+    assert d.value == "Z"
+
+
+def test_input_text_copy_paste(mac, board):
+    d = _Driver("abc")
+    d.frame()
+    d.click()
+    d.key(ord("a"), "a", CMD)
+    d.key(ord("c"), "c", CMD)
+    assert board["text"] == "abc"
+    d.key(KEY_END)
+    d.key(ord("v"), "v", CMD)
+    assert d.value == "abcabc"
+
+
+def test_input_text_caret_moves_and_inserts_in_the_middle(mac):
+    d = _Driver("ac")
+    d.frame()
+    d.click()
+    d.key(KEY_END)
+    d.key(KEY_LEFT)
+    d.key(0, "b")
+    assert d.value == "abc"
+
+
+# -- the clipboard -------------------------------------------------------- #
+def test_clipboard_round_trips_through_the_hook(board):
+    assert clipboard.copy("x y")
+    assert clipboard.paste() == "x y"
