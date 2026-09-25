@@ -119,6 +119,7 @@ def host_class():
             self.setMouseTracking(True)
             self.setMinimumHeight(80)
             self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent, True)
+            use_qt_clipboard()        # copy *and* paste through QClipboard
 
         # -- painting ----------------------------------------------------- #
         def paintEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
@@ -298,6 +299,24 @@ def host_class():
 
     _CLASS = _ControlHost
     return _CLASS
+
+
+def use_qt_clipboard() -> bool:
+    """Route :mod:`emtk.clipboard` through Qt's ``QClipboard``, both ways.
+
+    Every Qt host calls it; returns whether there was a Qt to route through.
+    """
+    try:
+        from qtpy import QtWidgets  # noqa: PLC0415
+    except ImportError:
+        return False
+    from . import clipboard  # noqa: PLC0415
+
+    def board():
+        return QtWidgets.QApplication.clipboard()
+
+    clipboard.set_hook(lambda text: board().setText(text), lambda: board().text())
+    return True
 
 
 def ControlHost(control, **kwargs):  # noqa: N802 - it stands in for a class

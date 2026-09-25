@@ -896,6 +896,9 @@ def wgpu_host_class():
         ) -> None:
             super().__init__(parent=parent, **kwargs)
             self.control = control
+            from .qt_host import use_qt_clipboard  # noqa: PLC0415
+
+            use_qt_clipboard()        # copy *and* paste through QClipboard
             self.font_pt = float(font_pt)
             self.background = tuple(background)
             self.on_change = on_change

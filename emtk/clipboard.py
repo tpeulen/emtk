@@ -7,7 +7,9 @@ process, so a "Copy as CSV" that should reach a spreadsheet needs the
 ``navigator.clipboard``, and a desktop has a command per platform.
 :func:`copy` tries them in that order and says whether one worked;
 :func:`paste` reads it back the same way. A host that owns a clipboard of
-its own (Tk, Qt, glfw) registers it with :func:`set_hook` and is asked first.
+its own (Tk, Qt, glfw) registers it with :func:`set_hook` and is asked first
+(:func:`use_tk`, :func:`use_glfw`, and ``emtk.qt_host.use_qt_clipboard`` --
+Qt is only ever named in the Qt modules).
 
 A page cannot *read* the clipboard synchronously (``readText`` is a promise
 behind a permission prompt), so ``boot.js`` forwards the DOM's ``paste``
@@ -24,6 +26,7 @@ import sys
 from collections.abc import Callable
 
 __all__ = ["copy", "paste", "receive", "set_hook", "commands", "paste_commands",
+           "use_tk", "use_glfw",
            "last_copied"]
 
 _hook: Callable[[str], None] | None = None
@@ -42,6 +45,42 @@ def set_hook(hook: Callable[[str], None] | None,
     global _hook, _paste_hook
     _hook = hook
     _paste_hook = paste_hook if hook is not None or paste_hook is not None else None
+
+
+def use_tk(root) -> None:
+    """Route the clipboard through a Tk root's ``clipboard_get/append``."""
+    def put(text: str) -> None:
+        root.clipboard_clear()
+        root.clipboard_append(text)
+
+    def get() -> str:
+        try:
+            return str(root.clipboard_get())
+        except Exception:  # noqa: BLE001 - TclError: the clipboard holds no text
+            return ""
+
+    set_hook(put, get)
+
+
+def use_glfw(window=None) -> bool:
+    """Route the clipboard through glfw (a native rendercanvas host on glfw).
+
+    *window* is the ``GLFWwindow``; glfw 3.3 and later ignore it, so ``None``
+    serves when the canvas does not say.
+    """
+    try:
+        import glfw  # noqa: PLC0415
+    except ImportError:
+        return False
+
+    def get() -> str:
+        value = glfw.get_clipboard_string(window)
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", "replace")
+        return value or ""
+
+    set_hook(lambda text: glfw.set_clipboard_string(window, text), get)
+    return True
 
 
 def receive(text: str) -> None:

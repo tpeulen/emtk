@@ -243,6 +243,9 @@ class TkHost:
         self.interval_ms = int(interval_ms)
         self.on_close = on_close
         self.root = root if root is not None else tk.Tk()
+        from . import clipboard  # noqa: PLC0415
+
+        clipboard.use_tk(self.root)   # copy *and* paste through Tk
         self.root.title(title)
         self.root.geometry("%dx%d" % (int(size[0]), int(size[1])))
         self.root.configure(background="#%02x%02x%02x" % self.background[:3])

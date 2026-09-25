@@ -593,6 +593,10 @@ class NativeHost:
             self.backend = type(canvas).__module__.rsplit(".", 1)[-1]
         self.canvas = canvas
         self._wake_loop = loop
+        if self.backend == "glfw":    # copy *and* paste through glfw
+            from . import clipboard  # noqa: PLC0415
+
+            clipboard.use_glfw(getattr(canvas, "_window", None))
         #: Bumped by every frame: a wake-up queued before it is stale (the
         #: loop cannot cancel one), so only the latest can draw.
         self._wake_generation = 0

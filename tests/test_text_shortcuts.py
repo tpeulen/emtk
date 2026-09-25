@@ -392,3 +392,63 @@ def test_the_prompt_pastes_the_clipboard(mac, board):
     board["text"] = "fit all"
     line.key(ord("V"), "v", CMD)
     assert line.text == "fit all"
+
+
+# -- the clipboard per host ------------------------------------------------ #
+def test_tk_routes_the_clipboard_through_its_root():
+    class Root:
+        held = ""
+
+        def clipboard_clear(self):
+            Root.held = ""
+
+        def clipboard_append(self, text):
+            Root.held += text
+
+        def clipboard_get(self):
+            return Root.held
+
+    try:
+        clipboard.use_tk(Root())
+        assert clipboard.copy("tk text")
+        assert Root.held == "tk text" and clipboard.paste() == "tk text"
+    finally:
+        clipboard.set_hook(None)
+
+
+def test_glfw_routes_the_clipboard_through_glfw(monkeypatch):
+    import sys
+    import types
+
+    held = {}
+    fake = types.SimpleNamespace(
+        set_clipboard_string=lambda w, t: held.__setitem__("t", t),
+        get_clipboard_string=lambda w: held.get("t", "").encode())
+    monkeypatch.setitem(sys.modules, "glfw", fake)
+    try:
+        assert clipboard.use_glfw()
+        clipboard.copy("glfw text")
+        assert clipboard.paste() == "glfw text"
+    finally:
+        clipboard.set_hook(None)
+
+
+def test_qt_routes_the_clipboard_through_qclipboard(qt_app):
+    from emtk.qt_host import use_qt_clipboard
+
+    try:
+        assert use_qt_clipboard()
+        clipboard.copy("qt text")
+        assert qt_app.clipboard().text() == "qt text"
+        qt_app.clipboard().setText("from qt")
+        assert clipboard.paste() == "from qt"
+    finally:
+        clipboard.set_hook(None)
+
+
+def test_a_paste_hook_alone_is_kept():
+    clipboard.set_hook(None, lambda: "only paste")
+    try:
+        assert clipboard.paste() == "only paste"
+    finally:
+        clipboard.set_hook(None)
