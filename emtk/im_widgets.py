@@ -59,7 +59,8 @@ def _col(which):
 __all__ = [
     "begin", "end", "begin_child", "end_child",
     "text", "text_colored", "text_disabled", "text_wrapped", "bullet_text",
-    "label_text", "button", "small_button", "invisible_button", "checkbox",
+    "label_text", "math", "math_text", "calc_math_size",
+    "button", "small_button", "invisible_button", "checkbox",
     "radio_button", "slider_float", "slider_int", "drag_float", "drag_int",
     "progress_bar", "selectable", "combo", "separator", "same_line", "spacing",
     "splitter", "splitter_behavior",
@@ -75,8 +76,18 @@ __all__ = [
 
 # --------------------------------------------------------------------------- #
 # Windows and layout -- thin passes through to the context
-# --------------------------------------------------------------------------- #
-def begin(name: str, box=None, flags: int = 0, **kwargs) -> bool:
+class _BeginResult(int):
+    """A boolean result that can also be unpacked as (expanded, opened) for pyimgui compatibility."""
+
+    def __iter__(self):
+        yield bool(self)
+        yield bool(self)
+
+    def __repr__(self) -> str:
+        return str(bool(self))
+
+
+def begin(name: str, box=None, flags: int = 0, **kwargs) -> _BeginResult:
     """``ImGui::Begin``.
 
     The reference's second argument is ``bool *p_open`` and emtk's is the
@@ -84,7 +95,8 @@ def begin(name: str, box=None, flags: int = 0, **kwargs) -> bool:
     close button to write through. A port therefore drops the ``p_open`` and
     keeps the flags, which is what ``tools/autoport`` rewrites it to.
     """
-    return get_current_context().begin(name, box, flags, **kwargs)
+    res = get_current_context().begin(name, box, flags, **kwargs)
+    return _BeginResult(1 if res else 0)
 
 
 def set_next_window_auto_resize(auto: bool = True) -> None:
@@ -536,6 +548,8 @@ def text_colored(col, s: str) -> None:
     ``Text("Hold to repeat:"); SameLine(); ArrowButton(...)`` is exactly that
     shape, and the arrows did not respond.
     """
+    if isinstance(col, str) and not isinstance(s, str):
+        col, s = s, col
     ctx = get_current_context()
     width, height = ctx.draw.calc_text_size(str(s))
     box = ctx.layout.row(height=max(height, ctx.p.line_height()), width=width)
@@ -591,6 +605,85 @@ def label_text(label: str, s: str) -> None:
     ctx.draw.add_text((box[0], box[1]), _col(Col.TEXT), str(s))
     width = ctx.draw.calc_text_size(label)[0]
     ctx.draw.add_text((box[0] + box[2] - width, box[1]), _col(Col.TEXT_DISABLED), label)
+
+
+def math(
+    formula: str,
+    font_size: float = 14.0,
+    colour: Optional[Any] = None,
+    scale: float = 0.5,
+    align_center: bool = False,
+) -> tuple[float, float]:
+    """Render a LaTeX mathematical expression into the current layout.
+
+    Uses matplotlib's mathtext parser when available to produce crisp,
+    antialiased, transparent math textures cached on the GPU/painter,
+    with automatic fallback to Unicode symbols.
+
+    Parameters
+    ----------
+    formula : str
+        LaTeX mathematical formula, e.g. ``r"\\frac{a}{b}"`` or ``"E = mc^2"``.
+    font_size : float
+        Nominal font size in points.
+    colour : tuple or str, optional
+        Foreground colour. If omitted, uses ``Col.TEXT``.
+    scale : float
+        Rendering display scale factor (default 0.5 for retina oversampling).
+    align_center : bool
+        If True, horizontally centers the formula in the available content region.
+
+    Returns
+    -------
+    tuple[float, float]
+        The (width, height) of the rendered item in points/pixels.
+    """
+    ctx = get_current_context()
+    if colour is None:
+        draw_colour = _col(Col.TEXT)
+    else:
+        from .mathtext import _color_to_rgba_tuple
+        draw_colour = _color_to_rgba_tuple(colour)
+
+    from .mathtext import render_math_to_texture, latex_to_unicode
+
+    tex = render_math_to_texture(formula, colour=draw_colour, font_size=font_size)
+    if tex is not None:
+        width = tex.width * scale
+        height = tex.height * scale
+        avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
+        if align_center and avail_w > width:
+            pad = (avail_w - width) * 0.5
+            from .im_widgets import get_cursor_pos_x, set_cursor_pos_x
+            set_cursor_pos_x(get_cursor_pos_x() + pad)
+        box = ctx.layout.row(height=height, width=width)
+        ctx.item_add(box)
+        ctx.draw.add_image(tex, (box[0], box[1]), (box[0] + width, box[1] + height))
+        return (width, height)
+
+    # Fallback to Unicode formatted text
+    u_text = latex_to_unicode(formula)
+    w, h = ctx.draw.calc_text_size(u_text)
+    avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
+    if align_center and avail_w > w:
+        pad = (avail_w - w) * 0.5
+        from .im_widgets import get_cursor_pos_x, set_cursor_pos_x
+        set_cursor_pos_x(get_cursor_pos_x() + pad)
+    text_colored(draw_colour, u_text)
+    return (w, max(h, ctx.p.line_height()))
+
+
+math_text = math
+
+
+def calc_math_size(
+    formula: str,
+    font_size: float = 14.0,
+    scale: float = 0.5,
+) -> tuple[float, float]:
+    """Calculate the layout bounds of a LaTeX formula without drawing it."""
+    from .mathtext import calc_math_size as _calc
+    return _calc(formula, font_size=font_size, scale=scale)
 
 
 # --------------------------------------------------------------------------- #
@@ -724,7 +817,7 @@ def radio_button(label: str, active, value=None):
 def _slider(label, value, v_min, v_max, fmt, integral: bool):
     ctx = get_current_context()
     height = _frame_height(ctx)
-    shown = _visible_label(label)
+    shown = _visible_label(label) if isinstance(label, str) else ""
     label_w = (ctx.draw.calc_text_size(shown)[0] + ctx.style.item_inner_spacing[0]
                if shown else 0.0)
     # `SetNextItemWidth` sizes the *widget*, and the label sits outside it --
@@ -778,9 +871,18 @@ def slider_int(label: str, v: int, v_min: int, v_max: int,
 def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
     ctx = get_current_context()
     height = _frame_height(ctx)
-    box = ctx.layout.row(height=height, width=ctx.take_next_item_width())
+    shown = _visible_label(label) if isinstance(label, str) else ""
+    label_w = (ctx.draw.calc_text_size(shown)[0] + ctx.style.item_inner_spacing[0]
+               if shown else 0.0)
+    # `SetNextItemWidth` sizes the *widget*, and the label sits outside it --
+    # the same contract the sliders honour (see `_slider`): without the
+    # reservation the row is the widget alone and the label never fits.
+    wanted = ctx.take_next_item_width()
+    box = ctx.layout.row(height=height,
+                         width=None if wanted is None else wanted + label_w)
+    field = (box[0], box[1], max(box[2] - label_w, 1.0), box[3])
     item_id = ctx.get_id(label)
-    hovered, held, _pressed = ctx.button_behavior(box, item_id)
+    hovered, held, _pressed = ctx.button_behavior(field, item_id)
     store = ctx.get_storage(item_id)
     if held:
         last = store.get("x", ctx.io.mouse_pos[0])
@@ -808,13 +910,16 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
         elif (ctx.active_id_previous_frame == item_id
               and ctx.active_id != item_id and store.pop("edited", False)):
             held = True
-    ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
+    ctx.draw.add_rect_filled((field[0], field[1]), (field[0] + field[2], field[1] + field[3]),
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
     shown_value = fmt % value
     tw, th = ctx.draw.calc_text_size(shown_value)
-    ctx.draw.add_text((box[0] + (box[2] - tw) * 0.5, box[1] + (box[3] - th) * 0.5),
+    ctx.draw.add_text((field[0] + (field[2] - tw) * 0.5, field[1] + (field[3] - th) * 0.5),
                       _col(Col.TEXT), shown_value)
+    if shown:
+        ctx.draw.add_text((field[0] + field[2] + ctx.style.item_inner_spacing[0], box[1]),
+                          _col(Col.TEXT), shown)
     return (bool(held), value)
 
 
@@ -1348,7 +1453,14 @@ def _elide_start(ctx, text: str, room: float) -> str:
 _ENTER_KEYS = (13, 0x01000004, 0x01000005)
 
 
-def input_text_with_hint(label: str, hint: str, value: str) -> tuple[bool, str]:
+def input_text_with_hint(label: str, value: str, hint: str = "") -> tuple[bool, str]:
+    """``InputTextWithHint``: an input whose empty state shows *hint*.
+
+    The argument order matches :func:`input_text` — ``(label, value, hint)`` —
+    so moving between the two is mechanical. (The reference C++ API puts the
+    hint before the buffer; a value-based Python API that did the same made
+    every ported call a silent hint/value swap.)
+    """
     return input_text(label, value, hint)
 
 
@@ -1421,6 +1533,18 @@ def _ctx():
 # -- where things are ------------------------------------------------------- #
 def get_content_region_avail() -> tuple:
     return _ctx().layout.avail()
+
+
+def get_line_avail() -> float:
+    """Room left on the *current line*, beside the last item — or 0.0 on an
+    empty line.
+
+    ``GetContentRegionAvail`` measures from the cursor, and after any item the
+    cursor is back at the row start, so mid-row it always reads the full width.
+    This is the measurement "does the next control still fit?" wants: see
+    :meth:`emtk.layout.Layout.line_avail` for the trap this exists to close.
+    """
+    return _ctx().layout.line_avail()
 
 
 def get_cursor_pos() -> tuple:
@@ -1784,20 +1908,33 @@ def menu_item(label: str, shortcut: str = "", selected: bool = False,
 def begin_tab_bar(str_id: str) -> bool:
     ctx = _ctx()
     ctx.push_id(str_id)
-    ctx.state(("tabbar", str_id))            # created on first use
+    # The bar's own state dict goes on a stack, because tab *items* below need
+    # the bar they belong to: state keyed without the str_id made every tab
+    # bar in a frame share one "selected" -- so a second bar's first tab was
+    # never the selected one and its body never rendered.
+    stack = getattr(ctx, "_tabbar_stack", None)
+    if stack is None:
+        stack = []
+        ctx._tabbar_stack = stack
+    stack.append(ctx.state(("tabbar", str_id)))
     return True
 
 
 def end_tab_bar() -> None:
-    _ctx().pop_id()
+    ctx = _ctx()
+    stack = getattr(ctx, "_tabbar_stack", None)
+    if stack:
+        stack.pop()
+    ctx.pop_id()
     new_line()
 
 
 def begin_tab_item(label: str) -> bool:
     """``BeginTabItem``: True while the tab's body should be submitted."""
     ctx = _ctx()
-    store = ctx.state(("tabbar",))
-    shown = _visible_label(label)
+    stack = getattr(ctx, "_tabbar_stack", None)
+    store = stack[-1] if stack else ctx.state(("tabbar",))
+    shown = _visible_label(label) if isinstance(label, str) else ""
     width = ctx.draw.calc_text_size(shown)[0] + ctx.style.frame_padding[0] * 2.0
     box = ctx.layout.row(height=_frame_height(ctx), width=width)
     hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
@@ -2447,7 +2584,7 @@ def table_get_column_index() -> int:
 
 
 __all__ += [
-    "get_content_region_avail", "get_cursor_pos", "get_cursor_pos_x",
+    "get_content_region_avail", "get_line_avail", "get_cursor_pos", "get_cursor_pos_x",
     "get_cursor_pos_y", "set_cursor_pos", "get_item_rect_min",
     "get_item_rect_max", "get_item_rect_size", "get_window_pos",
     "get_window_size", "get_window_width", "get_window_height",
@@ -3800,6 +3937,79 @@ def input_text_multiline(label: str, value: str, size=None) -> tuple[bool, str]:
     return (changed, value)
 
 
+def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None) -> bool:
+    """``text_editor``: embed and interact with a :class:`~emtk.widgets.text_editor.TextEditor`.
+
+    Draws the editor in the immediate-mode layout, routes mouse clicks, drags,
+    wheel scrolling, and keyboard events, and adapts palette to the active theme.
+
+    Parameters
+    ----------
+    label : str
+        Unique widget label or ID (e.g. ``"##editor"``).
+    editor : TextEditor
+        The editor instance to draw.
+    size : tuple of float, optional
+        (width, height). If width <= 0 or None, spans available content width.
+        If height <= 0 or None, spans available content height (minimum 120px).
+
+    Returns
+    -------
+    bool
+        True if the editor text was modified during this frame.
+    """
+    ctx = get_current_context()
+    avail_w, avail_h = get_content_region_avail()[:2]
+    w = float(size[0]) if size and len(size) > 0 and size[0] > 0.0 else max(100.0, float(avail_w))
+    h = float(size[1]) if size and len(size) > 1 and size[1] > 0.0 else max(120.0, float(avail_h))
+
+    box = ctx.layout.row(height=h, width=w)
+    item_id = ctx.get_id(label)
+    hovered = ctx.item_add(box, item_id)
+    focus = ctx.state(("focus",))
+    io = ctx.io
+    px, py = io.mouse_pos
+
+    if io.mouse_clicked[0]:
+        if hovered:
+            focus["id"] = item_id
+            set_nav_id(item_id)
+            clicks = 2 if io.mouse_double_clicked[0] else 1
+            editor.press(px, py, *box, 0, clicks)
+        elif focus.get("id") == item_id:
+            focus.pop("id", None)
+
+    focused = focus.get("id") == item_id or ctx.is_nav_focused(item_id)
+
+    if hovered and io.mouse_wheel:
+        editor.scroll(-3 if io.mouse_wheel > 0 else 3)
+    if io.mouse_down[0] and focused and not io.mouse_clicked[0]:
+        editor.drag(px, py, *box)
+    if io.mouse_released[0] and focused:
+        editor.release()
+
+    was_modified = getattr(editor, "modified", False)
+
+    if focused:
+        events = list(io.key_events)
+        if not events and (io.key or io.text):
+            mods = _current_modifiers(io)
+            events = [(io.key, io.text, mods)]
+        for key, text, mods in events:
+            editor.key(int(key), text, mods)
+
+    window_bg = ctx.style.color(Col.WINDOW_BG)
+    from .widgets.text_editor import DARK_PALETTE, LIGHT_PALETTE
+    if sum(window_bg[:3]) > 3 * 128:
+        editor.palette = LIGHT_PALETTE
+    else:
+        editor.palette = DARK_PALETTE
+
+    editor.draw(ctx.p, *box)
+    return bool(getattr(editor, "modified", False) and not was_modified)
+
+
+
 def is_key_chord_pressed(chord: int) -> bool:
     """``IsKeyChordPressed``: the key, and exactly the modifiers asked for.
 
@@ -4021,7 +4231,7 @@ __all__ += [
     "load_ini_settings_from_disk", "log_to_tty", "log_to_file",
     "log_to_clipboard", "log_text", "log_finish", "log_buttons", "debug_log",
     "debug_text_encoding", "debug_start_item_picker", "debug_flash_style_color",
-    "input_text_multiline", "is_key_chord_pressed", "shortcut",
+    "input_text_multiline", "text_editor", "is_key_chord_pressed", "shortcut",
     "set_next_item_shortcut", "set_item_key_owner", "set_next_item_storage_id",
     "set_nav_cursor_visible", "set_next_frame_want_capture_mouse",
     "set_next_frame_want_capture_keyboard",

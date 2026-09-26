@@ -20,6 +20,7 @@ from __future__ import annotations
 # vertices, which is the wrong moment to discover a lazy import. It costs one
 # small module with no dependencies of its own.
 from . import redraw
+from . import im
 from .widgets.axis import Axis, nice_ticks
 from .widgets.markers import MARKERS, draw_marker
 from .painter import (
@@ -90,6 +91,7 @@ __all__ = [
     "DEEP_PALETTE",
     "Plot",
     "begin_plot",
+    "im",
 ]
 
 #: The ported families, by module name. Kept as data because it is what the
@@ -114,6 +116,7 @@ CONTROL_MODULES = (
     "widgets.dragdrop",
     "layout",
     "widgets.text_editor",
+    "widgets.chat",
     "widgets.memory_editor",
     "control",
     "widgets.axis",
@@ -514,6 +517,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "button_name": "events",
     "buttons_from_dom": "events",
     "calc_item_width": "im",
+    "calc_math_size": "im",
     "calc_text_size": "im",
     "checkbox": "im",
     "checkbox_flags": "im",
@@ -621,6 +625,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "get_item_rect_size": "im",
     "get_key_name": "im",
     "get_key_pressed_amount": "im",
+    "get_line_avail": "im",
     "get_main_viewport": "im",
     "get_mouse_clicked_count": "im",
     "get_mouse_cursor": "im",
@@ -708,6 +713,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "key_from_dom": "keys",
     "label_text": "im",
     "label_text_v": "im",
+    "latex_to_unicode": "mathtext",
     "letter_of": "keys",
     "list_box": "im",
     "load_ini_settings_from_disk": "im",
@@ -720,6 +726,8 @@ _NAME_TO_MODULE: dict[str, str] = {
     "log_to_file": "im",
     "log_to_tty": "im",
     "mac_behaviors": "keys",
+    "math": "im",
+    "math_text": "im",
     "mem_alloc": "im",
     "mem_free": "im",
     "menu_item": "im",
@@ -731,6 +739,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "new_line": "im",
     "next_column": "im",
     "nice_ticks": "widgets.axis",
+    "normalize_latex": "mathtext",
     "open_popup": "im",
     "open_popup_on_item_click": "im",
     "painter_capabilities": "im",
@@ -761,6 +770,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "radio_button": "im",
     "ratio_from_value": "widgets.sliders",
     "render": "im",
+    "render_math_to_texture": "mathtext",
     "reset_mouse_drag_delta": "im",
     "rgb_to_hsv": "widgets.color",
     "rgba_to_floats": "widgets.color",
@@ -878,6 +888,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "text_colored_v": "im",
     "text_disabled": "im",
     "text_disabled_v": "im",
+    "text_editor": "im",
     "text_link": "im",
     "text_link_open_url": "im",
     "text_unformatted": "im",
