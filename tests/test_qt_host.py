@@ -114,3 +114,81 @@ def test_an_im_app_gets_every_button_and_the_wheel(qt_app):
     QtCore.QCoreApplication.sendEvent(host, wheel)
     assert app.io.mouse_wheel == 1.0, "one notch up is +1, as in Dear ImGui"
     host.close()
+
+
+def test_a_file_drop_reaches_the_control(qt_app, tmp_path):
+    """A file dragged over the host is delivered to the control's drop hook.
+
+    Qt hands drag events to the widget under the pointer and drops them there
+    when it ignores them -- they do not climb to an embedding window that
+    accepts drops. The host did neither, so an app hosted in Qt (ndX) never
+    saw a drop its own window logic was wired for.
+    """
+    from emtk.qt_host import ControlHost
+    from qtpy import QtCore, QtGui
+
+    dropped = []
+
+    class _Droplet:
+        def draw(self, painter, x, y, w, h):
+            pass
+
+        def files_dropped(self, paths):
+            dropped.extend(paths)
+            return True
+
+    control = _Droplet()
+    host = ControlHost(control)
+    assert host.acceptDrops(), "the host must take drops or Qt never asks it"
+
+    csv = tmp_path / "bursts.csv"
+    csv.write_text("I_DD,I_DA,I_AA\n10,4,7\n")
+
+    def drag(kind, accept_expected):
+        mime = QtCore.QMimeData()
+        mime.setUrls([QtCore.QUrl.fromLocalFile(str(csv))])
+        event_type = (QtGui.QDragEnterEvent if kind == "enter"
+                      else QtGui.QDragMoveEvent)
+        event = event_type(QtCore.QPoint(30, 40), QtCore.Qt.CopyAction, mime,
+                           QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+        QtCore.QCoreApplication.sendEvent(host, event)
+        assert event.isAccepted() == accept_expected
+
+    drag("enter", True)
+    drag("move", True)
+
+    # A non-URL drag (plain text) is refused:
+    mime = QtCore.QMimeData()
+    mime.setText("no files here")
+    enter = QtGui.QDragEnterEvent(QtCore.QPoint(30, 40), QtCore.Qt.CopyAction, mime,
+                                  QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+    QtCore.QCoreApplication.sendEvent(host, enter)
+    assert not enter.isAccepted()
+
+    mime = QtCore.QMimeData()
+    mime.setUrls([QtCore.QUrl.fromLocalFile(str(csv))])
+    drop = QtGui.QDropEvent(QtCore.QPoint(30, 40), QtCore.Qt.CopyAction, mime,
+                            QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+    QtCore.QCoreApplication.sendEvent(host, drop)
+    assert drop.isAccepted()
+    assert dropped == [str(csv)]
+    host.close()
+
+
+def test_a_control_without_a_drop_hook_refuses_drops(qt_app, tmp_path):
+    """No hook, no acceptance: the drop stays with the embedding window."""
+    from emtk.qt_host import ControlHost
+    from qtpy import QtCore, QtGui
+
+    host = ControlHost(_Ticker(frames_wanted=0))
+    assert host.acceptDrops()
+
+    csv = tmp_path / "x.csv"
+    csv.write_text("a\n1\n")
+    mime = QtCore.QMimeData()
+    mime.setUrls([QtCore.QUrl.fromLocalFile(str(csv))])
+    enter = QtGui.QDragEnterEvent(QtCore.QPoint(30, 40), QtCore.Qt.CopyAction, mime,
+                                  QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+    QtCore.QCoreApplication.sendEvent(host, enter)
+    assert not enter.isAccepted()
+    host.close()

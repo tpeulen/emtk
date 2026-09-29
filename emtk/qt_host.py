@@ -119,6 +119,12 @@ def host_class():
             self.setMouseTracking(True)
             self.setMinimumHeight(80)
             self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent, True)
+            # A file dragged over the control is the control's event, not the
+            # embedding window's: Qt delivers drag events to the widget under
+            # the pointer and drops them there when it ignores them -- they do
+            # not climb to a parent that accepts drops. Without this an app
+            # hosted here (ndX) never sees a drop its own window is wired for.
+            self.setAcceptDrops(True)
             use_qt_clipboard()        # copy *and* paste through QClipboard
 
         # -- painting ----------------------------------------------------- #
@@ -287,7 +293,7 @@ def host_class():
             scroll(-3 if delta > 0 else 3)
             self.update()
 
-        def keyPressEvent(self, event) -> None:  # noqa: N802
+        def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Forward a key press; unhandled keys go on to Qt."""
             key = getattr(self.control, "key", None)
             if callable(key) and key(
@@ -296,6 +302,45 @@ def host_class():
                 self._notify()
                 return
             super().keyPressEvent(event)
+
+        # -- file drops ---------------------------------------------------- #
+        def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Accept file URL drags when the control takes drops."""
+            if not event.mimeData().hasUrls():
+                event.ignore()
+                return
+            if callable(getattr(self.control, "files_dropped", None)) \
+                    or callable(getattr(self.control, "on_files_dropped", None)):
+                event.acceptProposedAction()
+            else:
+                event.ignore()
+
+        def dragMoveEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Accept URL moves over the control."""
+            event.acceptProposedAction()
+
+        def dropEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Hand the dropped local paths to the control and repaint it.
+
+            The rich hook (:meth:`emtk.app.ControlSurface`'s ``files_dropped``)
+            is preferred, the surface verb (:meth:`~.app.Surface`'s
+            ``on_files_dropped``, answered for by :class:`~.app.ImApp`) takes
+            the paths when there is no rich one. A drop that opens data asks
+            for the frame that shows it itself (``_frame_due``); the repaint
+            here covers a control that changes without asking.
+            """
+            paths = [url.toLocalFile() for url in event.mimeData().urls()]
+            paths = [p for p in paths if p]
+            rich = getattr(self.control, "files_dropped", None)
+            if callable(rich):
+                rich(paths)
+            else:
+                on_files = getattr(self.control, "on_files_dropped", None)
+                if not callable(on_files) or not on_files(paths):
+                    event.ignore()
+                    return
+            event.acceptProposedAction()
+            self._notify()
 
     _CLASS = _ControlHost
     return _CLASS
