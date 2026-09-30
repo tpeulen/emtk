@@ -52,6 +52,28 @@ def test_the_window_takes_the_controls_title(qt_app):
     host.close()
 
 
+def test_destroying_hosts_detaches_repaint_callbacks_safely(qt_app):
+    """Repeated Qt cleanup must not leave a callback bound to a dying signal."""
+    from qtpy import QtCore, QtWidgets
+
+    from emtk.app import ImApp
+    from emtk.qt_host import ControlHost
+
+    for _ in range(20):
+        control = ImApp(lambda: None)
+        parent = QtWidgets.QWidget()
+        host = ControlHost(control, parent=parent)
+        assert control._frame_request_callback is not None
+        parent.deleteLater()
+        qt_app.sendPostedEvents(None, QtCore.QEvent.DeferredDelete)
+        qt_app.processEvents()
+        # Keep the Python wrapper alive after Qt has deleted its C++ child,
+        # then deliver the late worker-style repaint request.
+        control.request_frame()
+        assert control._frame_request_callback is None
+        del host
+
+
 def test_the_qimage_cache_does_not_hand_a_new_texture_a_dead_ones_picture(qt_app):
     """An id is reused as soon as its texture dies; a cache keyed on the id
     and the revision alone drew the new texture as the old one's QImage.
@@ -192,3 +214,33 @@ def test_a_control_without_a_drop_hook_refuses_drops(qt_app, tmp_path):
     QtCore.QCoreApplication.sendEvent(host, enter)
     assert not enter.isAccepted()
     host.close()
+
+
+def test_a_top_level_host_opens_at_a_usable_size(qt_app):
+    from emtk.qt_host import ControlHost
+
+    host = ControlHost(_Ticker(frames_wanted=0))
+    assert host.width() > 640 and host.height() > 480
+    assert host.width() <= qt_app.primaryScreen().availableGeometry().width()
+
+
+def test_a_control_names_its_own_window_size(qt_app):
+    from emtk.qt_host import ControlHost
+
+    control = _Ticker(frames_wanted=0)
+    control.preferred_size = (700, 500)
+    host = ControlHost(control)
+    assert (host.width(), host.height()) == (700, 500)
+
+
+def test_an_embedded_host_is_left_to_its_layout(qt_app):
+    from qtpy import QtWidgets
+
+    from emtk.qt_host import ControlHost
+
+    parent = QtWidgets.QWidget()
+    host = ControlHost(_Ticker(frames_wanted=0), parent=parent)
+    from emtk.qt_host import DEFAULT_WINDOW_SIZE
+
+    assert (host.width(), host.height()) != DEFAULT_WINDOW_SIZE
+    parent.close()

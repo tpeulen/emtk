@@ -44,11 +44,17 @@ One implementation, two hosts, no parity to maintain between them.
 """
 from __future__ import annotations
 
+import threading
+import weakref
 from collections.abc import Callable
 
 from .font import DEFAULT_FONT_PT
 
-__all__ = ["ControlHost", "make_control_host", "host_class"]
+__all__ = ["ControlHost", "DEFAULT_WINDOW_SIZE", "make_control_host", "host_class"]
+
+#: What a stand-alone window opens at when its control names no size: enough
+#: for a tool panel beside a plot, which is what every port in ChiSurf is.
+DEFAULT_WINDOW_SIZE = (1200, 800)
 
 #: The built class, cached. Rebuilding it per widget would give every host its
 #: own type, which breaks ``isinstance`` and makes Qt re-register the signal.
@@ -100,6 +106,9 @@ def host_class():
         #: ``on_change`` callback: a section wires the callback, a dialog
         #: connects the signal, and neither has to adapt to the other.
         changed = QtCore.Signal()
+        frame_requested = QtCore.Signal()
+        is_emtk: bool = True
+        _emtk_native: bool = True
 
         def __init__(
             self,
@@ -111,8 +120,48 @@ def host_class():
         ) -> None:
             super().__init__(parent)
             self.control = control
+            self.frame_requested.connect(self.update)
+            set_callback = getattr(control, "set_frame_request_callback", None)
+            if callable(set_callback):
+                # Store a weak host reference instead of a bound Qt signal.
+                # A control may outlive a Qt form that embedded it, and worker
+                # notifications can arrive after that form's C++ widget dies.
+                control_ref = weakref.ref(control)
+                host_ref = weakref.ref(self)
+                active = threading.Event()
+                active.set()
+
+                def detach():
+                    active.clear()
+                    owner = control_ref()
+                    if owner is not None:
+                        setter = getattr(owner, "set_frame_request_callback", None)
+                        if callable(setter):
+                            setter(None)
+
+                def request_frame():
+                    if not active.is_set():
+                        return
+                    host = host_ref()
+                    if host is None:
+                        detach()
+                        return
+                    try:
+                        host.frame_requested.emit()
+                    except RuntimeError:
+                        # SIP/Shiboken report a deleted C++ QObject this way.
+                        # The Python control can remain alive in a form model.
+                        detach()
+
+                self._detach_control_callback = detach
+                self._control_callback_finalizer = weakref.finalize(self, detach)
+                set_callback(request_frame)
             self.font_pt = float(font_pt)
-            self.background = tuple(background)
+            bg_vals = tuple(background[:3])
+            if any(isinstance(c, float) and c <= 1.0 for c in bg_vals):
+                self.background = tuple(int(round(c * 255)) for c in bg_vals)
+            else:
+                self.background = tuple(int(round(c)) for c in bg_vals)
             self.on_change = on_change
             self._pressed = False
             self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -126,6 +175,41 @@ def host_class():
             # hosted here (ndX) never sees a drop its own window is wired for.
             self.setAcceptDrops(True)
             use_qt_clipboard()        # copy *and* paste through QClipboard
+            if parent is None:
+                self._size_as_window()
+
+        # -- sizing ------------------------------------------------------- #
+        def window_size_hint(self) -> tuple[int, int]:
+            """The size a stand-alone window for this control opens at.
+
+            The control's own ``preferred_size`` (a ``(w, h)`` pair, or a
+            callable returning one) wins; otherwise :data:`DEFAULT_WINDOW_SIZE`.
+            Either is clamped to 92 % of the screen the window opens on, so a
+            large default never opens taller than the display.
+            """
+            wanted = getattr(self.control, "preferred_size", None)
+            if callable(wanted):
+                wanted = wanted()
+            try:
+                width, height = (int(wanted[0]), int(wanted[1]))
+            except (TypeError, ValueError, IndexError):
+                width, height = DEFAULT_WINDOW_SIZE
+            screen = QtGui.QGuiApplication.primaryScreen()
+            if screen is not None:
+                area = screen.availableGeometry()
+                width = min(width, int(area.width() * 0.92))
+                height = min(height, int(area.height() * 0.92))
+            return max(width, 240), max(height, 160)
+
+        def _size_as_window(self) -> None:
+            """Give a parentless host a usable size.
+
+            Qt opens a bare widget at 640 x 480, which is small enough to cut
+            off the toolbar of every tool that is shown in a window of its own.
+            A host that is embedded (it has a parent) is sized by its layout
+            and is left alone.
+            """
+            self.resize(*self.window_size_hint())
 
         # -- painting ----------------------------------------------------- #
         def paintEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
@@ -141,6 +225,9 @@ def host_class():
                 )
             finally:
                 painter.end()
+            if getattr(self.control, "close_requested", False):
+                QtCore.QTimer.singleShot(0, self.window().close)
+                return
             from .app import window_title
 
             title = window_title(self.control)
@@ -166,6 +253,14 @@ def host_class():
                 self._wake.start(max(int(delay * 1000.0 + 0.5), 1))
             elif getattr(self, "_wake", None) is not None:
                 self._wake.stop()
+
+        def closeEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Detach queued repaint callbacks before closing the widget."""
+            detach = getattr(self, "_detach_control_callback", None)
+            if callable(detach):
+                detach()
+                self._detach_control_callback = None
+            super().closeEvent(event)
 
         def _box(self) -> tuple[float, float, float, float]:
             """The box the control is drawn in: the whole widget."""
