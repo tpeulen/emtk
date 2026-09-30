@@ -50,10 +50,15 @@ FONT_CANDIDATES: tuple[str, ...] = (
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
     "/System/Library/Fonts/Apple Symbols.ttf",
+    "/System/Library/Fonts/Apple Color Emoji.ttc",
     "/System/Library/Fonts/Hiragino Sans GB.ttc",
     "/System/Library/Fonts/STHeiti Light.ttc",
+    "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
+    "/usr/share/fonts/noto-color-emoji/NotoColorEmoji.ttf",
+    "/usr/share/fonts/truetype/ancient-scripts/Symbola.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "C:/Windows/Fonts/seguiemj.ttf",
     "C:/Windows/Fonts/consola.ttf",
     "C:/Windows/Fonts/arialuni.ttf",
 )
@@ -208,8 +213,13 @@ class GlyphCache:
         size = max(int(self.cell_h * 0.72), 6)
         try:
             font = ImageFont.truetype(path, size)
-        except Exception:  # noqa: BLE001 - try the next candidate
-            return None
+        except Exception:
+            # Fallback for bitmap/sbix fonts (e.g. Apple Color Emoji) requiring fixed strike sizes
+            try:
+                strike = min([20, 32, 40, 48, 64, 96, 160], key=lambda s: abs(s - size))
+                font = ImageFont.truetype(path, strike)
+            except Exception:
+                return None
         self._loaded[path] = font
         return font
 
@@ -221,6 +231,9 @@ class GlyphCache:
         try:
             from PIL import Image, ImageDraw  # noqa: PLC0415
 
+            if "emoji" in str(getattr(font, "path", "")).lower():
+                return self._rasterise_strike(char, font)
+
             # Measured first: a glyph wider than the cell is scaled to fit
             # rather than allowed to run into its neighbour, because the
             # layout is monospaced and nothing downstream would notice.
@@ -230,16 +243,17 @@ class GlyphCache:
             width = max(int(box[2] - box[0]), 1)
             scale = min(1.0, (self.cell_w - 2) / float(width)) if width else 1.0
 
-            canvas = Image.new("L", (self.cell_w * 2, self.cell_h * 2), 0)
+            canvas = Image.new("RGBA", (self.cell_w * 2, self.cell_h * 2), (0, 0, 0, 0))
             draw = ImageDraw.Draw(canvas)
-            draw.text((1, 0), char, fill=255, font=font, anchor="la")
+            draw.text((1, 0), char, fill=(255, 255, 255, 255), font=font, anchor="la")
+
             if scale < 1.0:
                 canvas = canvas.resize(
                     (max(int(canvas.width * scale), 1), canvas.height),
                     Image.LANCZOS,
                 )
-            glyph = np.asarray(canvas, dtype=np.uint8)[: self.cell_h, : self.cell_w]
-            if glyph.max() == 0:
+            alpha = np.asarray(canvas.split()[-1], dtype=np.uint8)[: self.cell_h, : self.cell_w]
+            if alpha.max() == 0:
                 # The font has no glyph and drew its own blank. Reported as a
                 # miss so the caller shows the placeholder: a blank cell here
                 # would be the invisible failure again, one layer down.
@@ -247,13 +261,60 @@ class GlyphCache:
         except Exception:  # noqa: BLE001 - a glyph is not worth a frame
             logger.debug("could not rasterise %r", char, exc_info=True)
             return None
+        return self._cell_from_alpha(alpha)
 
+    def _rasterise_strike(self, char: str, font):
+        """A colour-bitmap glyph (an emoji) as a one-colour mask.
+
+        Colour emoji fonts only load at fixed bitmap strikes (160 px for Apple
+        Color Emoji), far larger than a cell. Drawn into a cell-sized canvas
+        the strike is cropped to its top-left corner and the mask comes out a
+        solid block, so the glyph is drawn whole at its strike size and scaled
+        down. The atlas draws monochrome masks, so the picture becomes one:
+        the glyph's alpha is its silhouette and its darker pixels (outlines,
+        the details inside the shape) are kept, its light fill is thinned.
+        """
+        try:
+            from PIL import Image, ImageDraw  # noqa: PLC0415
+
+            side = int(font.size * 1.6)
+            canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+            ImageDraw.Draw(canvas).text(
+                (side // 2, side // 2), char, font=font, anchor="mm", embedded_color=True
+            )
+            bbox = canvas.getbbox()
+            if bbox is None:
+                return None
+            canvas = canvas.crop(bbox)
+            target = max(int(self.cell_h * 0.78), 6)
+            factor = min(target / canvas.height, (self.cell_w - 2) / canvas.width)
+            small = canvas.resize(
+                (max(int(canvas.width * factor), 1), max(int(canvas.height * factor), 1)),
+                Image.LANCZOS,
+            )
+            rgba = np.asarray(small, dtype=np.float32) / 255.0
+            luminance = rgba[..., :3] @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+            mask = rgba[..., 3] * np.clip(1.25 - luminance, 0.25, 1.0)
+            alpha = np.zeros((self.cell_h, self.cell_w), dtype=np.uint8)
+            top = max((self.cell_h - mask.shape[0]) // 2, 0)
+            left = max((self.cell_w - mask.shape[1]) // 2, 0)
+            h = min(mask.shape[0], self.cell_h - top)
+            w = min(mask.shape[1], self.cell_w - left)
+            alpha[top:top + h, left:left + w] = (mask[:h, :w] * 255).astype(np.uint8)
+            if alpha.max() == 0:
+                return None
+        except Exception:  # noqa: BLE001 - a glyph is not worth a frame
+            logger.debug("could not rasterise emoji %r", char, exc_info=True)
+            return None
+        return self._cell_from_alpha(alpha)
+
+    def _cell_from_alpha(self, alpha):
         cell = np.zeros((self.cell_h, self.cell_w, 4), dtype=np.uint8)
-        rows, columns = glyph.shape[:2]
+        rows, columns = alpha.shape[:2]
         cell[:rows, :columns, 0] = 255
         cell[:rows, :columns, 1] = 255
         cell[:rows, :columns, 2] = 255
-        cell[:rows, :columns, 3] = glyph
+        cell[:rows, :columns, 3] = alpha
         return cell
 
     def _store(self, char: str, cell) -> tuple[int, int, int, int]:
