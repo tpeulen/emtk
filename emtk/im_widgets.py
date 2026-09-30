@@ -1035,13 +1035,29 @@ def combo(label: str, current: int, items: Sequence[str],
     return (changed, current)
 
 
-def collapsing_header(label: str, open_: Optional[bool] = None) -> bool:
-    """``ImGui::CollapsingHeader``: returns whether the body should be drawn."""
+def collapsing_header(label: str, open_: "Optional[bool | int]" = None) -> bool:
+    """``ImGui::CollapsingHeader``: returns whether the body should be drawn.
+
+    Parameters
+    ----------
+    label : str
+    open_ : bool, int or None
+        A ``bool`` *forces* the state on every call (a caller that owns the state, for
+        instance to open a header from outside). An ``int`` is ImGui's ``flags`` word:
+        ``TreeNodeFlags.DEFAULT_OPEN`` makes the header start open, and that is **all** it
+        does -- after the first frame the user's clicks own the state. (Reading a flags
+        word as a bool forced ``flags=0`` closed and ``DEFAULT_OPEN`` open on every frame,
+        so such a header could never be toggled.) The literal ``1`` that older callers pass
+        for "open" is accepted as ``DEFAULT_OPEN``. ``None`` leaves the state alone; a header
+        nobody opened starts closed.
+    """
     ctx = get_current_context()
     item_id = ctx.get_id(label)
     store = ctx.get_storage(item_id)
-    if open_ is not None:
-        store["open"] = bool(open_)
+    if isinstance(open_, bool):
+        store["open"] = open_
+    elif open_ is not None and "open" not in store:
+        store["open"] = bool(int(open_) & 32) or int(open_) == 1    # DEFAULT_OPEN (32), or legacy 1
     is_open = bool(store.get("open", False))
     height = _frame_height(ctx)
     box = ctx.layout.row(height=height)
