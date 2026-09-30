@@ -615,6 +615,7 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
                 _w.same_line()
             if _w.radio_button(_id(label, f"{name}{i}"), i == index) and i != index:
                 _commit(model, section, values[i], state)
+            _tooltip(section)
             _remember(state, f"{name}.{i}")
         _remember(state, name)
         return
