@@ -327,3 +327,27 @@ def test_losing_focus_is_reported(qt_app):
     host = ControlHost(control)
     qt_app.sendEvent(host, QtGui.QFocusEvent(QtCore.QEvent.FocusOut))
     assert control.events == [("focus_lost",)]
+
+
+def test_a_drop_the_rich_hook_declines_is_ignored(qt_app, tmp_path):
+    """``files_dropped`` returning False refuses the drop, as ``on_files_dropped`` always did."""
+    from emtk.qt_host import ControlHost
+    from qtpy import QtCore, QtGui
+
+    class _Picky:
+        def draw(self, painter, x, y, w, h):
+            pass
+
+        def files_dropped(self, paths):
+            return False
+
+    host = ControlHost(_Picky())
+    f = tmp_path / "a.txt"
+    f.write_text("x")
+    mime = QtCore.QMimeData()
+    mime.setUrls([QtCore.QUrl.fromLocalFile(str(f))])
+    drop = QtGui.QDropEvent(QtCore.QPoint(5, 5), QtCore.Qt.CopyAction, mime,
+                            QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+    QtCore.QCoreApplication.sendEvent(host, drop)
+    assert not drop.isAccepted()
+    host.close()

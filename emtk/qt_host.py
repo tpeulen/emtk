@@ -458,7 +458,9 @@ def host_class():
             paths = [p for p in paths if p]
             rich = getattr(self.control, "files_dropped", None)
             if callable(rich):
-                rich(paths)
+                if rich(paths) is False:      # the hook declined (None still counts as taken)
+                    event.ignore()
+                    return
             else:
                 on_files = getattr(self.control, "on_files_dropped", None)
                 on_paths = getattr(self.control, "on_paths_dropped", None)
