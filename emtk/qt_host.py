@@ -404,8 +404,8 @@ def host_class():
             if not event.mimeData().hasUrls():
                 event.ignore()
                 return
-            if callable(getattr(self.control, "files_dropped", None)) \
-                    or callable(getattr(self.control, "on_files_dropped", None)):
+            if any(callable(getattr(self.control, name, None))
+                   for name in ("files_dropped", "on_files_dropped", "on_paths_dropped")):
                 event.acceptProposedAction()
             else:
                 event.ignore()
@@ -431,7 +431,15 @@ def host_class():
                 rich(paths)
             else:
                 on_files = getattr(self.control, "on_files_dropped", None)
-                if not callable(on_files) or not on_files(paths):
+                on_paths = getattr(self.control, "on_paths_dropped", None)
+                if callable(on_files):
+                    if not on_files(paths):
+                        event.ignore()
+                        return
+                elif callable(on_paths):
+                    # the spelling most ChiSurf apps use; it need not return a flag
+                    on_paths(paths)
+                else:
                     event.ignore()
                     return
             event.acceptProposedAction()

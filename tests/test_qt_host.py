@@ -244,3 +244,39 @@ def test_an_embedded_host_is_left_to_its_layout(qt_app):
 
     assert (host.width(), host.height()) != DEFAULT_WINDOW_SIZE
     parent.close()
+
+
+def test_an_on_paths_dropped_control_takes_drops(qt_app, tmp_path):
+    """The ``on_paths_dropped`` spelling (most ChiSurf apps) is a drop hook too.
+
+    The host only knew ``files_dropped`` / ``on_files_dropped``, so a drag over such an app was
+    refused and its drop never arrived (found by the photon_table / tttr_to_pto / pto_inspector
+    ports). It need not return a flag.
+    """
+    from emtk.qt_host import ControlHost
+    from qtpy import QtCore, QtGui
+
+    dropped = []
+
+    class _Paths:
+        def draw(self, painter, x, y, w, h):
+            pass
+
+        def on_paths_dropped(self, paths):
+            dropped.extend(paths)
+
+    host = ControlHost(_Paths())
+    f = tmp_path / "a.pto"
+    f.write_text("x")
+    mime = QtCore.QMimeData()
+    mime.setUrls([QtCore.QUrl.fromLocalFile(str(f))])
+    enter = QtGui.QDragEnterEvent(QtCore.QPoint(30, 40), QtCore.Qt.CopyAction, mime,
+                                  QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+    QtCore.QCoreApplication.sendEvent(host, enter)
+    assert enter.isAccepted()
+    drop = QtGui.QDropEvent(QtCore.QPoint(30, 40), QtCore.Qt.CopyAction, mime,
+                            QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
+    QtCore.QCoreApplication.sendEvent(host, drop)
+    assert drop.isAccepted()
+    assert dropped == [str(f)]
+    host.close()
