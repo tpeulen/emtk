@@ -427,6 +427,9 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     if kind in ("int", "float"):
         # A number is replaced, not extended, as ImGui's InputScalar does.
         flags |= InputTextFlags.AUTO_SELECT_ALL
+    if kind == "password":
+        # A spec that says ``kind: "password"`` gets a masked field: the text is never drawn.
+        flags |= InputTextFlags.PASSWORD
     entered, text = _w.input_text(f"##{name}", shown, str(section.get("placeholder", "")), flags,
                                   elide_start=str(section.get("elide", "")).lower() == "start")
     _remember(state, f"{name}.edit" if slider else name)

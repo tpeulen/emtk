@@ -144,6 +144,8 @@ class DialogWindow:
             _w.set_cursor_screen_pos((bx, y + (self.HEADER_H - bh) / 2.0))
             if _w.button(f"{label}##{self.key}.header.{label}", (bw, bh)):
                 pressed = "close" if label == "×" else label
+            if label == "×":
+                _w.set_item_tooltip("Close this window (Escape).")
             on_button = on_button or _w.is_item_hovered()
             bx += bw + 4.0
 
