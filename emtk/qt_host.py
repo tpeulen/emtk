@@ -398,6 +398,36 @@ def host_class():
                 return
             super().keyPressEvent(event)
 
+        def keyReleaseEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Forward a key release (``key_release``); unhandled ones go on to Qt.
+
+            Without it a control that tracks held keys (a game's paddle, a held
+            direction) never learnt a key went up: the key stayed held, the
+            action kept repeating, and the next press of the same key was taken
+            for a repeat and dropped. Auto-repeat releases are not forwarded:
+            Qt sends a release before every repeated press while a key is held,
+            and a held key must stay held (repeated *presses* still arrive, so
+            a text field keeps repeating).
+            """
+            if event.isAutoRepeat():
+                event.accept()
+                return
+            release = getattr(self.control, "key_release", None)
+            if callable(release) and release(
+                int(event.key()), event.text(), int(event.modifiers())
+            ):
+                self._notify()
+                return
+            super().keyReleaseEvent(event)
+
+        def focusOutEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Tell the control focus left (``focus_lost``): no release arrives then."""
+            lost = getattr(self.control, "focus_lost", None)
+            if callable(lost):
+                lost()
+                self._notify()
+            super().focusOutEvent(event)
+
         # -- file drops ---------------------------------------------------- #
         def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Accept file URL drags when the control takes drops."""

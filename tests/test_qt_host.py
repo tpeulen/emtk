@@ -280,3 +280,50 @@ def test_an_on_paths_dropped_control_takes_drops(qt_app, tmp_path):
     assert drop.isAccepted()
     assert dropped == [str(f)]
     host.close()
+
+
+class _Keys:
+    """A control that records key presses, releases and focus loss."""
+
+    def __init__(self):
+        self.events = []
+
+    def draw(self, painter, x, y, w, h):
+        pass
+
+    def key(self, key, text="", modifiers=0):
+        self.events.append(("press", key))
+        return True
+
+    def key_release(self, key, text="", modifiers=0):
+        self.events.append(("release", key))
+        return True
+
+    def focus_lost(self):
+        self.events.append(("focus_lost",))
+
+
+def test_key_releases_reach_the_control_and_auto_repeat_releases_do_not(qt_app):
+    from qtpy import QtCore, QtGui
+
+    from emtk.qt_host import ControlHost
+
+    control = _Keys()
+    host = ControlHost(control)
+    up = QtCore.Qt.Key_Up
+    for kind, repeat in ((QtCore.QEvent.KeyPress, False), (QtCore.QEvent.KeyRelease, True),
+                         (QtCore.QEvent.KeyPress, True), (QtCore.QEvent.KeyRelease, False)):
+        event = QtGui.QKeyEvent(kind, up, QtCore.Qt.NoModifier, "", repeat)
+        qt_app.sendEvent(host, event)
+    assert control.events == [("press", int(up)), ("press", int(up)), ("release", int(up))]
+
+
+def test_losing_focus_is_reported(qt_app):
+    from qtpy import QtCore, QtGui
+
+    from emtk.qt_host import ControlHost
+
+    control = _Keys()
+    host = ControlHost(control)
+    qt_app.sendEvent(host, QtGui.QFocusEvent(QtCore.QEvent.FocusOut))
+    assert control.events == [("focus_lost",)]
