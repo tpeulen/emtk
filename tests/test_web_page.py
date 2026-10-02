@@ -21,7 +21,7 @@ from emtk.events import (
     RIGHT_BUTTON,
     SHIFT_MODIFIER,
 )
-from emtk.keys import KEY_ESCAPE, KEY_LEFT, KEY_RETURN
+from emtk.keys import KEY_ESCAPE, KEY_LEFT, KEY_RETURN, KEY_RIGHT
 from emtk.web.page import DROP_DIR, MOUNT_DIR, WebPage, mount, wheel_steps_from_dom
 
 
@@ -67,6 +67,9 @@ class _Recorder(Surface):
     def on_key_press(self, key, text, modifiers):
         self.calls.append(("key", (key, text, modifiers), {}))
         return key == KEY_ESCAPE      # consumes one key only
+
+    def on_key_release(self, key, text, modifiers):
+        return self._log("key_release", key, text, modifiers)
 
     def on_resize(self, *a):
         return self._log("resize", *a)
@@ -155,6 +158,19 @@ def test_keys_are_named_through_emtk_and_consumption_is_honest(page):
     assert keys[0] == (KEY_LEFT, "", 0)
     assert keys[1] == (KEY_RETURN, "", CONTROL_MODIFIER)
     assert keys[2] == (0, "z", 0), "a printable key is text, not a key code"
+
+
+def test_key_up_and_window_blur_release_held_controls(page):
+    web, surface = page
+    web.key("ArrowLeft")
+    web.key("ArrowRight")
+    web.key_up("ArrowLeft")
+    assert surface.calls[-1] == ("key_release", (KEY_LEFT, "", 0), {})
+    web.key("ArrowLeft")
+    assert web.clear_keys() is True
+    assert [call[1][0] for call in surface.calls if call[0] == "key_release"] == [
+        KEY_LEFT, KEY_RIGHT, KEY_LEFT
+    ]
 
 
 def test_resize_moves_the_backing_store_and_tells_the_surface(page):

@@ -62,34 +62,45 @@ frame's input.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import pairwise
 from typing import NamedTuple, Union
 
 from .. import style
-from ..keys import (KEY_BACKSPACE, KEY_DOWN, KEY_END, KEY_ENTER, KEY_ESCAPE, KEY_HOME, KEY_PAGE_DOWN,
-                    KEY_PAGE_UP, KEY_RETURN, KEY_UP)
-from .text_field import TextField
+from ..i18n import tr
+from ..keys import (
+    KEY_DOWN,
+    KEY_END,
+    KEY_ENTER,
+    KEY_ESCAPE,
+    KEY_HOME,
+    KEY_PAGE_DOWN,
+    KEY_PAGE_UP,
+    KEY_RETURN,
+    KEY_UP,
+)
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
+from .text_field import TextField
 
 __all__ = [
-    "PAD",
-    "SPACING",
-    "OVERLAP",
-    "ROW_SCALE",
-    "MARK_SCALE",
-    "SEPARATOR_SCALE",
-    "SCROLLBAR_W",
-    "WHEEL_ROWS",
     "FILTER_MIN_ITEMS",
     "FILTER_PLACEHOLDER",
+    "MARK_SCALE",
     "NO_MATCH",
-    "filter_marks",
-    "best_popup_pos",
-    "PopupPress",
-    "MenuItem",
+    "OVERLAP",
+    "PAD",
+    "ROW_SCALE",
+    "SCROLLBAR_W",
+    "SEPARATOR_SCALE",
+    "SPACING",
+    "WHEEL_ROWS",
     "Menu",
     "MenuBar",
+    "MenuItem",
     "Popup",
     "PopupModal",
+    "PopupPress",
+    "best_popup_pos",
+    "filter_marks",
 ]
 
 #: Padding between a panel's edge and its contents, in pixels.
@@ -342,7 +353,7 @@ def _draw_marked(p: Painter, x: float, y: float, room: float, h: float, shown: s
     for start, end in marks:
         for i in range(min(start, visible), min(end, visible)):
             marked[i] = True
-    for start, end in zip(cuts, cuts[1:]):
+    for start, end in pairwise(cuts):
         if start >= end:
             continue
         left = p.text_width(shown[:start]) if start else 0.0   # some painters measure "" as a glyph
@@ -404,11 +415,11 @@ def _panel_metrics(
     for entry in entries:
         if entry is None:
             continue
-        label_w = max(label_w, p.text_width(entry.label))
+        label_w = max(label_w, p.text_width(entry.display_label))
         if entry.shortcut:
             shortcut_w = max(shortcut_w, p.text_width(entry.shortcut))
     content = _columns_width(label_w, shortcut_w, mark_w)
-    width = max(content, p.text_width(title)) + 2.0 * PAD
+    width = max(content, p.text_width(tr(title))) + 2.0 * PAD
     height = title_h + 2.0 * PAD + sum(
         row_h * SEPARATOR_SCALE if entry is None else row_h for entry in entries
     )
@@ -497,7 +508,7 @@ def _paint_panel(
     if title:
         p.text(x + PAD, y + PAD, max(w - 2.0 * PAD, 1.0), row_h,
                ALIGN_VCENTER | ALIGN_LEFT,
-               style.fit_text(p, title, w - 2.0 * PAD), style.GOLD, bold=True)
+               style.fit_text(p, tr(title), w - 2.0 * PAD), style.GOLD, bold=True)
 
     p.push_clip(x, y + PAD + title_h, w, max(h - 2.0 * PAD - title_h, 0.0))
     try:
@@ -608,15 +619,22 @@ class MenuItem:
         checked: bool = False,
         enabled: bool = True,
         checkable: bool = False,
+        tooltip: str | None = None,
     ) -> None:
         self.label = str(label)
         self.shortcut = str(shortcut)
         self.checked = bool(checked)
         self.enabled = bool(enabled)
         self.checkable = bool(checkable)
+        self.tooltip = str(tooltip) if tooltip else None
         self.hovered = False
         self.column_shortcut_width = 0.0
         self.marks: tuple[tuple[int, int], ...] = ()
+
+    @property
+    def display_label(self) -> str:
+        """The current locale's label; the source remains the stable identity."""
+        return tr(self.label)
 
     def toggle(self) -> bool:
         """Flip the tick and return its new state.
@@ -649,9 +667,10 @@ class MenuItem:
         room = self.label_room(p, w)
 
         colour = style.TEXT if self.enabled else style.TEXT_DISABLED
-        shown = _ellipsize(p, self.label, room)
+        label = self.display_label
+        shown = _ellipsize(p, label, room)
         if self.marks and self.enabled:
-            _draw_marked(p, x + PAD, y, room, h, shown, self.label, self.marks, colour)
+            _draw_marked(p, x + PAD, y, room, h, shown, label, self.marks, colour)
         else:
             p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, shown, colour)
 
@@ -682,7 +701,7 @@ class MenuItem:
 
     def cut(self, p: Painter, w: float) -> bool:
         """Whether the label does not fit a row *w* wide, and ends in "…"."""
-        return p.text_width(self.label) > self.label_room(p, w) + 0.5
+        return p.text_width(self.display_label) > self.label_room(p, w) + 0.5
 
     def draw_row(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the row alone, without anything that hangs off it.
@@ -794,6 +813,11 @@ class Menu:
         self._row: tuple[float, float, float, float] | None = None
         self._panel: tuple[float, float, float, float] | None = None
         self._rows: list[Row] = []
+
+    @property
+    def display_label(self) -> str:
+        """The current locale's menu title; ``label`` remains its stable ID."""
+        return tr(self.label)
 
     # ------------------------------------------------------------------ #
     def set_viewport(self, width: float, height: float) -> None:
@@ -908,7 +932,7 @@ class Menu:
             elif self.hovered and self.enabled:
                 p.fill_rect(x, y, w, h, style.HEADER_HOVERED)
             p.text(x, y, w, h, ALIGN_VCENTER | ALIGN_HCENTER,
-                   style.fit_text(p, self.label, w - 2.0 * PAD), colour)
+                   style.fit_text(p, self.display_label, w - 2.0 * PAD), colour)
             return
 
         if self.open or (self.hovered and self.enabled):
@@ -917,7 +941,7 @@ class Menu:
         mark_w = p.line_height() * MARK_SCALE
         room = max(w - 2.0 * PAD - mark_w - SPACING, 1.0)
         p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
-               style.fit_text(p, self.label, room), colour)
+               style.fit_text(p, self.display_label, room), colour)
         # "▸" and not ">": the baked atlas has this one, and it is the marker
         # the panel's inline menus already use.
         p.text(x, y, max(w - PAD, 1.0), h, ALIGN_VCENTER | ALIGN_RIGHT, "▸", colour)
@@ -925,7 +949,7 @@ class Menu:
     def cut(self, p: Painter, w: float) -> bool:
         """Whether the label does not fit a row *w* wide."""
         room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING
-        return p.text_width(self.label) > room + 0.5
+        return p.text_width(self.display_label) > room + 0.5
 
     def draw_panel(
         self, p: Painter, row_x: float, row_y: float, row_w: float, row_h: float
@@ -1079,7 +1103,7 @@ class MenuBar:
         float
             Its label's width plus padding either side.
         """
-        return p.text_width(menu.label) + 2.0 * self.title_pad
+        return p.text_width(menu.display_label) + 2.0 * self.title_pad
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the strip, its titles, and any panel that is down.
@@ -1107,6 +1131,8 @@ class MenuBar:
             self._titles.append((menu, (title_x, y, title_w, h)))
             title_x += title_w
 
+        self._update_hover()
+
         p.push_clip(x, y, w, h)
         try:
             for menu, rect in self._titles:
@@ -1117,6 +1143,37 @@ class MenuBar:
         for menu, rect in self._titles:
             if menu.open:
                 menu.draw_panel(p, *rect)
+
+    def _update_hover(self) -> None:
+        """Update menu-row hover and attach descriptions to the active frame."""
+        try:
+            from ..im_core import get_current_context
+
+            ctx = get_current_context()
+        except RuntimeError:
+            return
+        if ctx is None:
+            return
+        pointer = tuple(ctx.io.mouse_pos)
+
+        def update(menu: Menu):
+            for entry, rect in menu._rows:
+                if entry is None or rect is None:
+                    continue
+                hovered = style.hit(*pointer, *rect)
+                if isinstance(entry, MenuItem):
+                    entry.hovered = hovered
+                    if hovered and entry.tooltip:
+                        ctx.set_tooltip(entry.tooltip, owner=("menu-item", id(entry)))
+                elif isinstance(entry, Menu):
+                    entry.hovered = hovered
+                    if entry.open:
+                        update(entry)
+
+        for menu, rect in self._titles:
+            menu.hovered = style.hit(*pointer, *rect)
+            if menu.open:
+                update(menu)
 
     def press(
         self,
@@ -1287,7 +1344,7 @@ class Popup:
         if not (self.filterable and self.query.strip()):
             return list(range(len(self.entries)))
         return [i for i, entry in enumerate(self.entries)
-                if entry is not None and filter_marks(entry.label, self.query) is not None]
+                if entry is not None and filter_marks(entry.display_label, self.query) is not None]
 
     def _filter_h(self, row_h: float) -> float:
         """The height the filter field takes at the top, with its gap."""
@@ -1305,6 +1362,10 @@ class Popup:
         self.below = None
         self.highlight = None
         self._reveal = None
+        # Placement starts over: `last_dir` is what keeps an *open* panel's
+        # side stable while it flips near an edge, and a fresh open should
+        # decide its side from the current viewport, not the last one.
+        self.last_dir = None
         self._reset()
 
     def open_below(self, field: Sequence[float], current: int | None = None,
@@ -1501,7 +1562,7 @@ class Popup:
         for index, entry in enumerate(self.entries):
             if entry is not None:
                 entry.hovered = index == self.highlight
-                marks = filter_marks(entry.label, self.query) if filtering else None
+                marks = filter_marks(entry.display_label, self.query) if filtering else None
                 entry.marks = tuple(marks or ())
 
         # Opaque, as emtk's windows are: a list over a form must not show the
@@ -1510,7 +1571,7 @@ class Popup:
         if self.title:
             p.text(pos_x + PAD, pos_y + PAD, max(width - 2.0 * PAD, 1.0), row_h,
                    ALIGN_VCENTER | ALIGN_LEFT,
-                   style.fit_text(p, self.title, width - 2.0 * PAD), style.GOLD, bold=True)
+                   style.fit_text(p, tr(self.title), width - 2.0 * PAD), style.GOLD, bold=True)
         p.push_clip(*view)
         try:
             for entry, rect in self._rows:
@@ -1608,17 +1669,22 @@ class Popup:
         p.fill_rect(*self._thumb, colour)
 
     def _draw_tooltip(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
-        """The whole text of a highlighted row that had to be cut, under it."""
+        """Show a highlighted row's description, or its full truncated label."""
         self.tooltip = None
         if self.highlight is None or self._view is None:
             return
         entry = self.entries[self.highlight]
         rect = self.row_rect(self.highlight)
-        if entry is None or rect is None or not entry.cut(p, rect[2]):
+        if entry is None or rect is None:
             return
-        self.tooltip = entry.label
+        text = tr(entry.tooltip) if entry.tooltip else None
+        if not text and entry.cut(p, rect[2]):
+            text = entry.display_label
+        if not text:
+            return
+        self.tooltip = text
         room = max(w - 2.0 * PAD, 1.0)
-        lines = _wrap(p, entry.label, room)
+        lines = _wrap(p, text, room)
         line_h = p.line_height()
         tip_w = min(max(p.text_width(line) for line in lines) + 2.0 * PAD, w)
         tip_h = line_h * len(lines) + PAD
@@ -1679,7 +1745,7 @@ class Popup:
     def _press_filter(self, x: float, shift: bool = False) -> None:
         """A click places the filter's caret, a double click selects a word,
         a triple click all of it; a drag from it selects."""
-        import time  # noqa: PLC0415
+        import time
 
         now = time.monotonic()
         last, count = self._filter_click

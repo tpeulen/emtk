@@ -29,11 +29,16 @@ reused as soon as the texture that had it dies.
 
 from __future__ import annotations
 
+import io
+import os
+import pathlib
 from collections.abc import Sequence
+from typing import Any
 
-__all__ = ["Texture"]
+__all__ = ["Texture", "ImageTextureCache", "get_texture"]
 
 _CHANNELS = 4          # RGBA, the one layout every painter here understands
+
 
 
 class Texture:
@@ -137,8 +142,198 @@ class Texture:
     def size(self) -> tuple:
         return (self.width, self.height)
 
-    def __repr__(self) -> str:
-        return f"Texture({self.width}x{self.height}, revision={self.revision})"
+    # -- conversion & factories -------------------------------------------- #
+    @classmethod
+    def from_pil(cls, image: Any, filter: str = "linear") -> Texture:
+        """Create a Texture from a PIL Image instance."""
+        rgba = image.convert("RGBA")
+        return cls(rgba.width, rgba.height, rgba.tobytes(), filter=filter)
+
+    @classmethod
+    def from_file(cls, path: str | os.PathLike[str], filter: str = "linear") -> Texture:
+        """Load an image file from disk and return a Texture."""
+        from PIL import Image
+
+        p = pathlib.Path(path)
+        if not p.is_file():
+            raise FileNotFoundError(f"Image file not found: {p}")
+        with Image.open(p) as img:
+            return cls.from_pil(img, filter=filter)
+
+    @classmethod
+    def from_bytes(
+        cls,
+        data: bytes,
+        width: int | None = None,
+        height: int | None = None,
+        filter: str = "linear",
+    ) -> Texture:
+        """Create a Texture from raw bytes or encoded image data (PNG, JPEG, etc.)."""
+        if width is not None and height is not None:
+            return cls(width, height, data, filter=filter)
+        from PIL import Image
+
+        with Image.open(io.BytesIO(data)) as img:
+            return cls.from_pil(img, filter=filter)
+
+    @classmethod
+    def from_numpy(cls, arr: Any, filter: str = "linear") -> Texture:
+        """Create a Texture from a 2D or 3D numpy array.
+
+        Supports:
+        - 2D (H, W) grayscale
+        - 3D (H, W, 1) grayscale
+        - 3D (H, W, 3) RGB
+        - 3D (H, W, 4) RGBA
+        - float arrays (0.0 to 1.0) or integer arrays (0 to 255)
+        """
+        import numpy as np
+
+        a = np.asarray(arr)
+        if a.ndim == 2:
+            h, w = a.shape
+            if np.issubdtype(a.dtype, np.floating):
+                a = (np.clip(a, 0.0, 1.0) * 255.0).astype(np.uint8)
+            else:
+                a = np.clip(a, 0, 255).astype(np.uint8)
+            rgba = np.zeros((h, w, 4), dtype=np.uint8)
+            rgba[:, :, 0] = a
+            rgba[:, :, 1] = a
+            rgba[:, :, 2] = a
+            rgba[:, :, 3] = 255
+            return cls(w, h, rgba.tobytes(), filter=filter)
+
+        if a.ndim == 3:
+            h, w, c = a.shape
+            if np.issubdtype(a.dtype, np.floating):
+                a = (np.clip(a, 0.0, 1.0) * 255.0).astype(np.uint8)
+            else:
+                a = np.clip(a, 0, 255).astype(np.uint8)
+
+            if c == 1:
+                return cls.from_numpy(a[:, :, 0], filter=filter)
+            elif c == 3:
+                rgba = np.zeros((h, w, 4), dtype=np.uint8)
+                rgba[:, :, :3] = a
+                rgba[:, :, 3] = 255
+                return cls(w, h, rgba.tobytes(), filter=filter)
+            elif c == 4:
+                return cls(w, h, a.tobytes(), filter=filter)
+            else:
+                raise ValueError(f"Unsupported number of channels in numpy array: {c}")
+
+        raise ValueError(f"Array must be 2D or 3D, got ndim={a.ndim}")
+
+    def to_pil(self) -> Any:
+        """Export Texture pixels to a PIL Image (RGBA)."""
+        from PIL import Image
+
+        return Image.frombytes("RGBA", (self.width, self.height), bytes(self.px))
+
+    def save(self, path: str | os.PathLike[str], format: str | None = None) -> None:
+        """Save Texture pixels to disk as an image file."""
+        pil_img = self.to_pil()
+        pil_img.save(path, format=format)
+
+
+class ImageTextureCache:
+    """Cache for loaded textures to prevent redundant file I/O and decodes."""
+
+    def __init__(self, maxsize: int = 256) -> None:
+        self.maxsize = maxsize
+        self._cache: dict[tuple[str, str, int], Texture] = {}
+        self._keys: list[tuple[str, str, int]] = []
+
+    def get(self, path: pathlib.Path, filter: str) -> Texture | None:
+        try:
+            mtime_ns = path.stat().st_mtime_ns
+        except OSError:
+            mtime_ns = 0
+        key = (str(path.resolve()), filter, mtime_ns)
+        tex = self._cache.get(key)
+        if tex is not None:
+            self._keys.remove(key)
+            self._keys.append(key)
+        return tex
+
+    def put(self, path: pathlib.Path, filter: str, texture: Texture) -> None:
+        try:
+            mtime_ns = path.stat().st_mtime_ns
+        except OSError:
+            mtime_ns = 0
+        key = (str(path.resolve()), filter, mtime_ns)
+        if key in self._cache:
+            self._keys.remove(key)
+        elif len(self._keys) >= self.maxsize:
+            oldest = self._keys.pop(0)
+            self._cache.pop(oldest, None)
+        self._cache[key] = texture
+        self._keys.append(key)
+
+    def clear(self) -> None:
+        self._cache.clear()
+        self._keys.clear()
+
+
+_GLOBAL_IMAGE_CACHE = ImageTextureCache()
+
+
+def get_texture(
+    source: Any,
+    filter: str = "linear",
+    cache: ImageTextureCache | None = None,
+) -> Texture | None:
+    """Resolve an image source into a Texture.
+
+    Parameters
+    ----------
+    source : Texture, str, Path, PIL Image, or numpy array
+        The image data or reference.
+    filter : str
+        ``"linear"`` or ``"nearest"``.
+    cache : ImageTextureCache, optional
+        Custom cache instance (uses global cache by default for paths).
+
+    Returns
+    -------
+    Texture or None
+        The resolved Texture, or None if resolution failed.
+    """
+    if isinstance(source, Texture):
+        return source
+
+    if cache is None:
+        cache = _GLOBAL_IMAGE_CACHE
+
+    if isinstance(source, (str, os.PathLike)):
+        p = pathlib.Path(source)
+        if not p.is_file():
+            return None
+        cached = cache.get(p, filter)
+        if cached is not None:
+            return cached
+        try:
+            tex = Texture.from_file(p, filter=filter)
+            cache.put(p, filter, tex)
+            return tex
+        except Exception:
+            return None
+
+    # PIL Image
+    if hasattr(source, "convert") and hasattr(source, "tobytes"):
+        try:
+            return Texture.from_pil(source, filter=filter)
+        except Exception:
+            return None
+
+    # Numpy array
+    if hasattr(source, "shape") and hasattr(source, "dtype"):
+        try:
+            return Texture.from_numpy(source, filter=filter)
+        except Exception:
+            return None
+
+    return None
 
 
 def _rgba(colour) -> tuple:
@@ -146,3 +341,4 @@ def _rgba(colour) -> tuple:
     if len(vals) == 3:
         vals.append(255)
     return tuple(int(v) & 0xFF for v in vals[:4])
+

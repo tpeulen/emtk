@@ -29,9 +29,11 @@ from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
-from .flags import Axis, MouseCursor
+from .flags import Axis, MouseCursor, SliderFlags
 from .im_core import (BackendFlags, ButtonFlags, Col, ConfigFlags,
                       ItemFlags, get_current_context)
+from .painter import Colour, colour_bytes, ALIGN_LEFT, ALIGN_VCENTER
+from .i18n import tr
 
 
 def _frame_border(ctx, box) -> None:
@@ -60,7 +62,7 @@ __all__ = [
     "begin", "end", "begin_child", "end_child",
     "text", "text_colored", "text_disabled", "text_wrapped", "bullet_text",
     "label_text", "math", "math_text", "calc_math_size",
-    "button", "small_button", "invisible_button", "checkbox",
+    "button", "small_button", "action_button", "invisible_button", "checkbox",
     "radio_button", "slider_float", "slider_int", "drag_float", "drag_int",
     "progress_bar", "selectable", "combo", "separator", "same_line", "spacing",
     "splitter", "splitter_behavior",
@@ -108,12 +110,35 @@ def end() -> None:
     get_current_context().end()
 
 
-def begin_child(box, clip: bool = True):
-    return get_current_context().begin_child(box, clip)
+def begin_child(
+    id_or_box: Any,
+    size_or_clip: Any = None,
+    clip: bool = True,
+    child_id: Any = None,
+    scrollable: bool = True,
+):
+    """``ImGui::BeginChild``: Push a scrollable child layout region."""
+    ctx = get_current_context()
+    if isinstance(id_or_box, str):
+        cid = id_or_box
+        if isinstance(size_or_clip, (tuple, list)):
+            if len(size_or_clip) == 2:
+                box = (*ctx.layout.cursor, float(size_or_clip[0]), float(size_or_clip[1]))
+            else:
+                box = tuple(size_or_clip)
+        else:
+            avail = ctx.layout.avail()
+            box = (*ctx.layout.cursor, avail[0], avail[1])
+        c = clip if size_or_clip is None or isinstance(size_or_clip, (tuple, list)) else bool(size_or_clip)
+        return ctx.begin_child(box, clip=c, child_id=cid, scrollable=scrollable)
+    else:
+        box = id_or_box
+        c = clip if size_or_clip is None else bool(size_or_clip)
+        return ctx.begin_child(box, clip=c, child_id=child_id, scrollable=scrollable)
 
 
 def end_child(clip: bool = True):
-    return get_current_context().end_child(clip)
+    return get_current_context().end_child(clip=clip)
 
 
 def same_line(offset: float = 0.0, spacing: float = -1.0) -> None:
@@ -478,9 +503,7 @@ def get_item_rect():
 
 def calc_text_size(text_: str, text_end=None, hide_double_hash: bool = False,
                    wrap_width: float = -1.0):
-    """``CalcTextSize`` with the trailing C parameters accepted and honest:
-    ``text_end`` truncates, ``hide_double_hash`` hides what follows ``##``,
-    ``wrap_width`` is accepted (emtk measures unwrapped)."""
+    """Measure multiline text, optionally wrapping to a positive width."""
     if text_end is not None:
         try:
             text_ = text_[:int(text_end)]
@@ -488,11 +511,15 @@ def calc_text_size(text_: str, text_end=None, hide_double_hash: bool = False,
             pass
     if hide_double_hash and "##" in text_:
         text_ = text_.split("##", 1)[0]
-    return get_current_context().draw.calc_text_size(text_)
+    ctx = get_current_context()
+    lines = (_wrapped_lines(ctx, text_, float(wrap_width)) if wrap_width > 0
+             else str(text_).split("\n"))
+    return (max((ctx.p.text_width(line) for line in lines), default=0.0),
+            ctx.p.line_height() * len(lines))
 
 
 def set_tooltip(text_: str) -> None:
-    get_current_context().set_tooltip(text_)
+    get_current_context().set_tooltip(tr(text_))
 
 
 def get_cursor_screen_pos():
@@ -537,6 +564,24 @@ def text(s: str) -> None:
     text_colored(_col(Col.TEXT), s)
 
 
+def _active_wrap_width(ctx, box_x: float) -> float | None:
+    """The wrap width :func:`push_text_wrap_pos` set, or ``None`` for no wrap.
+
+    ``0.0`` wraps at the remaining content width (the window edge, ImGui's
+    default when pushed bare); a positive value is a window-relative x; a
+    negative value disables wrapping for the text below it.
+    """
+    stack = ctx.state(("wrap",)).get("stack") or []
+    if not stack:
+        return None
+    wrap = float(stack[-1])
+    if wrap < 0.0:
+        return None
+    if wrap == 0.0:
+        return max(1.0, ctx.layout.avail()[0])
+    return max(1.0, wrap - box_x)
+
+
 def text_colored(col, s: str) -> None:
     """``ImGui::TextColored``.
 
@@ -547,40 +592,69 @@ def text_colored(col, s: str) -> None:
     first), and the widget next to it goes dead. The demo's
     ``Text("Hold to repeat:"); SameLine(); ArrowButton(...)`` is exactly that
     shape, and the arrows did not respond.
+
+    Honours :func:`push_text_wrap_pos`: with a wrap width active the text
+    wraps like ``TextWrapped`` (muted captions and disabled text included),
+    because that is what the reference does.
     """
     if isinstance(col, str) and not isinstance(s, str):
         col, s = s, col
+    col = colour_bytes(col)
     ctx = get_current_context()
-    width, height = ctx.draw.calc_text_size(str(s))
+    lines = [tr(line) for line in str(s).split("\n")]
+    wrap_width = _active_wrap_width(ctx, ctx.layout.cursor[0])
+    if wrap_width is not None:
+        lines = [wrapped for line in lines for wrapped in _wrapped_lines(ctx, line, wrap_width)]
+    width = max((ctx.p.text_width(line) for line in lines), default=0.0)
+    height = ctx.p.line_height() * len(lines)
     box = ctx.layout.row(height=max(height, ctx.p.line_height()), width=width)
     ctx.item_add(box)
-    ctx.draw.add_text((box[0], box[1]), col, str(s))
+    for index, line in enumerate(lines):
+        ctx.draw.add_text((box[0], box[1] + index * ctx.p.line_height()), col, line)
 
 
 def text_disabled(s: str) -> None:
     text_colored(_col(Col.TEXT_DISABLED), s)
 
 
-def text_wrapped(s: str) -> None:
-    """``ImGui::TextWrapped``: broken to the width the cursor has left."""
-    ctx = get_current_context()
-    advance = max(ctx.draw.calc_text_size("M")[0], 1.0)
-    per_line = max(int((ctx.layout.w - ctx.layout.indent_x) / advance), 1)
-    # A newline starts a new line, as in ImGui; each paragraph wraps on its own.
+def _wrapped_lines(ctx, s, width):
+    """The shared wrapping rules for text measurement and drawing."""
+    lines = []
     for paragraph in str(s).split("\n"):
-        words, line = paragraph.split(), ""
+        words = paragraph.split()
         if not words:
-            text("")
+            lines.append("")
             continue
+        line = ""
         for word in words:
-            candidate = f"{line} {word}".strip()
-            if len(candidate) > per_line and line:
-                text(line)
-                line = word
+            candidate = f"{line} {word}".strip() if line else word
+            if line and ctx.p.text_width(candidate) > width:
+                lines.append(line)
+                line = ""
+            if ctx.p.text_width(word) > width:
+                for character in word:
+                    if line and ctx.p.text_width(line + character) > width:
+                        lines.append(line)
+                        line = ""
+                    line += character
             else:
-                line = candidate
+                line = f"{line} {word}".strip() if line else word
         if line:
-            text(line)
+            lines.append(line)
+    return lines
+
+
+def text_wrapped(s: str) -> None:
+    """Draw one measured text block, wrapping to the remaining content width."""
+    ctx = get_current_context()
+    source = "\n".join(tr(line) for line in str(s).split("\n"))
+    lines = _wrapped_lines(ctx, source, max(1.0, ctx.layout.avail()[0]))
+    width = max((ctx.p.text_width(line) for line in lines), default=0.0)
+    box = ctx.layout.row(height=len(lines) * ctx.p.line_height(), width=width)
+    ctx.item_add(box)
+    for index, line in enumerate(lines):
+        ctx.draw.add_text((box[0], box[1] + index * ctx.p.line_height()), _col(Col.TEXT), line)
+
 
 
 def bullet() -> None:
@@ -613,6 +687,7 @@ def math(
     colour: Optional[Any] = None,
     scale: float = 0.5,
     align_center: bool = False,
+    max_width: Optional[float] = None,
 ) -> tuple[float, float]:
     """Render a LaTeX mathematical expression into the current layout.
 
@@ -632,6 +707,9 @@ def math(
         Rendering display scale factor (default 0.5 for retina oversampling).
     align_center : bool
         If True, horizontally centers the formula in the available content region.
+    max_width : float, optional
+        Maximum width to constrain the formula to. If rendered width exceeds this
+        (or the available layout width), the formula is proportionally scaled down.
 
     Returns
     -------
@@ -645,32 +723,39 @@ def math(
         from .mathtext import _color_to_rgba_tuple
         draw_colour = _color_to_rgba_tuple(colour)
 
+    avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
+    limit_w = float(max_width) if max_width is not None and max_width > 0 else (avail_w if avail_w > 20.0 else float("inf"))
+
     from .mathtext import render_math_to_texture, latex_to_unicode
 
     tex = render_math_to_texture(formula, colour=draw_colour, font_size=font_size)
     if tex is not None:
         width = tex.width * scale
         height = tex.height * scale
-        avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
-        if align_center and avail_w > width:
-            pad = (avail_w - width) * 0.5
-            from .im_widgets import get_cursor_pos_x, set_cursor_pos_x
-            set_cursor_pos_x(get_cursor_pos_x() + pad)
-        box = ctx.layout.row(height=height, width=width)
+        if width > limit_w:
+            ratio = limit_w / width
+            width = limit_w
+            height = height * ratio
+
+        pad = (avail_w - width) * 0.5 if (align_center and avail_w > width) else 0.0
+        row_w = None if align_center else width
+        box = ctx.layout.row(height=height, width=row_w)
         ctx.item_add(box)
-        ctx.draw.add_image(tex, (box[0], box[1]), (box[0] + width, box[1] + height))
+        x0 = box[0] + pad
+        ctx.draw.add_image(tex, (x0, box[1]), (x0 + width, box[1] + height))
         return (width, height)
 
     # Fallback to Unicode formatted text
     u_text = latex_to_unicode(formula)
     w, h = ctx.draw.calc_text_size(u_text)
-    avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
-    if align_center and avail_w > w:
-        pad = (avail_w - w) * 0.5
-        from .im_widgets import get_cursor_pos_x, set_cursor_pos_x
-        set_cursor_pos_x(get_cursor_pos_x() + pad)
-    text_colored(draw_colour, u_text)
+    pad = (avail_w - w) * 0.5 if (align_center and avail_w > w) else 0.0
+    row_w = None if align_center else w
+    box = ctx.layout.row(height=max(h, ctx.p.line_height()), width=row_w)
+    ctx.item_add(box)
+    x0 = box[0] + pad
+    ctx.draw.add_text((x0, box[1]), draw_colour, u_text)
     return (w, max(h, ctx.p.line_height()))
+
 
 
 math_text = math
@@ -711,7 +796,17 @@ def _calc_item_size(size, default_w, default_h) -> tuple[float, float]:
 
 def _visible_label(label: str) -> str:
     """``"Save##id"`` shows "Save"; ``"##id"`` shows nothing."""
-    return label.split("##", 1)[0]
+    return tr(label.split("##", 1)[0])
+
+
+def _labelled_item_width(ctx, wanted, label_width):
+    """Keep filling fields and their captions inside the available row."""
+    if wanted is None:
+        return None
+    available = ctx.layout.avail()[0]
+    if wanted < 0:
+        return max(1.0, available + wanted)
+    return min(wanted + label_width, available) if label_width else wanted
 
 
 def button(label: str, size=None) -> bool:
@@ -740,6 +835,33 @@ def small_button(label: str) -> bool:
     shown = _visible_label(label)
     width = ctx.draw.calc_text_size(shown)[0] + ctx.style.frame_padding[0]
     return button(label, (width, ctx.p.line_height()))
+
+
+def action_button(label: str, tooltip: str, callback, accent: bool = False) -> bool:
+    """A button that carries its tooltip and fires *callback* when pressed.
+
+    The shape every tool window reaches for: a labelled button that explains
+    itself on hover and runs an action when clicked, with the optional accent
+    style for the one headline action a panel leads with. Returns whether the
+    click completed, so a caller can chain a same-line sibling after it.
+    """
+    if accent:
+        from .im_core import Col  # noqa: PLC0415
+
+        push_style_color(Col.BUTTON, ACCENT_GREEN_BUTTON)
+        push_style_color(Col.BUTTON_HOVERED, (56, 180, 77, 255))
+        push_style_color(Col.BUTTON_ACTIVE, (36, 140, 57, 255))
+    pressed = button(label)
+    if accent:
+        pop_style_color(3)
+    set_item_tooltip(tooltip)
+    if pressed and callback is not None:
+        callback()
+    return pressed
+
+
+#: The green every tool's headline action uses, so the accent reads as one voice.
+ACCENT_GREEN_BUTTON = (46, 160, 67, 255)
 
 
 def invisible_button(label: str, size) -> bool:
@@ -814,7 +936,102 @@ def radio_button(label: str, active, value=None):
 # --------------------------------------------------------------------------- #
 # Sliders and drags
 # --------------------------------------------------------------------------- #
-def _slider(label, value, v_min, v_max, fmt, integral: bool):
+def _log_epsilon(fmt: str, integral: bool) -> float:
+    """How near zero a logarithmic slider's bounds may be taken.
+
+    The same derivation :attr:`emtk.widgets.sliders.SliderScalar.log_epsilon`
+    makes: whole numbers can always take a bound of ``1``, anything else takes
+    the bound its own format could still *display* -- a ``%.2f`` slider cannot
+    hold ``0.001``, so ``0.01`` is near enough to zero to be the fudge.
+    """
+    from .widgets.sliders import parse_precision  # noqa: PLC0415
+
+    if integral:
+        return 1.0
+    precision = parse_precision(fmt, 3)
+    return pow(0.1, float(precision if precision >= 0 else 3))
+
+
+def _slider_text_edit(ctx, track, item_id, value: float, v_lo: float, v_hi: float,
+                      fmt: str, integral: bool, always_clamp: bool,
+                      no_input: bool):
+    """The Ctrl+Click (or double-click) type-in, the reference's slider text editing.
+
+    A double click opens the field as well: Ctrl+Click is the reference's
+    gesture and nothing on screen says so, while a double click is what a
+    person tries on a number they want to type.
+
+    Returns ``(changed, value, editing)``. *editing* is true from the
+    Ctrl+Click that opens the field until the edit ends; while it is open the
+    caller draws the typed text instead of the value and leaves its model
+    alone. The edit *commits* on Enter or on a click anywhere else, and the
+    commit frame is the only one that reports a change -- one edit, one
+    handler run, the contract every other field here keeps. Escape cancels
+    back to the value the field was opened with. Without ``ALWAYS_CLAMP`` a
+    committed value may sit outside the bounds (the grab pins at the end
+    until a drag brings it back), with it the commit is clamped, as the
+    reference's flag does. ``NO_INPUT`` refuses to open at all.
+    """
+    from .keys import KEY_ESCAPE  # noqa: PLC0415
+    from .widgets.text_field import TextField  # noqa: PLC0415
+
+    io = ctx.io
+    st = ctx.state(("slider_text_edit", item_id))
+
+    from .im_core import ItemFlags  # noqa: PLC0415
+
+    disabled = bool(ctx.item_flags & ItemFlags.DISABLED)
+    ctrl_click = (not disabled and not no_input and io.mouse_clicked[0]
+                  and (io.key_ctrl or io.mouse_double_clicked[0])
+                  and track[0] <= io.mouse_pos[0] <= track[0] + track[2]
+                  and track[1] <= io.mouse_pos[1] <= track[1] + track[3])
+    if ctrl_click and not st.get("open"):
+        field = st["field"] = TextField()
+        field.set_text(fmt % value)
+        field.select_all()
+        st["open"] = True
+        ctx._want_text_input = True
+        return (False, value, True)
+
+    if not st.get("open"):
+        return (False, value, False)
+
+    ctx._want_text_input = True
+    field = st["field"]
+    clicked_elsewhere = io.mouse_clicked[0] and not io.key_ctrl
+    commit = clicked_elsewhere
+    cancel = False
+    events = list(io.key_events)
+    if not events and (io.key or io.text):
+        events = [(io.key, io.text, _current_modifiers(io))]
+    for key, text, mods in events:
+        if key in _ENTER_KEYS:
+            commit = True
+        elif key == KEY_ESCAPE:
+            cancel = True
+        elif key or text:
+            field.key(key, "".join(c for c in text if c in "-+.eE0123456789"), mods)
+
+    if cancel:
+        st.pop("open", None)
+        return (False, value, False)
+
+    if not commit:
+        return (False, value, True)
+
+    st.pop("open", None)
+    try:
+        new = float(field.text)
+    except ValueError:
+        return (False, value, False)    # unparseable text: keep the old value
+    if integral:
+        new = int(round(new))
+    if always_clamp:
+        new = max(v_lo, min(v_hi, new))
+    return (new != value, new, False)
+
+
+def _slider(label, value, v_min, v_max, fmt, integral: bool, flags: int = 0):
     ctx = get_current_context()
     height = _frame_height(ctx)
     shown = _visible_label(label) if isinstance(label, str) else ""
@@ -826,46 +1043,135 @@ def _slider(label, value, v_min, v_max, fmt, integral: bool):
     # which is most of what anyone sets a width on.
     wanted = ctx.take_next_item_width()
     box = ctx.layout.row(height=height,
-                         width=None if wanted is None else wanted + label_w)
+                         width=_labelled_item_width(ctx, wanted, label_w))
     track = (box[0], box[1], max(box[2] - label_w, 1.0), box[3])
     item_id = ctx.get_id(label)
-    hovered, held, _pressed = ctx.button_behavior(track, item_id)
 
-    span = float(v_max) - float(v_min)
-    if held and span:
-        t = (ctx.io.mouse_pos[0] - track[0]) / max(track[2], 1.0)
-        value = float(v_min) + max(0.0, min(1.0, t)) * span
-        if integral:
-            value = int(round(value))
-    value = max(v_min, min(v_max, value))
-    fraction = 0.0 if not span else (float(value) - float(v_min)) / span
+    from .widgets.sliders import (  # noqa: PLC0415
+        LOG_SLIDER_DEADZONE, GRAB_PADDING, ratio_from_value, round_to_format,
+        value_from_ratio,
+    )
 
-    ctx.draw.add_rect_filled((track[0], track[1]), (track[0] + track[2], track[1] + track[3]),
-                             _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG),
-                             ctx.style.frame_rounding)
+    logarithmic = bool(flags & SliderFlags.LOGARITHMIC)
+    no_round = bool(flags & SliderFlags.NO_ROUND_TO_FORMAT)
+    always_clamp = bool(flags & SliderFlags.ALWAYS_CLAMP)
+    no_input = bool(flags & SliderFlags.NO_INPUT)
+    epsilon = _log_epsilon(fmt, integral) if logarithmic else 0.0
+    lo, hi = float(v_min), float(v_max)
+    value = float(value)
+
+    # The dead-zone is what keeps exactly zero reachable on a log track whose
+    # range crosses it; it is a fraction of the *usable* track, and the usable
+    # track is the box less one grab, so the grab's width is wanted first.
     grab_w = max(ctx.style.grab_min_size, track[2] * 0.06)
+    usable_px = max(track[2] - grab_w - 2.0 * GRAB_PADDING, 1.0)
+    deadzone = ((LOG_SLIDER_DEADZONE * 0.5) / usable_px) if logarithmic else 0.0
+
+    changed = False
+    hovered = held = False
+    edit_changed, new_value, editing = _slider_text_edit(
+        ctx, track, item_id, value, lo, hi, fmt, integral, always_clamp, no_input)
+    if editing:
+        pass
+    elif edit_changed:
+        # A committed type-in may leave the bounds on purpose (that is what
+        # life without ALWAYS_CLAMP means); the grab is drawn pinned at the
+        # end, because the scale clamps whatever it is asked about.
+        value = new_value
+        changed = True
+    else:
+        hovered, held, _pressed = ctx.button_behavior(track, item_id)
+        if held:
+            t = (ctx.io.mouse_pos[0] - track[0]) / max(track[2], 1.0)
+            raw = value_from_ratio(t, lo, hi, epsilon, deadzone, integral)
+            if not integral and not no_round:
+                raw = round_to_format(fmt, raw)
+            value = raw
+            changed = True
+
+    value = int(value) if integral else float(value)
+    if not (edit_changed or held):
+        # Idle: the slider answers with the value in range, as it always did
+        # and the reference's demo relies on. A commit frame keeps the typed
+        # value as it was (that is what life without ALWAYS_CLAMP means), and
+        # the next idle frame pulls it back in; the grab is drawn pinned at
+        # the end either way, because the scale clamps what it is asked about.
+        value = max(lo, min(hi, value))
+    fraction = ratio_from_value(value, lo, hi, epsilon, deadzone)
     grab_x = track[0] + fraction * max(track[2] - grab_w, 0.0)
+    ctx.draw.add_rect_filled((track[0], track[1]), (track[0] + track[2], track[1] + track[3]),
+                             _col(Col.FRAME_BG_ACTIVE) if editing
+                             else (_col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG)),
+                             ctx.style.frame_rounding)
     ctx.draw.add_rect_filled((grab_x, track[1]), (grab_x + grab_w, track[1] + track[3]),
-                             _col(Col.SLIDER_GRAB_ACTIVE) if held else _col(Col.SLIDER_GRAB), ctx.style.grab_rounding)
-    shown_value = fmt % value
-    tw, th = ctx.draw.calc_text_size(shown_value)
-    ctx.draw.add_text((track[0] + (track[2] - tw) * 0.5,
-                       track[1] + (track[3] - th) * 0.5), _col(Col.TEXT), shown_value)
+                             _col(Col.SLIDER_GRAB_ACTIVE) if held else _col(Col.SLIDER_GRAB),
+                             ctx.style.grab_rounding)
+
+    ctx.draw.push_clip_rect((track[0], track[1]),
+                            (track[0] + track[2], track[1] + track[3]))
+    if editing:
+        field = ctx.state(("slider_text_edit", item_id))["field"]
+        shown_value = field.text
+        pad = ctx.style.frame_padding[0]
+        tw = ctx.draw.calc_text_size(shown_value)[0]
+        origin = track[0] + pad - max(tw - (track[2] - 2.0 * pad), 0.0)
+        ctx.draw.add_text((origin, track[1] + ctx.style.frame_padding[1]),
+                          _col(Col.TEXT), shown_value)
+        caret = origin + ctx.draw.calc_text_size(shown_value[:field.cursor])[0]
+        ctx.draw.add_line((caret, track[1] + 2.0), (caret, track[1] + track[3] - 2.0),
+                          _col(Col.TEXT), 1.0)
+    else:
+        shown_value = fmt % value
+        tw, th = ctx.draw.calc_text_size(shown_value)
+        ctx.draw.add_text((track[0] + (track[2] - tw) * 0.5,
+                           track[1] + (track[3] - th) * 0.5), _col(Col.TEXT), shown_value)
+    ctx.draw.pop_clip_rect()
     if shown:
         ctx.draw.add_text((track[0] + track[2] + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), shown)
-    return (bool(held), value)
+    # `held` keeps the old contract -- true on every frame the pointer is
+    # actively working the control -- for callers that treat "released" as
+    # "finished"; `changed` says the value actually moved.
+    return (bool(changed or held), value)
 
 
 def slider_float(label: str, v: float, v_min: float, v_max: float,
-                 fmt: str = "%.3f") -> tuple[bool, float]:
-    """``ImGui::SliderFloat``. Returns ``(changed, v)``."""
-    return _slider(label, float(v), float(v_min), float(v_max), fmt, integral=False)
+                 fmt: str = "%.3f", flags: int = 0) -> tuple[bool, float]:
+    """``ImGui::SliderFloat``: the track, the grab, and the value on it.
+
+    Drag to set; the change is reported on every frame the pointer moves the
+    grab (live), as the reference's sliders do. Ctrl+Click opens a text field
+    over the track — the reference's slider text editing — which reports one
+    change on Enter or on a click elsewhere, and cancels on Escape.
+
+    *flags* takes the reference's ``ImGuiSliderFlags`` bits emtk implements:
+    ``LOGARITHMIC`` (the track interpolates in log space, per
+    :func:`emtk.widgets.sliders.value_from_ratio`, with the reference's
+    dead-zone keeping exactly zero reachable across a sign change),
+    ``NO_ROUND_TO_FORMAT`` (store the drag's full precision rather than what
+    the format shows), ``ALWAYS_CLAMP`` (a Ctrl+Click commit is clamped to the
+    bounds) and ``NO_INPUT`` (no Ctrl+Click field). The remaining bits are
+    accepted and ignored.
+
+    A drag's stored value passes through :func:`emtk.widgets.sliders.
+    round_to_format`, so a ``%.2f`` slider stores ``0.25`` rather than
+    ``0.2500000037`` — what the user sees and what the model carries are the
+    same number, and typing the number back changes nothing.
+    """
+    return _slider(label, float(v), float(v_min), float(v_max), fmt,
+                   integral=False, flags=flags)
 
 
 def slider_int(label: str, v: int, v_min: int, v_max: int,
-               fmt: str = "%d") -> tuple[bool, int]:
-    return _slider(label, int(v), int(v_min), int(v_max), fmt, integral=True)
+               fmt: str = "%d", flags: int = 0) -> tuple[bool, int]:
+    """``ImGui::SliderInt``: the whole-number slider.
+
+    The integer value is exact at both ends and never carries a fraction;
+    otherwise the float slider's behaviour, Ctrl+Click type-in included.
+    """
+    changed, value = _slider(label, float(v), float(v_min), float(v_max), fmt,
+                             integral=True, flags=flags)
+    return (changed, int(round(value)))
 
 
 def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
@@ -879,7 +1185,7 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
     # reservation the row is the widget alone and the label never fits.
     wanted = ctx.take_next_item_width()
     box = ctx.layout.row(height=height,
-                         width=None if wanted is None else wanted + label_w)
+                         width=_labelled_item_width(ctx, wanted, label_w))
     field = (box[0], box[1], max(box[2] - label_w, 1.0), box[3])
     item_id = ctx.get_id(label)
     hovered, held, _pressed = ctx.button_behavior(field, item_id)
@@ -945,6 +1251,7 @@ def progress_bar(fraction: float, size=None, overlay: str = "") -> None:
         ctx.draw.add_rect_filled((box[0], box[1]),
                                  (box[0] + box[2] * fraction, box[1] + box[3]),
                                  _col(Col.SLIDER_GRAB), ctx.style.frame_rounding)
+    overlay = tr(overlay) if overlay else ""
     if overlay:
         tw, th = ctx.draw.calc_text_size(overlay)
         ctx.draw.add_text((box[0] + (box[2] - tw) * 0.5, box[1] + (box[3] - th) * 0.5),
@@ -956,6 +1263,8 @@ def progress_bar(fraction: float, size=None, overlay: str = "") -> None:
 # --------------------------------------------------------------------------- #
 def selectable(label: str, selected: bool = False, size=None) -> bool:
     ctx = get_current_context()
+    if ctx._context_popup_stack:
+        return ctx.context_menu_item(label, selected=selected)
     width, height = _calc_item_size(size, ctx.layout.avail()[0], _frame_height(ctx))
     box = ctx.layout.row(height=height, width=width)
     hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
@@ -1001,12 +1310,9 @@ def combo(label: str, current: int, items: Sequence[str],
     visible = _visible_label(label)
     label_w = ((ctx.style.item_inner_spacing[0] + ctx.draw.calc_text_size(visible)[0])
                if visible else 0.0)
-    frame_w = ctx.take_next_item_width(None)
-    if frame_w is None:
-        box = ctx.layout.row(height=height)          # fill the row, as before
-        frame_w = max(box[2] - label_w, height)
-    else:
-        box = ctx.layout.row(height=height, width=frame_w + label_w)
+    wanted = ctx.take_next_item_width(None)
+    box = ctx.layout.row(height=height, width=_labelled_item_width(ctx, wanted, label_w))
+    frame_w = max(box[2] - label_w, 1.0)
     frame = (box[0], box[1], frame_w, height)
     item_id = ctx.get_id(label)
     changed = False
@@ -1181,6 +1487,11 @@ def set_item_tooltip(s: str) -> None:
     """``ImGui::SetItemTooltip``: a tooltip, if the last item is hovered --
     disabled or not (ImGui's tooltip hover flags allow disabled items, so a
     disabled control can say why it is disabled)."""
+    ctx = get_current_context()
+    if ctx._context_popup_last_item is not None:
+        ctx._context_popup_last_item.tooltip = str(s) if s else None
+        ctx._context_popup_last_item = None
+        return
     if is_item_hovered(allow_when_disabled=True):
         set_tooltip(s)
 
@@ -1213,9 +1524,11 @@ def input_float(label: str, v: float, step: float = 0.0,
         ctx.push_id(label)
         if arrow_button("##-", Dir.LEFT):
             v, changed = v - by, True
+        set_item_tooltip(f"Decrease the value by {by:g}; hold the primary modifier for the larger step.")
         same_line(0.0, ctx.style.item_inner_spacing[0])
         if arrow_button("##+", Dir.RIGHT):
             v, changed = v + by, True
+        set_item_tooltip(f"Increase the value by {by:g}; hold the primary modifier for the larger step.")
         same_line(0.0, ctx.style.item_inner_spacing[0])
         ctx.pop_id()
     edited, v = drag_float(label, v, max(step, 0.01) or 0.01, fmt=fmt)
@@ -1265,12 +1578,17 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
 
     if isinstance(value, (list, tuple, bytearray, bytes)):
         value = str(String(value))
+    hint = tr(hint)
 
     read_only = bool(flags & _ITF.READ_ONLY)
     enter_returns = bool(flags & _ITF.ENTER_RETURNS_TRUE)
     ctx = get_current_context()
-    box = ctx.layout.row(height=_frame_height(ctx),
-                         width=ctx.take_next_item_width(None))
+    label_shown = _visible_label(label)
+    label_width = (ctx.draw.calc_text_size(label_shown)[0] + ctx.style.item_inner_spacing[0]
+                   if label_shown else 0.0)
+    total = ctx.layout.row(height=_frame_height(ctx),
+        width=_labelled_item_width(ctx, ctx.take_next_item_width(None), label_width))
+    box = (total[0], total[1], max(1.0, total[2] - label_width), total[3])
     item_id = ctx.get_id(label)
     hovered, _held, pressed = ctx.button_behavior(box, item_id)
     focus = ctx.state(("focus",))
@@ -1282,15 +1600,18 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     elif ctx.io.mouse_clicked[0] and not hovered and focus.get("id") == item_id:
         focus.pop("id", None)
     # ...or the keyboard put the focus here, which is what Tab is for.
-    focused = focus.get("id") == item_id or ctx.is_nav_focused(item_id)
+    focused = not bool(ctx.item_flags & ItemFlags.DISABLED) and (
+        focus.get("id") == item_id or ctx.is_nav_focused(item_id))
 
     field, st = _field_state(ctx, item_id, value, focused)
     pad = ctx.style.frame_padding[0]
     room = box[2] - 2.0 * pad
     width = lambda s_: ctx.draw.calc_text_size(s_)[0]  # noqa: E731
+    password = bool(flags & _ITF.PASSWORD)
+    field_width = (lambda text_: width("*" * len(text_))) if password else width
     origin = box[0] + pad - (st["scroll"] if focused else 0.0)
     if focused:
-        _field_mouse(ctx, field, st, hovered, origin, width,
+        _field_mouse(ctx, field, st, hovered, origin, field_width,
                      bool(flags & _ITF.AUTO_SELECT_ALL))
         entered = _field_keys(ctx, field, flags, read_only)
         ctx._want_text_input = True
@@ -1308,10 +1629,11 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         else (_col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG)),
         ctx.style.frame_rounding)
     _frame_border(ctx, box)
-    shown = value if (value or not hint) else hint
+    display_value = "*" * len(value) if password else value
+    shown = display_value if (value or not hint) else hint
     text_w = width(shown)
     if focused:             # scrolled so the caret stays in the field
-        caret_px = width(value[:field.cursor])
+        caret_px = width(display_value[:field.cursor])
         scroll = min(st["scroll"], max(text_w - room, 0.0))
         scroll = min(max(scroll, caret_px - room), caret_px)
         st["scroll"] = max(scroll, 0.0)
@@ -1319,20 +1641,25 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         st["scroll"] = 0.0
     origin = box[0] + pad - st["scroll"]
     if value and elide_start and not focused and text_w > room:
-        shown = _elide_start(ctx, value, room)
+        shown = _elide_start(ctx, display_value, room)
+    elif not value and hint and text_w > room and not focused:
+        # An over-wide hint ends in an ellipsis rather than a hard clip --
+        # the placeholder is the only thing telling the user what to type,
+        # and a cut-off sentence reads as one.
+        shown = _elide_end(ctx, hint, room)
     # Clipped to the field, as the reference's InputText is: a value longer
     # than its box used to run over whatever stood beside it.
     ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
     if focused and field.has_selection():
         lo, hi = field.selection()
         from .style import TEXT_SELECTED_BG  # noqa: PLC0415
-        ctx.draw.add_rect_filled((origin + width(value[:lo]), box[1] + 2.0),
-                                 (origin + width(value[:hi]), box[1] + box[3] - 2.0),
+        ctx.draw.add_rect_filled((origin + width(display_value[:lo]), box[1] + 2.0),
+                                 (origin + width(display_value[:hi]), box[1] + box[3] - 2.0),
                                  TEXT_SELECTED_BG)
     ctx.draw.add_text((origin, box[1] + ctx.style.frame_padding[1]),
                       _col(Col.TEXT) if value else _col(Col.TEXT_DISABLED), shown)
     if focused:
-        caret = origin + width(value[:field.cursor])
+        caret = origin + width(display_value[:field.cursor])
         ctx.draw.add_line((caret, box[1] + 2.0), (caret, box[1] + box[3] - 2.0),
                           _col(Col.TEXT), 1.0)
     ctx.draw.pop_clip_rect()
@@ -1450,6 +1777,18 @@ def _current_modifiers(io) -> int:
             | (ALT_MODIFIER if io.key_alt else 0) | (META_MODIFIER if io.key_super else 0))
 
 
+def _elide_end(ctx, text: str, room: float) -> str:
+    """"…" and the longest start of *text* that fits in *room* with it."""
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if ctx.draw.calc_text_size(text[:mid] + "…")[0] <= room:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo] + "…"
+
+
 def _elide_start(ctx, text: str, room: float) -> str:
     """"…" and the longest end of *text* that fits in *room* with it."""
     lo, hi = 0, len(text)
@@ -1504,18 +1843,42 @@ def color_button(desc_id: str, col, flags: int = 0, size=None) -> bool:
 
 
 def color_edit3(label: str, col) -> tuple[bool, tuple]:
-    """``ImGui::ColorEdit3``: three drags and a swatch."""
+    """Three bounded channel drags, a swatch and a label that can wrap."""
     ctx = get_current_context()
     ctx.push_id(label)
     values, changed = list(col[:3]), False
+    visible = _visible_label(label)
+    available = max(1.0, ctx.layout.avail()[0] - ctx.style.frame_padding[0])
+    spacing = ctx.style.item_inner_spacing[0]
+    side = min(_frame_height(ctx), available / 4)
+    label_width = ctx.draw.calc_text_size(visible)[0] if visible else 0.0
+    label_above = bool(visible and available < label_width + side + 3 * 32 + 4 * spacing)
+    if label_above:
+        text_wrapped(visible)
+        label_width = 0.0
+    remaining = available - side - 3 * spacing - (label_width + spacing if label_width else 0.0)
+    channel_width = max(1.0, remaining / 3)
     for index, channel in enumerate("RGB"):
+        if index:
+            same_line(0.0, spacing)
+        set_next_item_width(channel_width)
         edited, values[index] = drag_float(f"##{channel}", float(values[index]),
                                            1.0, 0.0, 255.0, "%.0f")
+        set_item_tooltip(f"{visible or 'Color'}: {channel} channel (0–255)")
         changed = changed or edited
-        same_line(0.0, ctx.style.item_inner_spacing[0])
-    color_button("##swatch", tuple(int(v) for v in values))
-    same_line(0.0, ctx.style.item_inner_spacing[0])
-    text(_visible_label(label))
+    same_line(0.0, spacing)
+    color_button("##swatch", tuple(int(v) for v in values), size=(side, _frame_height(ctx)))
+    set_item_tooltip(f"{visible or 'Color'} preview")
+    if visible and not label_above:
+        same_line(0.0, spacing)
+        box = ctx.layout.row(height=_frame_height(ctx), width=label_width)
+        ctx.item_add(box)
+        label_height = ctx.draw.calc_text_size(visible)[1]
+        from .mathtext import convert_script_markup
+
+        ctx.p.text(box[0], box[1] + max(0.0, (box[3] - label_height) / 2),
+                   box[2], label_height, ALIGN_LEFT | ALIGN_VCENTER,
+                   convert_script_markup(visible), _col(Col.TEXT))
     ctx.pop_id()
     return (changed, tuple(values))
 
@@ -1834,6 +2197,7 @@ def open_popup(name: str) -> None:
 
 
 def begin_popup(name: str) -> bool:
+    """Begin an open popup; a context popup's menu rows render as an overlay."""
     return _ctx().begin_popup(name)
 
 
@@ -1854,14 +2218,38 @@ def is_popup_open(name: str) -> bool:
 
 # -- menus ------------------------------------------------------------------ #
 def begin_menu_bar() -> bool:
+    """Start a horizontal menu bar: titles lay out left-to-right on one row.
+
+    Menus opened inside the bar drop their items down as a floating popup,
+    like the reference, instead of indenting them into the layout. The bar
+    ends with a separator rule hard against its bottom edge, so the content
+    below starts tight under it.
+    """
     ctx = _ctx()
     ctx.push_id("##menubar")
+    cursor = ctx.layout.cursor
+    ctx._menu_bar_rect = [cursor[0], cursor[1], 0.0]
+    ctx._menu_bar_first = True
+    #: Where this frame's menu titles sit, by popup name: the overlay closing
+    #: a menu needs the title of *its own* menu to know a press there is a
+    #: toggle-off, not a click meant for whatever is behind it.
+    ctx._menu_title_rects = {}
     return True
 
 
 def end_menu_bar() -> None:
-    _ctx().pop_id()
-    new_line()
+    ctx = _ctx()
+    rect = getattr(ctx, "_menu_bar_rect", None)
+    if rect is not None:
+        # Separator rule hard against the bar's bottom edge: it marks the bar
+        # without spending a blank line the way a bare new_line would.
+        bar_height = max(ctx.layout.cursor[1] - rect[1], _frame_height(ctx))
+        y = rect[1] + bar_height
+        ctx.draw.add_line((rect[0], y), (rect[0] + ctx.layout.avail()[0] + (ctx.layout.cursor[0] - rect[0]), y),
+                          _col(Col.BORDER), 1.0)
+        ctx.layout.new_line()
+    ctx._menu_bar_first = True
+    ctx.pop_id()
 
 
 def begin_main_menu_bar() -> bool:
@@ -1873,8 +2261,18 @@ def end_main_menu_bar() -> None:
 
 
 def begin_menu(label: str, enabled: bool = True) -> bool:
-    """``BeginMenu``: the title; True while its items should be submitted."""
+    """``BeginMenu``: the title; True while its items should be submitted.
+
+    Inside a menu bar the titles sit side by side on the bar's row, and an
+    open menu submits its items into a floating popup below the title —
+    the same shape as the reference's menu bars.
+    """
     ctx = _ctx()
+    in_bar = getattr(ctx, "_menu_bar_first", None) is not None
+    if in_bar and not ctx._menu_bar_first:
+        same_line()
+    if in_bar:
+        ctx._menu_bar_first = False
     item_id = ctx.get_id(label)
     store = ctx.get_storage(item_id)
     shown = _visible_label(label)
@@ -1889,21 +2287,74 @@ def begin_menu(label: str, enabled: bool = True) -> bool:
                                  _col(Col.HEADER_HOVERED if hovered else Col.HEADER), 0.0)
     ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]),
                       _col(Col.TEXT if enabled else Col.TEXT_DISABLED), shown)
+    # Popup state sync, in order:
+    # 1. A selection made by the overlay last frame re-opens the popup state
+    #    for exactly one frame so menu_item can report the deferred pick.
+    # 2. A popup the overlay dismissed (outside click, Escape, item chosen)
+    #    closes the title too — otherwise the store kept "open" and re-opened
+    #    the popup every frame, swallowing every click on the window.
+    popup_name = "##menu_items_" + label
+    if in_bar:
+        ctx._menu_title_rects[popup_name] = box
+    popup_state = ctx.state(("context_popup", popup_name))
+    pending = (popup_state.get("selected") is not None
+               and not popup_state.get("open"))
+    # The title learns the popup is gone two ways: an outside press (the
+    # stored position is still set), or a pick (the "closed" mark the popup
+    # leaves). Either closes the title too -- otherwise the store kept
+    # "open" and re-opened the popup every frame, swallowing every click on
+    # the window. Not on the frame the title itself was pressed: that press
+    # toggled the store on purpose, and the sync must not undo it.
+    dismissed = (store.get("open") and not pressed and not pending
+                 and not popup_state.get("open")
+                 and (popup_state.get("position") is not None
+                      or popup_state.pop("closed", False)))
+    if pending:
+        store["open"] = True
+        popup_state.update(open=True, just_opened=False,
+                           dispatched=popup_state.get("dispatched", False))
+    elif dismissed:
+        store["open"] = False
+        # The dismissal is consumed here. The position it was recognised by
+        # has to go with it: left in place, every later open of this menu
+        # looked like another dismissal -- the title toggled open and the
+        # same frame's sync closed it again, so a menu reopened by a click
+        # never stayed open. It is set again while the menu is open.
+        popup_state.pop("position", None)
+
+    is_open = bool(store.get("open", False)) and enabled
     if is_open:
+        just_opened = (not bool(popup_state.get("open"))) and not pending
+        popup_state.update(open=True,
+                           selected=popup_state.get("selected"),
+                           position=(box[0], box[1] + box[3]),
+                           just_opened=just_opened, dispatched=False)
+        ctx._popups[popup_name] = True
+        if begin_popup(popup_name):
+            ctx._menu_popup_open = True
         ctx.push_id(label)
         indent()
     return is_open
 
 
 def end_menu() -> None:
+    if getattr(_ctx(), "_menu_popup_open", False):
+        _ctx()._menu_popup_open = False
+        end_popup()
     unindent()
     _ctx().pop_id()
 
 
 def menu_item(label: str, shortcut: str = "", selected: bool = False,
               enabled: bool = True) -> bool:
-    """``MenuItem``: label on the left, shortcut on the right."""
+    """``MenuItem``: label on the left, shortcut on the right.
+
+    Within a context popup, this records a floating menu row and yields its
+    activation to the same ``if menu_item(...)`` block on the next frame.
+    """
     ctx = _ctx()
+    if ctx._context_popup_stack:
+        return ctx.context_menu_item(label, shortcut, selected, enabled)
     box = ctx.layout.row(height=_frame_height(ctx))
     hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
     if hovered and enabled:
@@ -1923,6 +2374,12 @@ def menu_item(label: str, shortcut: str = "", selected: bool = False,
 # -- tab bars --------------------------------------------------------------- #
 def begin_tab_bar(str_id: str) -> bool:
     ctx = _ctx()
+    from .layout import Layout
+
+    parent = ctx.layout
+    x, y = parent.cursor
+    width, height = parent.avail()
+    header_height = _frame_height(ctx)
     ctx.push_id(str_id)
     # The bar's own state dict goes on a stack, because tab *items* below need
     # the bar they belong to: state keyed without the str_id made every tab
@@ -1932,7 +2389,26 @@ def begin_tab_bar(str_id: str) -> bool:
     if stack is None:
         stack = []
         ctx._tabbar_stack = stack
-    stack.append(ctx.state(("tabbar", str_id)))
+    store = ctx.state(("tabbar", str_id))
+    if ctx.io.mouse_clicked[0] and ctx.hovered_window in (None, ctx.current_window):
+        mx, my = ctx.io.mouse_pos
+        for item_id, box in store.get("rects", {}).items():
+            if box[0] <= mx < box[0] + box[2] and box[1] <= my < box[1] + box[3]:
+                store["selected"] = item_id
+                break
+    store["rects"] = {}
+    stack.append(store)
+    layouts = getattr(ctx, "_tabbar_layouts", None)
+    if layouts is None:
+        layouts = []
+        ctx._tabbar_layouts = layouts
+    gap = ctx.style.item_spacing[1]
+    header = Layout(ctx.p, x, y, width, header_height, style=parent.style)
+    body = Layout(ctx.p, x, y + header_height + gap, width,
+                  max(0.0, height - header_height - gap), style=parent.style)
+    layouts.append({"parent": parent, "header": header, "body": body,
+                    "width": width, "height": header_height, "gap": gap})
+    ctx.layout = header
     return True
 
 
@@ -1941,32 +2417,66 @@ def end_tab_bar() -> None:
     stack = getattr(ctx, "_tabbar_stack", None)
     if stack:
         stack.pop()
+    layouts = getattr(ctx, "_tabbar_layouts", None)
+    if layouts:
+        layout = layouts.pop()
+        ctx.layout = layout["parent"]
+        body_height = layout["body"].content_height()
+        height = layout["height"] + (layout["gap"] + body_height if body_height else 0.0)
+        ctx.layout.row(height=height, width=layout["width"])
     ctx.pop_id()
-    new_line()
 
 
-def begin_tab_item(label: str) -> bool:
+def begin_tab_item(label: str, flags: int = 0, *, on_close=None) -> bool:
     """``BeginTabItem``: True while the tab's body should be submitted."""
     ctx = _ctx()
+    layouts = getattr(ctx, "_tabbar_layouts", None)
+    if layouts:
+        ctx.layout = layouts[-1]["header"]
     stack = getattr(ctx, "_tabbar_stack", None)
     store = stack[-1] if stack else ctx.state(("tabbar",))
     shown = _visible_label(label) if isinstance(label, str) else ""
     width = ctx.draw.calc_text_size(shown)[0] + ctx.style.frame_padding[0] * 2.0
+    close_width = _frame_height(ctx) if on_close is not None else 0.0
+    width += close_width
     box = ctx.layout.row(height=_frame_height(ctx), width=width)
-    hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
-    if pressed:
-        store["selected"] = shown
-    selected = store.setdefault("selected", shown) == shown
+    from .flags import TabItemFlags
+
+    item_id = ctx.get_id(label)
+    if stack:
+        store["rects"][item_id] = (box[0], box[1], box[2] - close_width, box[3])
+    close_pressed = False
+    if on_close is not None:
+        close_box = (box[0] + box[2] - close_width, box[1], close_width, box[3])
+        close_hovered, _held, close_pressed = ctx.button_behavior(close_box, (*item_id, "close"))
+    hovered, _held, pressed = ctx.button_behavior(
+        (box[0], box[1], box[2] - close_width, box[3]), item_id)
+    if pressed or flags & TabItemFlags.SET_SELECTED:
+        store["selected"] = item_id
+    selected = store.setdefault("selected", item_id) == item_id
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              _col(Col.TAB_SELECTED if selected else Col.TAB), 0.0)
     ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
                       shown)
+    if on_close is not None:
+        if close_hovered:
+            ctx.draw.add_rect_filled((close_box[0], close_box[1]),
+                (close_box[0] + close_box[2], close_box[1] + close_box[3]), _col(Col.BUTTON_HOVERED))
+        ctx.draw.add_text((close_box[0] + ctx.style.frame_padding[0],
+                          close_box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT), "×")
+        if close_pressed:
+            on_close()
     same_line()
+    if selected and layouts:
+        ctx.layout = layouts[-1]["body"]
     return selected
 
 
 def end_tab_item() -> None:
-    pass
+    ctx = _ctx()
+    layouts = getattr(ctx, "_tabbar_layouts", None)
+    if layouts:
+        ctx.layout = layouts[-1]["header"]
 
 
 # -- combos and list boxes --------------------------------------------------- #
@@ -2396,6 +2906,7 @@ def table_headers_row() -> None:
 def table_header(label: str) -> None:
     """``TableHeader``: the name, plus sorting and resizing behaviour."""
     ctx = get_current_context()
+    label = tr(label)
     table = _table()
     if table is None:
         text_colored(_col(Col.TEXT_DISABLED), label)
@@ -2793,16 +3304,20 @@ def drag_scalar(label, *args, **kw):
 def slider_scalar(label, *args, **kw):
     """``ImGui::SliderScalar``, with or without the leading data type.
 
-    Trailing flags are accepted and ignored -- see :func:`drag_scalar`.
+    Trailing ``ImGuiSliderFlags`` are forwarded: ``LOGARITHMIC``,
+    ``NO_ROUND_TO_FORMAT``, ``ALWAYS_CLAMP`` and ``NO_INPUT`` change the
+    behaviour (see :func:`slider_float`), the rest are accepted and ignored --
+    said out loud rather than left as a silent difference from the C++.
     """
     args = _without_data_type(args)
     v = _arg(args, 0, kw, "v")
     v_min = _arg(args, 1, kw, "v_min")
     v_max = _arg(args, 2, kw, "v_max")
     fmt = _arg(args, 3, kw, "fmt")
+    flags = _arg(args, 4, kw, "flags", 0)
     if isinstance(v, int):
-        return slider_int(label, v, int(v_min), int(v_max), fmt or "%d")
-    return slider_float(label, v, v_min, v_max, fmt or "%.3f")
+        return slider_int(label, v, int(v_min), int(v_max), fmt or "%d", flags)
+    return slider_float(label, v, v_min, v_max, fmt or "%.3f", flags)
 
 
 def input_scalar(label, *args, **kw):
@@ -2947,6 +3462,11 @@ def get_scroll_x() -> float:
 
 
 def get_scroll_y() -> float:
+    ctx = get_current_context()
+    if ctx._child:
+        entry = ctx._child[-1]
+        if len(entry) >= 3 and isinstance(entry[2], dict):
+            return float(entry[2].get("scroll_y", 0.0))
     window = _window()
     return window.scroll[1] if window else 0.0
 
@@ -2958,9 +3478,22 @@ def set_scroll_x(value: float) -> None:
 
 
 def set_scroll_y(value: float) -> None:
+    ctx = get_current_context()
+    if ctx._child:
+        entry = ctx._child[-1]
+        if len(entry) >= 3 and isinstance(entry[2], dict):
+            entry[2]["scroll_y"] = float(value)
+            return
     window = _window()
     if window:
         window.scroll = (window.scroll[0], float(value))
+
+
+def set_child_scroll_y(child_id: str, value: float) -> None:
+    """Explicitly set scroll_y on a child container by ID."""
+    ctx = get_current_context()
+    state = ctx.storage.setdefault(child_id, {})
+    state["scroll_y"] = float(value)
 
 
 def get_scroll_max_x() -> float:
@@ -2969,6 +3502,14 @@ def get_scroll_max_x() -> float:
 
 
 def get_scroll_max_y() -> float:
+    ctx = get_current_context()
+    if ctx._child:
+        entry = ctx._child[-1]
+        if len(entry) >= 3 and isinstance(entry[2], dict):
+            box = entry[1]
+            state = entry[2]
+            content_h = state.get("content_height", box[3])
+            return max(content_h - box[3], 0.0)
     window = _window()
     return max(window.content_size[1] - window.box[3], 0.0) if window else 0.0
 
@@ -2979,6 +3520,7 @@ def set_scroll_here_x(centre: float = 0.5) -> None:
 
 def set_scroll_here_y(centre: float = 0.5) -> None:
     set_scroll_y(get_scroll_max_y() * centre)
+
 
 
 def set_scroll_from_pos_x(local_x: float, centre: float = 0.5) -> None:
@@ -3228,10 +3770,16 @@ def begin_popup_modal(name: str, *_args) -> bool:
 
 
 def begin_popup_context_item(name: str = "", button: int = 1) -> bool:
+    """Open a floating menu at a click on the last item.
+
+    Inside the returned block, submit :func:`menu_item` or :func:`selectable`
+    rows. They are drawn above the parent window, and a chosen row returns
+    ``True`` to its caller on the following frame.
+    """
     ctx = get_current_context()
     key = name or str(ctx._last_id)
     if is_item_hovered() and ctx.io.mouse_clicked[button]:
-        ctx.open_popup(key)
+        ctx.open_context_popup(key, ctx.io.mouse_pos)
     return ctx.begin_popup(key)
 
 
@@ -3239,18 +3787,22 @@ def begin_popup_context_window(name: str = "", button: int = 1) -> bool:
     ctx = get_current_context()
     key = name or "##window_context"
     if is_window_hovered() and ctx.io.mouse_clicked[button]:
-        ctx.open_popup(key)
+        ctx.open_context_popup(key, ctx.io.mouse_pos)
     return ctx.begin_popup(key)
 
 
 def begin_popup_context_void(name: str = "", button: int = 1) -> bool:
-    return begin_popup_context_window(name or "##void_context", button)
+    ctx = get_current_context()
+    key = name or "##void_context"
+    if ctx.current_window is None and ctx.io.mouse_clicked[1]:
+        ctx.open_context_popup(key, ctx.io.mouse_pos)
+    return ctx.begin_popup(key)
 
 
 def open_popup_on_item_click(name: str = "", button: int = 1) -> None:
     ctx = get_current_context()
     if is_item_hovered() and ctx.io.mouse_clicked[button]:
-        ctx.open_popup(name or str(ctx._last_id))
+        ctx.open_context_popup(name or str(ctx._last_id), ctx.io.mouse_pos)
 
 
 def push_text_wrap_pos(x: float = 0.0) -> None:
@@ -3459,7 +4011,7 @@ __all__ += [
     "color_convert_rgb_to_hsv", "color_convert_hsv_to_rgb",
     "color_convert_u32_to_float4", "color_convert_float4_to_u32",
     "color_picker3", "color_picker4", "get_scroll_x", "get_scroll_y",
-    "set_scroll_x", "set_scroll_y", "get_scroll_max_x", "get_scroll_max_y",
+    "set_scroll_x", "set_scroll_y", "set_child_scroll_y", "get_scroll_max_x", "get_scroll_max_y",
     "set_scroll_here_x", "set_scroll_here_y", "set_scroll_from_pos_x",
     "set_scroll_from_pos_y", "set_cursor_pos_x", "set_cursor_pos_y",
     "get_cursor_start_pos", "calc_item_width", "is_window_appearing",
@@ -3502,49 +4054,181 @@ __all__ += [
 # on its own.
 
 
-def image(handle, size, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
-          tint=(255, 255, 255, 255), border=(0, 0, 0, 0)) -> None:
-    """``ImGui::Image``."""
+def calc_image_size(
+    handle: Any,
+    size: tuple[float, float] | None = None,
+    max_size: tuple[float, float] | None = None,
+    scale: float = 1.0,
+) -> tuple[float, float]:
+    """Calculate the layout dimensions for an image item.
+
+    Parameters
+    ----------
+    handle : Texture, str, Path, PIL Image, or numpy array
+        The image item or source.
+    size : tuple[float, float], optional
+        Explicit (w, h) in pixels. If omitted, uses native dimensions.
+    max_size : tuple[float, float], optional
+        Maximum bounding box. If the image exceeds this, it is proportionally scaled down.
+    scale : float
+        Uniform scale factor applied to the native size (default 1.0).
+
+    Returns
+    -------
+    tuple[float, float]
+        The resolved (width, height) in points/pixels.
+    """
+    from .texture import Texture, get_texture
+
+    tex = handle if isinstance(handle, Texture) else get_texture(handle)
+    if size is not None and (size[0] > 0 or size[1] > 0):
+        w, h = float(size[0]), float(size[1])
+    elif tex is not None:
+        w, h = float(tex.width) * scale, float(tex.height) * scale
+    else:
+        w, h = 32.0 * scale, 32.0 * scale
+
+    if max_size is not None and (max_size[0] > 0 or max_size[1] > 0):
+        max_w = float(max_size[0]) if max_size[0] > 0 else float("inf")
+        max_h = float(max_size[1]) if max_size[1] > 0 else float("inf")
+        if w > max_w:
+            h = h * (max_w / w)
+            w = max_w
+        if h > max_h:
+            w = w * (max_h / h)
+            h = max_h
+    return (w, h)
+
+
+def image(
+    handle: Any,
+    size: tuple[float, float] | None = None,
+    uv0: tuple[float, float] = (0.0, 0.0),
+    uv1: tuple[float, float] = (1.0, 1.0),
+    tint: Colour = (255, 255, 255, 255),
+    border: Colour = (0, 0, 0, 0),
+    max_size: tuple[float, float] | None = None,
+    scale: float = 1.0,
+    align_center: bool = False,
+) -> tuple[float, float]:
+    """``ImGui::Image``: Draw an image in the current layout.
+
+    Accepts an EMTK :class:`~emtk.texture.Texture`, a file path (string or
+    ``pathlib.Path``), a PIL ``Image``, or a numpy array. Image files are
+    automatically cached in an internal LRU cache.
+
+    Parameters
+    ----------
+    handle : Texture, str, Path, PIL Image, or numpy array
+        The image item or source.
+    size : tuple[float, float], optional
+        Explicit (w, h) in pixels. If omitted or (0, 0), native dimensions are used.
+    uv0, uv1 : tuple[float, float]
+        UV coordinates windowing into the texture (0.0 to 1.0).
+    tint : Colour
+        Tint colour applied to the blit (default opaque white).
+    border : Colour
+        Border colour (default transparent).
+    max_size : tuple[float, float], optional
+        Maximum bounding box. If image exceeds this, it is proportionally scaled down.
+    scale : float
+        Uniform scale factor applied to native dimensions (default 1.0).
+    align_center : bool
+        If True, horizontally centers the image in the available content region.
+
+    Returns
+    -------
+    tuple[float, float]
+        The resolved (width, height) of the rendered item.
+    """
+    from .texture import Texture, get_texture
+
+    tex = handle if isinstance(handle, Texture) else get_texture(handle)
+    w, h = calc_image_size(tex or handle, size=size, max_size=max_size, scale=scale)
+
     ctx = get_current_context()
-    box = ctx.layout.row(height=size[1], width=size[0])
+    avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
+    pad = (avail_w - w) * 0.5 if (align_center and avail_w > w) else 0.0
+    row_w = None if align_center else w
+    box = ctx.layout.row(height=h, width=row_w)
     ctx.item_add(box)
-    ctx.draw.add_image(handle, (box[0], box[1]),
-                       (box[0] + box[2], box[1] + box[3]), uv0, uv1, tint)
+    target = tex if tex is not None else handle
+    x0 = box[0] + pad
+    ctx.draw.add_image(target, (x0, box[1]), (x0 + w, box[1] + h), uv0, uv1, tint)
     if border and len(border) > 3 and border[3]:
-        ctx.draw.add_rect((box[0], box[1]),
-                          (box[0] + box[2], box[1] + box[3]), border)
+        ctx.draw.add_rect((x0, box[1]), (x0 + w, box[1] + h), border)
+    return (w, h)
 
 
-def image_with_bg(handle, size, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
-                  bg=(0, 0, 0, 0), tint=(255, 255, 255, 255)) -> None:
-    """``ImGui::ImageWithBg``."""
+def image_with_bg(
+    handle: Any,
+    size: tuple[float, float] | None = None,
+    uv0: tuple[float, float] = (0.0, 0.0),
+    uv1: tuple[float, float] = (1.0, 1.0),
+    bg: Colour = (0, 0, 0, 0),
+    tint: Colour = (255, 255, 255, 255),
+    border: Colour = (0, 0, 0, 0),
+    max_size: tuple[float, float] | None = None,
+    scale: float = 1.0,
+    align_center: bool = False,
+) -> tuple[float, float]:
+    """``ImGui::ImageWithBg``: Draw an image with a filled background rectangle."""
     ctx = get_current_context()
-    x, y = ctx.layout.cursor
+    from .texture import Texture, get_texture
+
+    tex = handle if isinstance(handle, Texture) else get_texture(handle)
+    w, h = calc_image_size(tex or handle, size=size, max_size=max_size, scale=scale)
+    avail_w = max(0.0, ctx.layout.w - ctx.layout.indent_x)
+    pad = (avail_w - w) * 0.5 if (align_center and avail_w > w) else 0.0
+    row_w = None if align_center else w
+    box = ctx.layout.row(height=h, width=row_w)
+    ctx.item_add(box)
+    x0 = box[0] + pad
     if bg and len(bg) > 3 and bg[3]:
-        ctx.draw.add_rect_filled((x, y), (x + size[0], y + size[1]), bg)
-    image(handle, size, uv0, uv1, tint)
+        ctx.draw.add_rect_filled((x0, box[1]), (x0 + w, box[1] + h), bg)
+    target = tex if tex is not None else handle
+    ctx.draw.add_image(target, (x0, box[1]), (x0 + w, box[1] + h), uv0, uv1, tint)
+    if border and len(border) > 3 and border[3]:
+        ctx.draw.add_rect((x0, box[1]), (x0 + w, box[1] + h), border)
+    return (w, h)
 
 
-def image_button(str_id: str, handle, size, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
-                 bg=(0, 0, 0, 0), tint=(255, 255, 255, 255)) -> bool:
-    """``ImGui::ImageButton``: a button with a picture on it."""
+def image_button(
+    str_id: str,
+    handle: Any,
+    size: tuple[float, float] | None = None,
+    uv0: tuple[float, float] = (0.0, 0.0),
+    uv1: tuple[float, float] = (1.0, 1.0),
+    bg: Colour = (0, 0, 0, 0),
+    tint: Colour = (255, 255, 255, 255),
+    max_size: tuple[float, float] | None = None,
+    scale: float = 1.0,
+) -> bool:
+    """``ImGui::ImageButton``: A button with an image on it."""
+    from .texture import Texture, get_texture
+
+    tex = handle if isinstance(handle, Texture) else get_texture(handle)
+    w, h = calc_image_size(tex or handle, size=size, max_size=max_size, scale=scale)
+
     ctx = get_current_context()
     pad = ctx.style.frame_padding
-    box = ctx.layout.row(height=size[1] + pad[1] * 2.0, width=size[0] + pad[0] * 2.0)
+    box = ctx.layout.row(height=h + pad[1] * 2.0, width=w + pad[0] * 2.0)
     hovered, held, pressed = ctx.button_behavior(box, ctx.get_id(str_id))
     ctx.draw.add_rect_filled(
         (box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
         _col(Col.BUTTON_ACTIVE) if held
         else (_col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON)),
         ctx.style.frame_rounding)
-    ctx.draw.add_image(handle, (box[0] + pad[0], box[1] + pad[1]),
-                       (box[0] + pad[0] + size[0], box[1] + pad[1] + size[1]),
+    target = tex if tex is not None else handle
+    ctx.draw.add_image(target, (box[0] + pad[0], box[1] + pad[1]),
+                       (box[0] + pad[0] + w, box[1] + pad[1] + h),
                        uv0, uv1, tint)
     return pressed
 
 
+
 # -- fonts: a stack, and the painter adopts them if it can ------------------ #
-def push_font(font, size: float = 0.0) -> None:
+def push_font(font: Any, size: float = 0.0) -> None:
     """``ImGui::PushFont``.
 
     The painter is asked to adopt it (``painter.set_font``); one that cannot
@@ -3554,26 +4238,86 @@ def push_font(font, size: float = 0.0) -> None:
     from .painter import set_font as _set_font
 
     ctx = get_current_context()
-    stack = ctx.state(("font",)).setdefault("stack", [])
-    stack.append(ctx.state(("font",)).get("current"))
-    ctx.state(("font",))["current"] = font
-    _set_font(ctx.p, font)
+    store = ctx.state(("font",))
+    stack = store.setdefault("stack", [])
+    stack.append((store.get("current"), store.get("current_size", 0.0)))
+    store["current"] = font
+    store["current_size"] = size
+    _set_font(ctx.p, font, size)
 
 
 def pop_font() -> None:
+    """``ImGui::PopFont``."""
     from .painter import set_font as _set_font
 
     ctx = get_current_context()
     store = ctx.state(("font",))
     stack = store.setdefault("stack", [])
-    previous = stack.pop() if stack else None
-    store["current"] = previous
-    _set_font(ctx.p, previous)
+    previous_font, previous_size = stack.pop() if stack else (None, 0.0)
+    store["current"] = previous_font
+    store["current_size"] = previous_size
+    _set_font(ctx.p, previous_font, previous_size)
+
+
+def push_font_scale(scale: float) -> None:
+    """Push a font scaling multiplier on text rendering and metrics."""
+    from .painter import set_font_scale as _set_font_scale
+
+    ctx = get_current_context()
+    store = ctx.state(("font_scale",))
+    stack = store.setdefault("stack", [])
+    curr = store.get("current", 1.0)
+    stack.append(curr)
+    store["current"] = float(scale)
+    _set_font_scale(ctx.p, float(scale))
+
+
+def pop_font_scale() -> None:
+    """Pop the font scaling multiplier."""
+    from .painter import set_font_scale as _set_font_scale
+
+    ctx = get_current_context()
+    store = ctx.state(("font_scale",))
+    stack = store.setdefault("stack", [])
+    prev = stack.pop() if stack else 1.0
+    store["current"] = prev
+    _set_font_scale(ctx.p, prev)
+
+
+def set_window_font_scale(scale: float) -> None:
+    """``ImGui::SetWindowFontScale``."""
+    from .painter import set_font_scale as _set_font_scale
+
+    ctx = get_current_context()
+    ctx.state(("font_scale",))["current"] = float(scale)
+    _set_font_scale(ctx.p, float(scale))
+
+
+def heading(
+    label: str,
+    level: int = 1,
+    colour: Any = None,
+) -> None:
+    """Render a styled typographical heading with appropriate font scaling."""
+    scales = {1: 1.5, 2: 1.3, 3: 1.15, 4: 1.05}
+    scale = scales.get(level, 1.0)
+
+    push_font({"family": "sans-serif", "bold": True})
+    push_font_scale(scale)
+    if colour is not None:
+        text_colored(colour, label)
+    else:
+        text(label)
+    pop_font_scale()
+    pop_font()
+    if level == 1:
+        separator()
 
 
 def get_font():
     """``ImGui::GetFont``: whatever was pushed, or ``None`` for the painter's own."""
     return get_current_context().state(("font",)).get("current")
+
 
 
 def get_font_baked(size: float = 0.0):
@@ -3924,33 +4668,24 @@ def debug_flash_style_color(which: int) -> None:
 
 # -- the rest ---------------------------------------------------------------- #
 def input_text_multiline(label: str, value: str, size=None) -> tuple[bool, str]:
-    """``InputTextMultiline``: the field, one row per line."""
+    """A multiline buffer with cursor, selection, clipboard and undo editing."""
+    from .widgets.text_editor import TextEditor
+
     ctx = get_current_context()
-    lines = str(value).split("\n")
-    height = size[1] if size else _frame_height(ctx) * max(len(lines), 3)
-    box = ctx.layout.row(height=height, width=size[0] if size else None)
-    item_id = ctx.get_id(label)
-    hovered, _held, pressed = ctx.button_behavior(box, item_id)
-    focus = ctx.state(("focus",))
-    if pressed:
-        focus["id"] = item_id
-    focused = focus.get("id") == item_id
-    changed = False
-    if focused and ctx.io.text:
-        value, changed = str(value) + ctx.io.text, True
-        lines = value.split("\n")
-    ctx.draw.add_rect_filled(
-        (box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
-        _col(Col.FRAME_BG_ACTIVE) if focused
-        else (_col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG)),
-        ctx.style.frame_rounding)
-    row = ctx.p.line_height()
-    ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
-    for index, line in enumerate(lines):
-        ctx.draw.add_text((box[0] + ctx.style.frame_padding[0],
-                           box[1] + index * row), _col(Col.TEXT), line)
-    ctx.draw.pop_clip_rect()
-    return (changed, value)
+    value = str(value)
+    store = ctx.get_storage(ctx.get_id(label))
+    editor = store.get("multiline_editor")
+    if editor is None:
+        editor = TextEditor(value)
+        editor.config.show_line_numbers = False
+        store["multiline_editor"] = editor
+    elif editor.text != value:
+        editor.set_text(value)
+    editor.config.read_only = bool(ctx.item_flags & ItemFlags.DISABLED)
+    if size is None:
+        size = (0, _frame_height(ctx) * max(len(value.split("\n")), 3))
+    text_editor(label, editor, size)
+    return (editor.text != value, editor.text)
 
 
 def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None) -> bool:
@@ -3995,7 +4730,8 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
         elif focus.get("id") == item_id:
             focus.pop("id", None)
 
-    focused = focus.get("id") == item_id or ctx.is_nav_focused(item_id)
+    focused = not bool(ctx.item_flags & ItemFlags.DISABLED) and (
+        focus.get("id") == item_id or ctx.is_nav_focused(item_id))
 
     if hovered and io.mouse_wheel:
         editor.scroll(-3 if io.mouse_wheel > 0 else 3)
@@ -4005,6 +4741,7 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
         editor.release()
 
     was_modified = getattr(editor, "modified", False)
+    revision = getattr(editor, "revision", None)
 
     if focused:
         events = list(io.key_events)
@@ -4022,6 +4759,8 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
         editor.palette = DARK_PALETTE
 
     editor.draw(ctx.p, *box)
+    if revision is not None:
+        return editor.revision != revision
     return bool(getattr(editor, "modified", False) and not was_modified)
 
 
@@ -4231,8 +4970,20 @@ def show_demo_window(open_: bool = True) -> None:
     plot_lines("##lines", [0.0, 0.6, 0.2, 0.9, 0.4], size=(180.0, 40.0))
 
 
+def markdown(
+    content: Any,
+    on_link: Optional[Any] = None,
+    max_width: Optional[float] = None,
+) -> None:
+    """``ImGui::Markdown``: Render a formatted Markdown document into the layout."""
+    from .widgets.markdown import render_markdown
+
+    render_markdown(content, on_link=on_link, max_width=max_width)
+
+
 __all__ += [
-    "image", "image_with_bg", "image_button", "push_font", "pop_font",
+    "image", "image_with_bg", "image_button", "calc_image_size", "push_font", "pop_font",
+    "push_font_scale", "pop_font_scale", "set_window_font_scale", "heading", "markdown",
     "get_font", "get_font_baked", "get_font_tex_uv_white_pixel",
     "show_font_selector", "Viewport", "get_main_viewport", "PlatformIO",
     "get_platform_io", "mem_alloc", "mem_free", "set_allocator_functions",

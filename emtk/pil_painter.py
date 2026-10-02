@@ -41,6 +41,7 @@ __all__ = ["PilPainter"]
 _GLYPHS: dict = {}
 #: The atlas alpha channel as a Pillow image, decoded once.
 _ATLAS: dict = {}
+_GLYPH_SUMS: dict = {}
 
 
 def _pil():
@@ -92,6 +93,9 @@ class PilPainter:
         self.frame.paste(_rgba(background)[:3], (0, 0, self.width, self.height))
         self.scale = float(scale)
         self._font_scale = 1.0
+        self._font_spec = None
+        self._font_size_ratio = 1.0
+        self._font_bold = False
         self._clips = [(0, 0, self.width, self.height)]
         self._atlas = load_atlas()
 
@@ -233,11 +237,17 @@ class PilPainter:
         self._polygon([(float(px), float(py)) for px, py in points], colour)
 
     def text(self, x, y, w, h, align, string, colour, bold=False) -> None:
+        if self._font_spec is not None:
+            from .font_render import draw_text
+            draw_text(self, self._font_spec, self.scale * self._font_scale,
+                      x, y, w, h, align, string, colour, bold)
+            return
+        bold = bold or self._font_bold
         """Paste atlas glyphs, each box-filtered to the screen once and cached."""
         if not string:
             return
         atlas = self._atlas
-        scale = self.scale * self._font_scale
+        scale = self.scale * self._font_scale * self._font_size_ratio
         shrink = atlas.render_scale * scale
         if shrink <= 0.0:
             return
@@ -249,9 +259,9 @@ class PilPainter:
         pen_x = (x + w - span if align & ALIGN_RIGHT
                  else x + (w - span) * 0.5 if align & ALIGN_HCENTER else x)
         ascent, pad, cell_h = atlas.ascent, atlas.pad, atlas.cell[1]
-        baseline = (y + h * 0.5 + (ascent - cell_h * 0.5) * shrink
+        baseline = (y + h * 0.5 + (ascent - (cell_h - 2 * pad) * 0.5) * shrink
                     if align & ALIGN_VCENTER else y + ascent * shrink)
-        top = int(baseline - (ascent + pad) * shrink)
+        top = baseline - (ascent + pad) * shrink
         left = pen_x - pad * shrink
         cx, cy, cw, ch = self._clip()
         if top >= cy + ch:
@@ -259,22 +269,23 @@ class PilPainter:
         for index, char in enumerate(string):
             if char == " ":
                 continue
-            gx = int(left + index * advance)
+            pen = left + index * advance
+            gx, gy = int(pen), int(top)
             if gx >= cx + cw:
                 break
-            mask = self._glyph(char, bold, shrink, rgba[3])
+            mask = self._glyph(char, bold, shrink, rgba[3], pen - gx, top - gy)
             if mask is None:
                 continue
             mw, mh = mask.size
-            box = self._clipped(gx, top, gx + mw, top + mh)
+            box = self._clipped(gx, gy, gx + mw, gy + mh)
             if box is None:
                 continue
             bx0, by0, bx1, by1 = box
             if (bx1 - bx0, by1 - by0) != (mw, mh):
-                mask = mask.crop((bx0 - gx, by0 - top, bx1 - gx, by1 - top))
+                mask = mask.crop((bx0 - gx, by0 - gy, bx1 - gx, by1 - gy))
             self.frame.paste(rgba[:3], box, mask)
 
-    def _glyph(self, char, bold, shrink, alpha):
+    def _glyph(self, char, bold, shrink, alpha, phase_x=0.0, phase_y=0.0):
         """The screen-sized coverage mask of *char*, or ``None`` if it has no cell."""
         atlas = self._atlas
         cell = atlas.cell_of(char, bold=bold)
@@ -283,7 +294,8 @@ class PilPainter:
         u, v, gw, gh = cell
         dynamic = v >= atlas.baked_height
         version = atlas.cache.version if dynamic and atlas.cache is not None else 0
-        key = (u, v, gw, gh, round(shrink, 4), alpha, version)
+        key = (u, v, gw, gh, round(shrink, 4), alpha, version,
+               round(phase_x, 4), round(phase_y, 4))
         got = _GLYPHS.get(key)
         if got is not None:
             return got
@@ -293,10 +305,41 @@ class PilPainter:
             return None
         if dynamic:
             v -= atlas.baked_height
-        size = (max(1, math.ceil(gw * shrink)), max(1, math.ceil(gh * shrink)))
-        mask = source.crop((u, v, u + gw, v + gh)).resize(size, Image.BOX)
-        if alpha != 255:
-            mask = mask.point(lambda c: c * alpha // 255)
+        # Sampling must use the actual fractional scale and pen position.
+        # Resizing to ceil(cell * scale) changes that scale as atlas padding
+        # grows, moving/thickening ink relative to PixelPainter and the GPU.
+        sum_key = (u, v, gw, gh, dynamic, version)
+        summed = _GLYPH_SUMS.get(sum_key)
+        stride = gw + 1
+        if summed is None:
+            coverage = source.crop((u, v, u + gw, v + gh)).tobytes()
+            summed = [0] * ((gh + 1) * stride)
+            for yy in range(gh):
+                row_sum = 0
+                for xx in range(gw):
+                    row_sum += coverage[yy * gw + xx]
+                    summed[(yy + 1) * stride + xx + 1] = summed[yy * stride + xx + 1] + row_sum
+            if len(_GLYPH_SUMS) > 2048:
+                _GLYPH_SUMS.clear()
+            _GLYPH_SUMS[sum_key] = summed
+        size = (max(1, int(phase_x + gw * shrink) + 1),
+                max(1, int(phase_y + gh * shrink) + 1))
+        pixels = bytearray(size[0] * size[1])
+        texels = 1.0 / shrink
+        for yy in range(size[1]):
+            fy = (yy - phase_y) * texels
+            sy0 = max(0, int(fy))
+            sy1 = min(gh, int(fy + texels) + 1)
+            for xx in range(size[0]):
+                fx = (xx - phase_x) * texels
+                sx0 = max(0, int(fx))
+                sx1 = min(gw, int(fx + texels) + 1)
+                if sx1 <= sx0 or sy1 <= sy0:
+                    continue
+                total = (summed[sy1 * stride + sx1] - summed[sy0 * stride + sx1]
+                         - summed[sy1 * stride + sx0] + summed[sy0 * stride + sx0])
+                pixels[yy * size[0] + xx] = int(total * alpha / (255 * (sx1 - sx0) * (sy1 - sy0)))
+        mask = Image.frombytes("L", size, bytes(pixels))
         if len(_GLYPHS) > 4096:
             _GLYPHS.clear()
         _GLYPHS[key] = mask
@@ -320,10 +363,16 @@ class PilPainter:
         return Image.frombytes("RGBA", (width, height), rgba).getchannel("A")
 
     def text_width(self, string) -> float:
-        return self._atlas.advance(string) * self.scale * self._font_scale
+        if self._font_spec is not None:
+            from .font_render import text_width
+            return text_width(self._font_spec, string, self.scale * self._font_scale)
+        return self._atlas.advance(string) * self.scale * self._font_scale * self._font_size_ratio
 
     def line_height(self) -> float:
-        return self._atlas.line_height * self.scale * self._font_scale
+        if self._font_spec is not None:
+            from .font_render import line_height
+            return line_height(self._font_spec, self.scale * self._font_scale)
+        return self._atlas.line_height * self.scale * self._font_scale * self._font_size_ratio
 
     def set_font_scale(self, scale: float) -> None:
         """Scale the glyph cell on top of the device scale."""
@@ -331,8 +380,13 @@ class PilPainter:
 
     # -- optional operations ----------------------------------------------- #
 
-    def set_font(self, _spec) -> None:
-        """Font pushes are ignored: the atlas is the one size there is."""
+    def set_font(self, value=None, size=0.0) -> None:
+        """Select an actual family/style, with size in points."""
+        from .font_render import font_spec
+        spec = font_spec(value, size)
+        self._font_spec = spec if spec.family != "monospace" else None
+        self._font_bold = spec.bold
+        self._font_size_ratio = spec.size / self._atlas.font_pt if self._font_spec is None else 1.0
 
     def image(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
               tint=(255, 255, 255, 255)) -> None:
@@ -400,6 +454,9 @@ class PilPainter:
         scratch._clips = [(0, 0, scratch.width, scratch.height)]
         scratch._atlas = self._atlas
         scratch._font_scale = self._font_scale
+        scratch._font_spec = self._font_spec
+        scratch._font_size_ratio = self._font_size_ratio
+        scratch._font_bold = self._font_bold
         draw(scratch, x0, y0)
         patch = Image.frombytes("RGBA", (scratch.width, scratch.height), bytes(scratch.px))
         self.frame.paste(patch.convert("RGB"), (x0, y0))

@@ -22,6 +22,7 @@ from .painter import (
     ALIGN_LEFT,
     ALIGN_VCENTER,
     Colour,
+    colour_bytes,
     Painter,
     fill_circle,
     fill_convex,
@@ -190,12 +191,17 @@ class DrawList:
         polyline(self.p, _bezier_quadratic(p1, p2, p3, num_segments or self.curve_segments), thickness, col)
 
     def add_text(self, pos: Point, col: Colour, text: str, bold: bool = False) -> None:
+        from .mathtext import convert_script_markup
+
+        text = convert_script_markup(text)
         w = self.p.text_width(text)
         h = self.p.line_height()
-        self.p.text(pos[0], pos[1], w, h, ALIGN_LEFT | ALIGN_VCENTER, text, col, bold)
+        self.p.text(pos[0], pos[1], w, h, ALIGN_LEFT | ALIGN_VCENTER, text, colour_bytes(col), bold)
 
     def calc_text_size(self, text: str) -> Point:
-        return (self.p.text_width(text), self.p.line_height())
+        from .mathtext import convert_script_markup
+
+        return (self.p.text_width(convert_script_markup(text)), self.p.line_height())
 
     # -- path API ----------------------------------------------------------- #
     def path_clear(self) -> None:

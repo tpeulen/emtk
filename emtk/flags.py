@@ -101,8 +101,9 @@ HoveredFlags = _bits(
 SliderFlags = _bits(
     "Logarithmic", "NoRoundToFormat", "NoInput", "WrapAround", "ClampOnInput",
     "AlwaysClamp", "NoSpeedTiebreak", "KeyboardSupport",
-    # emtk implements: none of the behaviour bits yet; drag_scalar/slider_scalar
-    # accept and ignore them visibly through im SliderFlags documentation.
+    # emtk implements: LOGARITHMIC, NO_ROUND_TO_FORMAT, ALWAYS_CLAMP and
+    # NO_INPUT in im's sliders (see im.slider_float); the rest are accepted
+    # and ignored there, and slider_scalar forwards whatever it is handed.
 )
 
 TreeNodeFlags = _bits(

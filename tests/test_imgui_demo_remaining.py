@@ -881,7 +881,13 @@ def test_popups_menus_inside_a_regular_window():
     assert not any("Item" in s for s in frames.strings)
     frames.click(state["menu"])
     assert any("Item" in s for s in frames.strings)
-    frames.click(state["item"])
+    # The dropdown is a floating popup anchored at the title's bottom edge;
+    # click its rendered "Item" entry row, then let menu_item report it.
+    frames.draw()
+    entry = next((t[0] - 2.0, t[1] - 2.0) for t in frames.painter.texts
+                 if "Item" in str(t[5]) and t[1] > state["menu"][1])
+    frames.click((entry[0], entry[1], 60.0, 18.0))
+    frames.draw()
     assert state.get("chose") is True
 
 

@@ -516,3 +516,22 @@ def test_a_command_language_is_built_from_the_applications_own_words():
     bare = te.Language.commands()
     assert bare.keywords == frozenset() and bare.identifiers == frozenset()
     assert bare.single_line_comment == "#"
+
+
+def test_im_text_editor_widget():
+    """Verify im.text_editor interacts and renders via immediate mode."""
+    from emtk import im
+    from emtk.testing import RecordingPainter
+
+    p = RecordingPainter()
+    editor = te.TextEditor("hello world", language=te.Language.python())
+
+    with im.frame(p, (0, 0, 400, 300)):
+        im.begin("Code Window")
+        changed = im.text_editor("##editor", editor, (380.0, 250.0))
+        im.end()
+
+    assert not changed
+    assert editor.text == "hello world"
+    assert len(p.texts) > 0
+

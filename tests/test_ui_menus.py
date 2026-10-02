@@ -235,6 +235,25 @@ def test_an_enabled_menu_item_fires_and_closes_its_menu():
     assert menu.open is False
 
 
+def test_a_menu_item_shows_its_description_when_its_label_fits():
+    from emtk import IO
+    from emtk.im_core import frame
+
+    painter = RecordingPainter()
+    item = menus.MenuItem("Open", tooltip="Open a burst selection from disk.")
+    menu = menus.Menu("File", [item])
+    bar = menus.MenuBar([menu])
+    io = IO()
+    io.mouse_pos = (-1.0, -1.0)
+    menu.open = True
+    with frame(painter, (0.0, 0.0, 200.0, 100.0), io=io) as context:
+        bar.draw(painter, 0.0, 0.0, 200.0, 24.0)
+        rect = menu._rows[0][1]
+        io.mouse_pos = (rect[0] + rect[2] / 2, rect[1] + rect[3] / 2)
+        bar.draw(painter, 0.0, 0.0, 200.0, 24.0)
+        assert context.tooltip == "Open a burst selection from disk."
+
+
 def test_a_checkable_item_toggles_when_it_fires():
     """The reference's ``bool*`` overload; the plain one does not toggle."""
     toggling = menus.MenuItem("Sticks", checkable=True)

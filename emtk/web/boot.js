@@ -275,6 +275,15 @@ mount(js.emtkCanvas, _emtk_app_spec)
     if (consumed) event.preventDefault();
     redraw();
   });
+  window.addEventListener("keyup", (event) => {
+    if (isFormControl(event.target)) return;
+    const consumed = page.key_up(event.key, ...mods(event));
+    if (consumed) event.preventDefault();
+    redraw();
+  });
+  window.addEventListener("blur", () => {
+    if (page.clear_keys()) redraw();
+  });
 
   // Local files, both ending as a path on Pyodide's filesystem.
   const dropHint = document.getElementById("drop-hint");

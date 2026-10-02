@@ -168,14 +168,14 @@ def test_typing_into_an_unfocused_field_is_ignored():
 
 def test_a_hint_shows_only_while_the_field_is_empty():
     def gui():
-        emtk.input_text_with_hint("with hint", "enter text here", "")
+        emtk.input_text_with_hint("with hint", "", "enter text here")
 
     frames = Frames(gui)
     frames.draw()
     assert "enter text here" in frames.strings
 
     def filled():
-        emtk.input_text_with_hint("with hint", "enter text here", "typed")
+        emtk.input_text_with_hint("with hint", "typed", "enter text here")
 
     frames = Frames(filled)
     frames.draw()

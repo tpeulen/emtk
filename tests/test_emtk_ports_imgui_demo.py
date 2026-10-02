@@ -128,7 +128,7 @@ def widgets_basic(state: DemoState, io: emtk.IO, storage: dict) -> RecordingPain
         # ImGui::InputText("input text", str0, IM_ARRAYSIZE(str0));
         _, state.text = emtk.input_text("input text", state.text)
         # ImGui::InputTextWithHint("input text (w/ hint)", "enter text here", ...);
-        emtk.input_text_with_hint("input text (w/ hint)", "enter text here", "")
+        emtk.input_text_with_hint("input text (w/ hint)", "", "enter text here")
         # ImGui::InputFloat("input float", &f0, 0.01f, 1.0f, "%.3f");
         _, state.f = emtk.input_float("input float", state.f, 0.01, 1.0, "%.3f")
         # ImGui::InputInt("input int", &i0);

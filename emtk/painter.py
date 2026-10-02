@@ -48,6 +48,7 @@ because that is what the chrome's palette constants already are.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from numbers import Integral
 from typing import Protocol, Union
 
 __all__ = [
@@ -76,6 +77,19 @@ __all__ = [
 
 #: A colour: ``(r, g, b)`` or ``(r, g, b, a)``, 0-255.
 Colour = Union[tuple[int, int, int], tuple[int, int, int, int]]
+
+
+def colour_bytes(colour):
+    """Convert ImGui normalized float RGB(A) into the painter's byte colors.
+
+    Integer colors retain their 0–255 meaning, including very dark colors.
+    """
+    values = tuple(colour)
+    normalized = any(not isinstance(value, Integral) for value in values) and all(
+        0.0 <= value <= 1.0 for value in values)
+    if normalized:
+        return tuple(int(value * 255 + 0.5) for value in values)
+    return values
 
 #: Horizontal alignment within the box passed to :meth:`Painter.text`.
 ALIGN_LEFT = 0x01
@@ -576,7 +590,7 @@ def image_triangle(p: "Painter", p0, p1, p2, handle, uv0=(0.0, 0.0),
     p.fill_triangle(p0, p1, p2, tint)
 
 
-def set_font(p: "Painter", font) -> bool:
+def set_font(p: "Painter", font, size: float = 0.0) -> bool:
     """Ask the painter to draw in *font*. ``ImGui::PushFont``.
 
     Returns whether it could. Metrics come from the painter
@@ -585,6 +599,18 @@ def set_font(p: "Painter", font) -> bool:
     """
     op = getattr(p, "set_font", None)
     if callable(op):
-        op(font)
+        try:
+            op(font, size)
+        except TypeError:
+            op(font)
+        return True
+    return False
+
+
+def set_font_scale(p: "Painter", scale: float) -> bool:
+    """Ask the painter to scale subsequent text drawing and metrics."""
+    op = getattr(p, "set_font_scale", None)
+    if callable(op):
+        op(scale)
         return True
     return False

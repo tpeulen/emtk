@@ -507,6 +507,15 @@ class Language:
         )
 
     @staticmethod
+    def yaml() -> Language:
+        """YAML scalar highlighting, quoted strings, comments and indentation."""
+        return Language(name="YAML", case_sensitive=False, single_line_comment="#",
+            has_single_quoted_strings=True, has_double_quoted_strings=True,
+            string_escape="\\", indentation_for_blocks=True,
+            keywords=frozenset({"true", "false", "null", "yes", "no", "on", "off"}),
+            punctuation=frozenset("{}[],:&*!|>%-~"))
+
+    @staticmethod
     def glsl() -> Language:
         """GLSL -- and near enough WGSL, which is what emtk's shaders are."""
         return Language(
@@ -1592,6 +1601,15 @@ class EditorConfig:
     left_margin: int = 1
     text_margin: int = 2
     language: Language | None = None
+    # None keeps the inherited chrome colors; explicit values customize just
+    # this editor, without mutating the global application theme.
+    background_color: Colour | None = None
+    margin_color: Colour | None = None
+    line_number_color: Colour | None = None
+    selection_color: Colour | None = None
+    caret_color: Colour | None = None
+    current_line_color: Colour | None = None
+    highlight_current_line: bool = True
 
 
 #: The glyphs drawn for a space and a tab when whitespace is shown.
@@ -1665,6 +1683,7 @@ class TextEditor:
         self._find_case_sensitive = True
         self._find_whole_word = False
         self._changed = False
+        self._revision = 0
 
     # -- text ----------------------------------------------------------- #
     @property
@@ -1688,6 +1707,12 @@ class TextEditor:
         self.first_visible_line = 0
         self.first_visible_column = 0
         self._changed = False
+        self._revision += 1
+
+    @property
+    def revision(self) -> int:
+        """Monotonic content-change count, including replacements and undo/redo."""
+        return self._revision
 
     @property
     def line_count(self) -> int:
@@ -1831,6 +1856,7 @@ class TextEditor:
         transaction.after = [(one.start, one.end) for one in self.cursors]
         self.transactions.add(transaction)
         self._changed = True
+        self._revision += 1
         self._follow_main()
 
     def _delete_selection(self, transaction: Transaction, cursor: Cursor) -> Pos:
@@ -1986,6 +2012,7 @@ class TextEditor:
         done = self.transactions.undo(self.document, self.cursors)
         if done:
             self._changed = True
+            self._revision += 1
             self._follow_main()
         return done
 
@@ -1996,6 +2023,7 @@ class TextEditor:
         done = self.transactions.redo(self.document, self.cursors)
         if done:
             self._changed = True
+            self._revision += 1
             self._follow_main()
         return done
 
@@ -2686,7 +2714,9 @@ class TextEditor:
         self.vbar.top = self.first_visible_line
         self.vbar.clamp(len(self.document), self.visible_lines)
 
-        p.fill_rect(x, y, w, h, FRAME_BG)
+        p.fill_rect(x, y, w, h, self.config.background_color or FRAME_BG)
+        if self.config.margin_color is not None and self.config.show_line_numbers:
+            p.fill_rect(x, y, gutter, h, self.config.margin_color)
         p.push_clip(x, y, w, h)
 
         caret_lines = {one.end.line for one in self.cursors}
@@ -2701,8 +2731,8 @@ class TextEditor:
             line = self.document.lines[number]
             row_y = y + row * self._line_h
 
-            if number in caret_lines:
-                p.fill_rect(x, row_y, w, self._line_h, (255, 255, 255, 12))
+            if self.config.highlight_current_line and number in caret_lines:
+                p.fill_rect(x, row_y, w, self._line_h, self.config.current_line_color or (255, 255, 255, 12))
             self._draw_selections(p, number, row_y, w, x)
             if self.config.show_line_numbers:
                 self._draw_line_number(p, line, number, x, row_y, gutter)
@@ -2719,7 +2749,7 @@ class TextEditor:
     ) -> None:
         """Draw one right-aligned line number, in the marker's colour if any."""
         current = any(one.end.line == number for one in self.cursors)
-        colour: Colour = (224, 224, 240) if current else (128, 128, 144)
+        colour: Colour = self.config.line_number_color or ((224, 224, 240) if current else (128, 128, 144))
         if line.marker is not None:
             colour = line.marker[0]
         p.text(
@@ -2750,7 +2780,7 @@ class TextEditor:
             left = max(left, self._text_x)
             if left < x + w:
                 p.fill_rect(left, row_y, min(width, x + w - left), self._line_h,
-                            (32, 96, 160, 160))
+                            self.config.selection_color or (32, 96, 160, 160))
 
     def _draw_line(
         self,
@@ -2873,6 +2903,5 @@ class TextEditor:
                 y + row * self._line_h + self._line_h * 0.1,
                 max(1.0, self._glyph_w * 0.12),
                 self._line_h * 0.8,
-                TEXT if one.main else (200, 200, 210),
+                self.config.caret_color or (TEXT if one.main else (200, 200, 210)),
             )
-

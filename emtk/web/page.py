@@ -155,6 +155,7 @@ class WebPage:
         self.canvas = canvas
         self.app = app
         self.surface = as_surface(app)
+        self._pressed_keys = {}
         # Device pixels for the surface, CSS pixels for events and layout.
         self.width = max(int(canvas.width), 1)
         self.height = max(int(canvas.height), 1)
@@ -278,7 +279,29 @@ class WebPage:
         # A shortcut names its letter; a DOM event has it only as ``key``.
         if not code and modifiers & (CONTROL_MODIFIER | META_MODIFIER) and letter_of(0, name):
             code = ord(letter_of(0, name))
+        if name:
+            self._pressed_keys.setdefault(
+                str(name), (code, str(text or ""), modifiers)
+            )
         return bool(self.surface.on_key_press(code, str(text or ""), modifiers))
+
+    def key_up(self, name: str, ctrl: bool = False, shift: bool = False,
+               alt: bool = False, meta: bool = False) -> bool:
+        """Deliver a DOM ``keyup`` to the same surface that received keydown."""
+        name = str(name or "")
+        code, text, _pressed_modifiers = self._pressed_keys.pop(
+            name, (key_from_dom(name), "", 0)
+        )
+        modifiers = modifiers_from_dom(bool(ctrl), bool(shift), bool(alt), bool(meta))
+        return bool(self.surface.on_key_release(code, text, modifiers))
+
+    def clear_keys(self) -> bool:
+        """Release every key still held when the browser window loses focus."""
+        pressed, self._pressed_keys = self._pressed_keys, {}
+        consumed = False
+        for code, text, modifiers in pressed.values():
+            consumed = bool(self.surface.on_key_release(code, text, modifiers)) or consumed
+        return consumed
 
     # -- the clipboard --------------------------------------------------- #
     def _shortcut(self, letter: str) -> bool:

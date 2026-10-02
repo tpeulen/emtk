@@ -154,3 +154,41 @@ def test_every_control_module_draws_only_baked_glyphs(atlas, module):
         f"{module} draws these but the atlas has no glyph: "
         f"{sorted(used - set(meta['charset']))}"
     )
+
+
+@pytest.mark.parametrize('language,sample', [
+    ('en', 'Open files — photon intensity'),
+    ('de', 'Öffnen Größe für Fläche ß'),
+    ('fr', 'Éditeur fenêtre cœur où ça'),
+    ('es', 'Abrir selección información ¿Cómo?'),
+    ('pt', 'Abrir seleção informação ação'),
+    ('ru', 'Открыть файл — интенсивность фотонов Ёжик ё'),
+])
+def test_six_language_labels_are_real_baked_glyphs(atlas, language, sample):
+    alpha, meta = atlas
+    for face, table in meta['glyphs'].items():
+        for char in set(sample):
+            assert char in table, f'{language} {face} has no baked {char!r}'
+            if not char.isspace():
+                x, y, w, h, _ = table[char]
+                assert alpha[y:y+h, x:x+w].max() > 0
+
+
+def test_baker_promises_no_glyphs_that_the_artifact_drops(atlas):
+    import runpy
+    _alpha, meta = atlas
+    baker = runpy.run_path(str(_EMTK.parent / 'tools' / 'bake_chrome_atlas.py'))
+    assert set(baker['CHARSET']) <= set(meta['charset'])
+    # Superscripts, standalone accents and mathematical script z previously
+    # failed the advance-equality check despite having real fallback glyphs.
+    assert set('ₕₖₗₘₙₚₛₜ⃗𝓏∮⋮⋱') <= set(meta['charset'])
+
+
+def test_extended_atlas_keeps_existing_layout_metrics(atlas):
+    _alpha, meta = atlas
+    assert meta['advance'] == 26
+    assert meta['advance_1x'] == 7
+    assert meta['ascent'] == 41
+    assert meta['ascent_1x'] == 10
+    assert meta['line_height_1x'] == 13
+    assert max(meta['size']) <= 8192

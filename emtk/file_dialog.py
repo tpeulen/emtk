@@ -137,6 +137,8 @@ class FileDialog:
         self.rows = max(1, int(rows))
         self.selection: list[str] = []
         self.error = ""
+        self._pending_overwrite: list[str] | None = None
+        self.overwrite_confirmed = False
         self.page = 0
         self.folders: list[str] = []
         self.files: list[str] = []
@@ -282,6 +284,22 @@ class FileDialog:
             The chosen paths on the frame the action is taken, ``False`` on
             the frame Cancel is pressed, ``None`` while the dialog stays open.
         """
+        if self._pending_overwrite is not None:
+            _w.text_wrapped(f"Replace the existing file?\n{self._pending_overwrite[0]}")
+            if _w.button("Replace existing file"):
+                paths = self._pending_overwrite
+                self._pending_overwrite = None
+                self.overwrite_confirmed = True
+                return paths
+            _w.set_item_tooltip("Replace this existing file with the new output.")
+            if _w.button("Choose another name"):
+                self._pending_overwrite = None
+            _w.set_item_tooltip("Return to the file chooser without replacing the file.")
+            if _w.button("Cancel"):
+                self._pending_overwrite = None
+                return False
+            _w.set_item_tooltip("Cancel saving; leave the existing file unchanged.")
+            return None
         self.refresh()
         result: list[str] | bool | None = None
 
@@ -318,22 +336,27 @@ class FileDialog:
                     result = self.choose()
                 elif picked:
                     self.select(name)
+            _w.set_item_tooltip(("Open this folder." if is_folder else "Select this file.")
+                                + "\n" + os.path.join(self.directory, name))
         for _ in range(self.rows - len(entries[start:start + self.rows])):
             _w.dummy(1.0, _core.get_frame_height())
         if pages > 1:
             if _w.small_button("< prev") and self.page > 0:
                 self.page -= 1
+            _w.set_item_tooltip("Show the previous page of files.")
             _w.same_line()
             _w.text_disabled(f"page {self.page + 1} / {pages}")
             _w.same_line()
             if _w.small_button("next >") and self.page < pages - 1:
                 self.page += 1
+            _w.set_item_tooltip("Show the next page of files.")
         _w.separator()
 
         if self.mode == "save":
             _w.set_next_item_width(-1.0)
             _changed, name = _w.input_text("##file-dialog-name", self.filename, "file name")
             self.filename = name.replace("\r", "").replace("\n", "")
+            _w.set_item_tooltip("Enter the output file name; the selected format supplies its extension.")
         elif self.mode == "folder":
             _w.text_disabled(self.chosen()[0])
         else:
@@ -343,15 +366,24 @@ class FileDialog:
         if self.mode != "folder":
             labels = [label for label, _patterns in self.filters]
             changed, index = _w.combo("##file-dialog-filter", self.filter_index, labels)
+            _w.set_item_tooltip("Choose which file formats to list or save.")
             if changed and index != self.filter_index:
                 self.filter_index = index
                 self.refresh()
 
         if _w.button(self.action, (90.0, 0.0)):
             result = self.choose()
+        _w.set_item_tooltip({"save": "Save to the chosen output file.",
+                            "folder": "Use the selected folder.",
+                            "open": "Open the selected files."}[self.mode])
         _w.same_line()
         if _w.button("Cancel", (90.0, 0.0)):
             result = False
+        _w.set_item_tooltip("Close the file chooser without selecting a path.")
         if self.error:
             _w.text_colored(ERROR_COLOUR, self.error)
+        if isinstance(result, list) and self.mode == "save" and os.path.isfile(result[0]):
+            self.overwrite_confirmed = False
+            self._pending_overwrite = result
+            return None
         return result

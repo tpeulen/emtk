@@ -148,40 +148,132 @@ class QtPainter:
         #: The size everything is measured and drawn at when no font scale is
         #: in force. :meth:`set_font_scale` multiplies it; it never changes.
         self.font_pt = float(font_pt)
-        self._apply_font(self.font_pt)
+        self._font_scale: float = 1.0
+        self._font_family: str = "Menlo"
+        self._font_bold: bool = False
+        self._font_italic: bool = False
+        self._custom_font_size: float | None = None
+        self._apply_font()
         self._clips: list = []
 
-    def _apply_font(self, font_pt: float) -> None:
-        """Build the monospaced face at `font_pt` and hand it to the painter."""
+    def _apply_font(self) -> None:
+        """Build the face at effective point size and hand it to the painter."""
         from qtpy import QtGui
 
-        font = QtGui.QFont("Menlo")
-        font.setStyleHint(QtGui.QFont.Monospace)
-        font.setPointSizeF(qt_point_size(font_pt, self._p.device()))
+        from .font import PX_PER_PT  # noqa: PLC0415
+
+        effective_pt = (
+            self._custom_font_size if self._custom_font_size is not None else self.font_pt
+        ) * self._font_scale
+
+        import sys
+
+        family = self._font_family
+        font = QtGui.QFont()
+        emoji_fallbacks = ["Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Segoe UI Symbol"]
+
+        if family in ("sans-serif", "sans", "system-ui", "proportional"):
+            font.setStyleHint(QtGui.QFont.SansSerif)
+            default_fam = QtGui.QFont().defaultFamily()
+            main_fam = default_fam if default_fam else ("Helvetica Neue" if sys.platform == "darwin" else "Segoe UI")
+            families = [main_fam, "Helvetica Neue", "Arial", *emoji_fallbacks]
+        elif family in ("serif", "times"):
+            font.setStyleHint(QtGui.QFont.Serif)
+            families = ["Times New Roman", "Times", *emoji_fallbacks]
+        elif family in ("monospace", "mono", "code"):
+            font.setStyleHint(QtGui.QFont.Monospace)
+            families = ["Menlo", "Consolas", "Courier New", *emoji_fallbacks]
+        else:
+            families = [family, *emoji_fallbacks]
+
+        if hasattr(font, "setFamilies"):
+            font.setFamilies(families)
+        else:
+            font.setFamily(families[0])
+
+        font.setStyleStrategy(QtGui.QFont.PreferAntialias)
+
+        if self._font_bold:
+            font.setBold(True)
+        if self._font_italic:
+            font.setItalic(True)
+
+        # Pixel size, not point size: Qt converts points through the
+        # device's logical DPI, which is 72 on macOS and doubles under some
+        # HiDPI configurations, so the same emtk font drew wildly different
+        # sizes per platform. An emtk point is PX_PER_PT logical pixels on
+        # every host (the atlas bake size); setPixelSize pins that and Qt's
+        # device pixel ratio scales the rendering exactly once.
+        font.setPixelSize(max(1, round(float(effective_pt) * PX_PER_PT)))
         self._p.setFont(font)
         # The *float* metrics, deliberately. The integer flavour rounds every
         # advance down, and the error is per character: a node title measured
         # at a scaled-down size loses a fraction of a pixel per glyph and the
         # accumulated shortfall crops the last characters off -- visible only
         # under the node editor's zoom, and unreadable as anything but a bug.
-        #
-        # Measured on the device drawn to, not the screen: the point size
-        # above is chosen for the device's DPI, and a screen of another DPI
-        # would measure text the painter does not draw.
         try:
             self._metrics = QtGui.QFontMetricsF(font, self._p.device())
         except TypeError:  # a binding without the device overload
             self._metrics = QtGui.QFontMetricsF(font)
 
     def set_font_scale(self, scale: float) -> None:
-        """Draw and measure subsequent text `scale` times :attr:`font_pt`.
+        """Draw and measure subsequent text `scale` times :attr:`font_pt`."""
+        self._font_scale = float(scale)
+        self._apply_font()
 
-        Qt re-shapes the glyphs at the new size, so text scaled by the node
-        editor's zoom is rendered crisp rather than blown up from a bitmap.
-        Fractional sizes are kept fractional -- rounding here would draw text
-        of a size the layout did not budget for.
+    def set_font(self, font: Any = None, size: float = 0.0) -> None:
+        """Draw subsequent text in *font*.
+
+        Parameters
+        ----------
+        font : str, dict, QFont, or None
+            Font specifier:
+            - String: family name ("sans-serif", "monospace", "Arial", etc.)
+            - Dict: {"family": str, "bold": bool, "italic": bool, "size": float}
+            - None: restores default Menlo interface font.
+        size : float, optional
+            Explicit point size (overrides font_pt). 0.0 uses current base size.
         """
-        self._apply_font(self.font_pt * float(scale))
+        from qtpy import QtGui
+
+        if size > 0.0:
+            self._custom_font_size = float(size)
+        else:
+            self._custom_font_size = None
+
+        if font is None:
+            self._font_family = "Menlo"
+            self._font_bold = False
+            self._font_italic = False
+            self._apply_font()
+            return
+
+        if isinstance(font, str):
+            self._font_family = font
+            self._font_bold = False
+            self._font_italic = False
+            self._apply_font()
+            return
+
+        if isinstance(font, dict):
+            if "family" in font:
+                self._font_family = str(font["family"])
+            self._font_bold = bool(font.get("bold", False))
+            self._font_italic = bool(font.get("italic", False))
+            if "size" in font and float(font["size"]) > 0:
+                self._custom_font_size = float(font["size"])
+            self._apply_font()
+            return
+
+        if isinstance(font, QtGui.QFont):
+            self._font_family = font.family()
+            self._font_bold = font.bold()
+            self._font_italic = font.italic()
+            if font.pointSizeF() > 0:
+                self._custom_font_size = font.pointSizeF()
+            self._apply_font()
+            return
+
 
     # -- helpers -----------------------------------------------------------
 
@@ -200,7 +292,18 @@ class QtPainter:
         """
         from qtpy import QtGui
 
-        return QtGui.QColor(*value)
+        if isinstance(value, QtGui.QColor):
+            return value
+        if isinstance(value, str):
+            return QtGui.QColor(value)
+        if isinstance(value, (tuple, list)):
+            vals = list(value)
+            if any(isinstance(c, float) and c <= 1.0 for c in vals):
+                vals = [int(round(c * 255)) for c in vals]
+            else:
+                vals = [int(round(c)) for c in vals]
+            return QtGui.QColor(*vals)
+        return QtGui.QColor(value)
 
     @staticmethod
     def _rect(x: float, y: float, w: float, h: float):
@@ -502,10 +605,18 @@ class QtPainter:
             painter.restore()
 
     def push_clip(self, x: float, y: float, w: float, h: float) -> None:
-        """Restrict drawing to a rectangle until :meth:`pop_clip`."""
+        """Restrict drawing to a rectangle until :meth:`pop_clip`.
+
+        Qt's ``setClipRect`` defaults to ``ReplaceClip``, which discards the
+        enclosing clip -- a child scroller's clip then wiped its window's, and
+        rows past the child's bottom drew over whatever sat under it. Clips
+        must intersect: every push narrows, every pop widens back.
+        """
+        from qtpy import QtCore  # noqa: PLC0415
+
         self._p.save()
         self._clips.append(True)
-        self._p.setClipRect(self._rect(x, y, w, h))
+        self._p.setClipRect(self._rect(x, y, w, h), QtCore.Qt.IntersectClip)
 
     def pop_clip(self) -> None:
         """Undo the most recent :meth:`push_clip`."""

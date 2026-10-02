@@ -130,3 +130,75 @@ def test_it_draws_through_the_immediate_mode_api():
         emtk.end()
     lit = sum(1 for i in range(0, len(p.px), 4) if p.px[i] > 60)
     assert lit > 0, "im.image drew nothing"
+
+
+def test_texture_pil_and_numpy_factories(tmp_path):
+    from PIL import Image
+    import numpy as np
+    from emtk import get_texture, im
+
+    # 1. Test from_pil and to_pil
+    pil_src = Image.new("RGBA", (16, 8), (10, 20, 30, 255))
+    tex = Texture.from_pil(pil_src)
+    assert tex.width == 16
+    assert tex.height == 8
+    assert tex.get_pixel(0, 0) == (10, 20, 30, 255)
+
+    exported = tex.to_pil()
+    assert exported.size == (16, 8)
+    assert exported.getpixel((0, 0)) == (10, 20, 30, 255)
+
+    # 2. Test save and from_file
+    img_file = tmp_path / "test_img.png"
+    tex.save(img_file)
+    assert img_file.is_file()
+
+    loaded = Texture.from_file(img_file)
+    assert loaded.width == 16
+    assert loaded.height == 8
+    assert loaded.get_pixel(0, 0) == (10, 20, 30, 255)
+
+    # 3. Test get_texture caching
+    cached1 = get_texture(img_file)
+    cached2 = get_texture(img_file)
+    assert cached1 is cached2
+
+    # 4. Test from_numpy (2D grayscale, 3D RGB, 3D RGBA)
+    arr_2d = np.ones((10, 12), dtype=np.uint8) * 128
+    tex_2d = Texture.from_numpy(arr_2d)
+    assert tex_2d.width == 12
+    assert tex_2d.height == 10
+    assert tex_2d.get_pixel(0, 0) == (128, 128, 128, 255)
+
+    arr_rgb = np.zeros((6, 8, 3), dtype=np.float32)
+    arr_rgb[:, :, 0] = 1.0  # Red
+    tex_rgb = Texture.from_numpy(arr_rgb)
+    assert tex_rgb.width == 8
+    assert tex_rgb.height == 6
+    assert tex_rgb.get_pixel(0, 0) == (255, 0, 0, 255)
+
+    # 5. Test im.image with path, auto-size and max_size
+    p = PixelPainter(100, 100, background=(0, 0, 0, 255))
+    io, storage = emtk.IO(), {}
+    with emtk.frame(p, (0, 0, 100, 100), io=io, storage=storage):
+        emtk.begin("img_win")
+        # Direct string path with max_size
+        w, h = im.image(str(img_file), max_size=(8.0, 8.0))
+        assert w == 8.0
+        assert h == 4.0
+
+        # PIL image direct
+        w_pil, h_pil = im.image(pil_src)
+        assert w_pil == 16.0
+        assert h_pil == 8.0
+
+        # Button with image
+        pressed = im.image_button("btn_img", str(img_file))
+        assert not pressed
+
+        # calc_image_size
+        cw, ch = im.calc_image_size(str(img_file), max_size=(4.0, 4.0))
+        assert cw == 4.0
+        assert ch == 2.0
+        emtk.end()
+

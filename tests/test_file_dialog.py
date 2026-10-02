@@ -63,6 +63,19 @@ class _Driver:
 def test_a_filter_string_splits_like_qts():
     assert parse_filters("Sessions (*.mat);;SMD (*.json *.json.gz)") == [
         ("Sessions", ["*.mat"]), ("SMD", ["*.json", "*.json.gz"])]
+
+
+def test_save_existing_file_requires_explicit_replacement(folder):
+    dialog = FileDialog(mode="save", directory=str(folder), filename="a.dat")
+    driver = _Driver(dialog)
+    assert driver.click("Save") is None
+    assert dialog._pending_overwrite == [str(folder / "a.dat")]
+    assert driver.click("Choose another name") is None
+    assert dialog._pending_overwrite is None
+    assert (folder / "a.dat").read_text() == "x"
+    assert driver.click("Save") is None
+    assert driver.click("Replace existing file") == [str(folder / "a.dat")]
+    assert dialog.overwrite_confirmed
     assert parse_filters("") == [("All files", ["*"])]
 
 

@@ -527,10 +527,9 @@ class ImageAtlas:
 
         Only when the shelf is full and there is dead space to win back.
         The live images move -- each is rewritten at its new spot and so
-        reported dirty -- which a quad already built this frame from the
-        old spot does not know: it may sample the wrong texels for that one
-        frame. Rare, one frame, and self-correcting, against an atlas that
-        otherwise stays full for the rest of the process.
+        reported dirty. QuadPainter holds current-frame handles and refreshes
+        their UVs at vertex submission, so earlier quads use their new region
+        in this frame rather than briefly sampling unrelated pixels.
         """
         if not self._free:
             return False

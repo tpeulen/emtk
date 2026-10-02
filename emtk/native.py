@@ -319,6 +319,10 @@ class CanvasEvents:
         self._repeat_generation = 0
         #: ``(time, x, y, button)`` of the last press that could start a double click.
         self._last_down = None
+        self._closed = False
+        self._pressed_keys = {}
+        self.focus_callback = None
+        self._previous_focus_callback = None
         self.connect()
 
     # -- wiring ---------------------------------------------------------- #
@@ -340,7 +344,19 @@ class CanvasEvents:
             add(self._on_char, "char")
         add(self._on_key_up, "key_up")
         add(self._on_resize, "resize")
+        add(self._on_close, "close")
         self._connect_file_drop()
+        self._connect_focus_loss()
+
+    def _on_close(self, event) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self.release_keys()
+        self._restore_focus_callback()
+        close = getattr(self.sink, "close", None)
+        if callable(close):
+            close()
 
     def _connect_file_drop(self) -> None:
         """Deliver dropped files where the backend has a glfw window."""
@@ -365,6 +381,54 @@ class CanvasEvents:
             setter(window, dropped)
         except Exception:  # noqa: BLE001 - claims one and has none
             self.drop_callback = None
+
+    def _connect_focus_loss(self) -> None:
+        """Release held keys when a native window loses focus.
+
+        rendercanvas uses GLFW's focus callback only to request a redraw. Chain
+        that callback so its behavior is preserved while held controls are
+        released on alt-tab or a click into another window.
+        """
+        window = getattr(self.canvas, "_window", None)
+        if window is None:
+            return
+        try:
+            import glfw  # noqa: PLC0415
+            setter = getattr(glfw, "set_window_focus_callback", None)
+            if not callable(setter):
+                return
+
+            previous = setter(window, None)
+
+            def focused(_window, has_focus) -> None:
+                if not has_focus:
+                    self.release_keys()
+                if previous is not None:
+                    previous(_window, has_focus)
+
+            self.focus_callback = focused
+            self._previous_focus_callback = previous
+            setter(window, focused)
+        except Exception:  # noqa: BLE001 - focus release is optional off GLFW
+            self.focus_callback = None
+
+    def _restore_focus_callback(self) -> None:
+        window = getattr(self.canvas, "_window", None)
+        if window is None or self.focus_callback is None:
+            return
+        try:
+            import glfw  # noqa: PLC0415
+            glfw.set_window_focus_callback(window, self._previous_focus_callback)
+        except Exception:  # noqa: BLE001 - the window may already be gone
+            pass
+        self.focus_callback = None
+
+    def release_keys(self) -> None:
+        """Deliver releases for every key still held by the current window."""
+        self.stop_key_repeat()
+        pressed, self._pressed_keys = self._pressed_keys, {}
+        for key, text, modifiers in pressed.values():
+            self._deliver("on_key_release", key, text, modifiers)
 
     @property
     def supports_file_drop(self) -> bool:
@@ -490,6 +554,8 @@ class CanvasEvents:
         chord = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER))
         if chord and not key and letter_of(0, name):
             key = ord(letter_of(0, name))
+        if name:
+            self._pressed_keys.setdefault(name, (key, text, modifiers))
         self._deliver("on_key_press", key, text, modifiers)
         # Only keys that *do* something repeated: a held Escape must not fire
         # a hundred times, and nor may Cmd+V -- macOS sends no key-up for a
@@ -510,8 +576,16 @@ class CanvasEvents:
         self._deliver("on_key_press", 0, text,
                       modifiers_from_canvas(event.get("modifiers")))
 
-    def _on_key_up(self, _event: dict) -> None:
-        self.stop_key_repeat()
+    def _on_key_up(self, event: dict) -> None:
+        name = str(event.get("key", "") or "")
+        key, text, _original_modifiers = self._pressed_keys.pop(
+            name,
+            (key_from_dom(name), "", modifiers_from_canvas(event.get("modifiers"))),
+        )
+        modifiers = modifiers_from_canvas(event.get("modifiers"))
+        self._deliver("on_key_release", key, text, modifiers)
+        if self._repeat_key is not None and self._repeat_key[0] == key:
+            self.stop_key_repeat()
 
     def stop_key_repeat(self) -> None:
         """Cancel any pending repeat."""
@@ -582,6 +656,10 @@ class NativeHost:
         from .app import as_surface  # noqa: PLC0415
 
         self.app = app
+        import threading
+
+        self._host_thread = threading.get_ident()
+        self._pending_external_redraw = threading.Event()
         self.surface = as_surface(app)
         if canvas is None:
             module = canvas_module(backend)
@@ -621,6 +699,7 @@ class NativeHost:
                             float(canvas.get_pixel_ratio()))
         self.events = CanvasEvents(canvas, self.surface, on_frame=self.request_draw,
                                    loop=self._loop)
+        self.surface.set_frame_request_callback(self.request_draw_threadsafe)
         canvas.request_draw(self._draw_frame)
 
     def _draw_frame(self) -> None:
@@ -629,6 +708,11 @@ class NativeHost:
             return
         self.surface.render(self.context.get_current_texture().create_view())
         self._retitle()
+        if getattr(self.app, "close_requested", False):
+            if self._loop is not None and not getattr(self, "_close_scheduled", False):
+                self._close_scheduled = True
+                self._loop.call_soon(self.close)
+            return
         self._wake_generation += 1
         if self.surface.animating():
             self.canvas.request_draw()
@@ -669,12 +753,36 @@ class NativeHost:
         """Ask for a frame; the canvas coalesces requests."""
         self.canvas.request_draw()
 
+    def request_draw_threadsafe(self) -> None:
+        """Marshal background notifications onto rendercanvas' event loop."""
+        import threading
+
+        if self.events._closed:
+            return
+        if threading.get_ident() == self._host_thread:
+            self.request_draw()
+            return
+        schedule = getattr(self._loop, "call_soon_threadsafe", None)
+        if callable(schedule):
+            try:
+                schedule(self.request_draw)
+                return
+            except (AttributeError, RuntimeError):
+                # Before run() there is no asyncio loop yet. Its initial frame
+                # will process queued work; never call a GUI backend off-thread.
+                pass
+        self._pending_external_redraw.set()
+
     def draw_frame(self):
         """Render one frame now. The offscreen canvas returns the image."""
         draw = getattr(self.canvas, "draw", None)
         if callable(draw):
-            return draw()
-        return self.canvas.force_draw()
+            result = draw()
+        else:
+            result = self.canvas.force_draw()
+        if getattr(self.app, "close_requested", False) and self._loop is None:
+            self.close()
+        return result
 
     def is_interactive(self) -> bool:
         """``False`` for the offscreen canvas, which shows nothing."""
@@ -682,14 +790,17 @@ class NativeHost:
 
     def run(self) -> None:
         """Pump the canvas' loop until the window closes."""
+        if self._pending_external_redraw.is_set():
+            self._pending_external_redraw.clear()
+            self.request_draw()
         if self._loop is not None:
             self._loop.run()
 
     def close(self) -> None:
         try:
+            self.events._on_close({"event_type": "close"})
+        finally:
             self.canvas.close()
-        except Exception:  # noqa: BLE001
-            pass
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -706,16 +817,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--app", required=True,
                         help="factory spec 'package.module:make_app'")
     parser.add_argument("--title", default=None)
-    parser.add_argument("--size", default="1280x860", help="WIDTHxHEIGHT")
+    parser.add_argument("--size", help="WIDTHxHEIGHT; otherwise use the app's saved/default size")
     parser.add_argument("--backend", default=None,
                         help="rendercanvas backend (glfw, offscreen, ...)")
     parser.add_argument("--screenshot", default=None,
                         help="render one frame offscreen to this PNG and exit")
     args = parser.parse_args(argv)
-    width, _, height = str(args.size).partition("x")
-    size = (int(width), int(height or width))
+    app = load_app(args.app)
+    if args.size:
+        width, _, height = str(args.size).partition("x")
+        size = (int(width), int(height or width))
+    else:
+        size = getattr(app, "window_size", None) or DEFAULT_WINDOW_SIZE
     backend = "offscreen" if args.screenshot else args.backend
-    host = NativeHost(load_app(args.app), size=size,
+    host = NativeHost(app, size=size,
                       title=args.title or args.app, backend=backend)
     if args.screenshot or not host.is_interactive():
         image = host.draw_frame()
@@ -732,8 +847,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             # Asked for offscreen (a headless run) is not a missing backend.
             print("no interactive rendercanvas backend (pip install glfw); "
                   "rendered one frame offscreen", file=sys.stderr)
+        host.close()
         return 0
     host.run()
+    host.close()
     return 0
 
 

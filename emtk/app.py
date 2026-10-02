@@ -45,7 +45,6 @@ import importlib
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from .font import DEFAULT_FONT_PT
 from .events import (
     ALT_MODIFIER,
     CONTROL_MODIFIER,
@@ -55,6 +54,7 @@ from .events import (
     RIGHT_BUTTON,
     SHIFT_MODIFIER,
 )
+from .font import DEFAULT_FONT_PT
 
 __all__ = [
     "Surface",
@@ -183,6 +183,18 @@ class Surface:
         """A button went down; *double* for the second press of a double click."""
         return False
 
+    def close(self) -> None:
+        """Release application resources when the host's window closes."""
+
+    def set_frame_request_callback(self, callback) -> None:
+        self._frame_request_callback = callback
+
+    def request_frame(self) -> None:
+        """Wake the host after an external update, including from a worker."""
+        callback = getattr(self, "_frame_request_callback", None)
+        if callback is not None:
+            callback()
+
     def on_pointer_move(self, x: float, y: float, buttons: int,
                         modifiers: int) -> bool:
         """The pointer moved; *buttons* is the mask of buttons held."""
@@ -206,6 +218,10 @@ class Surface:
         must be honest: a surface that claims every key takes reload, find
         and the developer console away from the page.
         """
+        return False
+
+    def on_key_release(self, key: int, text: str, modifiers: int) -> bool:
+        """A key came up. Hosts deliver this even when the surface ignored its press."""
         return False
 
     def on_files_dropped(self, paths: Sequence[str]) -> bool:
@@ -251,6 +267,7 @@ class ControlSurface(Surface):
         self._painter = None
         self._painter_ratio: float | None = None
         self._pressed = False
+        self._closed = False
 
     # -- geometry -------------------------------------------------------- #
     def _box(self) -> tuple[float, float, float, float]:
@@ -262,6 +279,20 @@ class ControlSurface(Surface):
         return handler if callable(handler) else None
 
     # -- lifecycle ------------------------------------------------------- #
+    def set_frame_request_callback(self, callback) -> None:
+        setter = self._hook("set_frame_request_callback")
+        if setter is not None:
+            setter(callback)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self.set_frame_request_callback(None)
+        hook = self._hook("close")
+        if hook is not None:
+            hook()
+
     def attach(self, device, format, width, height, ratio) -> None:
         from .wgpu_host import WgpuRenderer  # noqa: PLC0415
 
@@ -272,6 +303,9 @@ class ControlSurface(Surface):
     def on_resize(self, width, height, ratio) -> bool:
         self.size = (max(int(width), 1), max(int(height), 1))
         self.ratio = float(ratio) if float(ratio or 0.0) > 0.0 else 1.0
+        resized = self._hook("window_resized")
+        if resized is not None:
+            resized(self.size[0] / self.ratio, self.size[1] / self.ratio)
         return True
 
     def render(self, view) -> None:
@@ -355,6 +389,13 @@ class ControlSurface(Surface):
             return False
         return bool(handler(int(key), str(text or ""), int(modifiers)))
 
+    def on_key_release(self, key, text, modifiers) -> bool:
+        handler = self._hook("key_release")
+        if handler is None:
+            return False
+        handler(int(key), str(text or ""), int(modifiers))
+        return True
+
     def on_files_dropped(self, paths) -> bool:
         handler = self._hook("files_dropped")
         if handler is None:
@@ -395,16 +436,97 @@ class ImApp:
         self.style = style
         self.io = IO()
         self.storage: dict = {}
+        # Native ports use this lightweight registry for guided-tour targets
+        # and named control rectangles.  Keep it private because some apps
+        # already expose a read-only ``item_rects`` property.
+        self._item_rects: dict[str, tuple[float, float, float, float]] = {}
         self.wants_frame = False
+        self._frame_request_callback = None
+        self.close_requested = False
+
+    def set_frame_request_callback(self, callback) -> None:
+        """Install the host's thread-safe redraw scheduler (or detach it)."""
+        self._frame_request_callback = callback
+
+    def request_frame(self) -> None:
+        """Wake an idle host when queued work or data arrives outside a frame."""
+        self.wants_frame = True
+        if self._frame_request_callback is not None:
+            self._frame_request_callback()
+
+    def request_close(self) -> None:
+        """Ask the host to close after the current frame has finished."""
+        self.close_requested = True
+        self.request_frame()
+
+    def remember(self, name: str, rect=None) -> None:
+        """Remember the current item's rectangle under *name*.
+
+        Native EMTK ports use this for help tours and action targeting.  When
+        no rectangle is supplied, the current immediate-mode item rectangle is
+        used; an item that has not been drawn yet is simply ignored.
+        """
+        if rect is None:
+            from . import im
+
+            rect = im.get_item_rect()
+        if rect is not None:
+            target = getattr(self, "item_rects", None)
+            if target is None:
+                target = self._item_rects
+            target[str(name)] = tuple(float(v) for v in rect)
 
     # -- drawing --------------------------------------------------------- #
     def draw(self, painter, x: float, y: float, w: float, h: float) -> None:
         from .im_core import frame  # noqa: PLC0415
 
+        input_changed = bool(any(self.io.mouse_clicked) or any(self.io.mouse_released)
+                             or self.io.key_events or self.io.key or self.io.text
+                             or self.io.mouse_wheel or self.io.mouse_wheel_h)
         with frame(painter, (x, y, w, h), io=self.io, style=self.style,
                    storage=self.storage) as ctx:
             self.gui()
-        self.wants_frame = bool(getattr(ctx, "frame_requested", False))
+        # Changes made late in an input frame (closing a panel, changing a
+        # tab) need one clean redraw even when the host otherwise sleeps.
+        self.wants_frame = input_changed or bool(getattr(ctx, "frame_requested", False))
+
+    def draw_child(self, painter, child, x: float, y: float, w: float, h: float,
+                   *, local_coordinates: bool = False) -> None:
+        """Draw another app's GUI inside a region of this app's canvas.
+
+        The region becomes the child's main viewport, so a child that lays
+        itself out against ``im.get_main_viewport()`` — a dock space, a
+        filling window — fills exactly the region, and the clip keeps the
+        child's overflow off the parent's chrome. Complements the child's
+        ``pointer_*`` / ``wheel`` / ``key`` hooks, which the parent forwards
+        with region-relative coordinates; :meth:`animating` and
+        :meth:`next_frame_in` of the child should be aggregated by the parent
+        so its host keeps repainting while the child animates.
+
+        Unlike translating the host's painter (which only works where the
+        painter *has* a transform — the Qt one does, the GPU one does not),
+        this stays inside the painter contract: any :class:`~.painter.Painter`
+        can host a child.
+
+        With ``local_coordinates=True`` the child's viewport starts at (0, 0)
+        and an OffsetPainter translates all its geometry into the region. The
+        parent then forwards region-relative pointer coordinates. By default
+        the viewport and forwarded pointer coordinates are in canvas space.
+        """
+        push = getattr(painter, "push_clip", None)
+        if callable(push):
+            painter.push_clip(x, y, w, h)
+        try:
+            if local_coordinates:
+                from .offset_painter import OffsetPainter
+
+                child.draw(OffsetPainter(painter, x, y), 0.0, 0.0, w, h)
+            else:
+                child.draw(painter, x, y, w, h)
+        finally:
+            pop = getattr(painter, "pop_clip", None)
+            if callable(pop):
+                painter.pop_clip()
 
     def animating(self) -> bool:
         return self.continuous or self.wants_frame
@@ -451,7 +573,10 @@ class ImApp:
 
     def wheel(self, x, y, steps, modifiers=0) -> None:
         self.io.mouse_pos = (float(x), float(y))
-        self.io.mouse_wheel += float(steps)
+        # Replace, not accumulate: the wheel persists across the nested frames
+        # of a draw pass until a window consumes it, so a new delivery
+        # supersedes whatever an unconsumed earlier notch left behind.
+        self.io.mouse_wheel = float(steps)
         self._modifiers(int(modifiers))
 
     # -- the classic control contract (qt_host, tk_host, wgpu_host) ------ #

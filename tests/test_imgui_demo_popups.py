@@ -128,7 +128,8 @@ def test_a_context_menu_item_reaches_the_caller():
     frames = Frames(_context_gui(state))
     frames.draw()
     frames.click(state["text"], button=1)
-    frames.click(state["zero"])
+    popup = frames.storage[("__state__", ("context_popup", "item context menu"))]["popup"]
+    frames.click(popup.row_rect(0))
     assert state["value"] == 0.0
 
 

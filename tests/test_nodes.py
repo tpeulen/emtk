@@ -1233,3 +1233,34 @@ def test_a_square_is_a_mark_the_size_of_a_disc_and_fills_its_corners():
     outside = lambda r: pixel(r[0] - 3, r[3] - 4)  # noqa: E731
     assert corner(disc) == outside(disc), "a disc painted its corner"
     assert corner(square) != outside(square), "a square left its corner empty"
+
+
+def test_the_grid_draws_at_the_style_s_line_width():
+    """The grid's weight is a style, and the drawn ink follows it.
+
+    The grid is a background, and on a HiDPI screen the integer default
+    doubles to two device pixels -- enough to bury the one-pixel edges a
+    diagram draws on top of it. The assertion is the ink itself: the same
+    empty editor, the same box, only the width different. A width below one
+    pixel fades rather than narrows, so it lands strictly between "no grid"
+    and "a one-pixel grid".
+    """
+
+    def grid_ink(width: float) -> int:
+        def build():
+            nodes.begin_node_editor(ctx, box=(0, 0, 200, 150))
+            nodes.end_node_editor()
+
+        ctx = nodes.EditorContext()
+        ctx.style.grid_line_width = width
+        ctx.style.colors[nodes.Col.GRID_BACKGROUND] = (0, 0, 0, 0)
+        ctx.style.colors[nodes.Col.GRID_LINE] = (255, 255, 255, 255)
+        ctx.style.colors[nodes.Col.GRID_LINE_PRIMARY] = (255, 255, 255, 255)
+        painter = PixelPainter(200, 150, background=(0, 0, 0, 255))
+        _frame(build, painter=painter)
+        return sum(painter.px[o] for o in range(0, len(painter.px), 4))
+
+    assert grid_ink(0.0) == 0, "a zero width still drew grid lines"
+    assert grid_ink(0.5) < grid_ink(1.0) < grid_ink(3.0), (
+        "the ink did not follow the width"
+    )

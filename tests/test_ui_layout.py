@@ -594,3 +594,20 @@ def test_emtks_defaults_are_a_text_line_plus_2_px_and_3_px_apart():
     assert layout.row() == (10.0, 39.0, 200.0, 16.0)
     assert Style().frame_padding == FRAME_PADDING == (4.0, 2.0)
     assert Style().item_spacing == ITEM_SPACING == (8.0, 3.0)
+
+
+def test_move_cursor_to_preserves_content_height_and_origin():
+    """move_cursor_to (SetCursorScreenPos) must not reset layout origin or truncate content_height."""
+    layout = Layout(RecordingPainter(), 0.0, 40.0, 500.0, 500.0)
+    layout.advance(100.0, 100.0)
+    assert layout.content_height() == 100.0
+
+    # Move cursor down (as tables or custom widgets do)
+    layout.move_cursor_to(0.0, 150.0)
+    # Origin must still be 40.0, so height so far is 150 - 40 = 110.0
+    assert layout.content_height() == 110.0
+
+    layout.advance(100.0, 50.0)
+    # Total content height must span from initial origin 40.0 to end 200.0
+    assert layout.content_height() == 160.0
+

@@ -341,6 +341,9 @@ class TkHost:
             self._photo.paste(frame)
         self._frame = frame
         self.frames += 1
+        if getattr(self.control, "close_requested", False):
+            self.close()
+            return
         from .app import window_title  # noqa: PLC0415
 
         title = window_title(self.control)

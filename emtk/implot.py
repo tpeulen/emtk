@@ -1567,6 +1567,10 @@ def _end_plot_render(plot, ctx, io, style, dl) -> None:
                 pos = (axis.datum1 - size[0] - style.label_padding[0], pix - size[1] * 0.5)
                 p.fill_triangle((pos[0] + size[0], pos[1]), (axis.datum1, pix),
                                 (pos[0] + size[0], pos[1] + size[1]), bg)
+            # A tag at the top or bottom edge keeps its pointer but slides its
+            # box just inside the plot, the way the reference clamps it --
+            # unclamped, half the label is cut off by the frame.
+            pos = (pos[0], min(max(pos[1], pr[1]), pr[3] - size[1]))
         else:
             if axis.is_opposite():
                 pos = (pix - size[0] * 0.5, axis.datum1 - size[1] - style.label_padding[1])
@@ -1575,6 +1579,8 @@ def _end_plot_render(plot, ctx, io, style, dl) -> None:
             else:
                 pos = (pix - size[0] * 0.5, axis.datum1 + style.label_padding[1])
                 p.fill_triangle(pos, (pix, axis.datum1), (pos[0] + size[0], pos[1]), bg)
+            # Same clamp across the left and right edges.
+            pos = (min(max(pos[0], pr[0]), pr[2] - size[0]), pos[1])
         _fill((pos[0], pos[1], pos[0] + size[0], pos[1] + size[1]), bg)
         _add_text((pos[0] + style.annotation_padding[0], pos[1] + style.annotation_padding[1]), fg, txt)
 

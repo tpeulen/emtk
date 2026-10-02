@@ -10,7 +10,6 @@ import sys
 import types
 
 import pytest
-
 from emtk.app import ControlSurface, ImApp, Surface, as_surface, load_app
 from emtk.events import LEFT_BUTTON, RIGHT_BUTTON, SHIFT_MODIFIER
 from emtk.testing import PixelPainter
@@ -42,6 +41,9 @@ class _Control:
     def key(self, key, text="", modifiers=0):
         self.calls.append(("key", (key, text, modifiers)))
         return text == "q"
+
+    def key_release(self, key, text="", modifiers=0):
+        self.calls.append(("key_release", (key, text, modifiers)))
 
 
 @pytest.fixture
@@ -86,6 +88,12 @@ def test_key_consumption_is_the_control_s_answer(lifted):
     control, surface = lifted
     assert surface.on_key_press(0, "q", 0) is True
     assert surface.on_key_press(0, "w", 0) is False
+
+
+def test_key_release_reaches_the_control_hook(lifted):
+    control, surface = lifted
+    assert surface.on_key_release(ord("a"), "a", SHIFT_MODIFIER) is True
+    assert control.calls == [("key_release", (ord("a"), "a", SHIFT_MODIFIER))]
 
 
 def test_rich_hooks_win_when_a_control_has_them():
@@ -161,6 +169,8 @@ def test_imapp_runs_the_gui_and_feeds_it_a_click():
         if clicks:
             break
     assert clicks, "a press and release between two frames never clicked the button"
+    assert app.animating() is True, "the input frame must request one clean redraw"
+    _frame(app)
     assert app.animating() is False, "an idle gui asked for continuous frames"
     assert ImApp(gui, continuous=True).animating() is True
 
@@ -176,6 +186,12 @@ def test_imapp_is_also_a_classic_control():
     assert app.io.mouse_wheel == 1.0
     app.key(0, "a", SHIFT_MODIFIER)
     assert app.io.text == "a" and app.io.key_shift
+
+
+def test_imapp_remember_records_named_item_rectangles():
+    app = ImApp(lambda: None)
+    app.remember("run", (1, 2, 30, 40))
+    assert app._item_rects["run"] == (1.0, 2.0, 30.0, 40.0)
 
 
 def test_keys_typed_between_two_frames_all_reach_the_frame():

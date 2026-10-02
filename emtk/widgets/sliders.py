@@ -77,6 +77,8 @@ __all__ = [
     "INNER_SPACING",
     "ratio_from_value",
     "value_from_ratio",
+    "parse_precision",
+    "round_to_format",
     "SliderScalar",
     "SliderInt",
     "VSliderFloat",
@@ -142,12 +144,14 @@ def _format_start(fmt: str) -> str:
     return ""
 
 
-def _parse_precision(fmt: str, default_precision: int = 3) -> int:
-    """How many decimals ``fmt`` shows.
+def parse_precision(fmt: str, default_precision: int = 3) -> int:
+    r"""How many decimals ``fmt`` shows.
 
     A port of the reference's ``ImParseFormatPrecision``: the digits after the
     dot, with scientific and shortest-form conversions reporting ``-1`` for
-    "as much as it takes".
+    "as much as it takes". Published (with :func:`round_to_format`) because a
+    Ctrl+Click edit on a slider needs the same authority on precision the
+    drag that produced the value used.
 
     Parameters
     ----------
@@ -191,13 +195,15 @@ def _parse_precision(fmt: str, default_precision: int = 3) -> int:
     return default_precision if precision is None else precision
 
 
-def _round_to_format(fmt: str, value: float) -> float:
-    """``value`` as it would read once written through ``fmt``, back as a number.
+def round_to_format(fmt: str, value: float) -> float:
+    r"""``value`` as it would read once written through ``fmt``, back as a number.
 
     The reference's ``RoundScalarWithFormatT``, and the reason a ``%.2f``
     slider stores ``0.25`` rather than ``0.2500000037``: a value that displays
     rounded but stores unrounded is a value that changes the moment anybody
-    types the number they can see.
+    types the number they can see. Published (with :func:`parse_precision`)
+    for the immediate-mode sliders' Ctrl+Click edits, which round the typed
+    text through the same format the track rounds its drag.
 
     Parameters
     ----------
@@ -540,7 +546,7 @@ class SliderScalar:
         """
         if not self.logarithmic:
             return 0.0
-        precision = 1 if self.is_int else _parse_precision(self.fmt, 3)
+        precision = 1 if self.is_int else parse_precision(self.fmt, 3)
         return pow(0.1, float(precision))
 
     @property
@@ -577,7 +583,7 @@ class SliderScalar:
         raw = value_from_ratio(t, self.v_min, self.v_max, self.log_epsilon,
                                self.deadzone, self.is_int)
         if not self.is_int and self.round_to_format:
-            raw = _round_to_format(self.fmt, raw)
+            raw = round_to_format(self.fmt, raw)
         self.value = self._coerce(raw)
         return self.value
 

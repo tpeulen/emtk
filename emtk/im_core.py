@@ -84,6 +84,13 @@ CASCADE_FRACTION = 0.6
 CASCADE_STEP = 28.0
 
 
+def _intersect_rects(a, b):
+    """The overlap of two ``(x, y, w, h)`` rectangles (zero-sized when they do not meet)."""
+    x0, y0 = max(a[0], b[0]), max(a[1], b[1])
+    x1, y1 = min(a[0] + a[2], b[0] + b[2]), min(a[1] + a[3], b[1] + b[3])
+    return (x0, y0, max(x1 - x0, 0.0), max(y1 - y0, 0.0))
+
+
 class ButtonFlags:
     NONE = 0
     MOUSE_BUTTON_LEFT = 1 << 0
@@ -195,8 +202,10 @@ class IO:
         self.mouse_clicked = [False, False, False]
         self.mouse_released = [False, False, False]
         self.mouse_double_clicked = [False, False, False]
-        self.mouse_wheel = 0.0
-        self.mouse_wheel_h = 0.0
+        # The mouse wheel is NOT cleared here: nested frames of one draw pass
+        # (hub-embedded apps) share this IO, and the outer frame ends before
+        # the inner one can consume the wheel. The next wheel delivery replaces
+        # the value instead of accumulating into it.
         self.key = 0
         self.text = ""
         self.key_events = []
@@ -365,7 +374,9 @@ class Style:
     colors: dict = field(default_factory=_default_colors)
 
     def color(self, which, default=(200, 200, 200, 255)):
-        return self.colors.get(which, default)
+        from .painter import colour_bytes
+
+        return colour_bytes(self.colors.get(which, default))
 
 
 
@@ -490,6 +501,9 @@ class Context:
         #: (:meth:`request_frame_at`), or ``None``.
         self.frame_due_at: Optional[float] = None
         self._popups: dict = self.storage.setdefault("__popups__", {})
+        self._context_popup_stack: list[str] = []
+        self._context_popup_builds: dict[str, list] = {}
+        self._context_popup_last_item = None
         self.tooltip: Optional[str] = None
         #: The item :attr:`tooltip` belongs to: what "the pointer rests on
         #: the same item" compares (:mod:`emtk.tooltip`).
@@ -536,6 +550,8 @@ class Context:
         #: context because a context lives one frame and this has to outlive
         #: the frame that set it.
         self.storage.setdefault("__window_placement__", PLACE_FRAME)
+        self.hovered_child: Any = None
+        self.hovered_child_previous_frame: Any = self.storage.get("__hovered_child__")
         self.hovered_window: Optional[_Window] = None
         self._window_stack: list[_Window] = []
         self.current_window: Optional[_Window] = None
@@ -559,10 +575,14 @@ class Context:
         self.hovered_id = None
         self.hovered_id_allow_overlap = False
         self._active_id_alive = False
+        self.hovered_child_previous_frame = self.storage.get("__hovered_child__")
+        self.hovered_child = None
+        self.storage["__hovered_child__"] = None
         self.hold_input_for_overlays()
-        self.hovered_window = self.find_hovered_window(*self.io.mouse_pos)
+        self._replay_dismissed_click()
         for window in self.windows:
             window.was_active, window.active = window.active, False
+        self.hovered_window = self.find_hovered_window(*self.io.mouse_pos)
         self.layout.reset(*self.box)
 
     def end_frame(self) -> None:
@@ -602,6 +622,8 @@ class Context:
         self.io.want_text_input = bool(getattr(self, "_want_text_input", False))
         self._want_text_input = False
         self.io.want_capture_mouse = self.hovered_window is not None or overlay_open
+        # A nested frame (draw_child) hands unconsumed wheel to the child
+        # frame that follows it in the same draw pass.
         self.io.end_event()
 
     # -- keyboard navigation --------------------------------------------- #
@@ -811,6 +833,11 @@ class Context:
         if self.io.mouse_pos == (-1.0, -1.0) or not hit(*self.io.mouse_pos, *box):
             return False
         if not self._overlaps_clip(box):
+            return False
+        # ImGui's IsMouseHoveringRect clips the rectangle by the clip rect before it tests the
+        # pointer: an item scrolled out of a child region keeps its box, and without this test it
+        # was still hovered (and clicked) wherever the pointer was over that hidden box.
+        if not hit(*self.io.mouse_pos, *self.clip_rect):
             return False
         key = item_id if item_id is not None else box
         if (self.hovered_id is not None and self.hovered_id != key
@@ -1233,18 +1260,12 @@ class Context:
             self.windows.append(window)
 
     # -- child regions ------------------------------------------------------------- #
-    def begin_child(self, box: Rect, clip: bool = True) -> Layout:
+    def begin_child(self, box: Rect, clip: bool = True, child_id: Any = None, scrollable: bool = True) -> Layout:
         """Lay out inside *box* until :meth:`end_child`; the parent's cursor is
         restored after.
 
-        A non-positive width or height means *fill the available content
-        region*, as it does in the reference and as ``implot.begin_plot``
-        already does for its size -- and ``-1`` means "all but one pixel".
-        The reference's own idiom is ``BeginChild(id, ImVec2(w, 0))`` for a
-        column that should run the full height, so reading the zero
-        literally gave a child of no height: every panel inside it drew into
-        nothing, the call still succeeded, and cmc's main window came out as
-        a four-pixel splitter bar with the whole interface missing beside it.
+        Supports vertical scrolling via mouse wheel and interactive scrollbar
+        when content height exceeds the child region bounds.
         """
         x, y, w, h = box
         if w <= 0.0 or h <= 0.0:
@@ -1252,26 +1273,123 @@ class Context:
             w = avail_w + w if w <= 0.0 else w
             h = avail_h + h if h <= 0.0 else h
             box = (x, y, max(w, 0.0), max(h, 0.0))
-        self._child.append((self.layout, box))
+
+        cid = child_id if child_id is not None else (round(box[0], 1), round(box[1], 1))
+        child_key = ("__child__", *self._ids, cid)
+        state = self.storage.setdefault(child_key, {})
+
+        mx, my = self.io.mouse_pos
+        is_hovered = (box[0] <= mx <= box[0] + box[2] and box[1] <= my <= box[1] + box[3])
+        if is_hovered and scrollable:
+            self.hovered_child = child_key
+            self.storage["__hovered_child__"] = child_key
+
+        if not scrollable:
+            state["scroll_y"] = 0.0
+            state["content_height"] = box[3]
+            state["dragging"] = False
+            self._child.append((self.layout, box, state, clip, 0.0, False, False, self.clip_rect))
+            if clip:
+                self.p.push_clip(*box)
+                self.clip_rect = _intersect_rects(self.clip_rect, box)
+            self.layout = Layout(self.p, box[0], box[1], box[2], box[3], style=self.layout.style)
+            return self.layout
+
+        prev_content_h = float(state.get("content_height", box[3]))
+        has_overflow = prev_content_h > box[3] + 1.0
+        scrollbar_w = 8.0 if has_overflow else 0.0
+
+        max_scroll = max(0.0, prev_content_h - box[3])
+        scroll_y = float(state.get("scroll_y", 0.0))
+
+        # Mouse wheel scrolling: 40px per notch (Qt / Dear ImGui convention: positive steps scroll up / content moves down)
+        # In nested scroll areas, route wheel to the innermost hovered child
+        # A child with nothing to scroll leaves the wheel to the widgets inside it (a node
+        # editor or plot zooms with it); only a child that can scroll takes it.
+        if is_hovered and self.io.mouse_wheel != 0.0 and has_overflow:
+            target_child = self.hovered_child_previous_frame
+            if target_child is None or target_child == child_key:
+                scroll_y -= self.io.mouse_wheel * 40.0
+                self.io.mouse_wheel = 0.0
+
+        # Scrollbar interaction
+        bar_x = box[0] + box[2] - 8.0 - 2.0
+        bar_y = box[1] + 2.0
+        bar_h = box[3] - 4.0
+        if has_overflow and bar_h > 12.0:
+            thumb_h = max(18.0, bar_h * (box[3] / max(prev_content_h, 1.0)))
+            travel = bar_h - thumb_h
+
+            if self.io.mouse_down[0]:
+                if not state.get("dragging", False):
+                    # Check if mouse pressed on scrollbar track or thumb
+                    if (bar_x - 3.0 <= mx <= bar_x + 12.0 and bar_y <= my <= bar_y + bar_h):
+                        state["dragging"] = True
+                        curr_thumb_y = bar_y + (travel * (scroll_y / max_scroll) if max_scroll > 0 else 0.0)
+                        if curr_thumb_y <= my <= curr_thumb_y + thumb_h:
+                            state["drag_offset"] = my - curr_thumb_y
+                        else:
+                            state["drag_offset"] = thumb_h * 0.5
+                            new_thumb_y = my - state["drag_offset"]
+                            frac = (new_thumb_y - bar_y) / max(1.0, travel)
+                            scroll_y = frac * max_scroll
+                else:
+                    new_thumb_y = my - state.get("drag_offset", thumb_h * 0.5)
+                    frac = (new_thumb_y - bar_y) / max(1.0, travel)
+                    scroll_y = frac * max_scroll
+            else:
+                state["dragging"] = False
+
+        scroll_y = max(0.0, min(scroll_y, max_scroll))
+        state["scroll_y"] = scroll_y
+
+        self._child.append((self.layout, box, state, clip, scrollbar_w, has_overflow, True, self.clip_rect))
         if clip:
             self.p.push_clip(*box)
-        self.layout = Layout(self.p, *box, style=self.layout.style)
+            # Hit-testing uses the clip rect, not the painter's: narrow it too, or a row scrolled
+            # out of this child stays clickable at its hidden position.
+            self.clip_rect = _intersect_rects(self.clip_rect, box)
+
+        child_w = max(1.0, box[2] - (scrollbar_w + 3.0 if has_overflow else 0.0))
+        child_h = max(box[3], box[3] + scroll_y)
+        self.layout = Layout(self.p, box[0], box[1] - scroll_y, child_w, child_h, style=self.layout.style)
         return self.layout
 
     def end_child(self, clip: bool = True) -> Rect:
-        """Close a child and advance the parent past it.
+        """Close a child, draw scrollbar on overflow, and advance the parent past it."""
+        entry = self._child.pop()
+        layout, box, state, pushed_clip, scrollbar_w, has_overflow = entry[:6]
+        is_scrollable = entry[6] if len(entry) > 6 else True
 
-        ``EndChild`` is an *item* in the reference: it calls ``ItemSize`` on
-        the parent, so the next thing submitted goes below (or beside, after
-        ``SameLine``) the child rather than on top of it. Restoring the
-        parent's layout without advancing it left every child starting at
-        the same cursor -- cmc's main window drew its device panel, its
-        acquisition panel, its statistics and its plots all stacked on the
-        same few rows, each overwriting the last.
-        """
-        layout, box = self._child.pop()
-        if clip:
+        actual_content_h = self.layout.content_height()
+        state["content_height"] = actual_content_h
+
+        if pushed_clip:
             self.p.pop_clip()
+            if len(entry) > 7:
+                self.clip_rect = entry[7]
+
+        # Render scrollbar if content overflows
+        if is_scrollable and actual_content_h > box[3] + 1.0 and box[3] > 14.0:
+            bar_x = box[0] + box[2] - 8.0 - 2.0
+            bar_y = box[1] + 2.0
+            bar_h = box[3] - 4.0
+            thumb_h = max(18.0, bar_h * (box[3] / max(actual_content_h, 1.0)))
+            travel = bar_h - thumb_h
+            max_s = max(0.0, actual_content_h - box[3])
+            curr_s = state.get("scroll_y", 0.0)
+            thumb_y = bar_y + (travel * (curr_s / max_s) if max_s > 0 else 0.0)
+
+            # Draw track background
+            self.p.fill_rect(bar_x, bar_y, 8.0, bar_h, (25, 28, 35, 120))
+
+            # Draw thumb
+            mx, my = self.io.mouse_pos
+            is_drag = state.get("dragging", False)
+            is_hover = (bar_x - 3.0 <= mx <= bar_x + 12.0 and thumb_y <= my <= thumb_y + thumb_h)
+            thumb_col = (160, 175, 205, 230) if (is_drag or is_hover) else (95, 105, 125, 170)
+            self.p.fill_rect(bar_x + 1.0, thumb_y, 6.0, thumb_h, thumb_col)
+
         self.layout = layout
         self.layout.advance(box[2], box[3])
         return box
@@ -1333,6 +1451,31 @@ class Context:
         io.mouse_wheel = io.mouse_wheel_h = 0.0
         io.key, io.text, io.key_events = 0, "", []
 
+    def _replay_dismissed_click(self) -> None:
+        """Feed back the press that closed a popup, when nothing took it.
+
+        The frame that ran while the popup was up saw no input (it was held
+        for the overlay), so the dismissing press reached nothing. Delivered
+        here as one complete click -- down edge and up edge together -- so a
+        button under the pointer fires and a second menu title opens without
+        a second click. Dropped when another overlay is already up: its input
+        wins, and a replay must not land behind its back.
+
+        Kept in ``storage``, not on the context: a context is one frame.
+        """
+        replay = self.storage.pop("__replay_click__", None)
+        if replay is None:
+            return
+        if self.overlay_open():
+            return
+        button, x, y = replay
+        io = self.io
+        io.mouse_pos = (float(x), float(y))
+        io.mouse_clicked_pos[button] = (float(x), float(y))
+        io.mouse_clicked[button] = True
+        io.mouse_released[button] = True
+        io.mouse_down[button] = False
+
     def draw_overlays(self) -> None:
         """Run this frame's overlays, over everything, with the input held back.
 
@@ -1366,17 +1509,182 @@ class Context:
     def open_popup(self, name: str) -> None:
         self._popups[name] = True
 
+    def open_context_popup(self, name: str, position: tuple[float, float]) -> None:
+        """Open a menu overlay anchored to a context-click position."""
+        for key, value in self.storage.items():
+            if (isinstance(key, tuple) and len(key) == 2 and key[0] == "__state__"
+                    and isinstance(key[1], tuple) and key[1][:1] == ("context_popup",)
+                    and isinstance(value, dict)):
+                value["open"] = False
+                self._popups[key[1][1]] = False
+                old_popup = value.get("popup")
+                if old_popup is not None:
+                    old_popup.close()
+        state = self.state(("context_popup", name))
+        state.update(open=True, selected=None, position=tuple(position), just_opened=True,
+                     dispatched=False)
+        self._popups[name] = True
+
     def is_popup_open(self, name: str) -> bool:
         return bool(self._popups.get(name))
 
     def close_current_popup(self, name: str) -> None:
         self._popups[name] = False
+        state = self.storage.get(("__state__", ("context_popup", name)))
+        if state is not None:
+            state["open"] = False
+            popup = state.get("popup")
+            if popup is not None:
+                popup.close()
 
     def begin_popup(self, name: str) -> bool:
+        state = self.state(("context_popup", name))
+        if state.get("open") or state.get("selected") is not None:
+            self._context_popup_stack.append(name)
+            self._context_popup_builds[name] = []
+            self._context_popup_last_item = None
+            return True
         return self.is_popup_open(name)
 
     def end_popup(self) -> None:
-        pass
+        if not self._context_popup_stack:
+            return
+        name = self._context_popup_stack.pop()
+        entries = self._context_popup_builds.pop(name, [])
+        state = self.state(("context_popup", name))
+        if state.pop("dispatched", False):
+            state["open"] = False
+            self._popups[name] = False
+            # The pick is spent; the stored position goes with it, and the
+            # title is told the popup closed under this frame -- its own
+            # "open" outlived the popup and would otherwise re-open (and, on
+            # a reused panel, re-open invisibly) every frame after.
+            state.pop("position", None)
+            state["closed"] = True
+            popup = state.get("popup")
+            if popup is not None:
+                popup.close()
+            return
+        if not state.get("open") or not entries:
+            return
+
+        popup = state.get("popup")
+        if popup is None:
+            from .widgets.menus import Popup
+
+            popup = state["popup"] = Popup(entries)
+            popup.open_at(*state["position"])
+            popup.open = True
+        else:
+            # A popup closed by a pick is reused when its menu opens again:
+            # the state says open, so the panel says open with it -- and is
+            # re-anchored, because the point it was opened at last time says
+            # nothing about where the title sits now (the window moved, the
+            # dock moved) and a stale anchor is a menu that opens in the
+            # wrong place.
+            popup.entries = entries
+            popup.open_at(*state["position"])
+            popup.open = True
+
+        def draw_overlay(ctx: "Context") -> bool:
+            current = state.get("popup")
+            if current is None or not state.get("open"):
+                return False
+            current.entries = entries
+            if state.pop("just_opened", False):
+                current.draw(ctx.p, *ctx.box)
+                return True
+
+            x, y = ctx.io.mouse_pos
+            if ctx.io.mouse_wheel:
+                current.wheel(x, y, ctx.io.mouse_wheel)
+            if any(ctx.io.mouse_released):
+                current.release()
+            if any(ctx.io.mouse_down) and not any(ctx.io.mouse_clicked):
+                current.drag(x, y)
+            current.draw(ctx.p, *ctx.box)
+            current.hover(x, y)
+
+            selected = None
+            if any(ctx.io.mouse_clicked) and not current.contains(x, y):
+                # A press outside the panel dismisses the popup — the standard
+                # menu contract. Without it the overlay stayed open forever and
+                # swallowed every subsequent click. The press itself is not
+                # spent: recorded for the next frame, so it lands on whatever
+                # is under the pointer, exactly as a plain popup's does in the
+                # reference -- a second menu title opens on the same click,
+                # and a click meant for a control under the menu reaches it.
+                # The one exception is the press on the open menu's own title:
+                # that is a toggle-off, and replaying it would re-open what
+                # the click just closed.
+                rect = (getattr(ctx, "_menu_title_rects", {}) or {}).get(name)
+                on_own_title = (rect is not None
+                                and rect[0] <= x < rect[0] + rect[2]
+                                and rect[1] <= y < rect[1] + rect[3])
+                if not on_own_title:
+                    for button in (0, 1, 2):
+                        if ctx.io.mouse_clicked[button]:
+                            self.storage["__replay_click__"] = (button, x, y)
+                            break
+                state["open"] = False
+                self._popups[name] = False
+                return False
+            if any(ctx.io.mouse_clicked):
+                result = current.press(x, y, *ctx.box)
+                if result.item is not None:
+                    # The pick is remembered by label, not by index: the menu
+                    # rebuilds its items every frame, and a menu whose item
+                    # list shifts -- Run's first row flips between "Run
+                    # Script" and "Stop" the moment a script starts -- would
+                    # deliver the pick to whatever sits at that index now.
+                    selected = getattr(result.item, "label", None)
+                elif result.closed:
+                    state["open"] = False
+                    self._popups[name] = False
+            elif ctx.io.key_events:
+                for key, text, modifiers in ctx.io.key_events:
+                    result = current.key(key, text, modifiers)
+                    if result.item is not None:
+                        selected = getattr(result.item, "label", None)
+                    if result.closed:
+                        state["open"] = False
+                        self._popups[name] = False
+                    if selected is not None or result.closed:
+                        break
+            if selected is not None:
+                state["selected"] = selected
+                state["open"] = False
+                self._popups[name] = False
+                return False
+            if current.tooltip:
+                ctx.set_tooltip(current.tooltip, owner=("context-popup", name))
+            return bool(state.get("open"))
+
+        self.add_overlay(("context-popup", name), draw_overlay)
+
+    def context_menu_item(self, label: str, shortcut: str = "", selected: bool = False,
+                          enabled: bool = True) -> bool:
+        """Record a context-popup menu row and return its deferred selection."""
+        if not self._context_popup_stack:
+            return False
+        from .widgets.menus import MenuItem
+        from .i18n import tr
+
+        name = self._context_popup_stack[-1]
+        entries = self._context_popup_builds[name]
+        item = MenuItem(tr(label), shortcut=shortcut, checked=selected, enabled=enabled)
+        entries.append(item)
+        state = self.state(("context_popup", name))
+        self._context_popup_last_item = item
+        # The pending pick is a label (see the overlay): a menu whose items
+        # changed between the press and this frame dispatches the row it
+        # named, not whatever now sits at its old position.
+        if state.get("selected") is not None and state.get("selected") == item.label:
+            state["selected"] = None
+            state["dispatched"] = True
+            self._context_popup_last_item = None
+            return bool(enabled)
+        return False
 
     def set_tooltip(self, text: str, owner: Any = None) -> None:
         """This frame's tooltip, belonging to *owner* (the hovered item by default).

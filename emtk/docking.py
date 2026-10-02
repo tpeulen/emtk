@@ -612,6 +612,7 @@ class DockWindow:
     anchor: Optional[str] = None
     min_size: Tuple[float, float] = (120.0, 60.0)
     padding: float = 6.0
+    scrollable: bool = True
     frame: Optional[Rect] = None
     content: Optional[Rect] = None
 
@@ -690,6 +691,8 @@ class DockManager:
         self._defaults: Dict[str, dict] = {}
         self._saved: dict = {}
         self._drag: Optional[dict] = None
+        self._context_targets: Dict[str, Optional[str]] = {}
+        self._context_positions: Dict[str, Tuple[float, float]] = {}
         #: While a window is dragged: the region under the pointer.
         self.drop_target: Optional[str] = None
         self._hint_edges: Tuple[str, ...] = ()
@@ -1390,6 +1393,9 @@ class DockManager:
         ctx.begin(area, self.box, WindowFlags.NO_BACKGROUND)
         submitted.append(area)
         self._draw_splitters(ctx)
+        if not self.region_boxes and not any(win.visible for win in self.windows.values()):
+            if ctx.item_add(self.box, self._id("empty", self.name)) and io.mouse_clicked[1]:
+                self._open_context(ctx, "empty", None)
         ctx.end()
 
         for region, rect in self.region_boxes.items():
@@ -1417,6 +1423,8 @@ class DockManager:
         submitted.append(overlay)
         self._draw_overlay(ctx)
         ctx.end()
+        for scope in list(self._context_targets):
+            self._draw_context(ctx, scope)
         self._sync_order(ctx, submitted, before)
         if self._drag is None:
             self.flush()
@@ -1482,11 +1490,18 @@ class DockManager:
         ctx.p.push_clip(x, y, max(right - x, 0.0), th)
         for key in shown:
             win = self.windows[key]
-            tw = ctx.p.text_width(win.title) + pad_x * 2.0 + 6.0
+            from .i18n import tr
+
+            title = tr(win.title)
+            tw = ctx.p.text_width(title) + pad_x * 2.0 + 6.0
             tab = (cursor, y + 1.0, tw, th - 1.0)
             rects.append((key, tab))
             item = self._id("tab", key)
             hovered = ctx.item_add(tab, item)
+            if hovered:
+                ctx.set_tooltip(f"{title}\nDrag to move this panel; right-click for panel actions.")
+            if hovered and io.mouse_clicked[1]:
+                self._open_context(ctx, region, key)
             if hovered and io.mouse_clicked[0] and self._drag is None:
                 if self.selected.get(region) != key:
                     self.selected[region] = key
@@ -1501,15 +1516,18 @@ class DockManager:
                                  style.color(colour))
             text_h = ctx.p.line_height()
             draw.add_text((tab[0] + pad_x + 3.0, tab[1] + (tab[3] - text_h) / 2.0),
-                          style.color(_core.Col.TEXT), win.title)
+                          style.color(_core.Col.TEXT), title)
             cursor += tw + 2.0
         ctx.p.pop_clip()
         self._tab_rects[region] = rects
         # The rest of the strip drags the tab on top, as its title bar would.
         rest = (cursor, y, max(right - cursor, 0.0), th)
-        if top is not None and rest[2] > 0:
+        if rest[2] > 0:
             item = self._id("strip", region)
-            if ctx.item_add(rest, item) and io.mouse_clicked[0] and self._drag is None:
+            hovered = ctx.item_add(rest, item)
+            if hovered and io.mouse_clicked[1]:
+                self._open_context(ctx, region, top)
+            if top is not None and hovered and io.mouse_clicked[0] and self._drag is None:
                 self._drag = {"kind": "tab", "region": region, "key": top, "id": item,
                               "start": tuple(io.mouse_pos), "grab_x": 40.0}
                 ctx.set_active_id(item)
@@ -1548,7 +1566,11 @@ class DockManager:
                 self._changed()
         title_rect = (x + th, y, max(right - x - th, 0.0), th)
         item = self._id("title", win.key)
-        if ctx.item_add(title_rect, item) and io.mouse_clicked[0] and self._drag is None:
+        hovered = ctx.item_add(title_rect, item)
+        context = f"floating.{win.key}"
+        if hovered and io.mouse_clicked[1]:
+            self._open_context(ctx, context, win.key)
+        if hovered and io.mouse_clicked[0] and self._drag is None:
             if io.mouse_double_clicked[0]:
                 win.collapsed = not win.collapsed
                 self._changed()
@@ -1557,8 +1579,10 @@ class DockManager:
                                  alone=bool(io.key_shift))
         ctx.p.push_clip(*title_rect)
         text_h = ctx.p.line_height()
+        from .i18n import tr
+
         draw.add_text((title_rect[0] + 2.0, y + (th - text_h) / 2.0),
-                      style.color(_core.Col.TEXT), win.title)
+                      style.color(_core.Col.TEXT), tr(win.title))
         ctx.p.pop_clip()
         if win.collapsed:
             win.content = None
@@ -1581,12 +1605,63 @@ class DockManager:
             colour = style.color(_core.Col.BUTTON_HOVERED if grip_hot else _core.Col.HEADER)
             draw.add_triangle_filled((gx + gw, gy), (gx + gw, gy + gh), (gx, gy + gh), colour)
 
+    def _open_context(self, ctx, scope: str, key: Optional[str]) -> None:
+        self._context_targets[scope] = key
+        self._context_positions[scope] = tuple(ctx.io.mouse_pos)
+        ctx.open_popup(f"##{self.name}.context.{scope}")
+
+    def _draw_context(self, ctx, scope: str) -> None:
+        from . import im
+
+        if not ctx.begin_popup(f"##{self.name}.context.{scope}"):
+            return
+        win = self.windows.get(self._context_targets.get(scope))
+        rows = 1 + sum(not panel.visible for panel in self.windows.values())
+        if win is not None:
+            rows += 3 if self.region_of(win.key) is not None else 2 + len(self.regions)
+        width = min(260.0, self.box[2])
+        height = min(rows * self._title_h + 16.0, self.box[3])
+        px, py = self._context_positions[scope]
+        px = max(self.box[0], min(px, self.box[0] + self.box[2] - width))
+        py = max(self.box[1], min(py, self.box[1] + self.box[3] - height))
+        menu_box = (px, py, width, height)
+        if (ctx.io.mouse_clicked[0] or ctx.io.mouse_clicked[1]) and not _hit(*ctx.io.mouse_pos, menu_box):
+            ctx.close_current_popup(f"##{self.name}.context.{scope}")
+            return
+        ctx.begin(f"##{self.name}.context-window.{scope}", menu_box)
+        if win is not None:
+            if self.region_of(win.key) is not None:
+                if im.menu_item("Undock", enabled=win.movable):
+                    self.undock(win.key)
+                    im.close_current_popup()
+            elif win.dockable:
+                for region in self.regions:
+                    if im.menu_item(f"Dock in {region}"):
+                        self.dock(win.key, region)
+                        im.close_current_popup()
+            if im.menu_item("Close panel", enabled=win.closable):
+                self.hide(win.key)
+                im.close_current_popup()
+            im.separator()
+        for key, panel in self.windows.items():
+            if not panel.visible and im.menu_item(f"Show {panel.title}##{key}"):
+                self.show(key)
+                region = self.region_of(key)
+                if region is not None:
+                    self.selected[region] = key
+                im.close_current_popup()
+        if im.menu_item("Restore default layout"):
+            self.reset()
+            im.close_current_popup()
+        ctx.end()
+        ctx.end_popup()
+
     def _draw_content(self, ctx, win: DockWindow, body: Rect) -> None:
         x, y, w, h = body
         p = win.padding
         content = (x + p, y + p, max(w - 2.0 * p, 1.0), max(h - 2.0 * p, 1.0))
         win.content = content
-        ctx.begin_child(content)
+        ctx.begin_child(content, scrollable=win.scrollable)
         ctx.push_id(("dockwin", win.key))
         try:
             if win.draw is not None:
@@ -1600,6 +1675,11 @@ class DockManager:
     def _button(self, ctx, rect: Rect, item, label: Optional[str]) -> bool:
         """A title-bar button: highlighted under the pointer, pressed on release."""
         hovered, held, pressed = ctx.button_behavior(rect, item)
+        if hovered:
+            from .i18n import tr
+
+            ctx.set_tooltip(tr("Close this panel; reopen it from a dock header context menu.")
+                            if label == "×" else tr("Collapse or expand this panel."))
         if hovered or held:
             x, y, w, h = rect
             ctx.draw.add_rect_filled((x + 2.0, y + 2.0), (x + w - 2.0, y + h - 2.0),

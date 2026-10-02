@@ -28,7 +28,7 @@ from emtk.events import (
     RIGHT_BUTTON,
     SHIFT_MODIFIER,
 )
-from emtk.keys import KEY_BACKSPACE, KEY_LEFT, KEY_RETURN
+from emtk.keys import KEY_BACKSPACE, KEY_LEFT, KEY_RETURN, KEY_RIGHT
 from emtk.native import (
     CHAR_BACKENDS,
     SHIFT_MAP,
@@ -210,8 +210,66 @@ def test_a_held_key_repeats_until_released():
     assert [a[0] for _n, a, _k in sink.calls] == [KEY_BACKSPACE] * 3
     canvas.emit("key_up", {"key": "Backspace"})
     loop.fire()
-    assert len(sink.calls) == 3, "a released key kept repeating"
+    assert len([c for c in sink.calls if c[0] == "on_key_press"]) == 3
+    assert sink.calls[-1][0] == "on_key_release"
     assert not loop.pending
+
+
+def test_key_up_reaches_the_surface_and_stops_only_its_repeat():
+    events, canvas, sink, loop = _events("rendercanvas.offscreen")
+    canvas.emit("key_down", {"key": "Backspace", "modifiers": ()})
+    canvas.emit("key_down", {"key": "a", "modifiers": ()})
+    canvas.emit("key_up", {"key": "a", "modifiers": ()})
+    assert sink.calls[-1][0] == "on_key_release"
+    assert sink.calls[-1][1] == (0, "a", 0)
+    assert loop.pending, "releasing another key must not stop Backspace repeat"
+    canvas.emit("key_up", {"key": "Backspace", "modifiers": ()})
+    assert sink.calls[-1][0] == "on_key_release"
+    assert sink.calls[-1][1][0] == KEY_BACKSPACE
+    press_count = sum(call[0] == "on_key_press" for call in sink.calls)
+    loop.fire()
+    assert sum(call[0] == "on_key_press" for call in sink.calls) == press_count
+
+
+def test_focus_loss_releases_all_held_keys():
+    events, canvas, sink, loop = _events("rendercanvas.offscreen")
+    canvas.emit("key_down", {"key": "ArrowLeft", "modifiers": ()})
+    canvas.emit("key_down", {"key": "ArrowRight", "modifiers": ()})
+    events.release_keys()
+    releases = [args[0] for name, args, _kwargs in sink.calls if name == "on_key_release"]
+    assert releases == [KEY_LEFT, KEY_RIGHT]
+    assert events._pressed_keys == {}
+
+
+def test_glfw_focus_callback_chains_rendercanvas_and_releases(monkeypatch):
+    import sys
+    import types
+
+    previous_calls = []
+
+    def prior(_window, focused):
+        previous_calls.append(focused)
+
+    callbacks = {"window": prior}
+
+    def set_focus_callback(window, callback):
+        old = callbacks.get(window)
+        callbacks[window] = callback
+        return old
+
+    fake_glfw = types.SimpleNamespace(
+        set_window_focus_callback=set_focus_callback,
+        set_drop_callback=lambda *_args: None,
+    )
+    monkeypatch.setitem(sys.modules, "glfw", fake_glfw)
+    canvas = _canvas("rendercanvas.glfw")
+    canvas._window = "window"
+    sink = _Sink()
+    CanvasEvents(canvas, sink)
+    canvas.emit("key_down", {"key": "ArrowLeft", "modifiers": ()})
+    callbacks["window"]("window", False)
+    assert previous_calls == [False], "the rendercanvas focus callback must remain chained"
+    assert [name for name, _args, _kw in sink.calls][-1] == "on_key_release"
 
 
 def test_return_does_not_repeat():

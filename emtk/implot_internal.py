@@ -1580,6 +1580,16 @@ class Axis:
     def constrain(self) -> None:
         self.range_min = constrain_nan(constrain_inf(self.range_min))
         self.range_max = constrain_nan(constrain_inf(self.range_max))
+        # A log axis cannot show zero or negative data: left alone, the
+        # transform's DBL_MIN clamp turns an empty or zero-crossing fit into
+        # tick labels like 1e-273. Keep the range on the positive side --
+        # entirely non-positive data falls back to one unit decade.
+        if self.scale == SCALE_LOG10:
+            lo, hi = (self.range_min, self.range_max)
+            if hi <= 0.0:
+                self.range_min, self.range_max = 0.1, 10.0
+            elif lo <= 0.0:
+                self.range_min = hi * 1e-6
         if self.range_min < self.constraint_range[0]:
             self.range_min = self.constraint_range[0]
         if self.range_max > self.constraint_range[1]:

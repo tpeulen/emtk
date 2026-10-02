@@ -172,6 +172,9 @@ class QuadPainter:
                  font_scale: float = 1.0) -> None:
         self._atlas = atlas if atlas is not None else load_atlas()
         self._font_scale = float(font_scale)
+        self._font_spec = None
+        self._font_size_ratio = 1.0
+        self._font_bold = False
         self._data: list[float] = []
         #: ``(quad index, four RGBA tuples)`` for the handful of quads whose
         #: corners differ. See :meth:`vertices`.
@@ -237,6 +240,8 @@ class QuadPainter:
         #: an image lives is the host's knowledge (an atlas it owns), which
         #: is why this is a hook rather than a table.
         self.image_uv_resolver = None
+        self._image_quads = []
+        self._image_triangles = []
         #: Advance width of one character, in logical pixels.
         self._advance = atlas.advance() * self._font_scale
         #: Logical pixels per baked texel, for the glyph quad.
@@ -244,7 +249,7 @@ class QuadPainter:
         self._glyph_w = atlas.cell[0] * self._shrink
         self._glyph_h = atlas.cell[1] * self._shrink
         self._ascent = atlas.ascent
-        self._half_cell_h = atlas.cell[1] * 0.5
+        self._half_cell_h = (atlas.cell[1] - 2 * atlas.pad) * 0.5
         self._pad = atlas.pad
 
     def set_font_scale(self, scale: float) -> None:
@@ -258,10 +263,19 @@ class QuadPainter:
         """
         self._font_scale = float(scale)
         atlas = self._atlas
-        self._advance = atlas.advance() * self._font_scale
-        self._shrink = atlas.render_scale * self._font_scale
+        self._advance = atlas.advance() * self._font_scale * self._font_size_ratio
+        self._shrink = atlas.render_scale * self._font_scale * self._font_size_ratio
         self._glyph_w = atlas.cell[0] * self._shrink
         self._glyph_h = atlas.cell[1] * self._shrink
+
+    def set_font(self, value=None, size=0.0) -> None:
+        """Select an actual family/style, with size in points."""
+        from .font_render import font_spec
+        spec = font_spec(value, size)
+        self._font_spec = spec if spec.family != "monospace" else None
+        self._font_bold = spec.bold
+        self._font_size_ratio = spec.size / self._atlas.font_pt if self._font_spec is None else 1.0
+        self.set_font_scale(self._font_scale)
 
     # -- output ------------------------------------------------------------
 
@@ -310,6 +324,7 @@ class QuadPainter:
         and the type first. Measured at 2.7 ms against 3.2 ms on the old,
         three-times-larger buffer.
         """
+        self._refresh_image_uvs()
         if not self._data:
             if not self._tris:
                 return np.zeros((0, FLOATS_PER_VERTEX), dtype=np.float32)
@@ -357,6 +372,8 @@ class QuadPainter:
         self._gradients.clear()
         self._tris.clear()
         self._runs.clear()
+        self._image_quads.clear()
+        self._image_triangles.clear()
         del self._clips[:]
         self._clip = _NO_CLIP
         self._scaled_clip = self._scale_clip(_NO_CLIP)
@@ -503,7 +520,11 @@ class QuadPainter:
         v = rv0 + max(fv0, 0.0) * (rv1 - rv0)
         uw = (min(fu1, 1.0) - max(fu0, 0.0)) * (ru1 - ru0)
         vh = (min(fv1, 1.0) - max(fv0, 0.0)) * (rv1 - rv0)
+        index = len(self._data) // FLOATS_PER_QUAD
         self._corner_quad(x, y, w, h, u, v, uw, vh, _rgba(tint))
+        # Keep handles alive for this frame, and resolve UVs again at submission:
+        # placing a later image may repack the atlas and move earlier images.
+        self._image_quads.append((index, handle, uv0, uv1))
 
     def stroke_rect(
         self,
@@ -603,6 +624,34 @@ class QuadPainter:
         block[:, 8:12] = (cx0, cy0, cx1, cy1)
         self._tris.append(block)
         self._note(_TRIS)
+        self._image_triangles.append((block, handle, (uv0, uv1, uv2)))
+
+    def _refresh_image_uvs(self) -> None:
+        """Finalize image regions after all this frame's atlas allocations."""
+        resolve = self.image_uv_resolver
+        if not callable(resolve):
+            return
+        for index, handle, uv0, uv1 in self._image_quads:
+            region = resolve(handle)
+            start = index * FLOATS_PER_QUAD + 4
+            if region is None:
+                u, v = self._solid_uv
+                self._data[start:start + 4] = (u, v, u, v)
+                continue
+            (ru0, rv0), (ru1, rv1) = region
+            self._data[start:start + 4] = (
+                ru0 + max(uv0[0], 0) * (ru1 - ru0),
+                rv0 + max(uv0[1], 0) * (rv1 - rv0),
+                ru0 + min(uv1[0], 1) * (ru1 - ru0),
+                rv0 + min(uv1[1], 1) * (rv1 - rv0))
+        for block, handle, uvs in self._image_triangles:
+            region = resolve(handle)
+            if region is None:
+                block[:, 2:4] = self._solid_uv
+                continue
+            (ru0, rv0), (ru1, rv1) = region
+            for row, (u, v) in enumerate(uvs):
+                block[row, 2:4] = (ru0 + u * (ru1 - ru0), rv0 + v * (rv1 - rv0))
 
     def text_rotated(self, x: float, y: float, w: float, h: float, align: int,
                      string: str, colour: Colour, degrees: float = 0.0) -> None:
@@ -615,6 +664,11 @@ class QuadPainter:
         import math
 
         if not string:
+            return
+        if self._font_spec is not None:
+            from .font_render import draw_text
+            draw_text(self, self._font_spec, self._font_scale, x, y, w, h, align,
+                      string, colour, degrees=degrees, require_resolver=True)
             return
         shrink = self._shrink
         quad_w, quad_h = self._glyph_w, self._glyph_h
@@ -637,7 +691,7 @@ class QuadPainter:
         corners = []
         uvs = []
         for index, char in enumerate(string):
-            cell = self._atlas.cell_of(char)
+            cell = self._atlas.cell_of(char, bold=self._font_bold)
             if cell is None:
                 continue
             u, v, cw, ch = cell
@@ -784,6 +838,12 @@ class QuadPainter:
         """Draw *string* aligned inside the box, one quad per glyph."""
         if not string:
             return
+        if self._font_spec is not None:
+            from .font_render import draw_text
+            draw_text(self, self._font_spec, self._font_scale, x, y, w, h, align,
+                      string, colour, bold, require_resolver=True)
+            return
+        bold = bold or self._font_bold
         advance = self._advance
         shrink = self._shrink
         ascent = self._ascent
@@ -870,8 +930,14 @@ class QuadPainter:
 
     def text_width(self, string: str) -> float:
         """Advance width of *string*, in pixels."""
-        return self._atlas.advance(string) * self._font_scale
+        if self._font_spec is not None:
+            from .font_render import text_width
+            return text_width(self._font_spec, string, self._font_scale)
+        return self._atlas.advance(string) * self._font_scale * self._font_size_ratio
 
     def line_height(self) -> float:
         """Height of one line of text, in pixels."""
-        return self._atlas.line_height * self._font_scale
+        if self._font_spec is not None:
+            from .font_render import line_height
+            return line_height(self._font_spec, self._font_scale)
+        return self._atlas.line_height * self._font_scale * self._font_size_ratio

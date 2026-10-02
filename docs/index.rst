@@ -16,6 +16,7 @@ window at all.
    quickstart
    concepts
    porting
+   localization
    widgets
    backends
    testing

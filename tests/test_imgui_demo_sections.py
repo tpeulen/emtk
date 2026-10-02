@@ -301,7 +301,12 @@ def test_choosing_a_menu_item_reports_it():
     frames = Frames(_menu_gui(state))
     frames.draw()
     frames.click(state["file"])
-    frames.click(state["items"]["Open"])
+    # The dropdown is a floating popup anchored at the title's bottom edge;
+    # aim into the middle of Open's row (its top edge borders "New").
+    frames.draw()
+    rows = [(round(t[0]), round(t[1])) for t in frames.painter.texts if "Open" in str(t[5])]
+    frames.click((float(rows[0][0]), float(rows[0][1]) + 4.0, 80.0, 18.0))
+    frames.draw()
     assert state.get("chose") == "Open"
 
 

@@ -314,3 +314,20 @@ Additional widget sub-modules
 
 .. automodule:: emtk.widgets.text_field
    :noindex:
+
+.. automodule:: emtk.widgets.chat
+   :noindex:
+
+.. automodule:: emtk.widgets.markdown
+   :noindex:
+
+.. automodule:: emtk.mathtext
+
+.. automodule:: emtk.htmltext
+   :noindex:
+
+.. automodule:: emtk.i18n
+   :members:
+
+.. automodule:: emtk.offset_painter
+   :members:

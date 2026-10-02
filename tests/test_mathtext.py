@@ -67,4 +67,38 @@ def test_im_math_widget():
         cw, ch = im.calc_math_size(r"E = mc^2")
         assert cw > 0
         assert ch > 0
+
+        # Auto-scaling with max_width
+        w3, h3 = im.math(r"\chi^2 = \sum_{i=1}^N \frac{(y_i - f(x_i))^2}{\sigma_i^2}", max_width=120.0)
+        assert w3 <= 120.001
+        assert h3 > 0
+
         im.end()
+
+
+def test_advanced_math_transforms():
+    # Nested fractions
+    nested = r"\frac{1}{1 + \frac{R}{R_0}}"
+    u_nested = latex_to_unicode(nested)
+    assert "(1)/(" in u_nested
+    assert "(R)/(R₀)" in u_nested
+
+    # Accents
+    u_accents = latex_to_unicode(r"\hat{x} + \bar{y} + \vec{v} + \dot{z}")
+    assert "x̂" in u_accents or "x\u0302" in u_accents
+    assert "ȳ" in u_accents or "y\u0304" in u_accents
+    assert "v⃗" in u_accents or "v\u20D7" in u_accents
+    assert "ż" in u_accents or "z\u0307" in u_accents
+
+    # Functions
+    u_fn = latex_to_unicode(r"\sin(\theta) + \cos(\phi) + \exp(-t/\tau)")
+    assert "sin(θ)" in u_fn
+    assert "cos(" in u_fn
+    assert "exp(" in u_fn
+
+    # Matrices and cases
+    mat = r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}"
+    norm_mat = normalize_latex(mat)
+    assert "a b" in norm_mat
+    assert "c d" in norm_mat
+

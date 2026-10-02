@@ -18,8 +18,8 @@ What is baked
 bold has exactly one caller, a menu's title row, and a face that is not baked is
 a face that silently renders as the regular one.
 
-The character set is printable ASCII plus the seven symbols the chrome actually
-uses: ``▾ ▸ ▴`` for menus and disclosure markers, ``─`` for separators, and
+The character set covers printable ASCII, Latin accents, Greek, Cyrillic,
+scientific math notation, and the symbols the chrome uses: ``▾ ▸ ▴`` for menus and disclosure markers, ``─`` for separators, and
 ``◀ ■ ▶ ▼`` for the movie transport. Enumerated rather than "some Unicode
 range", because an atlas is a fixed-size image and a missing glyph is an empty
 box at runtime rather than an error at build time.
@@ -43,11 +43,12 @@ so nobody needs Qt to *use* emtk. Baking is the one step that does.
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 import string
 from collections import Counter
 
-__all__ = ["CHARSET", "FONT_PT", "SCALE", "OUT_DIR", "bake"]
+__all__ = ["CHARSET", "FONT_PT", "OUT_DIR", "SCALE", "bake"]
 
 #: Point size of the chrome font. The size an application's chrome asks for; a mismatch
 #: shows up as text that does not fit the rows it is laid out into.
@@ -88,7 +89,7 @@ _SYMBOLS = "─▴▸▾◀■▶▼…"
 #: comparison, an arrow, a sub/superscript index (``R₀``, ``τ²``). Greek is
 #: added below: a FRET factor is γ, β, α or δ, and a missing glyph turns the
 #: name into ``¤``.
-_MATH = "∞−≤≥≈≠√∑∫∂∆→←↑↓⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉"
+_MATH = '±²³µ·¹×÷ʰʲʳʷʸˡˢˣ̂̃̄̇̈ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩαβγδεζηθικλνξοπρςστυφχψωϑϕϖϰϱբᑫᑯᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶻ‖•…⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜ⃗←↑→↓↔↗↦⇐⇒⇔∀∂∃∄∅∆∇∈∉∋∏∐∑−∓∖∗∘√∝∞∥∧∨∩∪∫∬∭∮∼≃≅≈≠≡≤≥≪≫⊂⊃⊆⊇⊕⊖⊗⊙⊥⋆⋮⋯⋱⌀⌈⌉⌊⌋⟨⟩ⱼⱽ꜀𝓏'
 
 #: The placeholder for a character with no glyph. In the set by construction,
 #: because a missing glyph that renders as another missing glyph is the bug
@@ -104,6 +105,7 @@ CHARSET: str = "".join(
         | {"\u20ac", "\u2013", "\u2014", "\u2018", "\u2019", "\u201c", "\u201d"}
         | {chr(c) for c in range(0x0391, 0x03AA) if c != 0x03A2}   # Greek capitals
         | {chr(c) for c in range(0x03B1, 0x03CA)}                   # Greek small
+        | {chr(c) for c in range(0x0400, 0x0460)}   # Cyrillic, including Russian Ё/ё
         | set(_MATH)
     )
 )
@@ -133,62 +135,28 @@ def _face(bold: bool, scale: int | None = None):
     return font
 
 
-def _padding(metrics: dict, advance: int, charset: str) -> int:
-    """Return the blank margin each cell needs, in texels.
+def _padding(paths, advance: int, ascent: int, height: int) -> int:
+    """Measure shared padding from actual glyph outlines of both faces.
 
-    Parameters
-    ----------
-    metrics : dict
-        ``{face name: QFontMetrics}``.
-    advance : int
-        The monospaced advance every cell is sized from.
-    charset : str
-        The characters actually being baked. **Not** the module's `CHARSET`:
-        that is what was asked for, and a character the font does not cover
-        can report an ink box of any size at all. Measuring the wanted set
-        rather than the covered one sized one cell at 199978 texels, which
-        fails as a painter error three steps later.
-
-    Returns
-    -------
-    int
-        Half-width of the blank border, including :data:`AA_MARGIN`.
-
-    Notes
-    -----
-    A monospaced font's *ink* is not bounded by its advance. ``─`` -- the
-    separator -- starts a texel to the **left** of the pen and ends past it,
-    because a box-drawing character is meant to join the one beside it; ``#``
-    overhangs too, and both overhang further in the bold face than the regular
-    one. Packed flush, that ink lands in the neighbouring cell, and at runtime
-    a glyph quad samples a sliver of the wrong glyph along its edge.
-
-    Measured across **both** faces rather than assumed, because sizing the
-    padding from the regular face is exactly the mistake that left bold ``#``
-    and ``─`` still touching their borders.
+    A monospaced advance does not bound a glyph's ink. Fallback mathematical
+    symbols can overhang horizontally, and accents can rise above the normal
+    ascent. Measuring the resolved outlines avoids Qt's invalid bounding box
+    for an isolated combining mark while keeping the chrome baseline fixed.
     """
-    overhang = 0
-    for face_metrics in metrics.values():
-        height = face_metrics.height()
-        ascent = face_metrics.ascent()
-        for char in charset:
-            ink = face_metrics.tightBoundingRect(char)
-            overhang = max(overhang, -ink.x(), ink.x() + ink.width() - advance)
-            # Vertically too. Measuring only the horizontal overhang was
-            # enough for ASCII and is not for accented capitals: `Ş` hangs
-            # its cedilla below the line box and `Ů` puts a ring above the
-            # ascent, and both landed on the cell border -- where a glyph
-            # quad samples a sliver of its neighbour.
-            overhang = max(
-                overhang,
-                -(ascent + ink.y()),
-                (ink.y() + ink.height()) - (height - ascent) - ascent,
-            )
-    return int(max(overhang, 0)) + AA_MARGIN
+    overhang = 0.0
+    for path in paths:
+        ink = path.boundingRect()
+        overhang = max(overhang, -ink.x(), ink.right() - advance,
+                       -(ascent + ink.y()), ascent + ink.bottom() - height)
+    return max(AA_MARGIN + math.ceil(overhang), AA_MARGIN)
 
 
 def bake(out_dir: pathlib.Path | None = None) -> dict:
     """Rasterise both faces into one atlas and write it out.
+
+    Fonts must supply actual glyphs for every requested character. Menlo is
+    preferred; installed fallback fonts supply missing math/script symbols.
+    A font-less build fails with named code points instead of baking tofu.
 
     Parameters
     ----------
@@ -204,7 +172,7 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
 
     Notes
     -----
-    A fixed grid rather than a tight pack. There are fewer than 210 cells and
+    A fixed grid rather than a tight pack. There are fewer than 700 cells and
     the font is monospaced, so the wasted texels are not worth a packer -- and a
     grid means a glyph's cell can be computed from its index, which keeps the
     runtime lookup a multiply rather than a table read.
@@ -234,26 +202,67 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
         m.horizontalAdvance(c) for m in metrics.values() for c in CHARSET
     )
     advance = counted.most_common(1)[0][0]
-    dropped = sorted(
-        c for c in CHARSET
-        if any(m.horizontalAdvance(c) != advance for m in metrics.values())
-    )
-    charset = "".join(c for c in CHARSET if c not in set(dropped))
-    if dropped:
-        names = " ".join(f"U+{ord(c):04X}" for c in dropped)
-        print(f"  {len(dropped)} character(s) the font does not cover, dropped: {names}")
-    if len(charset) < 95:
-        # Losing ASCII means the font is wrong, not the charset.
-        raise RuntimeError(
-            f"only {len(charset)} characters survived the advance check; "
-            "the chrome font is not monospaced at all"
-        )
-    pad = _padding(metrics, advance, charset)
+    # Different advances do not mean a glyph is absent: fallback math fonts
+    # are proportional, and combining accents may have no advance at all.
+    # Ask the font engine about coverage, retain fixed chrome spacing, and
+    # select a real fallback face when the primary font lacks a character.
+    fallbacks = {}
+    installed = set(QtGui.QFontDatabase().families())
+    for name in faces:
+        bold = name == "bold"
+        general = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.GeneralFont)
+        general.setPointSize(FONT_PT * SCALE)
+        general.setBold(bold)
+        candidates = [general]
+        for family in ("STIX Two Math", "DejaVu Sans", "Noto Sans", "Arial Unicode MS", "Apple Symbols"):
+            if family in installed:
+                font = QtGui.QFont(family)
+                font.setPointSize(FONT_PT * SCALE)
+                font.setBold(bold)
+                candidates.append(font)
+        fallbacks[name] = [(font, QtGui.QFontMetrics(font)) for font in candidates]
+
+    resolved = {}
+    missing = []
+    raw_cache = {}
+    for name, primary in faces.items():
+        candidates = [primary] + [f for f, _m in fallbacks[name]]
+        # Fallback resolution uses actual nonzero glyph indices, rather than
+        # QFontMetrics.inFont (which may promise a different implicit fallback).
+        # The remaining installed faces cover rare script/superscript symbols.
+        for family in sorted(installed):
+            font = QtGui.QFont(family)
+            font.setPointSize(FONT_PT * SCALE)
+            font.setBold(name == "bold")
+            candidates.append(font)
+        for char in CHARSET:
+            match = None
+            for candidate in candidates:
+                key = candidate.toString()
+                raw = raw_cache.get(key)
+                if raw is None:
+                    raw = QtGui.QRawFont.fromFont(candidate)
+                    raw_cache[key] = raw
+                indices = raw.glyphIndexesForString(char)
+                if indices and all(index != 0 for index in indices):
+                    path = raw.pathForGlyph(indices[0])
+                    match = (candidate, path)
+                    break
+            if match is None:
+                missing.append(f"{name}:U+{ord(char):04X}")
+            else:
+                resolved[name, char] = match
+    if missing:
+        raise RuntimeError("Installed fonts cannot bake requested glyphs: " + " ".join(missing))
+    charset = CHARSET
+    ascent = max(m.ascent() for m in metrics.values())
+    base_height = max(m.height() for m in metrics.values())
+    pad = _padding((path for _font, path in resolved.values()), advance, ascent, base_height)
     cell_w = advance + 2 * pad
     cell_h = max(m.height() for m in metrics.values()) + 2 * pad
     ascent = max(m.ascent() for m in metrics.values())
 
-    columns = 16
+    columns = 32
     rows_per_face = (len(charset) + columns - 1) // columns
     # One extra row for the solid block; see below.
     total_rows = rows_per_face * len(faces) + 1
@@ -261,6 +270,8 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
     image = QtGui.QImage(
         cell_w * columns, cell_h * total_rows, QtGui.QImage.Format_ARGB32
     )
+    if image.isNull():
+        raise RuntimeError(f"Could not allocate glyph atlas {image.width()}x{image.height()}")
     image.fill(QtCore.Qt.transparent)
 
     # A fully opaque block, so a plain rectangle is a textured quad that happens
@@ -282,7 +293,6 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
     try:
         for face_index, (name, font) in enumerate(faces.items()):
             painter.setFont(font)
-            face_metrics = metrics[name]
             row_offset = face_index * rows_per_face
             table: dict[str, list] = {}
             for index, char in enumerate(charset):
@@ -293,14 +303,24 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
                 # for every glyph -- so a caller places a quad at
                 # ``(pen_x - pad, baseline - ascent - pad)`` with the cell's
                 # size, and needs no per-glyph bearing.
-                painter.drawText(x + pad, y + pad + ascent, char)
+                glyph_font, glyph_path = resolved[name, char]
+                painter.setFont(glyph_font)
+                if glyph_font == font and char not in "\u00ad\u0302\u0303\u0304\u0307\u0308\u20d7":
+                    painter.drawText(x + pad, y + pad + ascent, char)
+                else:
+                    # Standalone combining marks and soft hyphens vanish under
+                    # text shaping. Rasterize the real glyph outline instead.
+                    painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+                    painter.fillPath(glyph_path.translated(x + pad, y + pad + ascent),
+                                     QtGui.QColor(255, 255, 255, 255))
                 table[char] = [x, y, cell_w, cell_h,
-                               face_metrics.horizontalAdvance(char)]
+                               advance]
             glyphs[name] = table
     finally:
         painter.end()
 
-    image.save(str(out_dir / "chrome.png"))
+    if not image.save(str(out_dir / "chrome.png")):
+        raise RuntimeError("Could not write glyph atlas image")
 
     # Metrics at the size the panel is *laid out* in, not the size it was baked
     # at. Font metrics do not scale linearly -- hinting and rounding make Menlo

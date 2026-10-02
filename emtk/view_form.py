@@ -898,7 +898,40 @@ def _draw_control(section: dict, model: Any, state: FormState, width: float) -> 
             value = getattr(model, source, None)
             value = value() if callable(value) else value
             text = text if value is None else value
-        _w.text_wrapped(str(text))
+        rich = bool(section.get("is_markdown") or section.get("is_html")) or _HAS_MARKUP(text)
+        _w.text_wrapped(_plain_text(str(text)) if rich else str(text))
+
+
+#: Rich text an info section may carry, flattened for the canvas: block tags
+#: become newlines, inline emphasis is dropped, entities are decoded. The Qt
+#: info block rendered this formatting; the canvas has no rich text, and
+#: drawing the raw markup shows the tags to the user.
+_HTML_BLOCK = ("br", "p", "div", "li", "tr", "h1", "h2", "h3", "h4")
+_TAG_RE = None
+
+
+def _HAS_MARKUP(text: str) -> bool:
+    global _TAG_RE
+    if _TAG_RE is None:
+        import re as _re
+
+        _TAG_RE = _re.compile(
+            r"<\s*(?:" + "|".join(_HTML_BLOCK) + r")\b|<\s*/?\s*(?:i|b|em|strong|code|sub|sup)\s*>",
+            _re.IGNORECASE,
+        )
+    return bool(_TAG_RE.search(text))
+
+
+def _plain_text(rich: str) -> str:
+    import html as _html
+    import re as _re
+
+    text = _re.sub(
+        r"<\s*(?:" + "|".join(_HTML_BLOCK) + r")\s*/?>", "\n", rich, flags=_re.IGNORECASE
+    )
+    text = _re.sub(r"<[^>]+>", "", text)
+    text = _html.unescape(text)
+    return _re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
 def _draw_progress(section: dict, model: Any, width: float) -> None:

@@ -33,6 +33,9 @@ class RecordingPainter:
     LINE_H = 16.0
 
     def __init__(self) -> None:
+        self._font_spec = None
+        self._font_scale = 1.0
+        self._font_size_ratio = 1.0
         self.fills: list[tuple] = []
         self.strokes: list[tuple] = []
         self.strings: list[str] = []
@@ -102,11 +105,24 @@ class RecordingPainter:
 
     def text_width(self, string) -> float:
         """Monospaced advance width."""
-        return len(string) * self.GLYPH_W
+        if self._font_spec is not None:
+            from .font_render import text_width
+            return text_width(self._font_spec, string, self._font_scale)
+        return len(string) * self.GLYPH_W * self._font_size_ratio
 
     def line_height(self) -> float:
         """Height of one line."""
-        return self.LINE_H
+        if self._font_spec is not None:
+            from .font_render import line_height
+            return line_height(self._font_spec, self._font_scale)
+        return self.LINE_H * self._font_size_ratio
+
+    def set_font(self, value=None, size=0.0) -> None:
+        from .font import DEFAULT_FONT_PT
+        from .font_render import font_spec
+        spec = font_spec(value, size)
+        self._font_spec = spec if spec.family != "monospace" else None
+        self._font_size_ratio = spec.size / DEFAULT_FONT_PT if self._font_spec is None else 1.0
 
     def set_font_scale(self, scale: float) -> None:
         """Scale the glyph cell, so tests can exercise scaled text.
@@ -114,6 +130,7 @@ class RecordingPainter:
         Instance attributes shadow the class constants, so one painter's
         metrics change without touching every other test's.
         """
+        self._font_scale = float(scale)
         self.GLYPH_W = type(self).GLYPH_W * float(scale)
         self.LINE_H = type(self).LINE_H * float(scale)
 
@@ -264,6 +281,9 @@ class PixelPainter:
         self._atlas = _load_atlas()
         #: Text size, as a multiple of the baked one. See :meth:`set_font_scale`.
         self._font_scale = 1.0
+        self._font_spec = None
+        self._font_size_ratio = 1.0
+        self._font_bold = False
 
     # -- plumbing ---------------------------------------------------------- #
 
@@ -497,16 +517,23 @@ class PixelPainter:
         """
         if not string:
             return
+        if self._font_spec is not None:
+            from .font_render import draw_text
+            draw_text(self, self._font_spec, self.scale * self._font_scale,
+                      x, y, w, h, align, string, colour, bold)
+            return
+        bold = bold or self._font_bold
         atlas = self._atlas
-        shrink = atlas.render_scale * self.scale
+        text_scale = self.scale * self._font_scale * self._font_size_ratio
+        shrink = atlas.render_scale * text_scale
         if shrink <= 0.0:
             return
-        advance = atlas.advance() * self.scale
+        advance = atlas.advance() * text_scale
         span = advance * len(string)
         pen_x = (x + w - span if align & ALIGN_RIGHT
                  else x + (w - span) * 0.5 if align & ALIGN_HCENTER else x)
         ascent, pad, cell_h = atlas.ascent, atlas.pad, atlas.cell[1]
-        baseline = (y + h * 0.5 + (ascent - cell_h * 0.5) * shrink
+        baseline = (y + h * 0.5 + (ascent - (cell_h - 2 * pad) * 0.5) * shrink
                     if align & ALIGN_VCENTER else y + ascent * shrink)
         # The pen sits a fixed (pad, pad + ascent) inside every cell, so a
         # glyph's quad is the whole cell placed relative to the baseline and
@@ -576,10 +603,16 @@ class PixelPainter:
                     self.px[o + 3] = max(self.px[o + 3], int(a * alpha / 255))
 
     def text_width(self, string) -> float:
-        return self._atlas.advance(string) * self.scale * self._font_scale
+        if self._font_spec is not None:
+            from .font_render import text_width
+            return text_width(self._font_spec, string, self.scale * self._font_scale)
+        return self._atlas.advance(string) * self.scale * self._font_scale * self._font_size_ratio
 
     def line_height(self) -> float:
-        return self._atlas.line_height * self.scale * self._font_scale
+        if self._font_spec is not None:
+            from .font_render import line_height
+            return line_height(self._font_spec, self.scale * self._font_scale)
+        return self._atlas.line_height * self.scale * self._font_scale * self._font_size_ratio
 
     def set_font_scale(self, scale: float) -> None:
         """Scale the glyph cell on top of the device scale."""
@@ -645,8 +678,13 @@ class PixelPainter:
                     self.px[di + k] = (s * a + self.px[di + k] * inv) // 255
                 self.px[di + 3] = min(255, a + self.px[di + 3] * inv // 255)
 
-    def set_font(self, _spec) -> None:
-        """Font pushes are ignored: the atlas is the one size there is."""
+    def set_font(self, value=None, size=0.0) -> None:
+        """Select an actual family/style, with size in points."""
+        from .font_render import font_spec
+        spec = font_spec(value, size)
+        self._font_spec = spec if spec.family != "monospace" else None
+        self._font_bold = spec.bold
+        self._font_size_ratio = spec.size / self._atlas.font_pt if self._font_spec is None else 1.0
 
     def text_rotated(self, x, y, w, h, align, string, colour,
                      degrees: float = 0.0) -> None:
@@ -664,6 +702,11 @@ class PixelPainter:
         import math
         if not string:
             return
+        if self._font_spec is not None:
+            from .font_render import draw_text
+            draw_text(self, self._font_spec, self.scale * self._font_scale,
+                      x, y, w, h, align, string, colour, degrees=degrees)
+            return
         bw, bh = max(int(math.ceil(w)) + 2, 1), max(int(math.ceil(h)) + 2, 1)
         scratch = PixelPainter.__new__(PixelPainter)
         scratch.width, scratch.height = bw, bh
@@ -672,6 +715,9 @@ class PixelPainter:
         scratch._clips = [(0, 0, bw, bh)]
         scratch._atlas = self._atlas
         scratch._font_scale = self._font_scale
+        scratch._font_spec = self._font_spec
+        scratch._font_size_ratio = self._font_size_ratio
+        scratch._font_bold = self._font_bold
         scratch.text(1.0, 1.0, w, h, align, string, (255, 255, 255, 255))
         r, g, b, a = self._rgba(colour)
         ccx, ccy = x + w * 0.5, y + h * 0.5          # rotation centre, screen

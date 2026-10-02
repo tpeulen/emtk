@@ -272,3 +272,49 @@ def test_a_window_paints_an_opaque_background_and_a_border():
     assert [c[1:5] for c in fills] == [(10, 20, 100, 50)]
     borders = [c for c in painter.calls if c[0] == "stroke_rect" and tuple(c[5])[:3] == (4, 5, 6)]
     assert [c[1:5] for c in borders] == [(10, 20, 100, 50)]
+
+
+def test_nested_child_scroll_routes_to_innermost_child():
+    """When nested scrollable children exist, mouse wheel scrolls the innermost hovered child."""
+    painter = RecordingPainter()
+    storage = {}
+
+    # Frame 1: Mouse is inside both outer and inner child
+    with emtk.frame(painter, (0, 0, 500, 500), storage=storage) as ctx:
+        ctx.io.mouse_pos = (150.0, 150.0)
+        ctx.io.mouse_wheel = 0.0
+
+        ctx.begin_child((0, 0, 400, 400), child_id="outer")
+        # Layout enough items to overflow outer child
+        ctx.layout.advance(10.0, 800.0)
+
+        ctx.begin_child((50, 50, 200, 200), child_id="inner")
+        # Layout enough items to overflow inner child
+        ctx.layout.advance(10.0, 600.0)
+        ctx.end_child()
+
+        ctx.end_child()
+
+    # Verify that the innermost child was detected as hovered
+    inner_key = ("__child__", "inner")
+    outer_key = ("__child__", "outer")
+    assert ctx.hovered_child == inner_key
+
+    # Frame 2: Mouse wheel turns while over innermost child
+    with emtk.frame(painter, (0, 0, 500, 500), storage=storage) as ctx:
+        ctx.io.mouse_pos = (150.0, 150.0)
+        ctx.io.mouse_wheel = -2.0  # Scroll down by 2 notches (80px)
+
+        ctx.begin_child((0, 0, 400, 400), child_id="outer")
+        ctx.layout.advance(10.0, 800.0)
+
+        ctx.begin_child((50, 50, 200, 200), child_id="inner")
+        ctx.layout.advance(10.0, 600.0)
+        ctx.end_child()
+
+        ctx.end_child()
+
+    # Outer child must NOT have scrolled; inner child MUST have scrolled
+    assert storage[outer_key]["scroll_y"] == 0.0
+    assert storage[inner_key]["scroll_y"] == 80.0
+

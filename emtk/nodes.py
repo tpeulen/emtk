@@ -358,6 +358,11 @@ class Style:
     ----------
     grid_spacing : float
         Pixels between grid lines, in grid space.
+    grid_line_width : float
+        Width of a grid line, in screen pixels. Below one pixel the width
+        fades the line's colour rather than drawing a narrower mark, which is
+        what a thinner line means once the painter's floor of one pixel is
+        reached.
     node_corner_rounding : float
         Corner radius of the node rectangle.
     node_padding : tuple
@@ -403,6 +408,7 @@ class Style:
 
     def __init__(self) -> None:
         self.grid_spacing: float = 24.0
+        self.grid_line_width: float = 1.0
         self.node_corner_rounding: float = 4.0
         self.node_padding: tuple = (8.0, 8.0)
         self.node_border_thickness: float = 1.0
@@ -1234,6 +1240,12 @@ def _pointer_over_editor(box: tuple) -> bool:
     return im.get_current_context().current_window is None or im.is_window_hovered()
 
 
+def _coverage_faded(colour: tuple, coverage: float) -> tuple:
+    """Scale a colour's alpha by *coverage* (a width below one pixel)."""
+    alpha = colour[3] if len(colour) > 3 else 255
+    return (colour[0], colour[1], colour[2], int(round(alpha * coverage)))
+
+
 def _draw_grid(draw, ctx: EditorContext, box: tuple) -> None:
     """Draw the background grid, spaced in grid units and scaled by the zoom.
 
@@ -1254,23 +1266,39 @@ def _draw_grid(draw, ctx: EditorContext, box: tuple) -> None:
     reads as a fixed overlay the nodes slide under. Below a few pixels the
     lines are skipped entirely: at ``zoom = 0.15`` a 24-unit grid is 3.6 pixels
     apart and paints as a solid wash that hides the graph.
+
+    The lines are filled *rects*, not stroked segments: a segment is a
+    triangle pair, and a triangle carries a hairline outline to close its
+    antialiasing seams -- which floors every line at a pixel no matter the
+    width, and where a line's triangles overlap, stacks that hairline's alpha
+    several times. A background grid living on alpha alone paints as a
+    visibly heavier grid than its colours name.
+
+    A width below one pixel cannot draw as less area, so it fades instead:
+    the width scales the alpha and the line is drawn a pixel wide, which is
+    what a thinner line *means* on a lit screen.
     """
     style = ctx.style
     spacing = style.grid_spacing * ctx.canvas.zoom
     if spacing < 6.0:
         return
+    width = max(float(style.grid_line_width), 0.0)
+    if width <= 0.0:
+        return
     pan_x, pan_y = ctx.canvas.panning
     x0, y0, w, h = box
-    line = style.colors[Col.GRID_LINE]
-    primary = style.colors[Col.GRID_LINE_PRIMARY]
+    drawn = max(width, 1.0)
+    line = _coverage_faded(style.colors[Col.GRID_LINE], min(width / drawn, 1.0))
+    primary = _coverage_faded(style.colors[Col.GRID_LINE_PRIMARY], min(width / drawn, 1.0))
     show_primary = bool(style.flags & StyleFlags.GRID_LINES_PRIMARY)
+    half = drawn * 0.5
 
     start = pan_x % spacing
     index = int(math.floor(-pan_x / spacing)) + 1
     x = start
     while x < w:
         colour = primary if (show_primary and index == 0) else line
-        draw.add_line((x0 + x, y0), (x0 + x, y0 + h), colour, 1.0)
+        draw.add_rect_filled((x0 + x - half, y0), (x0 + x + half, y0 + h), colour)
         x += spacing
         index += 1
 
@@ -1279,7 +1307,7 @@ def _draw_grid(draw, ctx: EditorContext, box: tuple) -> None:
     y = start
     while y < h:
         colour = primary if (show_primary and index == 0) else line
-        draw.add_line((x0, y0 + y), (x0 + w, y0 + y), colour, 1.0)
+        draw.add_rect_filled((x0, y0 + y - half), (x0 + w, y0 + y + half), colour)
         y += spacing
         index += 1
 

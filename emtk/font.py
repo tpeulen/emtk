@@ -14,8 +14,8 @@ from __future__ import annotations
 import json
 import pathlib
 
-__all__ = ["Atlas", "load_atlas", "ATLAS_DIR", "MISSING_GLYPH", "PX_PER_PT",
-           "DEFAULT_FONT_PT"]
+__all__ = ["ATLAS_DIR", "DEFAULT_FONT_PT", "MISSING_GLYPH", "PX_PER_PT",
+           "Atlas", "available_fonts", "load_atlas"]
 
 #: Drawn in place of a character the atlas has no glyph for. Matches the
 #: baker's own constant; a placeholder that is itself missing would be the bug
@@ -39,6 +39,12 @@ DEFAULT_FONT_PT = 8.0
 ATLAS_DIR = pathlib.Path(__file__).resolve().parent / "atlas"
 
 _CACHE: dict[str, "Atlas"] = {}
+
+
+def available_fonts(monospaced: bool = False) -> tuple[str, ...]:
+    """Return actual available system families and the baked monospace face."""
+    from .font_render import available_fonts as discover
+    return discover(monospaced=monospaced)
 
 
 class Atlas:

@@ -226,6 +226,8 @@ class Layout:
         self.y = float(y)
         self.w = float(w)
         self.h = float(h)
+        self._origin_x = float(x)
+        self._origin_y = float(y)
         self._groups: list[_GroupState] = []
         self._columns: _ColumnState | None = None
         self.reset()
@@ -256,7 +258,10 @@ class Layout:
         """
         max_x, max_y = self._max_x, self._max_y
         last_item = self._last_item
+        origin_x, origin_y = self._origin_x, self._origin_y
         self.reset(x, y, self.w, self.h)
+        self._origin_x = origin_x
+        self._origin_y = origin_y
         self._max_x = max(max_x, self._max_x)
         self._max_y = max(max_y, self._max_y)
         self._last_item = last_item
@@ -281,8 +286,10 @@ class Layout:
         """
         if x is not None:
             self.x = float(x)
+            self._origin_x = float(x)
         if y is not None:
             self.y = float(y)
+            self._origin_y = float(y)
         if w is not None:
             self.w = float(w)
         if h is not None:
@@ -300,6 +307,9 @@ class Layout:
         self._prev_line_h = 0.0
         self._same_line = False
         self._last_item: Rect = (self.x, self.y, 0.0, 0.0)
+        #: The item that ended the *current* line, if any -- what
+        #: :meth:`line_avail` measures from. :meth:`new_line` clears it.
+        self._line_item: Rect | None = None
         # Groups survive a cursor re-home: Dear ImGui code moves the cursor
         # inside an open group all the time (a centred title, a nudged row),
         # and wiping the group stack here made every such port lose its
@@ -384,6 +394,7 @@ class Layout:
         box = (self._cursor_x, self._cursor_y, row_w, row_h)
         self.advance(row_w, row_h)
         self._last_item = box
+        self._line_item = box
         return box
 
     def spacing(self) -> None:
@@ -407,6 +418,7 @@ class Layout:
         box = (self._cursor_x, self._cursor_y, float(w), float(h))
         self.advance(float(w), float(h))
         self._last_item = box
+        self._line_item = box
         return box
 
     def new_line(self) -> None:
@@ -418,6 +430,7 @@ class Layout:
         two visible gaps rather than one.
         """
         self._same_line = False
+        self._line_item = None
         if self._curr_line_h > 0.0:
             self.advance(0.0, 0.0)
         else:
@@ -452,6 +465,7 @@ class Layout:
         box = (self._cursor_x, self._cursor_y, max(self._work_right() - self._cursor_x, 0.0), rule)
         self.advance(0.0, rule)
         self._last_item = box
+        self._line_item = box
         return box
 
     # ------------------------------------------------------------------ #
@@ -601,6 +615,7 @@ class Layout:
 
         self.advance(box[2], box[3])
         self._last_item = box
+        self._line_item = box
         return box
 
     # ------------------------------------------------------------------ #
@@ -740,12 +755,32 @@ class Layout:
         """
         return (
             max(self._work_right() - self._cursor_x, 0.0),
-            max(self.y + self.h - self._cursor_y, 0.0),
+            max(self._origin_y + self.h - self._cursor_y, 0.0),
         )
+
+    def line_avail(self) -> float:
+        """How much room the *current line* has left, in pixels.
+
+        After an item the cursor returns to the row start, so :meth:`avail`
+        again reads the full width — which is correct for laying out a
+        full-width control and exactly wrong for "does the next control still
+        fit beside the last one?" That test is the toolbar-wrap idiom the
+        reference's own demos spell out: the last item's right edge plus one
+        spacing against the work rect. This is that measurement, so callers
+        stop re-deriving it (and stop deriving it wrong with :meth:`avail`).
+
+        Zero while nothing has been placed on the line yet — the seed
+        ``(x, y, 0, 0)`` rect is not an item.
+        """
+        item = self._line_item
+        if item is None:
+            return 0.0
+        last_right = item[0] + item[2]
+        return max(self._work_right() - last_right - self.style.item_spacing_x, 0.0)
 
     def content_width(self) -> float:
         """How wide everything laid out so far reached, from the box's left edge."""
-        return self._max_x - self.x
+        return self._max_x - self._origin_x
 
     def content_height(self) -> float:
         """How tall everything laid out so far was, from the box's top edge.
@@ -756,4 +791,4 @@ class Layout:
         the last row is not counted, so a panel whose rows exactly fill it does
         not report itself one gap too tall and grow a scrollbar for nothing.
         """
-        return self._max_y - self.y
+        return self._max_y - self._origin_y
