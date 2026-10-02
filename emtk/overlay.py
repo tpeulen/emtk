@@ -29,7 +29,19 @@ __all__ = ["OverlaySurface"]
 
 
 class _Over(ControlSurface):
-    """A control surface that draws over the target instead of clearing it."""
+    """A control surface that draws over the target instead of clearing it.
+
+    It re-runs the app's frame only when something can have changed it -- an
+    event it was given, a frame the app asked for, the app animating, a
+    resize -- and otherwise submits last frame's drawing again. The base under
+    it may redraw sixty times a second (a playing movie); an app with tables
+    and plots must not rebuild them for every one of those frames.
+    """
+
+    dirty = True
+
+    def mark(self) -> None:
+        self.dirty = True
 
     def render(self, view) -> None:
         if self.renderer is None:
@@ -37,12 +49,21 @@ class _Over(ControlSurface):
         if self._painter is None or self._painter_ratio != self.ratio:
             self._painter = self.renderer.painter(font_pt=self.font_pt, scale=self.ratio)
             self._painter_ratio = self.ratio
+            self.dirty = True
         painter = self._painter
-        painter.clear()
-        self.control.draw(painter, *self._box())
+        hook = self._hook("animating")
+        if self.dirty or (hook is not None and hook()):
+            painter.clear()
+            self.control.draw(painter, *self._box())
+            # An app that changed state late in its frame asks for one more.
+            self.dirty = bool(getattr(self.control, "wants_frame", False))
         width, height = self.size
         # background=None: load what the base drew, do not clear it.
         self.renderer.render(painter, width, height, view, background=None, format=self.format)
+
+    def on_resize(self, width, height, ratio) -> bool:
+        self.dirty = True
+        return super().on_resize(width, height, ratio)
 
 
 class OverlaySurface(Surface):
@@ -66,6 +87,7 @@ class OverlaySurface(Surface):
         self.over = _Over(app, **kwargs)
         self._held: Surface | None = None  # who got the press, until the release
         self._pointer = (-1.0, -1.0)
+        self._app_hovered = True  # the app last heard the pointer over itself
 
     # -- whose event ------------------------------------------------------ #
     def _io(self, name: str) -> bool:
@@ -105,7 +127,13 @@ class OverlaySurface(Surface):
     def set_frame_request_callback(self, callback) -> None:
         super().set_frame_request_callback(callback)
         self.base.set_frame_request_callback(callback)
-        self.over.set_frame_request_callback(callback)
+
+        def app_wants_a_frame():
+            self.over.mark()
+            if callback is not None:
+                callback()
+
+        self.over.set_frame_request_callback(app_wants_a_frame if callback is not None else None)
 
     def close(self) -> None:
         self.over.close()
@@ -114,6 +142,7 @@ class OverlaySurface(Surface):
     # -- input ------------------------------------------------------------ #
     def on_pointer_press(self, x, y, button, modifiers, double=False) -> bool:
         self._pointer = (float(x), float(y))
+        self.over.mark()
         target = self._mouse_target()
         self._held = target
         due = bool(target.on_pointer_press(x, y, button, modifiers, double))
@@ -127,13 +156,24 @@ class OverlaySurface(Surface):
         # The app always hears the pointer, so its hover (and so its claim on
         # the next press) is current.
         self._pointer = (float(x), float(y))
-        app_due = bool(self.over.on_pointer_move(x, y, buttons, modifiers))
         target = self._mouse_target()
+        # The app hears moves over itself (and the one that leaves it, so its
+        # hover clears); a drag on the base under it is none of its business,
+        # and redrawing the app for each of those moves is what made a rotation
+        # of the structure slow.
+        hook = getattr(self.app, "pointer_wanted", None)
+        over_app = target is self.over or (not callable(hook))
+        app_due = False
+        if over_app or self._app_hovered:
+            self.over.mark()
+            app_due = bool(self.over.on_pointer_move(x, y, buttons, modifiers))
+        self._app_hovered = over_app
         if target is self.over:
             return app_due
         return bool(self.base.on_pointer_move(x, y, buttons, modifiers)) or app_due
 
     def on_pointer_release(self, x, y, button, modifiers) -> bool:
+        self.over.mark()
         target = self._held or self._mouse_target()
         self._held = None
         due = bool(target.on_pointer_release(x, y, button, modifiers))
@@ -143,17 +183,27 @@ class OverlaySurface(Surface):
 
     def on_wheel(self, x, y, steps, modifiers) -> bool:
         self._pointer = (float(x), float(y))
-        return bool(self._mouse_target().on_wheel(x, y, steps, modifiers))
+        target = self._mouse_target()
+        if target is self.over:
+            self.over.mark()
+        return bool(target.on_wheel(x, y, steps, modifiers))
 
     def _key_target(self) -> Surface:
         wants = self._io("want_capture_keyboard") or self._io("want_text_input")
         return self.over if wants else self.base
 
     def on_key_press(self, key, text, modifiers) -> bool:
-        return bool(self._key_target().on_key_press(key, text, modifiers))
+        target = self._key_target()
+        if target is self.over:
+            self.over.mark()
+        return bool(target.on_key_press(key, text, modifiers))
 
     def on_key_release(self, key, text, modifiers) -> bool:
-        return bool(self._key_target().on_key_release(key, text, modifiers))
+        target = self._key_target()
+        if target is self.over:
+            self.over.mark()
+        return bool(target.on_key_release(key, text, modifiers))
 
     def on_files_dropped(self, paths: Sequence[str]) -> bool:
+        self.over.mark()
         return bool(self.over.on_files_dropped(paths) or self.base.on_files_dropped(paths))

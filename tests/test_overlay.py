@@ -121,3 +121,49 @@ def test_an_app_with_pointer_wanted_decides_the_pointer():
     s.on_pointer_move(50, 300, 0, 0)
     s.on_pointer_press(50, 300, LEFT_BUTTON, 0)
     assert [e[0] for e in base.events] == ["move", "press", "release"]
+
+
+class _Painter:
+    def clear(self):
+        pass
+
+
+class _Renderer:
+    def __init__(self):
+        self.submitted = 0
+
+    def painter(self, **kw):
+        return _Painter()
+
+    def render(self, painter, w, h, view, background=None, format=None):
+        self.submitted += 1
+
+
+def test_the_app_is_redrawn_only_when_something_can_have_changed_it():
+    """A playing movie under the app redraws every frame; the app must not."""
+    drawn = []
+
+    class App(ImApp):
+        def draw(self, painter, x, y, w, h):
+            drawn.append(1)
+            self.wants_frame = False
+
+    app = App(lambda: None)
+    app.pointer_wanted = lambda x, y: x < 100
+    s = OverlaySurface(_Base(), app)
+    s.over.renderer, s.over.size, s.over.ratio = _Renderer(), (800, 600), 1.0
+    for _ in range(5):          # the base animates: five frames, one app frame
+        s.over.render(None)
+    assert len(drawn) == 1 and s.over.renderer.submitted == 5
+    s.on_pointer_move(500, 300, 0, 0)   # leaving the app: it hears that once
+    s.over.render(None)
+    assert len(drawn) == 2
+    s.on_pointer_move(520, 310, 0, 0)   # over the base: the app is not redrawn
+    s.on_pointer_move(540, 320, 0, 0)
+    s.over.render(None)
+    assert len(drawn) == 2
+    s.on_pointer_move(50, 300, 0, 0)    # over the app: it is
+    s.over.render(None)
+    assert len(drawn) == 3
+    s.over.render(None)
+    assert len(drawn) == 3
