@@ -513,7 +513,7 @@ class EmTkGuidedTour:
         if hint:
             im.spacing()
             clean_hint = _clean_html_text(str(hint))
-            im.text_colored(f"💡 {clean_hint}", (0.5, 0.9, 0.5, 1.0))
+            im.text_colored(f"> {clean_hint}", (0.5, 0.9, 0.5, 1.0))
         im.end_child()
 
         # 5. Tour Controls at Bottom of Card
@@ -525,17 +525,17 @@ class EmTkGuidedTour:
 
         im.set_cursor_screen_pos((cx + card_w - 170.0, btn_y))
         if self.step_idx > 0:
-            if im.button("◄ Prev##tour_prev"):
+            if im.button("◀ Prev##tour_prev"):
                 self.prev()
         else:
             im.begin_disabled()
-            im.button("◄ Prev##tour_prev")
+            im.button("◀ Prev##tour_prev")
             im.end_disabled()
         im.set_item_tooltip("Go to the previous tour step." if self.step_idx > 0 else "This is the first tour step.")
 
         im.same_line()
         is_last = self.step_idx == len(self.steps) - 1
-        next_label = "Finish ✓##tour_next" if is_last else "Next ►##tour_next"
+        next_label = "Finish##tour_next" if is_last else "Next ▶##tour_next"
         im.push_style_color(Col.BUTTON, ACCENT_GREEN)
         im.begin_disabled(self.awaiting)
         if im.button(next_label):
