@@ -16,7 +16,7 @@ class _Model:
     mode = "a"
 
 
-def _tips(style):
+def _tips(style, descriptions=None):
     tips, buttons = [], []
     real_tip, real_radio = im_widgets.set_item_tooltip, im_widgets.radio_button
 
@@ -32,6 +32,8 @@ def _tips(style):
     try:
         spec = {"sections": [{"type": "choice", "attr": "mode", "options": ["a", "b", "c"],
                               "style": style, "description": "Pick the mode."}]}
+        if descriptions is not None:
+            spec["sections"][0]["descriptions"] = descriptions
         state, io, storage = FormState(), emtk.IO(), {}
         for _ in range(2):
             with emtk.frame(RecordingPainter(), (0, 0, 400, 200), io=io, storage=storage):
@@ -53,3 +55,10 @@ def test_every_inline_radio_button_has_the_tooltip():
 def test_every_stacked_radio_button_has_the_tooltip():
     tips, buttons = _tips("radio_list")
     assert {n for n, _ in tips} >= {1, 2, 3}
+
+
+def test_each_option_can_say_what_it_is():
+    tips, _ = _tips("radio_list", ["First.", "", "Third."])
+    by_button = {n: text for n, text in tips}
+    # Its own description where it has one, the section's where it has none.
+    assert by_button[1] == "First." and by_button[2] == "Pick the mode." and by_button[3] == "Third."

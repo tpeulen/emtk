@@ -25,7 +25,7 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``hidden_when``), ``value`` (``kind`` int/float/str, ``minimum``, ``maximum``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
 ``call``; a slider with ``"field": false`` is the slider alone, its value
-written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``options_source``,
+written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``descriptions`` (a tooltip per radio option), ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
 ``info``, ``progress`` (a bar over a fraction, indeterminate while it is
 ``None``), ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
@@ -618,7 +618,12 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
                 _w.same_line()
             if _w.radio_button(_id(label, f"{name}{i}"), i == index) and i != index:
                 _commit(model, section, values[i], state)
-            _tooltip(section)
+            # ``descriptions``: one tooltip per option, beside ``options``/``labels``.
+            notes = section.get("descriptions") or ()
+            if i < len(notes) and notes[i]:
+                _w.set_item_tooltip(str(notes[i]))
+            else:
+                _tooltip(section)
             _remember(state, f"{name}.{i}")
         _remember(state, name)
         return
