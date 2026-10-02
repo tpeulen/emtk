@@ -15,7 +15,9 @@ until the release, so a drag that leaves a window does not change hands.
 
 The rule is Dear ImGui's: ``io.want_capture_mouse`` / ``want_capture_keyboard``
 from the last frame decide, which is how an ImGui app routes input to the game
-underneath.
+underneath. An app whose windows include a transparent full-size one (a
+:class:`~emtk.docking.DockManager`'s area) answers more precisely with
+``pointer_wanted(x, y)``: when it has that method, it decides the pointer.
 """
 from __future__ import annotations
 
@@ -63,6 +65,7 @@ class OverlaySurface(Surface):
         kwargs = {} if font_pt is None else {"font_pt": font_pt}
         self.over = _Over(app, **kwargs)
         self._held: Surface | None = None  # who got the press, until the release
+        self._pointer = (-1.0, -1.0)
 
     # -- whose event ------------------------------------------------------ #
     def _io(self, name: str) -> bool:
@@ -72,6 +75,9 @@ class OverlaySurface(Surface):
     def _mouse_target(self) -> Surface:
         if self._held is not None:
             return self._held
+        hook = getattr(self.app, "pointer_wanted", None)
+        if callable(hook):
+            return self.over if hook(*self._pointer) else self.base
         return self.over if self._io("want_capture_mouse") else self.base
 
     # -- lifecycle -------------------------------------------------------- #
@@ -107,6 +113,7 @@ class OverlaySurface(Surface):
 
     # -- input ------------------------------------------------------------ #
     def on_pointer_press(self, x, y, button, modifiers, double=False) -> bool:
+        self._pointer = (float(x), float(y))
         target = self._mouse_target()
         self._held = target
         due = bool(target.on_pointer_press(x, y, button, modifiers, double))
@@ -119,6 +126,7 @@ class OverlaySurface(Surface):
     def on_pointer_move(self, x, y, buttons, modifiers) -> bool:
         # The app always hears the pointer, so its hover (and so its claim on
         # the next press) is current.
+        self._pointer = (float(x), float(y))
         app_due = bool(self.over.on_pointer_move(x, y, buttons, modifiers))
         target = self._mouse_target()
         if target is self.over:
@@ -134,6 +142,7 @@ class OverlaySurface(Surface):
         return due
 
     def on_wheel(self, x, y, steps, modifiers) -> bool:
+        self._pointer = (float(x), float(y))
         return bool(self._mouse_target().on_wheel(x, y, steps, modifiers))
 
     def _key_target(self) -> Surface:

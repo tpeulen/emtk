@@ -106,3 +106,18 @@ def test_typing_reaches_a_focused_input_text():
         frame()
     assert state["text"] == "1omp", (state, base.events)
     assert not any(e[0] == "key" for e in base.events)
+
+
+def test_an_app_with_pointer_wanted_decides_the_pointer():
+    """A transparent full-size window (a dock area) must not swallow the base's drags."""
+    app = ImApp(lambda: None)
+    app.io.want_capture_mouse = True            # the area is hovered everywhere
+    app.pointer_wanted = lambda x, y: x < 100   # but only the panel is the app's
+    base = _Base()
+    s = OverlaySurface(base, app)
+    s.on_pointer_move(500, 300, 0, 0)
+    s.on_pointer_press(500, 300, LEFT_BUTTON, 0)
+    s.on_pointer_release(500, 300, LEFT_BUTTON, 0)
+    s.on_pointer_move(50, 300, 0, 0)
+    s.on_pointer_press(50, 300, LEFT_BUTTON, 0)
+    assert [e[0] for e in base.events] == ["move", "press", "release"]
