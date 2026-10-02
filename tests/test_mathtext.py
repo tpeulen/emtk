@@ -39,6 +39,7 @@ def test_latex_to_unicode():
 
 
 def test_render_math_to_texture():
+    pytest.importorskip("matplotlib", reason="math rendering needs matplotlib")
     tex = render_math_to_texture(r"E = \frac{F_{12}}{F_{12} + \gamma F_{11}}", font_size=16.0)
     assert tex is not None
     assert tex.width > 0
@@ -51,6 +52,7 @@ def test_render_math_to_texture():
 
 
 def test_im_math_widget():
+    pytest.importorskip("matplotlib", reason="math rendering needs matplotlib")
     painter = RecordingPainter()
     with im.frame(painter, (0, 0, 800, 600)):
         im.begin("Math Test Window")
