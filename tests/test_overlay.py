@@ -167,3 +167,33 @@ def test_the_app_is_redrawn_only_when_something_can_have_changed_it():
     assert len(drawn) == 3
     s.over.render(None)
     assert len(drawn) == 3
+
+
+def test_a_frame_the_app_asked_for_later_is_drawn_when_due():
+    """A tooltip waits out its delay: the host wakes then, and the app must draw."""
+    import time
+
+    drawn = []
+
+    class App(ImApp):
+        wait = 0.05
+
+        def draw(self, painter, x, y, w, h):
+            drawn.append(1)
+            self.wants_frame = False
+
+        def next_frame_in(self):
+            wait, self.wait = self.wait, None   # one delayed frame, then idle
+            return wait
+
+    app = App(lambda: None)
+    s = OverlaySurface(_Base(), app)
+    s.over.renderer, s.over.size, s.over.ratio = _Renderer(), (800, 600), 1.0
+    s.over.render(None)
+    s.over.render(None)                 # not yet due: last frame's drawing
+    assert len(drawn) == 1
+    time.sleep(0.06)
+    s.over.render(None)                 # due: drawn although no event came
+    assert len(drawn) == 2
+    s.over.render(None)
+    assert len(drawn) == 2

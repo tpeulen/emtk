@@ -21,9 +21,10 @@ underneath. An app whose windows include a transparent full-size one (a
 """
 from __future__ import annotations
 
+import time
 from typing import Sequence
 
-from .app import ControlSurface, Surface
+from .app import ControlSurface, Surface, next_frame_in
 
 __all__ = ["OverlaySurface"]
 
@@ -39,6 +40,9 @@ class _Over(ControlSurface):
     """
 
     dirty = True
+    #: When the app's own timer is due (``next_frame_in``: a tooltip waiting out
+    #: its delay), as ``time.monotonic()``; ``None`` when it set none.
+    due_at: float | None = None
 
     def mark(self) -> None:
         self.dirty = True
@@ -52,11 +56,17 @@ class _Over(ControlSurface):
             self.dirty = True
         painter = self._painter
         hook = self._hook("animating")
-        if self.dirty or (hook is not None and hook()):
+        due = self.due_at is not None and time.monotonic() >= self.due_at
+        if self.dirty or due or (hook is not None and hook()):
             painter.clear()
             self.control.draw(painter, *self._box())
             # An app that changed state late in its frame asks for one more.
             self.dirty = bool(getattr(self.control, "wants_frame", False))
+            # And one that asked for a frame *later* gets it then, although no
+            # event marks it: without this a hover tooltip never appeared --
+            # the host woke on time and was handed the frame without it.
+            wait = next_frame_in(self.control)
+            self.due_at = None if wait is None else time.monotonic() + max(float(wait), 0.0)
         width, height = self.size
         # background=None: load what the base drew, do not clear it.
         self.renderer.render(painter, width, height, view, background=None, format=self.format)
