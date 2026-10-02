@@ -1075,3 +1075,40 @@ def test_release_lets_go_of_everything():
     table.press(100.0, 5.0, 0.0, 0.0, 300.0, 120.0)
     table.release()
     assert table.drag(200.0, 5.0, 0.0, 0.0, 300.0, 120.0) is False
+
+
+def test_consecutive_tables_keep_the_box_bottom():
+    """``avail()`` after a table measures to the same box bottom as before it.
+
+    The second of two tables used to restore the moved line start as the box
+    origin, so ``avail()`` reported the space *below* the box: a plot sized to
+    fill what was left ran off the bottom of its pane.
+    """
+    from emtk import im
+    from emtk.im_core import IO, frame
+    from emtk.testing import RecordingPainter
+
+    bottoms = []
+
+    def table(name, rows):
+        if im.begin_table(name, 3):
+            for _ in range(rows):
+                im.table_next_row()
+                for text in "abc":
+                    im.table_next_column()
+                    im.text(text)
+            im.end_table()
+
+    def gui():
+        im.begin_child((8.0, 8.0, 400.0, 500.0), clip=True, child_id="c", scrollable=True)
+        for name, rows in (("t1", 13), ("t2", 3), ("t3", 3)):
+            table(name, rows)
+            bottoms.append(im.get_cursor_pos()[1] + im.get_content_region_avail()[1])
+        im.end_child()
+
+    storage, io = {}, IO()
+    for _ in range(2):
+        bottoms.clear()
+        with frame(RecordingPainter(), (0.0, 0.0, 800.0, 600.0), io=io, storage=storage):
+            gui()
+    assert bottoms == [508.0, 508.0, 508.0]

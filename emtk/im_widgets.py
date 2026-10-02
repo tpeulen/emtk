@@ -2732,7 +2732,13 @@ def begin_table(str_id: str, column_count: int, flags: int = 0, size=None) -> bo
     width = (size[0] if size and size[0] else ctx.layout.avail()[0])
     height = (size[1] if size and len(size) > 1 and size[1] else 0.0)
     table = _Table(str_id, column_count, flags, (x, y, width, height))
-    table.saved_layout = (ctx.layout.x, ctx.layout.y, ctx.layout.w, ctx.layout.h)
+    lay = ctx.layout
+    # The box *and* its origin and extents: after a cursor move (any item
+    # placed by ``set_cursor_screen_pos``, a previous table) ``lay.y`` is the
+    # moved line start, not the box top, and restoring it as the origin made
+    # every following ``avail()`` report room below the box's real bottom.
+    table.saved_layout = (lay.x, lay.y, lay.w, lay.h,
+                          lay._origin_x, lay._origin_y, lay._max_x, lay._max_y)
     shared = _table_shared(str_id)
     for column in table.columns:
         stored = shared.get(("width", column.index))
@@ -2762,7 +2768,11 @@ def end_table() -> None:
     if table.flags & (TableFlags.BORDERS_OUTER_V | TableFlags.BORDERS_INNER_V):
         _table_borders(table)
     if table.saved_layout is not None:
-        ctx.layout.reset(*table.saved_layout)
+        x, y, w, h, origin_x, origin_y, max_x, max_y = table.saved_layout
+        lay = ctx.layout
+        lay.reset(x, y, w, h)
+        lay._origin_x, lay._origin_y = origin_x, origin_y
+        lay._max_x, lay._max_y = max(lay._max_x, max_x), max(lay._max_y, max_y)
     set_cursor_screen_pos((table.box[0], max(table.row_top, table.box[1])))
     ctx.pop_id()
 
