@@ -74,3 +74,15 @@ def test_a_missing_job_file_is_refused(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         jobs.start(f"{__name__}:_read_file", {"path": "x"}, files=[str(tmp_path / "nope.bin")])
+
+
+def test_configure_names_the_worker_packages():
+    from emtk import jobs
+
+    try:
+        jobs.configure(packages=["numpy"])
+        assert jobs._worker_packages == ["numpy"]
+        jobs.configure()
+        assert jobs._worker_packages is None
+    finally:
+        jobs.configure()

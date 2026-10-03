@@ -42,9 +42,25 @@ import threading
 import traceback
 from typing import Any, Callable, Optional
 
-__all__ = ["Job", "in_browser", "start", "warm", "worker_state"]
+__all__ = ["Job", "configure", "in_browser", "start", "warm", "worker_state"]
 
 _ids = itertools.count(1)
+
+#: Pyodide packages the worker loads; ``None``: all the page loads.
+_worker_packages: Optional[list] = None
+
+
+def configure(packages: Optional[list] = None) -> None:
+    """Say what the page's worker needs, before it starts (:func:`warm`, the first job).
+
+    ``packages``: the Pyodide packages to load there, e.g. ``["numpy"]`` -- a
+    worker that only computes need not load what the page loads for drawing or
+    for other tools (scipy, matplotlib, ...), and boots that much sooner.
+    ``None`` (the default) loads all of the page's. The page's wheels and app
+    archive are always loaded.
+    """
+    global _worker_packages
+    _worker_packages = None if packages is None else [str(p) for p in packages]
 
 
 def in_browser() -> bool:
@@ -177,7 +193,8 @@ class _Worker:
         script = js.document.querySelector('script[src*="pyodide"]')
         cfg = {
             "pyodide_js": absolute(script.src if script is not None else "pyodide/pyodide.js"),
-            "packages": list(config.get("pyodide_packages", [])),
+            "packages": list(config.get("pyodide_packages", []) if _worker_packages is None
+                             else _worker_packages),
             "wheels": [absolute(w) for w in config.get("wheels", [])],
             "archive": absolute(config["archive"]),
             "extract_dir": config.get("extract_dir", "/app"),
