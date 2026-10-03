@@ -48,6 +48,9 @@ async function copyDropped(item, dir, FS) {
     ? await new Promise((resolve, reject) => item.file(resolve, reject))
     : item;
   FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+  // The handle too: a job that reads this path gets the File itself in its
+  // worker (emtk.jobs), mounted read-only, instead of another copy of the bytes.
+  (globalThis.emtkDroppedFiles = globalThis.emtkDroppedFiles || {})[path] = file;
   return path;
 }
 // </copy-dropped>

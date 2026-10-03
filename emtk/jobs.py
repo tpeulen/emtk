@@ -26,10 +26,12 @@ so the first job does not pay for it. ``env`` is set in the worker's
 cannot read.
 
 ``files`` names files on the page's file system (a dropped file, say) that the
-job reads: in a page they are copied into the worker's file system at the same
-path before the function runs -- moved as a transferred buffer, not encoded
-into the JSON -- and stay there for later jobs, which need not send them
-again. On a desktop the thread shares the file system and ``files`` is a
+job reads: in a page they appear in the worker's file system at the same path
+before the function runs, and stay there for later jobs, which need not send
+them again. A file the user dropped goes as its ``File`` handle (kept by the
+page's drop handler): the worker mounts it read-only and reads it from disk
+as it goes, so a large file costs the worker no memory. Any other file is
+copied, as a transferred buffer, not encoded into the JSON. On a desktop the thread shares the file system and ``files`` is a
 no-op.
 """
 from __future__ import annotations
@@ -163,7 +165,18 @@ onmessage = async (event) => {
     for (const f of (job.files || [])) {
       const dir = f.path.substring(0, f.path.lastIndexOf("/"));
       if (dir) py.FS.mkdirTree(dir);
-      py.FS.writeFile(f.path, new Uint8Array(f.data));
+      try { py.FS.unlink(f.path); } catch (e) { /* not there yet */ }
+      if (f.file && py.FS.filesystems.WORKERFS) {
+        // The File itself: mounted read-only, read lazily from disk -- no
+        // copy of a large file in this worker's memory.
+        const at = "/mnt/emtk-jobfiles/" + (self.emtkJobFileMounts = (self.emtkJobFileMounts || 0) + 1);
+        py.FS.mkdirTree(at);
+        py.FS.mount(py.FS.filesystems.WORKERFS, { files: [f.file] }, at);
+        py.FS.symlink(at + "/" + f.file.name, f.path);
+      } else {
+        const data = f.data ? new Uint8Array(f.data) : new Uint8Array(await f.file.arrayBuffer());
+        py.FS.writeFile(f.path, data);
+      }
     }
     delete job.files;
   } catch (e) {
@@ -245,13 +258,23 @@ class _Worker:
             import pyodide_js  # noqa: PLC0415
 
             entries = js.Array.new()
+            handles = getattr(js, "emtkDroppedFiles", None)
             for path in files:
-                data = pyodide_js.FS.readFile(str(path))     # a copy, as a Uint8Array
                 entry = js.Object.new()
                 entry.path = str(path)
-                entry.data = data.buffer
+                handle = None
+                if handles is not None:
+                    try:
+                        handle = getattr(handles, str(path), None)
+                    except Exception:  # noqa: BLE001 - a path JS cannot index by
+                        handle = None
+                if handle is not None:
+                    entry.file = handle                          # cloned, not copied
+                else:
+                    data = pyodide_js.FS.readFile(str(path))     # a copy, as a Uint8Array
+                    entry.data = data.buffer
+                    transfer.append(data.buffer)
                 entries.push(entry)
-                transfer.append(data.buffer)
             message.files = entries
         if transfer:
             self.worker.postMessage(message, to_js(transfer))
