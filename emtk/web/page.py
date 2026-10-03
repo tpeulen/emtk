@@ -29,6 +29,7 @@ __all__ = [
     "MOUNT_DIR",
     "WebPage",
     "download",
+    "dropped_by_reference",
     "in_browser",
     "mount",
     "wheel_steps_from_dom",
@@ -67,6 +68,28 @@ def user_files_dir(fallback: str = "/") -> str:
         if pathlib.Path(candidate).is_dir():
             return candidate
     return fallback
+
+
+def dropped_by_reference(path: str, js=None):
+    """The size of a dropped file kept only as a handle, else ``None``.
+
+    With :attr:`emtk.web.serve.Bundle.drop_by_reference_above` a large dropped
+    file is not copied into the page: its path holds an empty placeholder and
+    a job reads the file itself (:mod:`emtk.jobs`). ``None`` off a page or for
+    a file that was copied.
+    """
+    if js is None:
+        if not in_browser():
+            return None
+        import js  # noqa: PLC0415
+    table = getattr(js, "emtkDroppedByReference", None)
+    if table is None:
+        return None
+    try:
+        size = getattr(table, str(path), None)
+    except Exception:  # noqa: BLE001 - a path JS cannot index by
+        return None
+    return None if size is None else int(size)
 
 
 def in_browser() -> bool:

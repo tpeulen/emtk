@@ -99,3 +99,48 @@ def test_the_drop_handler_takes_entries_before_it_awaits():
     assert "webkitGetAsEntry" in handler
     assert handler.index("webkitGetAsEntry") < handler.index("await")
     assert "copyDropped(" in handler
+
+
+BY_REFERENCE = r"""
+%(block)s
+
+const written = {};
+const FS = { mkdirTree: () => {}, writeFile: (p, bytes) => { written[p] = bytes.length; } };
+const big = { name: "big.ptu", size: 5000, arrayBuffer: async () => { throw new Error("read the big file"); } };
+const small = { name: "small.ptu", size: 10, arrayBuffer: async () => new Uint8Array(10).buffer };
+(async () => {
+  const a = await copyDropped(big, "/mnt/dropped", FS, 1000);
+  const b = await copyDropped(small, "/mnt/dropped", FS, 1000);
+  console.log(JSON.stringify({ a, b, written, handles: Object.keys(globalThis.emtkDroppedFiles),
+                               byref: globalThis.emtkDroppedByReference }));
+})();
+"""
+
+
+def test_a_large_drop_is_kept_by_reference_when_the_app_asks(tmp_path):
+    """Above the app's limit the page keeps only the File handle and an empty
+    placeholder; smaller files are copied as before; both handles are kept."""
+    script = tmp_path / "byref.js"
+    script.write_text(BY_REFERENCE % {"block": _block()})
+    out = json.loads(subprocess.run(["node", str(script)], capture_output=True, text=True,
+                                    check=True).stdout)
+    assert out["written"] == {"/mnt/dropped/big.ptu": 0, "/mnt/dropped/small.ptu": 10}
+    assert sorted(out["handles"]) == ["/mnt/dropped/big.ptu", "/mnt/dropped/small.ptu"]
+    assert out["byref"] == {"/mnt/dropped/big.ptu": 5000}
+
+
+def test_the_page_config_carries_the_limit():
+    bundle = serve.Bundle(app="emtk.implot_demo:make_app", drop_by_reference_above=123)
+    assert serve._config(bundle, [])["drop_by_reference_above"] == 123
+    assert serve._config(serve.Bundle(app="emtk.implot_demo:make_app"), [])["drop_by_reference_above"] == 0
+
+
+def test_dropped_by_reference_reads_the_page_table():
+    from types import SimpleNamespace
+
+    from emtk.web.page import dropped_by_reference
+
+    js = SimpleNamespace(emtkDroppedByReference=SimpleNamespace(**{"/mnt/dropped/big.ptu": 5000}))
+    assert dropped_by_reference("/mnt/dropped/big.ptu", js=js) == 5000
+    assert dropped_by_reference("/mnt/dropped/other.ptu", js=js) is None
+    assert dropped_by_reference("/x") is None          # not a page

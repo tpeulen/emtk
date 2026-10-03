@@ -143,6 +143,12 @@ class Bundle:
         Where ``pyodide.js`` comes from.
     mount, drop : bool
         Whether the page offers "Mount folder" and file drop.
+    drop_by_reference_above : int
+        Bytes. A dropped file larger than this is not copied into the page:
+        its path holds an empty placeholder and the page keeps the ``File``
+        handle, which :mod:`emtk.jobs` hands to the worker (read from disk
+        there). For apps that read large files only in jobs; 0 (the default)
+        copies every file.
     ready_message : str
         The status line once the first frame is drawn -- what a browser test
         waits for.
@@ -161,6 +167,7 @@ class Bundle:
     pyodide_url: str = DEFAULT_PYODIDE_URL
     mount: bool = True
     drop: bool = True
+    drop_by_reference_above: int = 0
     ready_message: str = "ready"
 
     def __post_init__(self) -> None:
@@ -284,6 +291,7 @@ def _config(bundle: Bundle, wheels: Sequence[str]) -> dict:
         "wheels": list(wheels),
         "mount": bool(bundle.mount),
         "drop": bool(bundle.drop),
+        "drop_by_reference_above": int(bundle.drop_by_reference_above or 0),
         "ready_message": str(bundle.ready_message),
     }
 

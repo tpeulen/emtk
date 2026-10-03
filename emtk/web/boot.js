@@ -29,7 +29,7 @@ const status = (message) => {
 // `DataTransferItem.webkitGetAsEntry` gives) may be a directory -- a
 // burst-analysis folder, a sample's result folder -- and is copied whole,
 // so the app is handed one folder path, as a desktop drop would hand it.
-async function copyDropped(item, dir, FS) {
+async function copyDropped(item, dir, FS, byReferenceAbove = 0) {
   const path = `${dir}/${item.name}`;
   FS.mkdirTree(dir);
   if (item.isDirectory) {
@@ -40,17 +40,24 @@ async function copyDropped(item, dir, FS) {
     for (;;) {
       const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
       if (!batch.length) break;
-      for (const child of batch) await copyDropped(child, path, FS);
+      for (const child of batch) await copyDropped(child, path, FS, byReferenceAbove);
     }
     return path;
   }
   const file = item.isFile
     ? await new Promise((resolve, reject) => item.file(resolve, reject))
     : item;
-  FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
-  // The handle too: a job that reads this path gets the File itself in its
+  // The handle always: a job that reads this path gets the File itself in its
   // worker (emtk.jobs), mounted read-only, instead of another copy of the bytes.
   (globalThis.emtkDroppedFiles = globalThis.emtkDroppedFiles || {})[path] = file;
+  if (byReferenceAbove > 0 && file.size > byReferenceAbove) {
+    // An app that reads large files only in jobs (Bundle.drop_by_reference_above):
+    // no copy in the page -- an empty placeholder marks the path.
+    FS.writeFile(path, new Uint8Array(0));
+    (globalThis.emtkDroppedByReference = globalThis.emtkDroppedByReference || {})[path] = file.size;
+    return path;
+  }
+  FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
   return path;
 }
 // </copy-dropped>
@@ -312,7 +319,8 @@ mount(js.emtkCanvas, _emtk_app_spec)
       for (const item of dropped) {
         status(`opening ${item.name}…`);
         try {
-          const path = await copyDropped(item, page.DROP_DIR, pyodide.FS);
+          const path = await copyDropped(item, page.DROP_DIR, pyodide.FS,
+                                         Number(config.drop_by_reference_above || 0));
           if (await promising(page.open_path, path)) redraw();
         } catch (error) {
           status(`could not open ${item.name}: ${error}`);
