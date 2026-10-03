@@ -24,6 +24,13 @@ into another interpreter); ``report(fraction, message)`` sets the progress::
 so the first job does not pay for it. ``env`` is set in the worker's
 ``os.environ`` before the function runs, for what a page knows and a worker
 cannot read.
+
+``files`` names files on the page's file system (a dropped file, say) that the
+job reads: in a page they are copied into the worker's file system at the same
+path before the function runs -- moved as a transferred buffer, not encoded
+into the JSON -- and stay there for later jobs, which need not send them
+again. On a desktop the thread shares the file system and ``files`` is a
+no-op.
 """
 from __future__ import annotations
 
@@ -135,6 +142,19 @@ onmessage = async (event) => {
   let py;
   try { py = await ready; } catch (e) { postMessage({ id: job.id, error: "worker failed to start: " + e }); return; }
   try {
+    // Files the job reads: written where the page had them, then dropped
+    // from the message so the buffers never reach Python as JSON.
+    for (const f of (job.files || [])) {
+      const dir = f.path.substring(0, f.path.lastIndexOf("/"));
+      if (dir) py.FS.mkdirTree(dir);
+      py.FS.writeFile(f.path, new Uint8Array(f.data));
+    }
+    delete job.files;
+  } catch (e) {
+    postMessage({ id: job.id, error: "could not copy the job's files: " + e });
+    return;
+  }
+  try {
     py.globals.set("_emtk_job", py.toPy(job));
     py.runPython("from emtk.jobs import _worker_run; _worker_run(_emtk_job)");
   } catch (e) {
@@ -194,7 +214,7 @@ class _Worker:
         elif "error" in data:
             job.error, job.done = str(data["error"]), True
 
-    def submit(self, job: Job, params: dict, env: dict) -> None:
+    def submit(self, job: Job, params: dict, env: dict, files=()) -> None:
         from pyodide.ffi import to_js  # noqa: PLC0415
         import js  # noqa: PLC0415
 
@@ -202,7 +222,24 @@ class _Worker:
         if self.state == "starting":
             job._report(None, "starting the compute worker (first run only)")
         message = {"id": job.id, "spec": job.spec, "params": json.dumps(params), "env": json.dumps(env)}
-        self.worker.postMessage(to_js(message, dict_converter=js.Object.fromEntries))
+        message = to_js(message, dict_converter=js.Object.fromEntries)
+        transfer = []
+        if files:
+            import pyodide_js  # noqa: PLC0415
+
+            entries = js.Array.new()
+            for path in files:
+                data = pyodide_js.FS.readFile(str(path))     # a copy, as a Uint8Array
+                entry = js.Object.new()
+                entry.path = str(path)
+                entry.data = data.buffer
+                entries.push(entry)
+                transfer.append(data.buffer)
+            message.files = entries
+        if transfer:
+            self.worker.postMessage(message, to_js(transfer))
+        else:
+            self.worker.postMessage(message)
         job._on_cancel = _restart
 
     def terminate(self) -> None:
@@ -264,13 +301,23 @@ def _worker_run(job) -> None:
 # --------------------------------------------------------------------------- #
 # the API
 # --------------------------------------------------------------------------- #
-def start(spec: str, params: Optional[dict] = None, env: Optional[dict] = None) -> Job:
-    """Run ``spec`` with ``params`` off the page's thread; returns its :class:`Job`."""
+def start(spec: str, params: Optional[dict] = None, env: Optional[dict] = None,
+          files: Optional[list] = None) -> Job:
+    """Run ``spec`` with ``params`` off the page's thread; returns its :class:`Job`.
+
+    ``files``: paths on the page's file system the job reads; copied into the
+    worker's file system first (see the module docstring). A desktop thread
+    reads them where they are.
+    """
     job = Job(spec)
     params = dict(params or {})
     env = {k: str(v) for k, v in (env or {}).items()}
+    files = [str(f) for f in (files or ())]
+    missing = [f for f in files if not os.path.exists(f)]
+    if missing:
+        raise FileNotFoundError(f"job files not found: {', '.join(missing)}")
     if in_browser():
-        _get_worker().submit(job, params, env)
+        _get_worker().submit(job, params, env, files)
     else:
         _start_thread(job, params, env)
     return job
