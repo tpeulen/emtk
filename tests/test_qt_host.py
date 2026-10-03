@@ -31,7 +31,11 @@ def test_an_animating_control_gets_frames_without_input(qt_app):
     host = ControlHost(control)
     host.resize(100, 80)
     host.show()
-    _pump(qt_app, 0.6)
+    # Up to 3 s for the five frames: a fixed 0.6 s window failed under the
+    # load of the full suite although the host keeps drawing.
+    end = time.time() + 3.0
+    while control.frames < 5 and time.time() < end:
+        _pump(qt_app, 0.05)
     assert control.frames >= 5, "the host drew once and stopped"
     drawn = control.frames
     _pump(qt_app, 0.2)
