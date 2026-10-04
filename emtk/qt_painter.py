@@ -509,6 +509,33 @@ class QtPainter:
         finally:
             self._p.restore()
 
+    def polyline(self, points, width: float, colour: Colour, closed: bool = False) -> None:
+        """Stroke a complete path natively, without per-segment triangle paths.
+
+        All vertices are retained. The plot layer splits missing data into
+        separate finite paths before calling this optional acceleration seam.
+        Existing clipping, transforms and painter state are preserved.
+        """
+        from qtpy import QtCore, QtGui
+
+        vertices = [QtCore.QPointF(float(x), float(y)) for x, y in points]
+        if len(vertices) < 2 or width <= 0.0:
+            return
+        if closed and len(vertices) > 2:
+            vertices.append(vertices[0])
+        # The legacy triangle stroke includes a one-pixel same-colour edge
+        # (fill_triangle). Retain its effective thickness when batching.
+        pen = QtGui.QPen(self._colour(colour), float(width) + 1.0)
+        pen.setCapStyle(QtCore.Qt.FlatCap)
+        pen.setJoinStyle(QtCore.Qt.BevelJoin)
+        self._p.save()
+        try:
+            self._p.setPen(pen)
+            self._p.setBrush(QtCore.Qt.NoBrush)
+            self._p.drawPolyline(QtGui.QPolygonF(vertices))
+        finally:
+            self._p.restore()
+
     def fill_triangle(
         self,
         p0: tuple[float, float],

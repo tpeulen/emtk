@@ -20,12 +20,12 @@ draw against and every item must be known before the range is.
 from __future__ import annotations
 
 import math
-
 from collections.abc import Sequence
 from contextlib import contextmanager
 
-from ..painter import line as _painter_line
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER
+from ..painter import line as _painter_line
+from ..painter import polyline as _painter_polyline
 from .axis import Axis
 from .markers import draw_marker
 
@@ -234,6 +234,21 @@ class Plot:
                 draw_marker(p, "circle", px, py, width, colour)
             return
         dash = series.get("dash")
+        if not dash:
+            # Submit complete finite runs to the painter's optional batch seam.
+            # No resampling: each original sample still contributes a vertex.
+            # A missing sample breaks a run instead of inventing a connecting line.
+            points = []
+            for i in range(n):
+                if math.isfinite(xs[i]) and math.isfinite(ys[i]):
+                    points.append((self._x_axis.to_pixels(xs[i]), self._y_axis.to_pixels(ys[i])))
+                else:
+                    if len(points) > 1:
+                        _painter_polyline(p, points, width, colour)
+                    points = []
+            if len(points) > 1:
+                _painter_polyline(p, points, width, colour)
+            return
         # The dash phase carries across vertices, so a pattern reads as one
         # pattern along the curve rather than restarting at every sample --
         # which on a densely sampled curve would draw it solid.
