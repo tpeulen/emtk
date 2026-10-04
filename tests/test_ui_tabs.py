@@ -380,6 +380,42 @@ def test_the_scrolling_arrows_step_the_selection():
     assert bar.index == start
 
 
+def test_scroll_view_flag_scrolls_visible_range_without_changing_selection():
+    """Under TAB_BAR_SCROLL_VIEW, the overflow arrows scroll the view without changing the active tab."""
+    painter = RecordingPainter()
+    bar = _bar(
+        [f"document {n}" for n in range(9)],
+        flags=tabs.TAB_BAR_FITTING_POLICY_SCROLL | tabs.TAB_BAR_SCROLL_VIEW,
+    )
+    bar.draw(painter, 0.0, 0.0, 200.0, BAR_H)
+    assert bar._scroll_enabled is True
+    left_box, right_box = bar._scroll_boxes
+
+    # Starts at 0
+    assert bar.index == 0
+    assert bar.scroll == 0.0
+
+    # Click right arrow -> scrolls view right, but selection stays 0 (Qt behavior)
+    pressed = bar.press(right_box[0] + 1.0, 6.0, 0.0, 0.0, 200.0, BAR_H)
+    assert pressed.action == "scroll"
+    assert bar.index == 0
+    assert bar.scroll > 0.0
+    scrolled = bar.scroll
+
+    # Click left arrow -> scrolls view left, selection stays 0
+    bar.press(left_box[0] + 1.0, 6.0, 0.0, 0.0, 200.0, BAR_H)
+    assert bar.index == 0
+    assert bar.scroll < scrolled
+
+    # Selecting a tab out of view automatically scrolls it into view
+    bar.select(8)
+    bar.draw(painter, 0.0, 0.0, 200.0, BAR_H)
+    item, item_x, item_w = bar._geometry[8]
+    vis_x, _, vis_w, _ = bar._visible
+    assert item_x + item_w <= vis_x + vis_w + 1e-6
+
+
+
 def test_a_strip_that_fits_neither_scrolls_nor_grows_arrows():
     """The arrows and the scroll offset only appear when they are needed."""
     painter = RecordingPainter()

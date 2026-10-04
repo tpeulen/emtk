@@ -53,6 +53,7 @@ __all__ = [
     "TAB_BAR_TAB_LIST_POPUP_BUTTON",
     "TAB_BAR_NO_CLOSE_WITH_MIDDLE_MOUSE_BUTTON",
     "TAB_BAR_NO_TAB_LIST_SCROLLING_BUTTONS",
+    "TAB_BAR_SCROLL_VIEW",
     "TAB_BAR_FITTING_POLICY_RESIZE_DOWN",
     "TAB_BAR_FITTING_POLICY_SCROLL",
     "TAB_BAR_FITTING_POLICY_MASK",
@@ -88,6 +89,9 @@ TAB_BAR_NO_CLOSE_WITH_MIDDLE_MOUSE_BUTTON = 1 << 3
 #: Do not put the two stepping arrows at the right of the strip. Only means
 #: anything under :data:`TAB_BAR_FITTING_POLICY_SCROLL`.
 TAB_BAR_NO_TAB_LIST_SCROLLING_BUTTONS = 1 << 4
+#: Scroll the visible window of tabs without changing the selected tab (Qt
+#: QTabBar behavior) when clicking the overflow arrows.
+TAB_BAR_SCROLL_VIEW = 1 << 5
 #: Tabs that do not fit are shrunk, widest first.
 TAB_BAR_FITTING_POLICY_RESIZE_DOWN = 1 << 8
 #: Tabs that do not fit keep their width and the strip scrolls.
@@ -570,6 +574,9 @@ class TabBar:
             self.flags |= TAB_BAR_FITTING_POLICY_DEFAULT
         #: How far the strip is scrolled, in pixels.
         self.scroll = 0.0
+        self._last_selected_tab: TabItem | None = None
+        self._force_scroll_to_selected = True
+        self._line_h = 14.0
         #: Whether the tab-list drop-down is showing.
         self.popup_open = False
         self._stamp = 1
@@ -734,6 +741,7 @@ class TabBar:
         item.last_selected = self._stamp
         self._stamp += 1
         self._selected = item
+        self._force_scroll_to_selected = True
         for one in self.items:
             one.selected = one is item
 
@@ -814,6 +822,7 @@ class TabBar:
         adding either one can be what makes the tabs need shrinking.
         """
         line = p.line_height()
+        self._line_h = float(line)
         bar_x, bar_w = float(x), float(w)
         self._popup_box = None
         if self.flags & TAB_BAR_TAB_LIST_POPUP_BUTTON:
@@ -826,7 +835,9 @@ class TabBar:
         spacing = TAB_SPACING * max(len(self.items) - 1, 0)
         self._ideal_width = sum(widths) + spacing
 
-        can_scroll = bool(self.flags & TAB_BAR_FITTING_POLICY_SCROLL)
+        can_scroll = bool(
+            self.flags & (TAB_BAR_FITTING_POLICY_SCROLL | TAB_BAR_SCROLL_VIEW)
+        )
         self._scroll_boxes = None
         self._scroll_enabled = (
             can_scroll
@@ -835,7 +846,7 @@ class TabBar:
             and not (self.flags & TAB_BAR_NO_TAB_LIST_SCROLLING_BUTTONS)
         )
         if self._scroll_enabled:
-            arrow_w = max(line - 2.0, 4.0)
+            arrow_w = max(line - 2.0, 14.0)
             buttons_w = arrow_w * 2.0
             at = max(bar_x, bar_x + bar_w - buttons_w)
             self._scroll_boxes = (
@@ -855,8 +866,20 @@ class TabBar:
             run += width + TAB_SPACING
         self._width_all = max(run - TAB_SPACING, 0.0)
 
+        max_scroll = max(self._width_all - bar_w, 0.0)
         if can_scroll:
-            self._scroll_to_selected(offsets, widths, bar_w, line)
+            if self.flags & TAB_BAR_SCROLL_VIEW:
+                if (
+                    self._force_scroll_to_selected
+                    or self._last_selected_tab is not self._selected
+                ):
+                    self._scroll_to_selected(offsets, widths, bar_w, line)
+                    self._force_scroll_to_selected = False
+                    self._last_selected_tab = self._selected
+                else:
+                    self.scroll = style.clamp(self.scroll, 0.0, max_scroll)
+            else:
+                self._scroll_to_selected(offsets, widths, bar_w, line)
         else:
             self.scroll = 0.0
 
@@ -931,11 +954,17 @@ class TabBar:
             p.pop_clip()
 
         if self._scroll_boxes is not None:
-            for box, glyph in zip(self._scroll_boxes, ("◀", "▶")):
+            max_scroll = max(self._width_all - vis_w, 0.0)
+            can_scroll_left = self.scroll > 0.5
+            can_scroll_right = self.scroll < max_scroll - 0.5
+            for box, glyph, enabled in zip(
+                self._scroll_boxes, ("◀", "▶"), (can_scroll_left, can_scroll_right)
+            ):
                 box_x, box_y, box_w, box_h = box
                 p.stroke_rect(box_x, box_y + 1.0, box_w, max(box_h - 1.0, 1.0),
                               style.BORDER, style.FRAME_BG)
-                p.text(box_x, box_y, box_w, box_h, ALIGN_CENTER, glyph, style.DIM)
+                glyph_col = style.TEXT if enabled else style.TEXT_DISABLED
+                p.text(box_x, box_y, box_w, box_h, ALIGN_CENTER, glyph, glyph_col)
 
         self._popup_rows = []
         if self.popup_open:
@@ -1017,6 +1046,11 @@ class TabBar:
         if self._scroll_boxes is not None:
             for box, direction in zip(self._scroll_boxes, (-1, +1)):
                 if style.hit(x, y, *box):
+                    if self.flags & TAB_BAR_SCROLL_VIEW:
+                        step = max(getattr(self, "_line_h", 14.0) * 4.0, 40.0)
+                        max_scroll = max(self._width_all - self._visible[2], 0.0)
+                        self.scroll = style.clamp(self.scroll + direction * step, 0.0, max_scroll)
+                        return TabPress("scroll", None, -1)
                     stepped = self._step_selection(direction)
                     at = self.items.index(stepped) if stepped is not None else -1
                     return TabPress("scroll", stepped, at)

@@ -688,6 +688,7 @@ class DockManager:
         self.region_boxes: Dict[str, Rect] = {}
         self.splitters: List[Tuple[Split, Rect, Rect]] = []
         self._tab_rects: Dict[str, List[Tuple[str, Rect]]] = {}
+        self._tab_scroll: Dict[str, float] = {}
         self._defaults: Dict[str, dict] = {}
         self._saved: dict = {}
         self._drag: Optional[dict] = None
@@ -1485,12 +1486,42 @@ class DockManager:
                 self._changed()
         right = (close_rect[0] if close_rect else x + w) - 2.0
 
+        from .i18n import tr
+
+        tab_widths = [
+            ctx.p.text_width(tr(self.windows[k].title)) + pad_x * 2.0 + 8.0 for k in shown
+        ]
+        total_tw = sum(tab_widths)
+        available_w = max(right - x, 0.0)
+
+        if region not in self._tab_scroll:
+            self._tab_scroll[region] = 0.0
+
+        if total_tw > available_w and len(shown) > 1:
+            arrow_w = th
+            buttons_w = arrow_w * 2.0
+            scroll_right_rect = (right - arrow_w, y, arrow_w, th)
+            scroll_left_rect = (right - buttons_w, y, arrow_w, th)
+            right -= buttons_w + 2.0
+            available_w = max(right - x, 0.0)
+            max_scroll = max(total_tw - available_w, 0.0)
+
+            if self._button(ctx, scroll_left_rect, self._id("scroll_left", region), "◀"):
+                self._tab_scroll[region] = max(0.0, self._tab_scroll[region] - 60.0)
+                self._changed()
+            if self._button(ctx, scroll_right_rect, self._id("scroll_right", region), "▶"):
+                self._tab_scroll[region] = min(max_scroll, self._tab_scroll[region] + 60.0)
+                self._changed()
+
+            self._tab_scroll[region] = max(0.0, min(self._tab_scroll[region], max_scroll))
+        else:
+            self._tab_scroll[region] = 0.0
+
         rects: List[Tuple[str, Rect]] = []
-        cursor = x + 1.0
+        cursor = x + 1.0 - self._tab_scroll[region]
         ctx.p.push_clip(x, y, max(right - x, 0.0), th)
         for key in shown:
             win = self.windows[key]
-            from .i18n import tr
 
             title = tr(win.title)
             tw = ctx.p.text_width(title) + pad_x * 2.0 + 6.0
