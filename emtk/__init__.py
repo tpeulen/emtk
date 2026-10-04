@@ -442,6 +442,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "TAB_BAR_NO_CLOSE_WITH_MIDDLE_MOUSE_BUTTON": "widgets.tabs",
     "TAB_BAR_NO_TAB_LIST_SCROLLING_BUTTONS": "widgets.tabs",
     "TAB_BAR_REORDERABLE": "widgets.tabs",
+    "TAB_BAR_SCROLL_VIEW": "widgets.tabs",
     "TAB_BAR_TAB_LIST_POPUP_BUTTON": "widgets.tabs",
     "TAB_SPACING": "widgets.tabs",
     "TabBar": "widgets.tabs",

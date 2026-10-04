@@ -564,3 +564,105 @@ def test_an_apps_own_layout_values_are_saved_restored_and_reset(tmp_path):
     assert not again.flush()
     again.reset()
     assert again.extra("plot.split", 120.0) == 120.0 and not store.load()
+
+
+def test_drag_and_drop_on_directional_pad_splits_region():
+    """Dragging a window to a region's directional pad splits the region."""
+    docks = DockManager(Region("main"))
+    docks.add_window("a", "Panel A", _content([], "a"), dock="main")
+    docks.add_window("b", "Panel B", _content([], "b"), dock="main")
+    host = Driver(docks)
+
+    assert docks.docked("main") == ["a", "b"]
+    assert len(docks.regions) == 1
+
+    # Find the right split pad for "main"
+    specs = docks._all_target_specs()["buttons"]
+    right_pad = next(pad for target_id, pad, _prev in specs if target_id == "main:right")
+    r_cx, r_cy = right_pad[0] + right_pad[2] / 2.0, right_pad[1] + right_pad[3] / 2.0
+
+    # Drag tab B to the right split pad
+    bx, by = host.tab("b")
+    host.press(bx, by)
+    host.move(bx + 10.0, by + 40.0)  # undock
+    host.move(r_cx, r_cy)
+    assert docks.drop_target == "main:right"
+    host.release(r_cx, r_cy)
+
+    # b is now in a new region on the right, a remains in main
+    r_b = docks.region_of("b")
+    assert r_b is not None and r_b != "main"
+    assert docks.docked("main") == ["a"]
+    assert docks.docked(r_b) == ["b"]
+    assert isinstance(docks.layout, Split)
+    assert docks.layout.axis == "h"
+
+    # Both regions are visible side-by-side
+    box_a = docks.region_boxes["main"]
+    box_b = docks.region_boxes[r_b]
+    assert box_a[0] < box_b[0]  # main on the left, new region on the right
+    assert box_a[2] + box_b[2] < BOX[2]  # share width
+
+
+def test_drag_window_back_prunes_empty_dynamic_region():
+    """Moving the last window out of a dynamic region prunes the region."""
+    docks = DockManager(Region("main"))
+    docks.add_window("a", "Panel A", _content([], "a"), dock="main")
+    docks.add_window("b", "Panel B", _content([], "b"), dock="main")
+    host = Driver(docks)
+
+    # Split b to the right
+    new_r = docks.split_region("main", "right")
+    docks.dock("b", new_r)
+    host.frame()
+    assert len(docks.regions) == 2
+    assert isinstance(docks.layout, Split)
+
+    # Drag b back onto main's tab strip
+    main_strip = docks.drop_targets()["main"][2]
+    host.drag(host.tab("b"), (main_strip[0] + 50.0, main_strip[1] + 10.0))
+
+    assert docks.region_of("b") == "main"
+    assert docks.docked("main") == ["a", "b"]
+    # The dynamic region was pruned, collapsing the layout back to Region("main")
+    assert isinstance(docks.layout, Region)
+    assert docks.layout.name == "main"
+    assert "main" in docks.regions
+    assert new_r not in docks.regions
+    assert docks.region_boxes["main"][2] == pytest.approx(BOX[2])
+
+
+def test_dynamic_split_round_trips_through_json():
+    """A dynamically split layout serializes and restores cleanly."""
+    docks = DockManager(Region("center"))
+    docks.add_window("w1", "W1", _content([], "w1"), dock="center")
+    docks.add_window("w2", "W2", _content([], "w2"), dock="center")
+    docks.add_window("w3", "W3", _content([], "w3"), dock="center")
+    host = Driver(docks)
+
+    # Split w2 to the right, w3 to the bottom of w2
+    r_right = docks.split_region("center", "right")
+    docks.dock("w2", r_right)
+    r_bottom = docks.split_region(r_right, "bottom")
+    docks.dock("w3", r_bottom)
+    host.frame()
+
+    text = docks.to_json()
+    state = json.loads(text)
+    assert "layout" in state
+    assert state["windows"]["w2"]["dock"] == r_right
+    assert state["windows"]["w3"]["dock"] == r_bottom
+
+    # Restore in a fresh DockManager
+    again = DockManager()
+    again.add_window("w1", "W1", _content([], "w1"))
+    again.add_window("w2", "W2", _content([], "w2"))
+    again.add_window("w3", "W3", _content([], "w3"))
+    again.restore(state)
+    Driver(again)
+
+    assert again.region_of("w1") == "center"
+    assert again.region_of("w2") == r_right
+    assert again.region_of("w3") == r_bottom
+    assert len(again.regions) == 3
+

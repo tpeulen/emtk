@@ -676,6 +676,7 @@ class DockManager:
         self.splits: Dict[str, Split] = {}
         self._index(self.layout, "root")
         self._default_ratios = {name: s.ratio for name, s in self.splits.items()}
+        self._initial_layout = self._deserialize_node(self._serialize_node(self.layout))
         #: Region name -> window keys docked there, in tab order.
         self.tabs: Dict[str, List[str]] = {name: [] for name in self.regions}
         #: Region name -> the key of its tab on top.
@@ -714,11 +715,195 @@ class DockManager:
             return
         if node.axis not in ("h", "v"):
             raise ValueError(f"a split's axis is 'h' or 'v', not {node.axis!r}")
-        if not node.name:
+        if not node.name or node.name.startswith("root") or node.name in self.splits:
             node.name = path
         self.splits[node.name] = node
         self._index(node.first, f"{path}.0")
         self._index(node.second, f"{path}.1")
+
+    def _reindex(self) -> None:
+        self.regions.clear()
+        self.splits.clear()
+        self._index(self.layout, "root")
+        for name in self.regions:
+            self.tabs.setdefault(name, [])
+            self.selected.setdefault(name, None)
+        for name, s in self.splits.items():
+            self._default_ratios.setdefault(name, s.ratio)
+
+    def _serialize_node(self, node: Node) -> dict:
+        if isinstance(node, Region):
+            return {
+                "type": "region",
+                "name": node.name,
+                "keep": bool(node.keep),
+                "dynamic": bool(getattr(node, "_dynamic", False)),
+            }
+        return {
+            "type": "split",
+            "axis": node.axis,
+            "ratio": round(float(node.ratio), 4),
+            "name": node.name,
+            "min_size": float(node.min_size),
+            "first": self._serialize_node(node.first),
+            "second": self._serialize_node(node.second),
+        }
+
+    def _deserialize_node(self, data: dict) -> Optional[Node]:
+        if not isinstance(data, dict):
+            return None
+        ntype = data.get("type")
+        if ntype == "region":
+            r = Region(name=str(data["name"]), keep=bool(data.get("keep", False)))
+            if data.get("dynamic"):
+                r._dynamic = True
+            return r
+        elif ntype == "split":
+            first = self._deserialize_node(data.get("first", {}))
+            second = self._deserialize_node(data.get("second", {}))
+            if first is None or second is None:
+                return None
+            return Split(
+                axis=str(data.get("axis", "h")),
+                ratio=float(data.get("ratio", 0.5)),
+                first=first,
+                second=second,
+                name=str(data.get("name", "")),
+                min_size=float(data.get("min_size", 80.0)),
+            )
+        return None
+
+    def split_region(self, region_name: str, zone: str,
+                     new_region_name: Optional[str] = None, ratio: float = 0.5) -> str:
+        """Split *region_name* along *zone* ('left', 'right', 'top', 'bottom').
+
+        Creates and returns the name of a new dynamic Region.
+        """
+        if region_name not in self.regions:
+            raise KeyError(f"no region {region_name!r}")
+        target_node = self.regions[region_name]
+
+        if new_region_name is None:
+            base = f"{region_name}_{zone}"
+            candidate = base
+            i = 1
+            while candidate in self.regions or candidate in self.tabs:
+                i += 1
+                candidate = f"{base}_{i}"
+            new_region_name = candidate
+
+        new_region = Region(name=new_region_name, keep=False)
+        new_region._dynamic = True
+
+        if zone in ("left", "right"):
+            axis = "h"
+            first, second = (new_region, target_node) if zone == "left" else (target_node, new_region)
+            r = ratio if zone == "left" else (1.0 - ratio)
+        elif zone in ("top", "bottom"):
+            axis = "v"
+            first, second = (new_region, target_node) if zone == "top" else (target_node, new_region)
+            r = ratio if zone == "top" else (1.0 - ratio)
+        else:
+            raise ValueError(f"invalid split zone: {zone!r}")
+
+        new_split = Split(axis=axis, ratio=r, first=first, second=second)
+
+        if self.layout is target_node:
+            self.layout = new_split
+        else:
+            def replace_in(node: Node) -> bool:
+                if isinstance(node, Split):
+                    if node.first is target_node:
+                        node.first = new_split
+                        return True
+                    if node.second is target_node:
+                        node.second = new_split
+                        return True
+                    return replace_in(node.first) or replace_in(node.second)
+                return False
+            replace_in(self.layout)
+
+        self._reindex()
+        self._dirty = True
+        return new_region_name
+
+    def split_root(self, zone: str, new_region_name: Optional[str] = None,
+                   ratio: float = 0.3) -> str:
+        """Split the entire layout along *zone* ('left', 'right', 'top', 'bottom')."""
+        if new_region_name is None:
+            base = f"dock_{zone}"
+            candidate = base
+            i = 1
+            while candidate in self.regions or candidate in self.tabs:
+                i += 1
+                candidate = f"{base}_{i}"
+            new_region_name = candidate
+
+        new_region = Region(name=new_region_name, keep=False)
+        new_region._dynamic = True
+
+        if zone in ("left", "right"):
+            axis = "h"
+            first, second = (new_region, self.layout) if zone == "left" else (self.layout, new_region)
+            r = ratio if zone == "left" else (1.0 - ratio)
+        elif zone in ("top", "bottom"):
+            axis = "v"
+            first, second = (new_region, self.layout) if zone == "top" else (self.layout, new_region)
+            r = ratio if zone == "top" else (1.0 - ratio)
+        else:
+            raise ValueError(f"invalid split zone: {zone!r}")
+
+        self.layout = Split(axis=axis, ratio=r, first=first, second=second)
+        self._reindex()
+        self._dirty = True
+        return new_region_name
+
+    def prune_empty(self) -> bool:
+        """Prune empty dynamic regions from the layout tree."""
+        if len(self.regions) <= 1:
+            return False
+
+        changed = False
+
+        def _prune(node: Node) -> Optional[Node]:
+            nonlocal changed
+            if isinstance(node, Region):
+                if getattr(node, "_dynamic", False) and not self.tabs.get(node.name):
+                    changed = True
+                    return None
+                return node
+
+            first = _prune(node.first)
+            second = _prune(node.second)
+
+            if first is None and second is None:
+                changed = True
+                return None
+            if first is None:
+                changed = True
+                return second
+            if second is None:
+                changed = True
+                return first
+
+            node.first = first
+            node.second = second
+            return node
+
+        new_layout = _prune(self.layout)
+        if changed and new_layout is not None:
+            self.layout = new_layout
+            self._reindex()
+            for name in list(self.tabs):
+                if name not in self.regions:
+                    self.tabs.pop(name, None)
+                    self.selected.pop(name, None)
+                    self._tab_rects.pop(name, None)
+                    self._tab_scroll.pop(name, None)
+            self._dirty = True
+            return True
+        return False
+
 
     # --------------------------------------------------------- the windows
     def add_window(self, key: str, title: str = "", draw: Optional[Callable] = None,
@@ -774,6 +959,7 @@ class DockManager:
         self._forget(key)
         self.windows.pop(key, None)
         self._defaults.pop(key, None)
+        self.prune_empty()
         return True
 
     def window(self, key: str) -> Optional[DockWindow]:
@@ -852,6 +1038,7 @@ class DockManager:
             win.box = self._undocked_box(region)
         self._forget(key)
         self.z.append(key)
+        self.prune_empty()
         self._dirty = True
 
     def _undocked_box(self, region: Optional[str]) -> Rect:
@@ -956,6 +1143,7 @@ class DockManager:
             regions[name] = {"tabs": tabs, "selected": self.selected.get(name)}
         return {
             "version": 1,
+            "layout": self._serialize_node(self.layout),
             "splits": {name: round(float(s.ratio), 4) for name, s in self.splits.items()},
             "regions": regions,
             "windows": windows,
@@ -976,6 +1164,11 @@ class DockManager:
         if not isinstance(state, dict):
             return
         self._saved = state
+        if "layout" in state and isinstance(state["layout"], dict):
+            new_layout = self._deserialize_node(state["layout"])
+            if new_layout is not None:
+                self.layout = new_layout
+                self._reindex()
         for name, ratio in (state.get("splits") or {}).items():
             if name in self.splits:
                 try:
@@ -1069,8 +1262,12 @@ class DockManager:
         """
         self._saved = {}
         self.extras = {}
+        if hasattr(self, "_initial_layout") and self._initial_layout is not None:
+            self.layout = self._deserialize_node(self._serialize_node(self._initial_layout))
+            self._reindex()
         for name, ratio in self._default_ratios.items():
-            self.splits[name].ratio = ratio
+            if name in self.splits:
+                self.splits[name].ratio = ratio
         for name in self.tabs:
             self.tabs[name] = []
             self.selected[name] = None
@@ -1175,21 +1372,111 @@ class DockManager:
                 continue
             x, y, w, h = rect
             side = min(max(min(w, h) * PAD_FRACTION, PAD_MIN), PAD_MAX, min(w, h))
-            pad = (x + (w - side) / 2.0, y + (h - side) / 2.0, side, side)
+            btn = min(side * 0.65, 32.0)
+            pad = (x + (w - btn) / 2.0, y + (h - btn) / 2.0, btn, btn)
             strip = (x, y, w, self._title_h)
             targets[name] = (rect, pad, strip)
         return targets
 
+    def _all_target_specs(self) -> dict:
+        buttons = []
+        zones = []
+        for name in self.regions:
+            rect = self.region_boxes.get(name)
+            if rect is None:
+                rect = self.compute_layout(self.box, force=name)[0].get(name)
+            if rect is None:
+                continue
+            rx, ry, rw, rh = rect
+            if rw < 30.0 or rh < 30.0:
+                continue
+
+            side = min(max(min(rw, rh) * PAD_FRACTION, PAD_MIN), PAD_MAX, min(rw, rh))
+            btn = min(side * 0.65, 32.0)
+            gap = 3.0
+
+            cx = rx + (rw - btn) / 2.0
+            cy = ry + (rh - btn) / 2.0
+
+            # Buttons: center, left, right, top, bottom
+            c_pad = (cx, cy, btn, btn)
+            buttons.append((name, c_pad, rect))
+
+            l_pad = (cx - btn - gap, cy, btn, btn)
+            r_pad = (cx + btn + gap, cy, btn, btn)
+            t_pad = (cx, cy - btn - gap, btn, btn)
+            b_pad = (cx, cy + btn + gap, btn, btn)
+
+            buttons.append((f"{name}:left", l_pad, (rx, ry, rw * 0.5, rh)))
+            buttons.append((f"{name}:right", r_pad, (rx + rw * 0.5, ry, rw * 0.5, rh)))
+            buttons.append((f"{name}:top", t_pad, (rx, ry, rw, rh * 0.5)))
+            buttons.append((f"{name}:bottom", b_pad, (rx, ry + rh * 0.5, rw, rh * 0.5)))
+
+            # Edge zones (thin 14px strip along edges)
+            edge = 14.0
+            th = self._title_h
+
+            if rw > 60.0 and rh > 60.0:
+                zones.append((f"{name}:left", (rx, ry + th, edge, max(rh - th, 1.0)), (rx, ry, rw * 0.5, rh)))
+                zones.append((f"{name}:right", (rx + rw - edge, ry + th, edge, max(rh - th, 1.0)), (rx + rw * 0.5, ry, rw * 0.5, rh)))
+                zones.append((f"{name}:top", (rx + edge, ry + th, max(rw - 2 * edge, 1.0), edge), (rx, ry, rw, rh * 0.5)))
+                zones.append((f"{name}:bottom", (rx + edge, ry + rh - edge, max(rw - 2 * edge, 1.0), edge), (rx, ry + rh * 0.5, rw, rh * 0.5)))
+
+        return {"buttons": buttons, "zones": zones}
+
+    def get_target_preview(self, target: Optional[str]) -> Optional[Rect]:
+        """The bounding rectangle a window would fill if dropped on *target*."""
+        if not target:
+            return None
+        if target.startswith("root:"):
+            zone = target[5:]
+            bx, by, bw, bh = self.box
+            if zone == "left":
+                return (bx, by, bw * 0.3, bh)
+            elif zone == "right":
+                return (bx + bw * 0.7, by, bw * 0.3, bh)
+            elif zone == "top":
+                return (bx, by, bw, bh * 0.3)
+            elif zone == "bottom":
+                return (bx, by + bh * 0.7, bw, bh * 0.3)
+            return None
+
+        if ":" in target:
+            region_name, zone = target.split(":", 1)
+        else:
+            region_name, zone = target, "center"
+
+        rect = self.region_boxes.get(region_name)
+        if rect is None:
+            rect = self.compute_layout(self.box, force=region_name)[0].get(region_name)
+        if rect is None:
+            return None
+
+        rx, ry, rw, rh = rect
+        if zone == "center":
+            return rect
+        elif zone == "left":
+            return (rx, ry, rw * 0.5, rh)
+        elif zone == "right":
+            return (rx + rw * 0.5, ry, rw * 0.5, rh)
+        elif zone == "top":
+            return (rx, ry, rw, rh * 0.5)
+        elif zone == "bottom":
+            return (rx, ry + rh * 0.5, rw, rh * 0.5)
+        return rect
+
     def target_at(self, px: float, py: float) -> Optional[str]:
-        """The region whose drop target is under ``(px, py)``, or ``None``."""
-        best, best_d = None, None
-        for name, (_rect, pad, strip) in self.drop_targets().items():
-            if _hit(px, py, pad) or _hit(px, py, strip):
-                cx, cy = pad[0] + pad[2] / 2.0, pad[1] + pad[3] / 2.0
-                d = (px - cx) ** 2 + (py - cy) ** 2
-                if best is None or d < best_d:
-                    best, best_d = name, d
-        return best
+        """The drop target under ``(px, py)``, or ``None``."""
+        drop_specs = self._all_target_specs()
+        for target_id, pad_rect, _preview in drop_specs.get("buttons", []):
+            if _hit(px, py, pad_rect):
+                return target_id
+
+        for r_name, (_rect, _pad, strip) in self.drop_targets().items():
+            if _hit(px, py, strip):
+                return r_name
+
+        return None
 
     def _floating_frame(self, win: DockWindow) -> Rect:
         """The frame a floating window is drawn at: its box, kept inside the dock box."""
@@ -1342,6 +1629,30 @@ class DockManager:
             keys.remove(key)
             keys.insert(min(slot, len(keys)), key)
 
+    def _apply_drop(self, key: str, target: str, px: float, py: float) -> None:
+        if target.startswith("root:"):
+            zone = target[5:]
+            new_r = self.split_root(zone)
+            self.dock(key, new_r)
+            return
+
+        if ":" in target:
+            region_name, zone = target.split(":", 1)
+        else:
+            region_name, zone = target, "center"
+
+        if zone == "center":
+            index = None
+            strip = self.drop_targets().get(region_name, (None, None, None))[2]
+            if strip and _hit(px, py, strip):
+                rects = self._tab_rects.get(region_name) or []
+                index = next((i for i, (_k, tab) in enumerate(rects)
+                              if px < tab[0] + tab[2] / 2.0), None)
+            self.dock(key, region_name, index)
+        elif zone in ("left", "right", "top", "bottom"):
+            new_r = self.split_region(region_name, zone)
+            self.dock(key, new_r)
+
     def _finish_drag(self, ctx, px: float, py: float) -> None:
         drag, self._drag = self._drag, None
         if ctx.active_id == drag.get("id"):
@@ -1352,13 +1663,8 @@ class DockManager:
         if kind == "move" and drag.get("moved"):
             key = drag["key"]
             if target is not None and key in self.windows and self.windows[key].dockable:
-                index = None
-                strip = self.drop_targets().get(target, (None, None, None))[2]
-                if _hit(px, py, strip):
-                    rects = self._tab_rects.get(target) or []
-                    index = next((i for i, (_k, tab) in enumerate(rects)
-                                  if px < tab[0] + tab[2] / 2.0), None)
-                self.dock(key, target, index)
+                self._apply_drop(key, target, px, py)
+            self.prune_empty()
             self._changed()
         elif kind in ("resize", "split", "tab"):
             self._changed()
@@ -1745,19 +2051,41 @@ class DockManager:
         win = self.windows.get(drag["key"])
         # Drop targets: a pad in every region, the whole region lit under the pointer.
         if win is not None and win.dockable:
-            for name, (rect, pad, _strip) in self.drop_targets().items():
-                if name == self.drop_target:
-                    x, y, w, h = rect
+            if self.drop_target is not None:
+                preview = self.get_target_preview(self.drop_target)
+                if preview is not None:
+                    x, y, w, h = preview
                     draw.add_rect_filled((x, y), (x + w, y + h), _style.HEADER)
                     draw.add_rect((x, y), (x + w, y + h), accent, thickness=2.0)
-                px, py, pw, ph = pad
-                lit = name == self.drop_target
+
+            drop_specs = self._all_target_specs()
+            for target_id, pad_rect, _prev in drop_specs.get("buttons", []):
+                px, py, pw, ph = pad_rect
+                lit = target_id == self.drop_target
                 draw.add_rect_filled((px, py), (px + pw, py + ph),
                                      _style.BUTTON_HOVERED if lit else _style.BUTTON, 4.0)
                 draw.add_rect((px, py), (px + pw, py + ph), accent, 4.0)
-                inset = pw * 0.22
-                draw.add_rect((px + inset, py + inset), (px + pw - inset, py + ph - inset),
-                              _style.TEXT + (200,), 2.0)
+                if ":" not in target_id or target_id.endswith(":center"):
+                    inset = pw * 0.22
+                    draw.add_rect((px + inset, py + inset), (px + pw - inset, py + ph - inset),
+                                  _style.TEXT + (200,), 2.0)
+                elif target_id.endswith(":left"):
+                    draw.add_rect_filled((px + 3.0, py + 3.0),
+                                         (px + pw * 0.45, py + ph - 3.0),
+                                         accent if lit else (_style.TEXT + (200,)))
+                elif target_id.endswith(":right"):
+                    draw.add_rect_filled((px + pw * 0.55, py + 3.0),
+                                         (px + pw - 3.0, py + ph - 3.0),
+                                         accent if lit else (_style.TEXT + (200,)))
+                elif target_id.endswith(":top"):
+                    draw.add_rect_filled((px + 3.0, py + 3.0),
+                                         (px + pw - 3.0, py + ph * 0.45),
+                                         accent if lit else (_style.TEXT + (200,)))
+                elif target_id.endswith(":bottom"):
+                    draw.add_rect_filled((px + 3.0, py + ph * 0.55),
+                                         (px + pw - 3.0, py + ph - 3.0),
+                                         accent if lit else (_style.TEXT + (200,)))
+
         if self.drop_target is not None:
             return
         # The snap hint: the glued window and its partners outlined, bands on glued edges.
