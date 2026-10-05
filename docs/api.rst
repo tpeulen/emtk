@@ -267,6 +267,9 @@ Widget families
 .. automodule:: emtk.widgets.splitter
    :noindex:
 
+.. automodule:: emtk.widgets.pane_stack
+   :noindex:
+
 .. automodule:: emtk.widgets.tables
    :noindex:
 
