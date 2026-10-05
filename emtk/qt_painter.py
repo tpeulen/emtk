@@ -564,7 +564,14 @@ class QtPainter:
         path.lineTo(QtCore.QPointF(*p2))
         path.closeSubpath()
         fill = self._colour(colour)
-        self._p.setPen(QtGui.QPen(fill, 1.0))
+        if fill.alpha() == 255:
+            self._p.setPen(QtGui.QPen(fill, 1.0))
+        else:
+            # On a translucent fill the seam-closing hairline is extra
+            # coverage, not a closed seam: a 1 px alpha-20 line came out at
+            # 71 (fill plus two hairlines). Antialiased translucent halves
+            # sharing an edge sum to about the fill's own alpha anyway.
+            self._p.setPen(QtCore.Qt.NoPen)
         self._p.setBrush(fill)
         self._p.drawPath(path)
 

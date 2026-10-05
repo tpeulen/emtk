@@ -84,3 +84,39 @@ def test_qt_painter_fills_a_triangle_at_its_three_corners(qt_app):
     outside = image.pixelColor(1, 1)
     assert (inside.red(), inside.green(), inside.blue()) == (255, 0, 0)
     assert outside.alpha() == 0
+
+
+def test_a_translucent_line_is_drawn_once_not_three_times(qt_app):
+    """The seam-closing hairline is for opaque fills only.
+
+    ``fill_triangle`` strokes each triangle with a hairline of its own colour so
+    two triangles sharing an edge leave no seam. On a translucent colour that
+    stroke is extra coverage: a 1 px white line at alpha 20 came out at 71 --
+    the fill plus two hairlines -- so a grid meant to be barely there was
+    three and a half times as bright as asked.
+    """
+    from qtpy import QtGui
+
+    from emtk.qt_painter import QtPainter
+
+    image = QtGui.QImage(40, 40, QtGui.QImage.Format_RGB32)
+    image.fill(QtGui.QColor(0, 0, 0))
+    qp = QtGui.QPainter(image)
+    painter_mod.line(QtPainter(qp), 20.5, 2.0, 20.5, 38.0, 1.0, (255, 255, 255, 20))
+    qp.end()
+    peak = max(QtGui.QColor(image.pixel(x, 20)).red() for x in range(15, 26))
+    assert 12 <= peak <= 30, f"alpha-20 line drawn at {peak}"
+
+
+def test_an_opaque_line_still_has_no_seam(qt_app):
+    from qtpy import QtGui
+
+    from emtk.qt_painter import QtPainter
+
+    image = QtGui.QImage(60, 60, QtGui.QImage.Format_RGB32)
+    image.fill(QtGui.QColor(0, 0, 0))
+    qp = QtGui.QPainter(image)
+    painter_mod.line(QtPainter(qp), 5.0, 5.0, 55.0, 55.0, 8.0, (255, 255, 255))
+    qp.end()
+    # the shared diagonal runs through the middle of the stroke
+    assert all(QtGui.QColor(image.pixel(i, i)).red() == 255 for i in range(15, 45))
