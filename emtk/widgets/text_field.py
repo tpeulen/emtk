@@ -62,6 +62,7 @@ class TextField:
     on_change : callable, optional
         Called with the new text after every edit. A search box filters as you
         type, which is the whole reason it is a field and not a prompt.
+        :meth:`set_text` is a load, not an edit, and does not call it.
     placeholder : str, optional
         Drawn when the field is empty; the panel reads it.
 
@@ -158,13 +159,18 @@ class TextField:
 
     # -- editing -------------------------------------------------------- #
     def set_text(self, text: str) -> None:
-        """Replace the contents, caret at the end, history forgotten."""
+        """Load contents: caret at the end, history forgotten, owner not told.
+
+        This is how an owner shows a value it read; it is not an edit, so
+        ``on_change`` does not fire (Qt's ``setText`` vs ``textEdited``). An
+        owner that fired on loads would write back what it had just read, and
+        would hear from the field while still being built.
+        """
         self.text = str(text)
         self.cursor = len(self.text)
         self._undo.clear()
         self._redo.clear()
         self._typing = False
-        self._changed()
 
     def clear(self) -> bool:
         """Empty it. Returns whether there was anything to clear."""

@@ -805,8 +805,11 @@ class EditableComboBox(ComboBox):
         from .text_field import TextField
 
         self._user_on_change = on_change
+        # Read the chosen option before the field exists: once it does,
+        # ``value`` *is* the field's text.
+        initial = super().value
         self.field = TextField(on_change=self._text_changed)
-        self.field.set_text(self.value)
+        self.field.set_text(initial)
 
     # -- the text ------------------------------------------------------- #
     def _text_changed(self, text: str) -> None:
@@ -875,6 +878,8 @@ class EditableComboBox(ComboBox):
                 # The picked row fills the field. ``self.value`` is the field
                 # now, so read the row the way the base class does.
                 self.set_text(self.rows[result.index].label)
+                # Loading the field is silent; the pick is the user's edit.
+                self._text_changed(self.field.text)
             return result
         arrow = self.arrow_size(frame[3])
         frame_x, frame_y, frame_w, frame_h = frame
