@@ -153,3 +153,13 @@ def test_row_heights_follow_height_ratios():
     assert fig.png_bytes()[:4] == b"\x89PNG"
     with pytest.raises(ValueError):
         Figure(2, 1, height_ratios=(1,))
+
+
+def test_a_line_on_the_right_axis_gets_its_own_range():
+    fig = Figure(size=(360, 220))
+    ax = fig.ax()
+    ax.line(range(10), [v / 10 for v in range(10)], label="left")
+    ax.line(range(10), [1000 + v for v in range(10)], right=True, label="right")
+    ax.set_right_label("RIGHTLAB")
+    text = _texts(fig)
+    assert "RIGHTLAB" in text and "1000" in text

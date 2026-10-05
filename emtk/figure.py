@@ -115,6 +115,8 @@ class Axes:
         self.colorbar: dict | None = None
         self.yinvert = False
         self.hidden = False
+        self.has_right = False
+        self.y2label = ""
 
     # -- colours ----------------------------------------------------------
     def _colour(self, colour, alpha: float | None = None) -> tuple[float, float, float, float]:
@@ -130,15 +132,21 @@ class Axes:
     # -- items --------------------------------------------------------------
     def line(self, x, y, *, color=None, width: float = 1.5, dash: str = "-",
              marker: str | None = None, marker_size: float = 4.0, alpha: float | None = None,
-             label: str | None = None) -> Axes:
-        """A polyline through ``(x, y)``; ``dash`` is ``"-"``, ``"--"``, ``":"`` or ``"-."``."""
+             label: str | None = None, right: bool = False) -> Axes:
+        """A polyline through ``(x, y)``; ``dash`` is ``"-"``, ``"--"``, ``":"`` or ``"-."``.
+
+        ``right=True`` plots against a second y-axis on the right, with its own
+        range (a quantity in other units over the same x).
+        """
         if dash not in _DASHES:
             raise ValueError(f"dash is one of {sorted(_DASHES)}, got {dash!r}")
         if marker is not None and marker not in _MARKERS:
             raise ValueError(f"marker is one of {sorted(_MARKERS)}, got {marker!r}")
+        if right:
+            self.has_right = True
         return self._add("line", x=_floats(x), y=_floats(y), color=self._colour(color, alpha),
                          width=float(width), dash=_DASHES[dash], marker=marker,
-                         marker_size=float(marker_size), label=label)
+                         marker_size=float(marker_size), label=label, right=bool(right))
 
     def scatter(self, x, y, *, color=None, colors=None, size: float = 3.0,
                 alpha: float | None = None, marker: str = "o", label: str | None = None) -> Axes:
@@ -263,6 +271,11 @@ class Axes:
             self.xlabel = str(x)
         if y is not None:
             self.ylabel = str(y)
+        return self
+
+    def set_right_label(self, label: str) -> Axes:
+        """Label of the right-hand y-axis (used by ``line(..., right=True)``)."""
+        self.y2label = str(label)
         return self
 
     def set_xlim(self, low: float, high: float) -> Axes:
@@ -507,6 +520,8 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
     try:
         implot.setup_axes(axes.xlabel or None, axes.ylabel or None, 0,
                           I.AXIS_FLAGS_INVERT if axes.yinvert else 0)
+        if axes.has_right:
+            implot.setup_axis(I.AXIS_Y2, axes.y2label or None, I.AXIS_FLAGS_AUX_DEFAULT)
         if axes.xlog:
             implot.setup_axis_scale(I.AXIS_X1, I.SCALE_LOG10)
         if axes.ylog:
@@ -522,7 +537,11 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
         if axes.legend_at is not None and labelled:
             implot.setup_legend(getattr(I, _LEGEND_AT[axes.legend_at]))
         for k, (kind, d) in enumerate(axes._items):
+            if d.get("right"):
+                implot.set_axes(I.AXIS_X1, I.AXIS_Y2)
             _draw_item(kind, d, f"{d.get('label') or ''}##{k}", implot, I)
+            if d.get("right"):
+                implot.set_axes(I.AXIS_X1, I.AXIS_Y1)
     finally:
         implot.end_plot()
     if axes.colorbar:
