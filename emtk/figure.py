@@ -114,6 +114,7 @@ class Axes:
         self.legend_at: str | None = None
         self.colorbar: dict | None = None
         self.yinvert = False
+        self.hidden = False
 
     # -- colours ----------------------------------------------------------
     def _colour(self, colour, alpha: float | None = None) -> tuple[float, float, float, float]:
@@ -295,6 +296,11 @@ class Axes:
             raise ValueError("this panel belongs to no figure")
         return self.figure.png_bytes()
 
+    def hide(self) -> Axes:
+        """Leave this panel's cell empty (an unused cell of a grid)."""
+        self.hidden = True
+        return self
+
     def legend(self, at: str = "ne") -> Axes:
         """Show the labelled items' legend in a corner (``"ne"``, ``"nw"``, ``"se"``...)."""
         if at not in _LEGEND_AT:
@@ -314,12 +320,19 @@ class Figure:
         Picture size in pixels.
     title : str
         Centred above the panels.
+    height_ratios, width_ratios : sequence of float, optional
+        Relative row heights / column widths (e.g. ``(3, 1)`` for a curve
+        above its residuals); equal when omitted.
     """
 
-    def __init__(self, rows: int = 1, cols: int = 1, size=(640, 480), title: str = ""):
+    def __init__(self, rows: int = 1, cols: int = 1, size=(640, 480), title: str = "",
+                 height_ratios: Sequence[float] | None = None,
+                 width_ratios: Sequence[float] | None = None):
         if rows < 1 or cols < 1:
             raise ValueError("a figure has at least one row and one column")
         self.rows, self.cols = int(rows), int(cols)
+        self.height_ratios = _ratios(height_ratios, self.rows, "height_ratios")
+        self.width_ratios = _ratios(width_ratios, self.cols, "width_ratios")
         self.size = (int(size[0]), int(size[1]))
         self.title = str(title)
         self._axes = [[Axes(self) for _ in range(self.cols)] for _ in range(self.rows)]
@@ -398,21 +411,41 @@ class Figure:
                 im.set_cursor_pos_x(max(0.0, (im.get_content_region_avail()[0] - text_w) / 2.0))
                 im.text(self.title)
             avail_w, avail_h = im.get_content_region_avail()
-            cell_w = (avail_w - (self.cols - 1) * _GAP) / self.cols
-            cell_h = (avail_h - (self.rows - 1) * _GAP) / self.rows
-            for r, row in enumerate(self._axes):
-                for c, axes in enumerate(row):
-                    if c:
-                        im.same_line(0.0, _GAP)
-                    else:
-                        im.set_cursor_pos_x(left)
-                    _draw_axes(axes, f"##p{r}_{c}", cell_w, cell_h, implot, I)
+            free_w = avail_w - (self.cols - 1) * _GAP
+            free_h = avail_h - (self.rows - 1) * _GAP
+            # One aligned group: every panel gets the widest y-axis gutter, so
+            # stacked panels share their x position (a curve above its
+            # residuals) and a grid's columns line up.
+            aligned = self.rows > 1 and implot.begin_aligned_plots("##emtk-figure-align")
+            try:
+                for r, row in enumerate(self._axes):
+                    for c, axes in enumerate(row):
+                        if c:
+                            im.same_line(0.0, _GAP)
+                        else:
+                            im.set_cursor_pos_x(left)
+                        _draw_axes(axes, f"##p{r}_{c}", free_w * self.width_ratios[c],
+                                   free_h * self.height_ratios[r], implot, I)
+            finally:
+                if aligned:
+                    implot.end_aligned_plots()
             im.end()
             im.pop_style_color(pushed)
         finally:
             style.colors[:] = saved
             style.minor_alpha = saved_minor
             style.fit_padding = saved_pad
+
+
+def _ratios(ratios, count: int, name: str) -> list[float]:
+    """*ratios* normalised to sum to one; equal parts when ``None``."""
+    if ratios is None:
+        return [1.0 / count] * count
+    values = [float(v) for v in ratios]
+    if len(values) != count or any(v <= 0 for v in values):
+        raise ValueError(f"{name} needs {count} positive values, got {ratios!r}")
+    total = sum(values)
+    return [v / total for v in values]
 
 
 def _painter() -> str:
@@ -457,6 +490,10 @@ def _spec(I, **fields):
 
 def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -> None:
     from . import im
+
+    if axes.hidden:
+        im.dummy(width, height)
+        return
 
     plot_w = width - (_COLORBAR_WIDTH + _GAP if axes.colorbar else 0.0)
     flags = I.FLAGS_NO_MENUS | I.FLAGS_NO_MOUSE_TEXT | I.FLAGS_NO_INPUTS

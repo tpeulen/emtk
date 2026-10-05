@@ -135,3 +135,21 @@ def test_a_step_histogram_is_an_outline_ending_on_the_last_edge():
     kind, data = ax._items[-1]
     assert kind == "stairs"
     assert data["x"] == edges and data["y"] == counts + [counts[-1]]
+
+
+def test_a_hidden_panel_leaves_its_cell_empty():
+    fig = Figure(1, 2, size=(400, 200))
+    fig.ax(0, 0).line([0, 1], [0, 1]).set_title("shown")
+    fig.ax(0, 1).set_title("HIDDEN").hide()
+    text = _texts(fig)
+    assert "shown" in text and "HIDDEN" not in text
+
+
+def test_row_heights_follow_height_ratios():
+    fig = Figure(2, 1, size=(300, 400), height_ratios=(3, 1))
+    assert fig.height_ratios == [0.75, 0.25] and fig.width_ratios == [1.0]
+    fig.ax(0, 0).line([0, 1], [0, 1])
+    fig.ax(1, 0).line([0, 1], [1, 0])
+    assert fig.png_bytes()[:4] == b"\x89PNG"
+    with pytest.raises(ValueError):
+        Figure(2, 1, height_ratios=(1,))
