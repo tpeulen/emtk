@@ -2699,6 +2699,8 @@ class _Table:
         #: table as wide as its last cell, and a *nested* table left the outer
         #: one narrowed too.
         self.saved_layout: tuple | None = None
+        #: Column index -> widest cell content this frame (see :func:`_measure_cell`).
+        self.fit_next: dict = {}
 
     # -- geometry ---------------------------------------------------------- #
     def visible_columns(self) -> list:
@@ -2727,10 +2729,19 @@ class _Table:
                 stretch.append(column)
 
         used = 0.0
+        fit = _table_shared(self.name).get("fit", {})
+        pad = self.cell_padding[0] * 2.0
         for column in fixed:
-            column.width = float(
-                column.user_width if column.user_width is not None
-                else (column.init_width or available / len(columns)))
+            if column.user_width is not None:
+                width = column.user_width
+            elif column.init_width:
+                width = column.init_width
+            elif column.index in fit:
+                # Auto-fit: as wide as its widest content was last frame.
+                width = fit[column.index] + pad
+            else:
+                width = available / len(columns)
+            column.width = float(width)
             used += column.width
         if stretch:
             weights = [c.init_width or 1.0 for c in stretch]
@@ -2805,7 +2816,10 @@ def end_table() -> None:
         return
     table = stack.pop()
     if table.started:
+        _measure_cell(table)
         table.row_top += table.row_height + table.cell_padding[1] * 2.0
+    # This frame's widest content per column sizes the fixed columns next frame.
+    _table_shared(table.name)["fit"] = dict(table.fit_next)
     if table.flags & (TableFlags.BORDERS_OUTER_V | TableFlags.BORDERS_INNER_V):
         _table_borders(table)
     if table.saved_layout is not None:
@@ -2853,6 +2867,69 @@ def table_setup_column(label: str, flags: int = 0,
             return
 
 
+def begin_grid(str_id: str, columns, flags: int = 0) -> bool:
+    """Lay the controls that follow out in columns that fit or stretch.
+
+    *columns* holds one entry per column: ``0`` makes the column as wide as its
+    widest content (a button, a label), a positive number makes it stretch,
+    sharing what is left by weight; the control in a stretching cell fills it.
+    Columns line up across rows, so a grid of labels and fields reads as a
+    form. The first cell is open on return; :func:`next_cell` moves right,
+    :func:`next_row` starts the next row, :func:`end_grid` closes it::
+
+        if im.begin_grid("##bar", (0, 1, 0)):
+            im.button("Back")
+            im.next_cell(); im.combo("##file", i, names)    # takes the rest
+            im.next_cell(); im.button("Save")
+            im.end_grid()
+
+    A borderless table underneath (``begin_table`` with ``WIDTH_FIXED`` and
+    ``WIDTH_STRETCH`` columns): a fit column is sized from the previous frame,
+    as ImGui's auto-fit columns are.
+
+    Returns
+    -------
+    bool
+        True when the grid is open (call :func:`end_grid` then).
+    """
+    weights = [float(w) for w in columns]
+    if not weights or not begin_table(str_id, len(weights), int(flags) | TableFlags.SIZING_STRETCH_PROP):
+        return False
+    for index, weight in enumerate(weights):
+        if weight > 0:
+            table_setup_column(f"##grid{index}", TableColumnFlags.WIDTH_STRETCH, weight)
+        else:
+            table_setup_column(f"##grid{index}", TableColumnFlags.WIDTH_FIXED)
+    _table().grid_weights = weights
+    table_next_row()
+    _enter_grid_cell()
+    return True
+
+
+def _enter_grid_cell() -> None:
+    table_next_column()
+    table = _table()
+    weights = getattr(table, "grid_weights", None)
+    if weights and 0 <= table.current < len(weights) and weights[table.current] > 0:
+        set_next_item_width(-1.0)
+
+
+def next_cell() -> None:
+    """The next cell of the open :func:`begin_grid` row (the next row after the last)."""
+    _enter_grid_cell()
+
+
+def next_row() -> None:
+    """Start the next row of the open :func:`begin_grid` at its first column."""
+    table_next_row()
+    _enter_grid_cell()
+
+
+def end_grid() -> None:
+    """Close a :func:`begin_grid`; the layout continues below it."""
+    end_table()
+
+
 def table_setup_scroll_freeze(cols: int, rows: int) -> None:
     table = _table()
     if table is not None:
@@ -2879,8 +2956,22 @@ def _place(table: _Table, index: int) -> None:
                  max(layout.h, 1.0))
 
 
+def _measure_cell(table: _Table) -> None:
+    """Remember how wide the cell that was just filled turned out, per column.
+
+    What a fixed-width column with no width of its own is sized from on the
+    next frame (``ImGui``'s auto-fit: a fixed column fits its widest content).
+    """
+    if not 0 <= table.current < len(table.visible_columns()):
+        return
+    column = table.visible_columns()[table.current]
+    width = get_current_context().layout.content_width()
+    table.fit_next[column.index] = max(table.fit_next.get(column.index, 0.0), width)
+
+
 def _close_cell(table: _Table) -> None:
-    """Remember how tall the cell that was just filled turned out."""
+    """Remember how tall the cell that was just filled turned out (and how wide)."""
+    _measure_cell(table)
     layout = get_current_context().layout
     table.row_height = max(table.row_height,
                            layout.cursor[1] - table.row_top - table.cell_padding[1])
@@ -5187,7 +5278,7 @@ __all__ += [
     "load_ini_settings_from_disk", "log_to_tty", "log_to_file",
     "log_to_clipboard", "log_text", "log_finish", "log_buttons", "debug_log",
     "debug_text_encoding", "debug_start_item_picker", "debug_flash_style_color",
-    "input_text_multiline", "text_editor", "host_control", "is_key_chord_pressed", "shortcut",
+    "input_text_multiline", "text_editor", "host_control", "begin_grid", "next_cell", "next_row", "end_grid", "is_key_chord_pressed", "shortcut",
     "set_next_item_shortcut", "set_item_key_owner", "set_next_item_storage_id",
     "set_nav_cursor_visible", "set_next_frame_want_capture_mouse",
     "set_next_frame_want_capture_keyboard",
