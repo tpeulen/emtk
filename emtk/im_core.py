@@ -1351,8 +1351,10 @@ class Context:
             self.clip_rect = _intersect_rects(self.clip_rect, box)
 
         child_w = max(1.0, box[2] - (scrollbar_w + 3.0 if has_overflow else 0.0))
-        child_h = max(box[3], box[3] + scroll_y)
-        self.layout = Layout(self.p, box[0], box[1] - scroll_y, child_w, child_h, style=self.layout.style)
+        # The layout keeps the child's own height: content is laid out as if unscrolled and only
+        # moved up. A height of ``box + scroll`` made an item that fills the room left (``avail``)
+        # grow by the scroll every frame, and the scroll range with it.
+        self.layout = Layout(self.p, box[0], box[1] - scroll_y, child_w, box[3], style=self.layout.style)
         return self.layout
 
     def end_child(self, clip: bool = True) -> Rect:
