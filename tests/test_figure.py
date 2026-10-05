@@ -199,3 +199,23 @@ def test_horizontal_bars_lie_along_x_at_their_positions():
     finally:
         implot.plot_bars = original
     assert calls[-1] == ([10.0, 20.0, 30.0], [1.0, 2.0, 3.0])
+
+
+def test_fitted_axes_leave_five_percent_a_side():
+    seen = []
+    original = implot.end_plot
+
+    def end():
+        limits = implot.get_plot_limits()
+        seen.append((limits.x_min, limits.x_max))
+        return original()
+
+    implot.end_plot = end
+    try:
+        fig = Figure(size=(300, 200))
+        fig.ax().line([1, 2, 3], [0, 1, 0])
+        fig.png_bytes()
+    finally:
+        implot.end_plot = original
+    low, high = seen[-1]
+    assert abs(low - 0.9) < 1e-9 and abs(high - 3.1) < 1e-9

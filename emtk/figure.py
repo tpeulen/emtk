@@ -436,7 +436,8 @@ class Figure:
         _paper(style, I)
         # A margin around fitted data, so a point on the extreme is not drawn
         # on the frame (an IRF spike at t=0 vanished into the axis without it).
-        style.fit_padding = (0.05, 0.05)
+        # implot pads by this fraction of *half* the range: 0.1 is 5% a side.
+        style.fit_padding = (0.1, 0.1)
         try:
             w, h = float(self.size[0]), float(self.size[1])
             from .im_core import Col
