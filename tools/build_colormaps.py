@@ -7,8 +7,7 @@ Developer tool, not shipped behaviour. Run it only to add a map::
 Two sources, each recorded per map in the output (``"source"``):
 
 * ``--pyqtgraph-maps``: a folder of pyqtgraph's map files (``*.csv`` RGB stops
-  in 0..1, ``*.hex`` palettes), e.g. ``pyqtgraph/colors/maps`` or ndXplorer's
-  copy of it. viridis/magma/inferno/plasma/cividis are CC0, the CET maps
+  in 0..1, ``*.hex`` palettes): ``pyqtgraph/colors/maps`` of pyqtgraph 0.14. viridis/magma/inferno/plasma/cividis are CC0, the CET maps
   CC-BY 4.0 (Peter Kovesi), turbo Apache-2.0 (Google); see
   ``licenses/colormaps.txt``.
 * ``--matplotlib``: the colour names (CSS4, one-letter, ``C0``..``C9``) and
@@ -40,7 +39,9 @@ QUALITATIVE = {"tab10", "tab20", "PAL-relaxed", "PAL-relaxed_bright"}
 
 
 def _hex(rgb) -> str:
-    return "#" + "".join(f"{max(0, min(255, int(round(float(c) * 255)))):02x}" for c in rgb[:3])
+    # Half rounds *up*, as pyqtgraph's reader quantises: Python's round() is
+    # half-to-even and moved two CET-L9 entries by one step.
+    return "#" + "".join(f"{max(0, min(255, int(float(c) * 255 + 0.5))):02x}" for c in rgb[:3])
 
 
 def _read_pyqtgraph(path: pathlib.Path) -> list[str]:
