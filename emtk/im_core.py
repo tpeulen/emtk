@@ -1167,6 +1167,15 @@ class Context:
                 sticky=box is None and self.window_placement != PLACE_FRAME,
             )
             self.windows.append(window)
+        # ``Begin``: a window that appears is focused, and focus is the front of
+        # the list. A window the ini settings created first would otherwise
+        # stay behind everything submitted after it and lose presses on the
+        # overlap. Calling begin twice in one frame appends; it is not appearing.
+        appearing = not window.active and not window.was_active
+        if (appearing and not created
+                and not flags & (_WF.NO_FOCUS_ON_APPEARING | _WF.NO_BRING_TO_FRONT_ON_FOCUS)):
+            self.windows.remove(window)
+            self.windows.append(window)
         window.title = title
         if box is not None:
             window.box = box

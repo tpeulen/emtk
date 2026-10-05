@@ -4580,7 +4580,9 @@ def load_ini_settings_from_memory(data: str) -> None:
         if name and pos and size:
             window = next((w for w in ctx.windows if w.name == name), None)
             if window is None:
-                window = _Window(name=name, box=(pos[0], pos[1], size[0], size[1]))
+                # Remembered, not shown: inactive until a begin() submits it,
+                # so it neither takes presses nor skips appearing.
+                window = _Window(name=name, box=(pos[0], pos[1], size[0], size[1]), active=False)
                 ctx.windows.append(window)
             else:
                 window.box = (pos[0], pos[1], size[0], size[1])
