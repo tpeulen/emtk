@@ -238,3 +238,28 @@ def test_it_reports_whether_it_took_input():
     app.pointer_press(x + 5, y + 5, 1)
     app.draw(RecordingPainter(), 0, 0, 300, 300)
     assert taken[-1] is True
+
+
+def test_a_control_that_names_a_tooltip_gets_it_shown():
+    class Tipped(Classic):
+        def tooltip_at(self, px, py):
+            return ("the left half", "left") if px < self.box[0] + 50 else ""
+
+    control = Tipped()
+    app = _app(control)
+    x, y, *_ = control.box
+    app.pointer_move(x + 10, y + 10, 0)
+    seen = {}
+
+    def gui():
+        im.begin("W", (0, 0, 300, 300), flags=im.WindowFlags.NO_TITLE_BAR)
+        im.host_control("##c", control, (200.0, 120.0))
+        seen["tip"] = im.get_current_context().tooltip
+        im.end()
+
+    app.gui = gui
+    _frame(app)
+    assert seen["tip"] == "the left half"
+    app.pointer_move(x + 150, y + 10, 0)
+    _frame(app)
+    assert not seen["tip"]

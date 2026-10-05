@@ -133,3 +133,17 @@ def test_a_bar_lights_when_hovered():
     bx, by, *_ = stack._bar_boxes[0]
     stack.hover(bx + 5, by + 2)
     assert stack.hovered_bar == 0
+
+
+def test_a_panes_tooltip_is_the_stacks():
+    class Tipped(Pane):
+        def tooltip_at(self, px, py):
+            return "bottom pane"
+
+    panes = [Pane(), Tipped()]
+    stack = PaneStack(panes)
+    stack.draw(RecordingPainter(), 0, 0, 400, 605)
+    x, y, *_ = panes[1].box
+    assert stack.tooltip_at(x + 3, y + 3) == "bottom pane"
+    x, y, *_ = panes[0].box
+    assert stack.tooltip_at(x + 3, y + 3) == ""

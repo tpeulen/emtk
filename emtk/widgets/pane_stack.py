@@ -215,6 +215,13 @@ class PaneStack(Control):
         if pane is not None:
             self._call(pane, "hover", px, py, *self._pane_boxes[pane])
 
+    def tooltip_at(self, px: float, py: float):
+        """The tooltip of the pane under the pointer, as that pane names it."""
+        pane = self._pane_at(px, py)
+        if pane is None:
+            return ""
+        return self._call(pane, "tooltip_at", px, py) or ""
+
     def scroll(self, rows: float, *_args: Any):
         """The wheel goes to the pane under the pointer (else the one last pressed)."""
         target = self._hover_pane if self._hover_pane is not None else self._focus_pane

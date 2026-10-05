@@ -64,7 +64,7 @@ __all__ = [
     "label_text", "math", "math_text", "calc_math_size",
     "button", "small_button", "action_button", "invisible_button", "checkbox",
     "radio_button", "slider_float", "slider_int", "drag_float", "drag_int",
-    "progress_bar", "selectable", "combo", "separator", "same_line", "spacing",
+    "progress_bar", "selectable", "selectable_icon_width", "combo", "separator", "same_line", "spacing",
     "splitter", "splitter_behavior",
     "dummy", "indent", "unindent", "begin_group", "end_group", "columns",
     "next_column", "new_line", "push_id", "pop_id", "get_id",
@@ -1261,7 +1261,37 @@ def progress_bar(fraction: float, size=None, overlay: str = "") -> None:
 # --------------------------------------------------------------------------- #
 # Lists and trees
 # --------------------------------------------------------------------------- #
-def selectable(label: str, selected: bool = False, size=None) -> bool:
+#: Codepoints that change how the glyph before them looks but draw nothing of
+#: their own. The atlas has no cell for them, so left in they draw as the
+#: missing-glyph box beside the pictogram (``"⏱️"`` is U+23F1 then U+FE0F).
+_ICON_MODIFIERS = dict.fromkeys(map(ord, "\ufe0e\ufe0f\u200d"))
+
+
+def icon_text(icon: str) -> str:
+    """*icon* without its presentation modifiers: what the atlas can draw."""
+    return (icon or "").translate(_ICON_MODIFIERS)
+
+
+def selectable_icon_width() -> float:
+    """How much wider an icon makes a :func:`selectable`'s content: the slot and its gap.
+
+    For a list that sizes its column from its labels -- a navigation sidebar --
+    so the label after the slot still fits.
+    """
+    ctx = get_current_context()
+    return _frame_height(ctx) + ctx.style.item_inner_spacing[0]
+
+
+def selectable(label: str, selected: bool = False, size=None, icon: str | None = None) -> bool:
+    """``ImGui::Selectable``, with an optional *icon* in a column of its own.
+
+    The icon is a pictogram -- normally an emoji, as plugin manifests carry
+    them -- and gets a square slot one frame high in front of the label. Typed
+    into the label instead, a colour emoji draws wider than the one cell the
+    layout measured for it and runs into the first letters of the label; in its
+    own slot every row's label starts in the same column, which is what makes a
+    navigation list of icons scan as a list.
+    """
     ctx = get_current_context()
     if ctx._context_popup_stack:
         return ctx.context_menu_item(label, selected=selected)
@@ -1271,8 +1301,19 @@ def selectable(label: str, selected: bool = False, size=None) -> bool:
     if selected or hovered:
         ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                                  _col(Col.HEADER) if selected else _col(Col.HEADER_HOVERED), 0.0)
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
-                      _visible_label(label))
+    pad_x, pad_y = ctx.style.frame_padding
+    x = box[0] + pad_x
+    glyph = icon_text(icon) if icon else ""
+    if glyph:
+        line = _frame_height(ctx)
+        top = box[1] + (box[3] - line) * 0.5
+        gw = ctx.draw.calc_text_size(glyph)[0]
+        ctx.draw.add_text((x + max(line - gw, 0.0) * 0.5 - 1.0, top + pad_y), _col(Col.TEXT), glyph)
+        x += selectable_icon_width()
+        text_y = top + pad_y
+    else:
+        text_y = box[1] + pad_y
+    ctx.draw.add_text((x, text_y), _col(Col.TEXT), _visible_label(label))
     return pressed
 
 
@@ -4795,6 +4836,8 @@ def host_control(label: str, control: Any, size: tuple[float, float] | None = No
     * Keys go to the control that was clicked last, and only while it is: a click
       elsewhere ends that (``focus_lost``), so typing never lands in a control the
       user is not looking at.
+    * A control with ``tooltip_at(px, py)`` -- text, or ``(text, part)`` with the
+      part of the control it belongs to -- has that shown while it is hovered.
 
     A control that speaks the rich hooks (``pointer_press``/``pointer_move``/
     ``pointer_release``/``wheel``, as :class:`emtk.app.ImApp` does) is given every
@@ -4899,6 +4942,14 @@ def host_control(label: str, control: Any, size: tuple[float, float] | None = No
                 took = True
 
     control.draw(ctx.p, *box)
+    tooltip_at = getattr(control, "tooltip_at", None)
+    if hovered and callable(tooltip_at):
+        tip = tooltip_at(px, py)
+        part = None
+        if isinstance(tip, tuple):
+            tip, part = (tip + (None,))[:2]
+        if tip:
+            ctx.set_tooltip(str(tip), owner=(item_id, part))
     return took
 
 
