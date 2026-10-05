@@ -229,6 +229,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "ComboBox": "widgets.combo",
     "ComboFlags": "im",
     "ComboPress": "widgets.combo",
+    "EditableComboBox": "widgets.combo",
     "Cond": "im",
     "ConfigFlags": "im",
     "Consumed": "router",

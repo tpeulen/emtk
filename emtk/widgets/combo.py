@@ -61,9 +61,10 @@ What was deliberately skipped
   reason the rest of this package skips them: they read a global input context
   that would be a second paradigm beside the retained controls.
 """
+
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import NamedTuple
 
 from .. import style
@@ -89,6 +90,7 @@ __all__ = [
     "ROW_SCALE",
     "ComboPress",
     "ComboBox",
+    "EditableComboBox",
 ]
 
 #: No flags. The reference's ``ImGuiComboFlags_None``.
@@ -120,7 +122,10 @@ COMBO_NO_PREVIEW = 1 << 6
 COMBO_WIDTH_FIT_PREVIEW = 1 << 7
 #: The four height flags. The reference's ``ImGuiComboFlags_HeightMask_``.
 COMBO_HEIGHT_MASK = (
-    COMBO_HEIGHT_SMALL | COMBO_HEIGHT_REGULAR | COMBO_HEIGHT_LARGE | COMBO_HEIGHT_LARGEST
+    COMBO_HEIGHT_SMALL
+    | COMBO_HEIGHT_REGULAR
+    | COMBO_HEIGHT_LARGE
+    | COMBO_HEIGHT_LARGEST
 )
 
 #: How many items each height flag allows. ``None`` is the reference's
@@ -403,7 +408,9 @@ class ComboBox:
         """
         if self._frame is not None and style.hit(x, y, *self._frame):
             return True
-        return bool(self.open and self._popup is not None and style.hit(x, y, *self._popup))
+        return bool(
+            self.open and self._popup is not None and style.hit(x, y, *self._popup)
+        )
 
     # ------------------------------------------------------------------ #
     def frame_width(self, p: Painter, w: float, h: float) -> float:
@@ -452,7 +459,9 @@ class ComboBox:
         """
         return 0.0 if self.flags & COMBO_NO_ARROW_BUTTON else float(h)
 
-    def popup_metrics(self, p: Painter, frame_w: float) -> tuple[float, float, float, int]:
+    def popup_metrics(
+        self, p: Painter, frame_w: float
+    ) -> tuple[float, float, float, int]:
         """Measure the popup: how wide, how tall, and how many rows it shows.
 
         The item cap comes from the height flags (:attr:`max_items`) and the
@@ -476,7 +485,9 @@ class ComboBox:
         _view_w, view_h = self.viewport
         fits = max(int((view_h - 2.0 * PAD) // row_h), 1)
         cap = self.max_items
-        visible = min(len(self.rows), fits) if cap is None else min(len(self.rows), cap, fits)
+        visible = (
+            min(len(self.rows), fits) if cap is None else min(len(self.rows), cap, fits)
+        )
         visible = max(visible, 1)
         scrolling = len(self.rows) > visible
         longest = max((p.text_width(row.label) for row in self.rows), default=0.0)
@@ -526,12 +537,22 @@ class ComboBox:
         value_x2 = max(x, x + frame_w - arrow)
 
         if not (self.flags & COMBO_NO_PREVIEW):
-            p.fill_rect(x, y, value_x2 - x, h,
-                        style.FRAME_BG_HOVERED if self.hovered else style.FRAME_BG)
+            p.fill_rect(
+                x,
+                y,
+                value_x2 - x,
+                h,
+                style.FRAME_BG_HOVERED if self.hovered else style.FRAME_BG,
+            )
         if not (self.flags & COMBO_NO_ARROW_BUTTON):
             lit = self.open or self.hovered
-            p.fill_rect(value_x2, y, x + frame_w - value_x2, h,
-                        style.BUTTON_HOVERED if lit else style.BUTTON)
+            p.fill_rect(
+                value_x2,
+                y,
+                x + frame_w - value_x2,
+                h,
+                style.BUTTON_HOVERED if lit else style.BUTTON,
+            )
             # The reference draws the arrow only when there is room for it, so
             # a frame narrower than its own button shows the button and no mark
             # rather than a mark hanging outside the frame.
@@ -543,16 +564,30 @@ class ComboBox:
             room = max(value_x2 - x - 2.0 * FRAME_PAD, 1.0)
             p.push_clip(x, y, max(value_x2 - x, 0.0), h)
             try:
-                p.text(x + FRAME_PAD, y, room, h, ALIGN_LEFT | ALIGN_VCENTER,
-                       style.fit_text(p, self.value, room), style.TEXT)
+                p.text(
+                    x + FRAME_PAD,
+                    y,
+                    room,
+                    h,
+                    ALIGN_LEFT | ALIGN_VCENTER,
+                    style.fit_text(p, self.value, room),
+                    style.TEXT,
+                )
             finally:
                 p.pop_clip()
 
         if self.label:
             left = x + frame_w + INNER_SPACING
             room = max(x + w - left, 1.0)
-            p.text(left, y, room, h, ALIGN_LEFT | ALIGN_VCENTER,
-                   style.fit_text(p, self.label, room), style.TEXT)
+            p.text(
+                left,
+                y,
+                room,
+                h,
+                ALIGN_LEFT | ALIGN_VCENTER,
+                style.fit_text(p, self.label, room),
+                style.TEXT,
+            )
 
         if self.open:
             self._draw_popup(p, x, y, frame_w, h)
@@ -731,3 +766,178 @@ class ComboBox:
         self.bar.release()
         for row in self.rows:
             row.release()
+
+
+class EditableComboBox(ComboBox):
+    """A combo whose preview is a text field: pick from the list *or* type.
+
+    The fit Info page's *Sample* row needs this spelling of the control: the
+    database lists the samples it knows, and a new sample id is typed straight
+    into the frame. The popup keeps its whole behaviour -- placement, scroll,
+    row presses -- from :class:`ComboBox`; the preview is swapped for a
+    :class:`~emtk.widgets.text_field.TextField`, so editing works as it does
+    in every other field, and the typed text *is* the current value.
+
+    Parameters
+    ----------
+    label : str
+        Caption drawn after the frame, as :class:`ComboBox` draws it.
+    options : sequence of str
+        The choices offered in the list.
+    index : int, optional
+        Which one is current.
+    on_change : callable, optional
+        Called with the control whenever the text changes -- by typing,
+        by editing, or by picking a row.
+    flags : int, optional
+        As :class:`ComboBox`.
+    """
+
+    def __init__(
+        self,
+        label: str,
+        options: Sequence[str],
+        index: int = 0,
+        on_change: Callable[[str], None] | None = None,
+        flags: int = COMBO_NONE,
+    ) -> None:
+        super().__init__(label, options, index, flags)
+        from .text_field import TextField
+
+        self._user_on_change = on_change
+        self.field = TextField(on_change=self._text_changed)
+        self.field.set_text(self.value)
+
+    # -- the text ------------------------------------------------------- #
+    def _text_changed(self, text: str) -> None:
+        """The field edited; tell the owner and remember the text."""
+        self._reported = text
+        if self._user_on_change is not None:
+            self._user_on_change(text)
+
+    @property
+    def value(self) -> str:
+        """The typed text -- what the frame shows is what the value is."""
+        field = self.__dict__.get("field")
+        return field.text if field is not None else super().value
+
+    @property
+    def text(self) -> str:
+        """The frame's editable text -- the current value when typed."""
+        return self.field.text
+
+    def set_text(self, text: str) -> None:
+        """Replace the frame's text without firing ``on_change``.
+
+        A reader that loads a document sets what is on screen; it does not
+        pretend the user typed.
+        """
+        self.field.set_text(text)
+        self._reported = self.field.text
+
+    # -- keys ----------------------------------------------------------- #
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        """Feed a key to the field. The combo consumes everything it does."""
+        from ..keys import KEY_BACKSPACE, KEY_DELETE, KEY_ENTER, KEY_RETURN
+
+        if key in (KEY_RETURN, KEY_ENTER):
+            self.close()
+            return True
+        if key == KEY_BACKSPACE:
+            self.field._delete_to(self.field.cursor - 1)
+            return True
+        if key == KEY_DELETE:
+            self.field._delete_to(self.field.cursor + 1)
+            return True
+        if text:
+            self.field.insert(text, typing=True)
+        return True
+
+    def focus_lost(self) -> None:
+        """Nothing to release; kept so a host's focus-out finds a hook."""
+        return None
+
+    # -- presses -------------------------------------------------------- #
+    def press(
+        self,
+        x: float,
+        y: float,
+        box_x: float,
+        box_y: float,
+        box_w: float,
+        box_h: float,
+    ) -> ComboPress:
+        """Open the list from the arrow half, edit from the preview half."""
+        frame = self._frame or (box_x, box_y, box_w, box_h)
+        if self.open:
+            result = super().press(x, y, box_x, box_y, box_w, box_h)
+            if result.index is not None:
+                # The picked row fills the field. ``self.value`` is the field
+                # now, so read the row the way the base class does.
+                self.set_text(self.rows[result.index].label)
+            return result
+        arrow = self.arrow_size(frame[3])
+        frame_x, frame_y, frame_w, frame_h = frame
+        value_x2 = max(frame_x, frame_x + frame_w - arrow)
+        if style.hit(x, y, frame_x, frame_y, value_x2 - frame_x, frame_h):
+            # The preview half: a click takes the whole text (the click-to-edit
+            # affordance), so the first typed key replaces instead of appending.
+            self.field.select_all()
+            return ComboPress(None, False, True, False)
+        return super().press(x, y, box_x, box_y, box_w, box_h)
+
+    # -- painting ------------------------------------------------------- #
+    def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
+        """Paint the frame with the field in the preview half."""
+        from .text_field import paint as paint_field
+
+        arrow = self.arrow_size(h)
+        frame_w = self.frame_width(p, w, h)
+        self._frame = (x, y, frame_w, h)
+        value_x2 = max(x, x + frame_w - arrow)
+
+        p.fill_rect(x, y, value_x2 - x, h, style.FRAME_BG)
+        p.stroke_rect(x, y, frame_w, h, style.BORDER, None)
+        room = max(value_x2 - x - 2.0 * FRAME_PAD, 1.0)
+        p.push_clip(x, y, max(value_x2 - x, 0.0), h)
+        try:
+            paint_field(
+                p,
+                self.field,
+                x + FRAME_PAD,
+                y,
+                room,
+                h,
+                style.TEXT,
+                style.GOLD if self.open else None,
+            )
+            if not self.field.text:
+                p.text(
+                    x + FRAME_PAD,
+                    y,
+                    room,
+                    h,
+                    ALIGN_LEFT | ALIGN_VCENTER,
+                    style.fit_text(p, self.value, room),
+                    style.DIM,
+                )
+        finally:
+            p.pop_clip()
+        if not (self.flags & COMBO_NO_ARROW_BUTTON):
+            p.fill_rect(value_x2, y, x + frame_w - value_x2, h, style.BUTTON)
+            if value_x2 + arrow - FRAME_PAD <= x + frame_w:
+                p.text(value_x2, y, arrow, h, ALIGN_CENTER, "▼", style.TEXT)
+        if self.label:
+            left = x + frame_w + INNER_SPACING
+            room = max(x + w - left, 1.0)
+            p.text(
+                left,
+                y,
+                room,
+                h,
+                ALIGN_LEFT | ALIGN_VCENTER,
+                style.fit_text(p, self.label, room),
+                style.TEXT,
+            )
+        if self.open:
+            self._draw_popup(p, x, y, frame_w, h)
