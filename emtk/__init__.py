@@ -667,6 +667,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "get_window_size": "im",
     "get_window_width": "im",
     "heading": "im",
+    "host_control": "im",
     "hsv_to_rgb": "widgets.color",
     "html_to_markdown": "htmltext",
     "im_col32": "im",

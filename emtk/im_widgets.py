@@ -4776,6 +4776,132 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
     return bool(getattr(editor, "modified", False) and not was_modified)
 
 
+_RICH_HOOKS = ("pointer_press", "pointer_move", "pointer_release", "wheel")
+_BUTTONS = (1, 2, 4)            # emtk.events LEFT/RIGHT/MIDDLE_BUTTON, by io index
+
+
+def host_control(label: str, control: Any, size: tuple[float, float] | None = None) -> bool:
+    """Host a retained control as one item of the immediate-mode layout.
+
+    The control is anything with emtk's control contract (:class:`emtk.control.Control`
+    spells it out): it draws into a box and is handed the input that concerns it,
+    the same calls :func:`emtk.qt_host.ControlHost` makes, so a control written for
+    a window of its own runs unchanged inside a dock window, a child, a table cell.
+
+    * A press inside the box captures the pointer: the drags that follow, and the
+      release, reach the control wherever the pointer goes, as a host's grab does.
+    * Hover arrives while the pointer is over the box and nothing is held.
+    * The wheel scrolls the hovered control, three rows a notch, and is consumed.
+    * Keys go to the control that was clicked last, and only while it is: a click
+      elsewhere ends that (``focus_lost``), so typing never lands in a control the
+      user is not looking at.
+
+    A control that speaks the rich hooks (``pointer_press``/``pointer_move``/
+    ``pointer_release``/``wheel``, as :class:`emtk.app.ImApp` does) is given every
+    button and the wheel in notches instead of the classic ``press``/``drag``/
+    ``release``/``hover``/``scroll``.
+
+    Parameters
+    ----------
+    label : str
+        Unique widget label or ID (e.g. ``"##plot"``).
+    control : object
+        The retained control.
+    size : tuple of float, optional
+        ``(width, height)``. A missing or non-positive extent takes what is left
+        of the content region in that direction.
+
+    Returns
+    -------
+    bool
+        True if the control was handed a press, a release, the wheel or a key
+        this frame -- the frames after which a caller re-reads its state.
+    """
+    ctx = get_current_context()
+    avail_w, avail_h = get_content_region_avail()[:2]
+    w = float(size[0]) if size and size[0] and size[0] > 0.0 else max(1.0, float(avail_w))
+    h = float(size[1]) if size and len(size) > 1 and size[1] and size[1] > 0.0 else max(
+        1.0, float(avail_h))
+    box = ctx.layout.row(height=h, width=w)
+    item_id = ctx.get_id(label)
+    hovered = ctx.item_add(box, item_id)
+    disabled = bool(ctx.item_flags & ItemFlags.DISABLED)
+    io = ctx.io
+    px, py = io.mouse_pos
+    mods = _current_modifiers(io)
+    store = ctx.get_storage(item_id)
+    focus = ctx.state(("focus",))
+    rich = all(callable(getattr(control, hook, None)) for hook in _RICH_HOOKS)
+    took = False
+
+    if not disabled:
+        clicked = [i for i, c in enumerate(io.mouse_clicked) if c]
+        if clicked and hovered:
+            focus["id"] = item_id
+            set_nav_id(item_id)
+            for i in clicked:
+                clicks = 2 if io.mouse_double_clicked[i] else 1
+                if rich:
+                    control.pointer_press(px, py, _BUTTONS[i], mods, clicks)
+                elif i == 0:
+                    control.press(px, py, *box, mods, clicks)
+                store.setdefault("held", set()).add(i)
+            took = True
+        elif clicked and focus.get("id") == item_id:
+            focus.pop("id", None)
+            lost = getattr(control, "focus_lost", None)
+            if callable(lost):
+                lost()
+
+        held = store.get("held") or set()
+        if held:
+            if rich:
+                buttons = sum(_BUTTONS[i] for i in held if io.mouse_down[i])
+                control.pointer_move(px, py, buttons, mods)
+            elif 0 in held and io.mouse_down[0]:
+                drag = getattr(control, "drag", None)
+                if callable(drag):
+                    drag(px, py, *box)
+            for i in [i for i in held if io.mouse_released[i] or not io.mouse_down[i]]:
+                held.discard(i)
+                if rich:
+                    control.pointer_release(px, py, _BUTTONS[i], mods)
+                elif i == 0:
+                    release = getattr(control, "release", None)
+                    if callable(release):
+                        release()
+                took = True
+        elif hovered:
+            if rich:
+                control.pointer_move(px, py, 0, mods)
+            else:
+                hover = getattr(control, "hover", None)
+                if callable(hover):
+                    hover(px, py, *box)
+
+        if hovered and io.mouse_wheel:
+            if rich:
+                control.wheel(px, py, float(io.mouse_wheel), mods)
+            else:
+                scroll = getattr(control, "scroll", None)
+                if callable(scroll):
+                    scroll(-3 if io.mouse_wheel > 0 else 3)
+            io.mouse_wheel = 0.0
+            took = True
+
+        key = getattr(control, "key", None)
+        if focus.get("id") == item_id and callable(key):
+            events = list(io.key_events)
+            if not events and (io.key or io.text):
+                events = [(io.key, io.text, mods)]
+            for code, text, modifiers in events:
+                key(int(code), text, modifiers)
+                took = True
+
+    control.draw(ctx.p, *box)
+    return took
+
+
 
 def is_key_chord_pressed(chord: int) -> bool:
     """``IsKeyChordPressed``: the key, and exactly the modifiers asked for.
@@ -5010,7 +5136,7 @@ __all__ += [
     "load_ini_settings_from_disk", "log_to_tty", "log_to_file",
     "log_to_clipboard", "log_text", "log_finish", "log_buttons", "debug_log",
     "debug_text_encoding", "debug_start_item_picker", "debug_flash_style_color",
-    "input_text_multiline", "text_editor", "is_key_chord_pressed", "shortcut",
+    "input_text_multiline", "text_editor", "host_control", "is_key_chord_pressed", "shortcut",
     "set_next_item_shortcut", "set_item_key_owner", "set_next_item_storage_id",
     "set_nav_cursor_visible", "set_next_frame_want_capture_mouse",
     "set_next_frame_want_capture_keyboard",
