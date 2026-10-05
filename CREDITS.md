@@ -87,3 +87,12 @@ touches — plus the methods still to write.
 A port that merely runs is not evidence. Porting the reference's own demo is
 how this toolkit was found to be wrong twenty-two times; that is why
 `tests/test_imgui_demo_remaining.py` exists and why its count may not fall.
+
+## Colour tables (`colormaps.json`)
+
+Data, not code, under their own licences (texts and attributions in
+`licenses/colormaps.txt`): viridis/magma/inferno/plasma/cividis (CC0, van der
+Walt, Smith, Firing; Nuñez et al.), the CET maps (CC-BY 4.0, Peter Kovesi,
+https://colorcet.com), turbo (Apache-2.0, Google), pyqtgraph's palettes (MIT),
+and the classic and ColorBrewer maps sampled from matplotlib's definitions.
+`tools/build_colormaps.py` regenerates the file.
