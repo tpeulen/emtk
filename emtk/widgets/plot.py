@@ -47,6 +47,53 @@ _TICK_TEXT = (160, 165, 175)
 _AXIS_LINE = (110, 115, 125)
 
 
+def column_extremes_index(px, py, run_id=None):
+    """Which samples of a pixel path draw the same pixels: sorted indices into it.
+
+    A trace far denser than the screen -- a 4096-channel decay in a plot 700 px
+    wide -- puts many samples in each pixel column, and stroking every one of
+    them is most of a frame. Where x runs left to right and a column holds two
+    samples or more, each column of each run (*run_id*: equal for samples
+    joined by a line) keeps its lowest and highest sample, in sample order, and
+    every run keeps its two ends: the stroke spans each column's full vertical
+    extent and stays within a pixel of the original path. A path that doubles
+    back in x, or is sparser than that, is kept whole.
+    """
+    import numpy as np  # noqa: PLC0415
+
+    px = np.asarray(px, dtype=float)
+    py = np.asarray(py, dtype=float)
+    count = px.size
+    everything = np.arange(count)
+    if count < 8:
+        return everything
+    columns = np.floor(px).astype(np.int64)
+    if np.any(np.diff(columns) < 0):
+        return everything
+    runs = np.zeros(count, dtype=np.int64) if run_id is None else np.asarray(run_id, np.int64)
+    key = runs * (int(columns.max() - columns.min()) + 2) + (columns - columns.min())
+    starts = np.concatenate(([0], np.flatnonzero(np.diff(key)) + 1))
+    if starts.size * 2 >= count:
+        return everything  # under two samples a column: nothing to gain
+    ends = np.concatenate((starts[1:], [count])) - 1
+    order = np.lexsort((py, key))  # by group, then y: each group stays contiguous
+    # A column's lowest and highest sample, in sample order; a run's first and
+    # last sample, so it still starts and ends where it did.
+    run_edges = np.flatnonzero(np.diff(runs)) if run_id is not None else np.zeros(0, int)
+    edges = np.concatenate(([0, count - 1], run_edges, run_edges + 1))
+    return np.unique(np.concatenate((order[starts], order[ends], edges)))
+
+
+def column_extremes(px, py):
+    """:func:`column_extremes_index` applied: the kept vertices as an ``(n, 2)`` array."""
+    import numpy as np  # noqa: PLC0415
+
+    px = np.asarray(px, dtype=float)
+    py = np.asarray(py, dtype=float)
+    keep = column_extremes_index(px, py)
+    return np.column_stack((px[keep], py[keep]))
+
+
 class Plot:
     """A plot area, built up by :meth:`line`/:meth:`scatter`/:meth:`hline`
     then drawn once by :meth:`draw` (or on exit, if used as a context
@@ -235,19 +282,30 @@ class Plot:
             return
         dash = series.get("dash")
         if not dash:
-            # Submit complete finite runs to the painter's optional batch seam.
-            # No resampling: each original sample still contributes a vertex.
-            # A missing sample breaks a run instead of inventing a connecting line.
-            points = []
-            for i in range(n):
-                if math.isfinite(xs[i]) and math.isfinite(ys[i]):
-                    points.append((self._x_axis.to_pixels(xs[i]), self._y_axis.to_pixels(ys[i])))
-                else:
-                    if len(points) > 1:
-                        _painter_polyline(p, points, width, colour)
-                    points = []
-            if len(points) > 1:
-                _painter_polyline(p, points, width, colour)
+            # Complete finite runs go to the painter's batch seam, mapped to
+            # pixels in one array operation. A missing sample breaks a run
+            # instead of inventing a connecting line.
+            import numpy as np  # noqa: PLC0415
+
+            px = self._x_axis.to_pixels_array(np.asarray(xs[:n], dtype=float))
+            py = self._y_axis.to_pixels_array(np.asarray(ys[:n], dtype=float))
+            keep = np.flatnonzero(np.isfinite(px) & np.isfinite(py))
+            if keep.size < 2:
+                return
+            # A run is a stretch without a missing sample; a trace on a log axis
+            # that touches zero (a prompt's background) breaks into many.
+            run_id = np.concatenate(([0], np.cumsum(np.diff(keep) != 1)))
+            chosen = column_extremes_index(px[keep], py[keep], run_id)
+            keep, run_id = keep[chosen], run_id[chosen]
+            runs = [np.column_stack((px[part], py[part]))
+                    for part in np.split(keep, np.flatnonzero(np.diff(run_id)) + 1)
+                    if part.size > 1]
+            batch = getattr(p, "polylines", None)
+            if callable(batch):
+                batch(runs, width, colour)
+            else:
+                for points in runs:
+                    _painter_polyline(p, points, width, colour)
             return
         # The dash phase carries across vertices, so a pattern reads as one
         # pattern along the curve rather than restarting at every sample --

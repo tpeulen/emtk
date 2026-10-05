@@ -51,9 +51,21 @@ class Axis:
         A no-op on the axes whose bound was fixed at construction -- fitting
         a caller-specified range would silently override what they asked for.
         """
+        try:
+            import numpy as np  # noqa: PLC0415
+
+            array = np.asarray(values, dtype=float)
+        except (ImportError, TypeError, ValueError):
+            array = None
+        if array is not None and array.ndim == 1:
+            finite = array[np.isfinite(array)]  # a gap in a series, not a range to show
+            if finite.size:
+                self._fit_min = min(self._fit_min, float(finite.min()))
+                self._fit_max = max(self._fit_max, float(finite.max()))
+            return
         for v in values:
             if not math.isfinite(v):
-                continue  # a gap in a series, not a range to show
+                continue
             if v < self._fit_min:
                 self._fit_min = v
             if v > self._fit_max:
@@ -102,6 +114,17 @@ class Axis:
             return self.pixel_min
         scale = (self.pixel_max - self.pixel_min) / span
         return self.pixel_min + scale * (v - lo)
+
+    def to_pixels_array(self, values):
+        """:meth:`to_pixels` for a whole numpy array at once."""
+        import numpy as np  # noqa: PLC0415
+
+        lo, hi = self.range
+        span = hi - lo
+        values = np.asarray(values, dtype=float)
+        if span <= 0.0:
+            return np.full(values.shape, self.pixel_min)
+        return self.pixel_min + (self.pixel_max - self.pixel_min) / span * (values - lo)
 
     def to_plot(self, px: float) -> float:
         """Map a pixel coordinate back to a value. Inverse of :meth:`to_pixels`."""

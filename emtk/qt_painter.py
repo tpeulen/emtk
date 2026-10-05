@@ -130,6 +130,44 @@ def image_bytes(image):
     return width, height, bytes(packed)
 
 
+def _polygon(points, closed: bool = False):
+    """A ``QPolygonF`` of *points*, filled from a numpy buffer when it can be.
+
+    Building one ``QPointF`` per vertex in Python was the larger part of
+    stroking a dense trace; a polygon of the right size whose memory is written
+    as one float64 array is not. Anything else takes the plain path. ``None``
+    for fewer than two vertices.
+    """
+    from qtpy import QtCore, QtGui
+
+    try:
+        import numpy as np  # noqa: PLC0415
+
+        array = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+        if closed and len(array) > 2:
+            array = np.vstack((array, array[:1]))
+        n = len(array)
+        if n < 2:
+            return None
+        polygon = QtGui.QPolygonF()
+        polygon.fill(QtCore.QPointF(), n)
+        pointer = polygon.data()
+        pointer.setsize(16 * n)
+        np.frombuffer(pointer, dtype=np.float64, count=2 * n)[:] = array.ravel()
+        return polygon
+    except Exception:
+        vertices = [QtCore.QPointF(float(x), float(y)) for x, y in points]
+        if len(vertices) < 2:
+            return None
+        if closed and len(vertices) > 2:
+            vertices.append(vertices[0])
+        return QtGui.QPolygonF(vertices)
+
+
+#: Runs shorter than this many vertices are batched into one ``drawLines``.
+SHORT_RUN = 64
+
+
 class QtPainter:
     """Draw the chrome with a ``QPainter``.
 
@@ -509,6 +547,90 @@ class QtPainter:
         finally:
             self._p.restore()
 
+    def _hairline_offsets(self, width: float, qcolour):
+        """Device-pixel offsets that sweep a 1 px pen into a stroke *width* wide.
+
+        ``None`` when the wide pen must be used instead: an antialiased
+        painter, or a translucent colour (overlapping hairlines would stack its
+        alpha). Qt strokes a wide non-antialiased polyline as an outline it then
+        fills -- 24 ms for four 4096-channel decays at 2x -- while 1 px pens take
+        Qt's line path: nine of them, offset across and along, 9 ms; every pixel
+        either paints is within one logical pixel of the other's.
+        """
+        from qtpy import QtGui
+
+        if qcolour.alpha() != 255 or self._p.testRenderHint(QtGui.QPainter.Antialiasing):
+            return None
+        device = self._p.device()
+        ratio = float(device.devicePixelRatioF()) if device is not None else 1.0
+        pixels = max(1, int(round(width * ratio)))
+        if pixels < 2:
+            return None
+        unit = 1.0 / ratio
+        half = pixels // 2
+        steps = [k - half for k in range(pixels)]
+        offsets = [(0.0, k * unit) for k in steps] + [(k * unit, 0.0) for k in steps if k]
+        return offsets
+
+    def _sweep(self, polygon, offsets, qcolour) -> None:
+        from qtpy import QtCore, QtGui
+
+        pen = QtGui.QPen(qcolour, 0)
+        pen.setCosmetic(True)
+        self._p.setPen(pen)
+        for dx, dy in offsets:
+            self._p.drawPolyline(polygon.translated(QtCore.QPointF(dx, dy)))
+
+    def polylines(self, runs, width: float, colour: Colour) -> None:
+        """Stroke several open paths in one colour and width (one series' runs).
+
+        A trace broken into many short runs -- a prompt on a log axis, whose
+        background is zero -- paid Qt's stroke setup per run: 364 calls, most of
+        a frame. Long runs are stroked as joined polylines; the short ones go
+        to Qt together, as one batch of segments with square caps (which cover
+        their joints).
+        """
+        from qtpy import QtCore, QtGui
+
+        if width <= 0.0:
+            return
+        import numpy as np  # noqa: PLC0415
+
+        long_runs, pairs = [], []
+        for points in runs:
+            array = np.asarray(points, dtype=np.float64).reshape(-1, 2)
+            if len(array) < 2:
+                continue
+            if len(array) >= SHORT_RUN:
+                long_runs.append(array)
+            else:
+                segment = np.empty((2 * (len(array) - 1), 2))
+                segment[0::2], segment[1::2] = array[:-1], array[1:]
+                pairs.append(segment)
+        colour = self._colour(colour)
+        self._p.save()
+        try:
+            self._p.setBrush(QtCore.Qt.NoBrush)
+            if long_runs:
+                offsets = self._hairline_offsets(float(width) + 1.0, colour)
+                if offsets is not None:
+                    for array in long_runs:
+                        self._sweep(_polygon(array), offsets, colour)
+                else:
+                    pen = QtGui.QPen(colour, float(width) + 1.0)
+                    pen.setCapStyle(QtCore.Qt.FlatCap)
+                    pen.setJoinStyle(QtCore.Qt.BevelJoin)
+                    self._p.setPen(pen)
+                    for array in long_runs:
+                        self._p.drawPolyline(_polygon(array))
+            if pairs:
+                pen = QtGui.QPen(colour, float(width) + 1.0)
+                pen.setCapStyle(QtCore.Qt.SquareCap)
+                self._p.setPen(pen)
+                self._p.drawLines(_polygon(np.vstack(pairs)))
+        finally:
+            self._p.restore()
+
     def polyline(self, points, width: float, colour: Colour, closed: bool = False) -> None:
         """Stroke a complete path natively, without per-segment triangle paths.
 
@@ -518,11 +640,9 @@ class QtPainter:
         """
         from qtpy import QtCore, QtGui
 
-        vertices = [QtCore.QPointF(float(x), float(y)) for x, y in points]
-        if len(vertices) < 2 or width <= 0.0:
+        polygon = _polygon(points, closed)
+        if polygon is None or width <= 0.0:
             return
-        if closed and len(vertices) > 2:
-            vertices.append(vertices[0])
         # The legacy triangle stroke includes a one-pixel same-colour edge
         # (fill_triangle). Retain its effective thickness when batching.
         pen = QtGui.QPen(self._colour(colour), float(width) + 1.0)
@@ -532,7 +652,7 @@ class QtPainter:
         try:
             self._p.setPen(pen)
             self._p.setBrush(QtCore.Qt.NoBrush)
-            self._p.drawPolyline(QtGui.QPolygonF(vertices))
+            self._p.drawPolyline(polygon)
         finally:
             self._p.restore()
 

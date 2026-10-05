@@ -24,7 +24,12 @@ def test_solid_trace_batches_every_sample_into_one_native_stroke():
     plot.draw(painter)
     expected = [(plot._x_axis.to_pixels(x), plot._y_axis.to_pixels(y))
                 for x, y in zip([0.0, 1.0, 2.0, 3.0], [1.0, 3.0, 2.0, 8.0])]
-    assert painter.paths == [(expected, 2.0, colour, False)]
+    assert len(painter.paths) == 1
+    points, width, got_colour, closed = painter.paths[0]
+    # every sample of a sparse trace is a vertex (only a trace denser than the
+    # pixel columns is thinned, see test_plot_line_speed.py)
+    assert [tuple(map(float, p)) for p in points] == expected
+    assert (width, got_colour, closed) == (2.0, colour, False)
     assert painter.triangles == []
 
 
