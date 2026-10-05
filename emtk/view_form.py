@@ -28,7 +28,8 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``descriptions`` (a tooltip per radio option), ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
 ``info``, ``progress`` (a bar over a fraction, indeterminate while it is
-``None``), ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
+``None``), ``value`` of ``kind: "text"`` (a multi-line field, ``lines`` tall,
+committed on a click elsewhere), ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
 and the wheel over it, step by ``step`` or by :func:`spin_step`), and the two
 table dialects -- ``table`` and ``custom``
 ``data_table`` (:mod:`emtk.widgets.data_table`), one full-width row each --
@@ -405,6 +406,9 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     if slider and section.get("field") is False and kind in ("int", "float"):
         _draw_bare_slider(section, model, state, width, value, bounds)
         return
+    if kind == "text":
+        _draw_text_block(section, model, state, width, shown_value, read_only)
+        return
     colour = kind in ("color", "colour")
     field_w = width
     if slider:
@@ -483,6 +487,33 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _tooltip(section)
         if changed and new != current and not read_only:
             _commit(model, section, new, state)
+
+
+def _draw_text_block(section: dict, model: Any, state: FormState, width: float,
+                     shown_value: str, read_only: bool) -> None:
+    """A ``value`` of ``kind: "text"``: AutoForm's multi-line text field.
+
+    ``lines`` (default 3) sets its height. What is typed is kept in
+    :attr:`FormState.buffers` and written to the model when the pointer goes
+    down elsewhere -- the single-line fields' click-away commit; a newline is
+    text here, not a commit. ``read_only`` shows the text without editing.
+    """
+    name = section_name(section)
+    lines = max(1, int(section.get("lines", 3) or 3))
+    height = _core.get_text_line_height() * lines + 2.0 * _core.get_style().frame_padding[1]
+    shown = state.buffers.get(name, shown_value)
+    _w.begin_disabled(read_only)
+    changed, text = _w.input_text_multiline(f"##{name}", shown, (max(width, 30.0), height))
+    _w.end_disabled()
+    _remember(state, name)
+    _tooltip(section)
+    if changed and not read_only:
+        state.buffers[name] = text
+    io = _core.get_io()
+    if name in state.buffers and io.mouse_clicked[0] and not _w.is_item_hovered(True):
+        typed = state.buffers.pop(name)
+        if typed != shown_value:
+            _commit(model, section, typed, state)
 
 
 def _slider_format(section: dict, kind: str) -> str:

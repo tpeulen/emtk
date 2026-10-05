@@ -41,6 +41,16 @@ table needs them and neither dialect had them:
     flips, any other cell opens for typing on a double click (Enter commits,
     Escape cancels, a click elsewhere commits). The new value is written into
     a mutable record and handed to ``edited_call(record, key, value)``;
+``activated_cell_call``
+    called as ``activated_cell_call(record, key)`` on a double click that does
+    not open a cell: like ``activated_call``, with the key of the column that
+    was double-clicked -- a cell that names another record opens *that* one;
+``display: "link"`` on a column
+    the cell text is drawn in the link colour and underlined: a value that
+    names another record, opened by a double click (``activated_cell_call``);
+``background`` on a column
+    ``{value: "#rrggbb"}``: a cell whose text is one of the keys is filled
+    with that colour -- a status column reads at a glance;
 ``delete_call``
     called with the selected record when Delete (or Backspace) is pressed;
 ``context_call``
@@ -213,6 +223,8 @@ class TableColumn:
     #: Whether value shading applies to this column; a row number or an
     #: identifier is a number that has no magnitude worth a colour.
     shade: bool = True
+    #: ``{cell text: (r, g, b[, a])}``: a fixed fill per value (a status column).
+    background: Optional[dict] = None
 
     @classmethod
     def from_spec(cls, spec: Mapping, editable: bool = False) -> "TableColumn":
@@ -236,6 +248,7 @@ class TableColumn:
             align_right=None if align is None else str(align).lower() == "right",
             editable=bool(spec.get("editable", editable)),
             shade=bool(spec.get("shade", True)),
+            background=_backgrounds(spec.get("background")),
         )
 
     def text(self, value: Any) -> str:
@@ -281,6 +294,26 @@ class TableColumn:
             colour = POSITIVE_COLOUR if number >= 0 else NEGATIVE_COLOUR
             return (min(zero, point), max(zero, point), colour)
         return (0.0, at(number), BAR_COLOUR)
+
+
+def _backgrounds(spec: Any) -> Optional[dict]:
+    """A column's ``background`` map with its colours read: ``"#rrggbb"`` or a tuple."""
+    if not isinstance(spec, Mapping) or not spec:
+        return None
+    out = {}
+    for value, colour in spec.items():
+        if isinstance(colour, str):
+            text = colour.strip().lstrip("#")
+            if len(text) not in (6, 8):
+                continue
+            try:
+                parts = [int(text[i:i + 2], 16) for i in range(0, len(text), 2)]
+            except ValueError:
+                continue
+            out[str(value).lower()] = tuple(parts)
+        elif isinstance(colour, (list, tuple)) and len(colour) in (3, 4):
+            out[str(value).lower()] = tuple(int(c) for c in colour)
+    return out or None
 
 
 def _ramp(fraction: float) -> tuple:
@@ -421,6 +454,7 @@ class DataTable:
         self._picker_keys: list = []
         self.on_select = on_select
         self.on_activate = on_activate
+        self.activated_key: Optional[str] = None
         self.on_edit = on_edit
         self.on_delete = on_delete
         self.on_context = on_context
@@ -1021,6 +1055,8 @@ class DataTable:
                 col_x += width
                 continue
             shade = self.colour_of(column.key, value)
+            if column.background and value is not None:
+                shade = column.background.get(str(value).lower(), shade)
             if shade is not None:
                 p.fill_rect(col_x, y, width, h, shade)
             bar = column.bar(value)
@@ -1035,8 +1071,15 @@ class DataTable:
             shown = fit_text(p, text, width - 12.0 - indent)
             if shown != text:
                 self._elided[(index, column.key)] = text
+            link = column.display == "link" and bool(text)
+            ink = _style.CHECK_MARK if link else colour
             p.text(col_x + 6.0 + indent, y + 1.0, max(width - 12.0 - indent, 1.0), text_h,
-                   ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT), shown, colour)
+                   ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT), shown, ink)
+            if link:
+                room = max(width - 12.0 - indent, 1.0)
+                tw = min(p.text_width(shown), room)
+                lx = col_x + 6.0 + indent + (room - tw if right else 0.0)
+                p.fill_rect(lx, y + 1.0 + (text_h + p.line_height()) / 2.0, tw, 1.0, ink)
             col_x += width
 
     def _draw_hbar(self, p: Painter, widths: Sequence[float], list_w: float) -> None:
@@ -1198,6 +1241,8 @@ class DataTable:
         if clicks > 1 and self.is_parent(index):
             self.toggle(index)
         if clicks > 1 and self.on_activate is not None:
+            #: The column of the double click, for ``activated_cell_call``.
+            self.activated_key = column.key if column is not None else None
             self.on_activate(index)
         return True
 
@@ -1397,6 +1442,7 @@ class TableBinding:
         self.selected_call = str(merged.get("selected_call", "") or "")
         self.selected_attr = str(merged.get("selected_attr", "") or "")
         self.activated_call = str(merged.get("activated_call", "") or "")
+        self.activated_cell_call = str(merged.get("activated_cell_call", "") or "")
         self.edited_call = str(merged.get("edited_call", "") or "")
         self.delete_call = str(merged.get("delete_call", "") or "")
         self.context_call = str(merged.get("context_call", "") or "")
@@ -1576,6 +1622,10 @@ class TableBinding:
             fn = self._lookup(self.activated_call)
             if callable(fn):
                 fn(self.record(index))
+        if self.activated_cell_call:
+            fn = self._lookup(self.activated_cell_call)
+            if callable(fn):
+                fn(self.record(index), getattr(self.control, "activated_key", None))
 
 
 def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
