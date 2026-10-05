@@ -72,9 +72,10 @@ def test_panels_heatmap_and_colorbar():
 
 def test_the_shared_plot_style_is_left_as_it_was():
     style = implot.get_style()
-    before, minor = list(style.colors), style.minor_alpha
+    before, minor, pad = list(style.colors), style.minor_alpha, style.fit_padding
     _every_item(Figure(size=(300, 200))).png_bytes()
     assert list(style.colors) == before and style.minor_alpha == minor
+    assert style.fit_padding == pad
 
 
 def test_what_is_not_offered_raises():
@@ -118,3 +119,19 @@ def test_a_dashed_reference_line_is_drawn_in_dashes():
         return len(painter.calls)
 
     assert segments(":") > segments("-") + 5
+
+
+def test_a_panel_knows_its_figure_and_both_show_in_jupyter():
+    fig = Figure(1, 2, size=(300, 150))
+    ax = fig.ax(0, 1)
+    assert ax.figure is fig
+    assert fig._repr_png_()[:8] == b"\x89PNG\r\n\x1a\n"
+    assert ax._repr_png_()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_a_step_histogram_is_an_outline_ending_on_the_last_edge():
+    ax = Figure().ax()
+    edges, counts = ax.hist([0.1, 0.2, 0.8], bins=2, step=True, label="s")
+    kind, data = ax._items[-1]
+    assert kind == "stairs"
+    assert data["x"] == edges and data["y"] == counts + [counts[-1]]

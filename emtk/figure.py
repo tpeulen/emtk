@@ -92,9 +92,14 @@ def _histogram(values: Sequence[float], bins: int | Sequence[float],
 
 
 class Axes:
-    """One panel of a :class:`Figure`; every method records, nothing draws until saved."""
+    """One panel of a :class:`Figure`; every method records, nothing draws until saved.
 
-    def __init__(self) -> None:
+    ``axes.figure`` is the figure it belongs to, so a function handed a panel
+    can still save the whole picture.
+    """
+
+    def __init__(self, figure: Figure | None = None) -> None:
+        self.figure = figure
         self._items: list[tuple[str, dict]] = []
         self._cycle = 0
         self.title = ""
@@ -150,13 +155,26 @@ class Axes:
                          color=self._colour(color, alpha), label=label)
 
     def hist(self, values, bins: int | Sequence[float] = 40, *, range=None,  # noqa: A002
-             density: bool = False, color=None, alpha: float | None = None,
-             label: str | None = None) -> tuple[list[float], list[float]]:
-        """A histogram of *values* drawn as bars; returns ``(edges, counts)``."""
+             density: bool = False, step: bool = False, color=None, alpha: float | None = None,
+             width: float = 1.5, label: str | None = None) -> tuple[list[float], list[float]]:
+        """A histogram of *values*; returns ``(edges, counts)``.
+
+        Drawn as bars, or with ``step=True`` as the outline only (``width`` is
+        then the line width) -- the readable choice for several overlaid
+        distributions.
+        """
         edges, counts = _histogram(values, bins, range, density)
+        if step:
+            # Each count held from its left edge to the next; the closing
+            # point carries the last count to the right edge.
+            xs = list(edges)
+            ys = list(counts) + [counts[-1] if counts else 0.0]
+            self._add("stairs", x=xs, y=ys, color=self._colour(color, alpha), width=float(width),
+                      label=label)
+            return edges, counts
         centres = [(a + b) / 2.0 for a, b in zip(edges[:-1], edges[1:])]
-        width = (edges[-1] - edges[0]) / max(len(counts), 1)
-        self._add("bars", x=centres, y=counts, width=width, color=self._colour(color, alpha),
+        bar_width = (edges[-1] - edges[0]) / max(len(counts), 1)
+        self._add("bars", x=centres, y=counts, width=bar_width, color=self._colour(color, alpha),
                   label=label)
         return edges, counts
 
@@ -271,6 +289,12 @@ class Axes:
         self.yticks = (_floats(values), None if labels is None else [str(s) for s in labels])
         return self
 
+    def _repr_png_(self) -> bytes:
+        """A panel shows its whole figure in Jupyter."""
+        if self.figure is None:
+            raise ValueError("this panel belongs to no figure")
+        return self.figure.png_bytes()
+
     def legend(self, at: str = "ne") -> Axes:
         """Show the labelled items' legend in a corner (``"ne"``, ``"nw"``, ``"se"``...)."""
         if at not in _LEGEND_AT:
@@ -298,7 +322,7 @@ class Figure:
         self.rows, self.cols = int(rows), int(cols)
         self.size = (int(size[0]), int(size[1]))
         self.title = str(title)
-        self._axes = [[Axes() for _ in range(self.cols)] for _ in range(self.rows)]
+        self._axes = [[Axes(self) for _ in range(self.cols)] for _ in range(self.rows)]
 
     def ax(self, row: int = 0, col: int = 0) -> Axes:
         """The panel at ``(row, col)``."""
@@ -328,6 +352,10 @@ class Figure:
         canvas = grab(self._app(), self.size, frames=2, painter=_painter())
         return canvas.width, canvas.height, bytes(canvas.px)
 
+    def _repr_png_(self) -> bytes:
+        """Shown inline by Jupyter, as a plotting library's figure is."""
+        return self.png_bytes()
+
     def save(self, path) -> pathlib.Path:
         """Write the figure to *path* (``.png``); returns the path."""
         target = pathlib.Path(path)
@@ -350,8 +378,11 @@ class Figure:
         from . import implot_internal as I
 
         style = implot.get_style()
-        saved, saved_minor = list(style.colors), style.minor_alpha
+        saved, saved_minor, saved_pad = list(style.colors), style.minor_alpha, style.fit_padding
         _paper(style, I)
+        # A margin around fitted data, so a point on the extreme is not drawn
+        # on the frame (an IRF spike at t=0 vanished into the axis without it).
+        style.fit_padding = (0.05, 0.05)
         try:
             w, h = float(self.size[0]), float(self.size[1])
             from .im_core import Col
@@ -381,6 +412,7 @@ class Figure:
         finally:
             style.colors[:] = saved
             style.minor_alpha = saved_minor
+            style.fit_padding = saved_pad
 
 
 def _painter() -> str:
