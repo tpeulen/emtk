@@ -45,3 +45,27 @@ def test_fewer_than_two_frames_is_raised_to_two():
 def test_a_bad_size_is_refused():
     with pytest.raises(ValueError):
         grab(_gui, (0, 100))
+
+
+def test_the_pillow_painter_draws_the_same_kind_of_picture():
+    """``painter="pil"`` gives a PNG of the requested size, drawn (not blank),
+    close to the reference painter's -- it is the fast path for big frames."""
+    pytest.importorskip("PIL")
+    import emtk
+    from emtk.export import grab
+
+    def gui():
+        emtk.begin("w", (0.0, 0.0, 200.0, 120.0))
+        emtk.text("Hello")
+        emtk.button("Press")
+        emtk.end()
+
+    ref = grab(gui, (220, 140), painter="pixel")
+    fast = grab(gui, (220, 140), painter="pil")
+    assert (fast.width, fast.height) == (220, 140)
+    a, b = bytes(ref.px), bytes(fast.px)
+    assert len(a) == len(b)
+    differing = sum(1 for i in range(0, len(a), 4) if a[i:i + 3] != b[i:i + 3])
+    assert differing < 0.05 * 220 * 140, differing
+    with pytest.raises(ValueError):
+        grab(gui, (10, 10), painter="gpu")

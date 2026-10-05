@@ -25,7 +25,8 @@ __all__ = ["grab", "png_bytes", "save_png"]
 Size = Tuple[int, int]
 
 
-def grab(app: Union[Any, Callable[[], Any]], size: Size = (1200, 800), frames: int = 3):
+def grab(app: Union[Any, Callable[[], Any]], size: Size = (1200, 800), frames: int = 3,
+         painter: str = "pixel"):
     """Draw *app* and return the painter holding the pixels.
 
     Parameters
@@ -38,45 +39,56 @@ def grab(app: Union[Any, Callable[[], Any]], size: Size = (1200, 800), frames: i
     frames : int
         How many frames to run. The first opens windows and settles layout, the last is the
         picture; two is the least that is right, three also settles a docked layout.
+    painter : {"pixel", "pil"}
+        ``"pixel"`` (default) draws on :class:`emtk.testing.PixelPainter`, pure Python and
+        the reference every golden image is taken with. ``"pil"`` draws the same picture on
+        :class:`emtk.pil_painter.PilPainter`, whose inner loops are Pillow's -- many times
+        faster for a large or busy frame (a figure for a report), and it needs Pillow.
 
     Returns
     -------
-    emtk.testing.PixelPainter
+    PixelPainter or PilPainter
         ``.width``, ``.height`` and ``.px`` (RGBA bytes).
     """
-    from .testing import PixelPainter
+    if painter == "pixel":
+        from .testing import PixelPainter as make
+    elif painter == "pil":
+        from .pil_painter import PilPainter as make
+    else:
+        raise ValueError(f"painter is 'pixel' or 'pil', got {painter!r}")
 
     width, height = int(size[0]), int(size[1])
     if width < 1 or height < 1:
         raise ValueError(f"size must be positive, got {size!r}")
-    painter = None
+    canvas = None
     for _ in range(max(2, int(frames))):
-        painter = PixelPainter(width, height)
+        canvas = make(width, height)
         if hasattr(app, "draw"):
-            app.draw(painter, 0.0, 0.0, float(width), float(height))
+            app.draw(canvas, 0.0, 0.0, float(width), float(height))
         else:
             from . import im
 
-            with im.frame(painter, (0.0, 0.0, float(width), float(height))):
+            with im.frame(canvas, (0.0, 0.0, float(width), float(height))):
                 app()
-    return painter
+    return canvas
 
 
-def png_bytes(app: Union[Any, Callable[[], Any]], size: Size = (1200, 800), frames: int = 3) -> bytes:
+def png_bytes(app: Union[Any, Callable[[], Any]], size: Size = (1200, 800), frames: int = 3,
+              painter: str = "pixel") -> bytes:
     """Draw *app* and return the picture encoded as PNG bytes (see :func:`grab`)."""
     from .testing import png_encode
 
-    painter = grab(app, size, frames)
-    return png_encode(painter.width, painter.height, painter.px)
+    canvas = grab(app, size, frames, painter)
+    return png_encode(canvas.width, canvas.height, canvas.px)
 
 
 def save_png(app: Union[Any, Callable[[], Any]], path: Union[str, pathlib.Path],
-             size: Size = (1200, 800), frames: int = 3) -> pathlib.Path:
+             size: Size = (1200, 800), frames: int = 3, painter: str = "pixel") -> pathlib.Path:
     """Draw *app* and write it to *path* as a PNG; returns the path (see :func:`grab`).
 
     The parent folder must exist; an existing file is replaced.
     """
     target = pathlib.Path(path)
-    data = png_bytes(app, size, frames)
+    data = png_bytes(app, size, frames, painter)
     target.write_bytes(data)
     return target
