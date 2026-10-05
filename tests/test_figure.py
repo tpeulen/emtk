@@ -163,3 +163,39 @@ def test_a_line_on_the_right_axis_gets_its_own_range():
     ax.set_right_label("RIGHTLAB")
     text = _texts(fig)
     assert "RIGHTLAB" in text and "1000" in text
+
+
+def test_bars_horizontal_outlined_and_uneven():
+    fig = Figure(1, 2, size=(420, 220))
+    left = fig.ax(0, 0)
+    left.bars([0.5, 2.0], [3, 1], width=[1.0, 2.0], edgecolor="k")
+    left.hist([0.1, 0.2, 0.9], bins=[0.0, 0.5, 2.0])
+    right = fig.ax(0, 1)
+    right.bars([1, 2, 3], [5, 2, 4], horizontal=True, color="darkorange")
+    right.hide_tick_labels(y=True).add_colorbar("Counts", 0, 9, "Greys")
+    assert fig.png_bytes()[:4] == b"\x89PNG"
+    assert "Counts" in _texts(fig)
+    with pytest.raises(ValueError):
+        Figure().ax().bars([1, 2], [1, 1], width=[1.0])
+    with pytest.raises(KeyError):
+        Figure().ax().add_colorbar("x", 0, 1, "no-such")
+
+
+def test_horizontal_bars_lie_along_x_at_their_positions():
+    from emtk import implot
+
+    calls = []
+    original = implot.plot_bars
+
+    def record(label, xs, *args, ys=None, **kw):
+        calls.append((list(xs), list(ys)))
+        return original(label, xs, *args, ys=ys, **kw)
+
+    implot.plot_bars = record
+    try:
+        fig = Figure(size=(200, 200))
+        fig.ax().bars([1, 2, 3], [10, 20, 30], horizontal=True)
+        fig.png_bytes()
+    finally:
+        implot.plot_bars = original
+    assert calls[-1] == ([10.0, 20.0, 30.0], [1.0, 2.0, 3.0])

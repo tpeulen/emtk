@@ -117,6 +117,8 @@ class Axes:
         self.hidden = False
         self.has_right = False
         self.y2label = ""
+        self.no_xticklabels = False
+        self.no_yticklabels = False
 
     # -- colours ----------------------------------------------------------
     def _colour(self, colour, alpha: float | None = None) -> tuple[float, float, float, float]:
@@ -157,11 +159,22 @@ class Axes:
         return self._add("scatter", x=_floats(x), y=_floats(y), color=self._colour(color, alpha),
                          colors=per_point, size=float(size), marker=marker, label=label)
 
-    def bars(self, x, heights, *, width: float = 0.8, color=None, alpha: float | None = None,
-             label: str | None = None) -> Axes:
-        """Vertical bars centred on ``x``, ``width`` in data units."""
-        return self._add("bars", x=_floats(x), y=_floats(heights), width=float(width),
-                         color=self._colour(color, alpha), label=label)
+    def bars(self, x, heights, *, width=0.8, color=None, alpha: float | None = None,
+             edgecolor=None, horizontal: bool = False, label: str | None = None) -> Axes:
+        """Bars centred on ``x``, ``width`` in data units (one value, or one per bar).
+
+        ``horizontal=True`` lays them along x from the y-axis (``x`` is then
+        the bar centres on y) -- a y-marginal histogram. ``edgecolor`` outlines
+        each bar.
+        """
+        xs, ys = _floats(x), _floats(heights)
+        widths = _floats(width) if isinstance(width, Iterable) else [float(width)] * len(xs)
+        if len(widths) != len(xs):
+            raise ValueError(f"width needs one value or {len(xs)}, got {len(widths)}")
+        fill = self._colour(color, alpha)
+        edge = None if edgecolor is None else _rgba(edgecolor)
+        return self._add("bars", x=xs, y=ys, widths=widths, color=fill, edge=edge,
+                         horizontal=bool(horizontal), label=label)
 
     def hist(self, values, bins: int | Sequence[float] = 40, *, range=None,  # noqa: A002
              density: bool = False, step: bool = False, color=None, alpha: float | None = None,
@@ -182,9 +195,8 @@ class Axes:
                       label=label)
             return edges, counts
         centres = [(a + b) / 2.0 for a, b in zip(edges[:-1], edges[1:])]
-        bar_width = (edges[-1] - edges[0]) / max(len(counts), 1)
-        self._add("bars", x=centres, y=counts, width=bar_width, color=self._colour(color, alpha),
-                  label=label)
+        widths = [b - a for a, b in zip(edges[:-1], edges[1:])]
+        self.bars(centres, counts, width=widths, color=color, alpha=alpha, label=label)
         return edges, counts
 
     def stairs(self, x, y, *, color=None, width: float = 1.5, label: str | None = None) -> Axes:
@@ -271,6 +283,22 @@ class Axes:
             self.xlabel = str(x)
         if y is not None:
             self.ylabel = str(y)
+        return self
+
+    def hide_tick_labels(self, x: bool = False, y: bool = False) -> Axes:
+        """Drop the tick labels of an axis another panel already labels (a marginal)."""
+        self.no_xticklabels = self.no_xticklabels or bool(x)
+        self.no_yticklabels = self.no_yticklabels or bool(y)
+        return self
+
+    def add_colorbar(self, label: str, low: float, high: float, colormap: str = "viridis") -> Axes:
+        """A colour bar beside this panel for ``low``..``high`` -- also for a map
+        drawn in another panel (the colour bar of a map with marginals sits
+        right of the y-marginal)."""
+        if not colormaps.has(colormap):
+            raise KeyError(f"no colormap named {colormap!r}")
+        self.colorbar = {"label": str(label), "low": float(low), "high": float(high),
+                         "colormap": colormap}
         return self
 
     def set_right_label(self, label: str) -> Axes:
@@ -518,8 +546,10 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
     if not implot.begin_plot((axes.title or "") + ident, (plot_w, height), flags):
         return
     try:
-        implot.setup_axes(axes.xlabel or None, axes.ylabel or None, 0,
-                          I.AXIS_FLAGS_INVERT if axes.yinvert else 0)
+        x_flags = I.AXIS_FLAGS_NO_TICK_LABELS if axes.no_xticklabels else 0
+        y_flags = (I.AXIS_FLAGS_INVERT if axes.yinvert else 0) | (
+            I.AXIS_FLAGS_NO_TICK_LABELS if axes.no_yticklabels else 0)
+        implot.setup_axes(axes.xlabel or None, axes.ylabel or None, x_flags, y_flags)
         if axes.has_right:
             implot.setup_axis(I.AXIS_Y2, axes.y2label or None, I.AXIS_FLAGS_AUX_DEFAULT)
         if axes.xlog:
@@ -571,8 +601,18 @@ def _draw_item(kind: str, d: dict, label: str, implot, I) -> None:
             spec.marker_line_colors = d["colors"]
         implot.plot_scatter(label, d["x"], d["y"], spec=spec)
     elif kind == "bars":
-        spec = _spec(I, fill_color=d["color"], line_color=d["color"], flags=hidden)
-        implot.plot_bars(label, d["x"], ys=d["y"], bar_size=d["width"], spec=spec)
+        flags = hidden | (I.BARS_FLAGS_HORIZONTAL if d["horizontal"] else 0)
+        spec = _spec(I, fill_color=d["color"], line_color=d["edge"] or d["color"], flags=flags)
+        widths = d["widths"]
+        # implot's horizontal bars take (lengths, positions), as ImPlot's do.
+        pos, val = d["x"], d["y"]
+        xs, ys = (val, pos) if d["horizontal"] else (pos, val)
+        if widths and all(abs(w - widths[0]) <= 1e-12 * max(abs(widths[0]), 1.0) for w in widths):
+            implot.plot_bars(label, xs, ys=ys, bar_size=widths[0], spec=spec)
+        else:
+            # Uneven bins: one bar per call, each its own width, one legend entry.
+            for x, y, w in zip(xs, ys, widths):
+                implot.plot_bars(label, [x], ys=[y], bar_size=w, spec=spec)
     elif kind == "stairs":
         implot.plot_stairs(label, d["x"], d["y"],
                            spec=_spec(I, line_color=d["color"], line_weight=d["width"],
