@@ -111,11 +111,26 @@ def end_item() -> None:
     gp.current_item = None
 
 
+def _item_id(label_id: str) -> tuple:
+    """The item's id as ImGui hashes ``label_id``: the whole label, or what follows ``###``.
+
+    Not :meth:`emtk.im_core.Context.get_id`, which takes what follows ``##`` as
+    the id: two items ``"Intensity 0##psf"`` and ``"Intensity 1##psf"`` are two
+    items in ImPlot3D (``##`` only keeps the rest out of the legend), and were
+    one here -- one automatic colour, one legend entry. emtk's 2-D implot keys
+    items by the whole label for the same reason.
+    """
+    ctx = _p._im()
+    label = str(label_id)
+    key = label[label.index("###"):] if "###" in label else label
+    return (*ctx._ids, "implot3d-item", key)
+
+
 def register_or_get_item(label_id: str, flags: int):
     """``RegisterOrGetItem``: ``(item, just_created)``."""
     gp = _p._gp()
     items = gp.current_items
-    item_id = _p._im().get_id(label_id)
+    item_id = _item_id(label_id)
     just_created = items.get_item(item_id) is None
     item = items.get_or_add_item(item_id)
     if item.seen_this_frame:
