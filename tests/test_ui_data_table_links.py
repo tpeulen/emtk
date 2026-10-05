@@ -96,3 +96,33 @@ def test_a_status_cell_is_filled_with_its_value_colour():
     fills = {tuple(r[4][:3]) for r in painter.fills if r[4] is not None}
     assert (0xD6, 0xF5, 0xDC) in fills
     assert (255, 220, 220) in fills
+
+
+def _luminance(colour):
+    r, g, b = (c / 255.0 for c in tuple(colour)[:3])
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def test_text_on_a_value_fill_contrasts_with_the_fill():
+    """A pale status fill under the dark theme's pale text made the value unreadable
+    (MMFDB Admin's Spectra: "unverified" on #fff4cc). The text takes the ink that
+    contrasts with the fill it sits on."""
+    model = _Samples()
+    control = TableBinding(SECTION, model).control
+    painter = _draw(control)
+    for value, fill in (("approved", (0xD6, 0xF5, 0xDC)), ("rejected", (255, 220, 220))):
+        texts = [t for t in painter.texts if t[5] == value]
+        assert texts, value
+        assert abs(_luminance(texts[0][6]) - _luminance(fill)) > 0.45, (value, texts[0][6])
+
+
+def test_text_on_a_dark_value_fill_stays_light():
+    section = {**SECTION, "options": {**SECTION["options"], "columns": [
+        {"key": "sample_id", "title": "Sample", "width": 120},
+        {"key": "status", "title": "Status", "width": 120,
+         "background": {"approved": "#204020"}},
+    ]}}
+    control = TableBinding(section, _Samples()).control
+    painter = _draw(control)
+    text = next(t for t in painter.texts if t[5] == "approved")
+    assert _luminance(text[6]) > 0.5

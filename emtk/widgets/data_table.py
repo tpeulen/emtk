@@ -50,7 +50,8 @@ table needs them and neither dialect had them:
     names another record, opened by a double click (``activated_cell_call``);
 ``background`` on a column
     ``{value: "#rrggbb"}``: a cell whose text is one of the keys is filled
-    with that colour -- a status column reads at a glance;
+    with that colour -- a status column reads at a glance; its text is drawn
+    in the ink that contrasts with the fill (dark on pale, light on dark);
 ``delete_call``
     called with the selected record when Delete (or Backspace) is pressed;
 ``context_call``
@@ -294,6 +295,14 @@ class TableColumn:
             colour = POSITIVE_COLOUR if number >= 0 else NEGATIVE_COLOUR
             return (min(zero, point), max(zero, point), colour)
         return (0.0, at(number), BAR_COLOUR)
+
+
+def _contrasting_ink(fill: Sequence[int]) -> tuple:
+    """Text colour for a cell filled with *fill*: near black on a pale fill, near white on a
+    dark one -- a status fill chosen for one theme stays readable under the other."""
+    r, g, b = (float(c) / 255.0 for c in tuple(fill)[:3])
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return (20, 20, 20, 255) if luminance > 0.55 else (245, 245, 245, 255)
 
 
 def _backgrounds(spec: Any) -> Optional[dict]:
@@ -1060,8 +1069,12 @@ class DataTable:
                 col_x += width
                 continue
             shade = self.colour_of(column.key, value)
+            ink_on_fill = None
             if column.background and value is not None:
-                shade = column.background.get(str(value).lower(), shade)
+                fill = column.background.get(str(value).lower())
+                if fill is not None:
+                    shade = fill
+                    ink_on_fill = _contrasting_ink(fill)
             if shade is not None:
                 p.fill_rect(col_x, y, width, h, shade)
             bar = column.bar(value)
@@ -1077,7 +1090,7 @@ class DataTable:
             if shown != text:
                 self._elided[(index, column.key)] = text
             link = column.display == "link" and bool(text)
-            ink = _style.CHECK_MARK if link else colour
+            ink = _style.CHECK_MARK if link else (ink_on_fill or colour)
             p.text(col_x + 6.0 + indent, y + 1.0, max(width - 12.0 - indent, 1.0), text_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT), shown, ink)
             if link:
