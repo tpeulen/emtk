@@ -782,6 +782,9 @@ class DataTable:
             edge += width
         return None
 
+    #: The least a column without a declared width is given, before any shrinking to fit.
+    FLEX_MIN = 72.0
+
     def _column_widths(self, total: float) -> list[float]:
         """Widths of every visible column, filling *total*.
 
@@ -802,7 +805,9 @@ class DataTable:
             natural.append(max(width, floor) if width else None)
         known = sum(w for w in natural if w)
         flexible = sum(1 for w in natural if w is None)
-        share = max((total - known) / flexible, floor, 1.0) if flexible else 0.0
+        # A column without a width is never squeezed below a few characters by the declared ones: it competes
+        # with them for the room (and the table scrolls sideways) instead of collapsing to a pixel.
+        share = max((total - known) / flexible, floor, self.FLEX_MIN) if flexible else 0.0
         widths = [w if w else share for w in natural]
         size = sum(widths)
         if size < total and size > 0.0:

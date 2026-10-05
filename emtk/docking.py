@@ -595,6 +595,8 @@ class DockWindow:
     min_size : (float, float)
     padding : float
         Space between the frame and the content box.
+    tooltip : str
+        What the window shows, on hovering its tab or title (before the move hint).
     frame, content : (x, y, w, h) or None
         Where it was drawn last frame (``None`` when not drawn).
     """
@@ -613,6 +615,7 @@ class DockWindow:
     min_size: Tuple[float, float] = (120.0, 60.0)
     padding: float = 6.0
     scrollable: bool = True
+    tooltip: str = ""
     frame: Optional[Rect] = None
     content: Optional[Rect] = None
 
@@ -1091,6 +1094,20 @@ class DockManager:
             self.raise_window(key)
         self._dirty = True
 
+    def tab_rect(self, key: str) -> Optional[Rect]:
+        """Where the window *key* can be grabbed or picked, as drawn last frame: its tab in a region's tab strip,
+        else its title bar (a lone or floating window); ``None`` if it is not drawn. For a guided tour or a test that
+        points at "the Positions tab" without knowing how the user arranged the windows."""
+        for rects in self._tab_rects.values():
+            for k, rect in rects:
+                if k == key:
+                    return rect
+        win = self.windows.get(key)
+        frame, content = getattr(win, "frame", None), getattr(win, "content", None)
+        if win is None or not win.visible or not frame or not content:
+            return None
+        return (frame[0], frame[1], frame[2], max(content[1] - frame[1], 1.0))
+
     def raise_window(self, key: str) -> None:
         if key in self.z and self.z[-1] != key:
             self.z.remove(key)
@@ -1169,6 +1186,7 @@ class DockManager:
             if new_layout is not None:
                 self.layout = new_layout
                 self._reindex()
+                self._rehome_orphans()
         for name, ratio in (state.get("splits") or {}).items():
             if name in self.splits:
                 try:
@@ -1191,6 +1209,20 @@ class DockManager:
         if isinstance(extras, dict):
             self.extras = dict(extras)
         self._dirty = False
+
+    def _rehome_orphans(self) -> None:
+        """Windows docked in a region the restored layout no longer has go to its first region.
+
+        A layout saved by an earlier version of an app (other region names) would otherwise leave them docked
+        where nothing is drawn: present, visible, and never on screen.
+        """
+        home = next(iter(self.regions), None)
+        for name in [n for n in self.tabs if n not in self.regions]:
+            keys = self.tabs.pop(name)
+            self.selected.pop(name, None)
+            if home is not None:
+                for key in keys:
+                    self._put(key, home)
 
     @classmethod
     def from_json(cls, text: str, layout: Optional[Node] = None, **kwargs) -> "DockManager":
@@ -1836,7 +1868,8 @@ class DockManager:
             item = self._id("tab", key)
             hovered = ctx.item_add(tab, item)
             if hovered:
-                ctx.set_tooltip(f"{title}\nDrag to move this panel; right-click for panel actions.")
+                ctx.set_tooltip(f"{tr(win.tooltip) if win.tooltip else title}\n"
+                                "Drag to move this panel; right-click for panel actions.")
             if hovered and io.mouse_clicked[1]:
                 self._open_context(ctx, region, key)
             if hovered and io.mouse_clicked[0] and self._drag is None:

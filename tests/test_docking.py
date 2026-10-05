@@ -705,3 +705,46 @@ def test_a_window_keeps_its_scroll_when_its_box_moves():
     where["box"] = (0.0, 7.0, 400.0, 300.0)  # the dock moved down by 7 px
     draw()
     assert rows[0][1] == pytest.approx(scrolled + 7.0), "the window lost its scroll when it moved"
+
+
+def test_tab_rect_finds_a_tabbed_or_lone_window():
+    """``tab_rect`` points at a window's tab in a shared region, or its title bar when it is alone."""
+    docks = DockManager(Split("h", 0.5, Region("left"), Region("right")))
+    for key, dock in (("a", "left"), ("b", "left"), ("c", "right")):
+        docks.add_window(key, key.upper(), lambda box: None, dock=dock, closable=False)
+    app = ImApp(lambda: docks.draw((0.0, 0.0, 600.0, 400.0)))
+    for _ in range(2):
+        app.draw(RecordingPainter(), 0.0, 0.0, 600.0, 400.0)
+    a, b, c = (docks.tab_rect(k) for k in "abc")
+    assert a and b and c and a[0] < b[0] and a[1] == b[1]  # two tabs side by side in the left strip
+    assert c[0] >= 300.0 - 1.0  # the lone right window's title bar
+    assert docks.tab_rect("nope") is None
+    # a press on b's tab brings it to the front, as a user picks it
+    x, y = b[0] + b[2] / 2, b[1] + b[3] / 2
+    app.hover(x, y)
+    app.draw(RecordingPainter(), 0.0, 0.0, 600.0, 400.0)
+    app.press(x, y)
+    app.draw(RecordingPainter(), 0.0, 0.0, 600.0, 400.0)
+    app.release()
+    app.draw(RecordingPainter(), 0.0, 0.0, 600.0, 400.0)
+    assert docks.selected["left"] == "b"
+
+
+def test_window_tooltip_is_a_field():
+    dm = DockManager(Region("a"))
+    win = dm.add_window("w", "W", dock="a", tooltip="What W shows.")
+    assert win.tooltip == "What W shows."
+
+
+def test_a_layout_from_other_regions_leaves_no_window_off_screen():
+    """An app that renamed its regions read its old layout: the windows stayed in the vanished region."""
+    old = DockManager(Region("main"))
+    old.add_window("main", "Main", dock="main")
+    state = old.state()
+    dm = DockManager(Region("views"))
+    for key in ("a", "b"):
+        dm.add_window(key, key.upper(), dock="views")
+    dm.restore(state)
+    assert set(dm.tabs) == set(dm.regions)
+    assert all(dm.region_of(k) in dm.regions for k in ("a", "b"))
+    assert dm.active_tab(dm.region_of("a")) in ("a", "b")

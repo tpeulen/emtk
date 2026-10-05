@@ -879,3 +879,20 @@ def test_fitted_columns_share_spare_room_instead_of_leaving_it_empty():
     control = TableBinding(section, model).control
     draw(control, w=600.0, h=200.0)
     assert sum(control._widths) == pytest.approx(600.0, abs=1.0)
+
+
+def test_a_column_without_a_width_is_not_squeezed_to_a_pixel():
+    """Declared widths that already fill the box left the undeclared column one pixel; its text was then
+    painted over the next column (a narrow dock showed "protein_1R0A.pdb" over the chain and residue)."""
+    table = DataTable(columns=[TableColumn("a", width=200.0), TableColumn("free"), TableColumn("b", width=200.0)])
+    widths = table._column_widths(380.0)
+    assert widths[1] >= 40.0
+
+
+def test_fit_text_without_room_draws_nothing():
+    from emtk.style import fit_text
+
+    p = RecordingPainter()
+    assert fit_text(p, "protein_1R0A.pdb", 0.0) == ""
+    assert fit_text(p, "protein_1R0A.pdb", -5.0) == ""
+    assert fit_text(p, "ab", 100.0) == "ab"
