@@ -238,3 +238,28 @@ def test_a_heatmap_fills_its_frame():
     finally:
         implot.end_plot = original
     assert seen[-1] == (0.0, 2.0, 0.0, 1.0)
+
+
+def test_a_figure_saved_inside_another_apps_plot_leaves_it_intact():
+    """An export button inside an app's frame: the app's plot and window go on."""
+    import emtk
+    from emtk.app import ImApp
+    from emtk.testing import PixelPainter
+
+    saved = []
+
+    def gui():
+        emtk.begin("host", (0.0, 0.0, 300.0, 200.0))
+        if implot.begin_plot("##host", (280, 160)):
+            implot.plot_line("a", [0, 1], [0, 1])
+            fig = Figure(size=(120, 80))
+            fig.ax().line([0, 1], [1, 0])
+            saved.append(fig.png_bytes())
+            implot.plot_line("b", [0, 1], [1, 1])
+            implot.end_plot()
+        emtk.end()
+
+    app = ImApp(gui)
+    for _ in range(2):
+        app.draw(PixelPainter(300, 200), 0.0, 0.0, 300.0, 200.0)
+    assert saved and saved[-1][:4] == b"\x89PNG"

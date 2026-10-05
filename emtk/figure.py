@@ -31,6 +31,7 @@ next colour of the ``C0``..``C9`` cycle of its panel.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import pathlib
 from typing import Any, Iterable, Sequence
@@ -397,13 +398,15 @@ class Figure:
         """The figure encoded as PNG."""
         from .export import png_bytes
 
-        return png_bytes(self._app(), self.size, frames=2, painter=_painter())
+        with _isolated():
+            return png_bytes(self._app(), self.size, frames=2, painter=_painter())
 
     def rgba(self) -> tuple[int, int, bytes]:
         """``(width, height, RGBA bytes)``, for a texture or an image widget."""
         from .export import grab
 
-        canvas = grab(self._app(), self.size, frames=2, painter=_painter())
+        with _isolated():
+            canvas = grab(self._app(), self.size, frames=2, painter=_painter())
         return canvas.width, canvas.height, bytes(canvas.px)
 
     def _repr_png_(self) -> bytes:
@@ -477,6 +480,30 @@ class Figure:
             style.colors[:] = saved
             style.minor_alpha = saved_minor
             style.fit_padding = saved_pad
+
+
+@contextlib.contextmanager
+def _isolated():
+    """Draw with a clean im and implot state, and put the caller's back after.
+
+    A figure is often saved from *inside* an application's frame (an export
+    button in an emtk app). implot keeps its state in one module-level
+    context and im has one current context; drawn without this, the figure
+    found the app's plot still open ("begin_plot() inside a plot") and left
+    the app's window stack corrupted for the rest of its frame.
+    """
+    from . import im_core
+    from .implot_internal import PlotContext, gp
+
+    saved_plot = dict(gp.__dict__)
+    saved_im = getattr(im_core, "_CURRENT", None)
+    gp.__dict__.update(PlotContext().__dict__)
+    try:
+        yield
+    finally:
+        gp.__dict__.clear()
+        gp.__dict__.update(saved_plot)
+        im_core.set_current_context(saved_im)
 
 
 def _ratios(ratios, count: int, name: str) -> list[float]:
