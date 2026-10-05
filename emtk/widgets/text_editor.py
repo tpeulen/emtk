@@ -2580,7 +2580,23 @@ class TextEditor:
         return True
 
     def _type(self, typed: str) -> None:
-        """Insert typed text, completing brackets and quotes when configured."""
+        """Insert typed text, completing brackets and quotes when configured.
+
+        A closing glyph typed in front of the same glyph steps over it (type-over), so text
+        typed character by character comes out as typed and the completed closer is not doubled.
+        """
+        if (
+            self.config.complete_paired_glyphs
+            and len(typed) == 1
+            and typed in ")]}\"'"
+            and not self.cursors.any_has_selection
+            and all(
+                self.document.get_line_text(one.end.line)[one.end.index:one.end.index + 1] == typed
+                for one in self.cursors
+            )
+        ):
+            self.move_right()
+            return
         if (
             self.config.complete_paired_glyphs
             and len(typed) == 1

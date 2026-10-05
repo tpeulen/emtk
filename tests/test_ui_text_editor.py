@@ -409,6 +409,28 @@ def test_typing_an_opening_bracket_completes_the_pair_and_stays_inside():
     assert editor.cursors.main.end.index == 1
 
 
+@pytest.mark.parametrize(
+    "typed",
+    ['{"a": [1, (2)]}', "x = f('s', \"t\")", '{"Positions": {}, "Distances": {}}'],
+)
+def test_typing_the_closer_steps_over_the_completed_one(typed):
+    """Typing a whole text character by character gives that text: a closing bracket or quote typed
+    in front of the same glyph moves past it instead of doubling it (found typing JSON into the FPS
+    JSON editor: ``{"a": {}}`` came out as ``{"a": {}}}""``)."""
+    editor = te.TextEditor("")
+    for ch in typed:
+        editor.key(0, ch)
+    assert editor.text == typed
+    assert editor.cursors.main.end.index == len(typed)
+
+
+def test_a_closer_with_nothing_completed_after_it_is_inserted():
+    """Type-over only steps over the glyph that is there; elsewhere a closer is typed as usual."""
+    editor = te.TextEditor("ab")
+    editor.key(0, ")")
+    assert editor.text == ")ab"
+
+
 def test_key_down_scrolls_the_view_to_follow_the_caret():
     """A caret off screen is a caret nobody can find."""
     editor = te.TextEditor("\n".join(str(one) for one in range(100)))
