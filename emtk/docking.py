@@ -1998,7 +1998,9 @@ class DockManager:
         p = win.padding
         content = (x + p, y + p, max(w - 2.0 * p, 1.0), max(h - 2.0 * p, 1.0))
         win.content = content
-        ctx.begin_child(content, scrollable=win.scrollable)
+        # Keyed by the window, not by where the content box is: a box that moves by a pixel (a
+        # status line above the dock, other font metrics) must not reset the window's scroll.
+        ctx.begin_child(content, scrollable=win.scrollable, child_id=("dockwin", id(self), win.key))
         ctx.push_id(("dockwin", win.key))
         try:
             if win.draw is not None:

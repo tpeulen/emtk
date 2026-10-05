@@ -666,3 +666,42 @@ def test_dynamic_split_round_trips_through_json():
     assert again.region_of("w3") == r_bottom
     assert len(again.regions) == 3
 
+
+
+def test_a_window_keeps_its_scroll_when_its_box_moves():
+    """The scroll of a docked window belongs to the window, not to where it happens to be drawn.
+
+    The content child was keyed by its screen position, so anything that moved it by a pixel -- a
+    painter with other font metrics, a status line above the dock, a toolbar wrapping -- handed it a
+    fresh, unscrolled state (found capturing ChiSurf's FPS JSON editor: the screenshot showed the
+    top of a window the user had scrolled to its end).
+    """
+    docks = DockManager(Region("main"))
+    rows: dict = {}
+
+    def content(_box):
+        for i in range(40):
+            im.button(f"row {i}")
+            rows[i] = im.get_item_rect()
+
+    docks.add_window("main", "Main", content, dock="main", closable=False)
+    where = {"box": (0.0, 0.0, 400.0, 300.0)}
+    app = ImApp(lambda: docks.draw(where["box"]))
+
+    def draw(frames=2):
+        for _ in range(frames):
+            app.draw(RecordingPainter(), 0.0, 0.0, 400.0, 400.0)
+
+    draw()
+    top = rows[0][1]
+    for _ in range(3):
+        app.hover(100.0, 150.0)
+        draw(1)
+        app.wheel(100.0, 150.0, -3)
+        draw(1)
+    draw()
+    scrolled = rows[0][1]
+    assert scrolled < top - 100.0, (top, scrolled)
+    where["box"] = (0.0, 7.0, 400.0, 300.0)  # the dock moved down by 7 px
+    draw()
+    assert rows[0][1] == pytest.approx(scrolled + 7.0), "the window lost its scroll when it moved"
