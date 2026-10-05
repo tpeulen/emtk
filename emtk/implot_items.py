@@ -1376,6 +1376,13 @@ def plot_inf_lines(label_id: str, values, count=None, spec=None, **kw) -> None:
             else:
                 pmin = [(v, ya.range_min) for v in vals]
                 pmax = [(v, ya.range_max) for v in vals]
+            if sp.dash:
+                # emtk's dashes, as a line's: one dashed strip per value.
+                colors = _colors(sp.line_colors, len(vals))
+                for i, (a, b) in enumerate(zip(pmin, pmax)):
+                    col = colors[i] if colors is not None else sp.line_color
+                    _render_line_strip([a, b], col, None, sp.line_weight, False, sp.dash)
+                return
             _render_line_segments2(pmin, pmax, sp.line_color, _colors(sp.line_colors, len(vals)),
                                    sp.line_weight)
 
