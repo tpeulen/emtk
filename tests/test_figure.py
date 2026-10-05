@@ -219,3 +219,22 @@ def test_fitted_axes_leave_five_percent_a_side():
         implot.end_plot = original
     low, high = seen[-1]
     assert abs(low - 0.9) < 1e-9 and abs(high - 3.1) < 1e-9
+
+
+def test_a_heatmap_fills_its_frame():
+    seen = []
+    original = implot.end_plot
+
+    def end():
+        limits = implot.get_plot_limits()
+        seen.append((limits.x_min, limits.x_max, limits.y_min, limits.y_max))
+        return original()
+
+    implot.end_plot = end
+    try:
+        fig = Figure(size=(300, 200))
+        fig.ax().heatmap([[1, 2], [3, 4]], extent=(0.0, 2.0, 1.0, 0.0))
+        fig.png_bytes()
+    finally:
+        implot.end_plot = original
+    assert seen[-1] == (0.0, 2.0, 0.0, 1.0)

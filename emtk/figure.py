@@ -557,10 +557,17 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
             implot.setup_axis_scale(I.AXIS_X1, I.SCALE_LOG10)
         if axes.ylog:
             implot.setup_axis_scale(I.AXIS_Y1, I.SCALE_LOG10)
-        if axes.xlim:
-            implot.setup_axis_limits(I.AXIS_X1, *axes.xlim, I.COND_ALWAYS)
-        if axes.ylim:
-            implot.setup_axis_limits(I.AXIS_Y1, *axes.ylim, I.COND_ALWAYS)
+        xlim, ylim = axes.xlim, axes.ylim
+        maps = [d for kind, d in axes._items if kind == "heatmap"]
+        if maps:
+            # An image fills its frame: no fit margin around a heatmap.
+            x0, x1, y0, y1 = maps[0]["extent"]
+            xlim = xlim or (min(x0, x1), max(x0, x1))
+            ylim = ylim or (min(y0, y1), max(y0, y1))
+        if xlim:
+            implot.setup_axis_limits(I.AXIS_X1, *xlim, I.COND_ALWAYS)
+        if ylim:
+            implot.setup_axis_limits(I.AXIS_Y1, *ylim, I.COND_ALWAYS)
         if axes.xticks:
             implot.setup_axis_ticks(I.AXIS_X1, axes.xticks[0], labels=axes.xticks[1])
         if axes.yticks:
