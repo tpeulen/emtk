@@ -1264,7 +1264,7 @@ def progress_bar(fraction: float, size=None, overlay: str = "") -> None:
 #: Codepoints that change how the glyph before them looks but draw nothing of
 #: their own. The atlas has no cell for them, so left in they draw as the
 #: missing-glyph box beside the pictogram (``"⏱️"`` is U+23F1 then U+FE0F).
-_ICON_MODIFIERS = dict.fromkeys(map(ord, "\ufe0e\ufe0f\u200d"))
+_ICON_MODIFIERS = dict.fromkeys((0xFE0E, 0xFE0F, 0x200D))  # VS15, VS16, ZWJ: code points, not a drawn string
 
 
 def icon_text(icon: str) -> str:
