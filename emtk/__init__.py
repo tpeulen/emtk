@@ -805,6 +805,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "save_png": "testing",
     "screenshot": "testing",
     "selectable": "im",
+    "selectable_icon_width": "im",
     "separator": "im",
     "separator_text": "im",
     "set_allocator_functions": "im",
