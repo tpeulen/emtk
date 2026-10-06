@@ -195,6 +195,9 @@ class TableColumn:
         Header text.
     width : float
         Preferred pixel width; ``0`` shares what the sized columns leave.
+    min_width : float
+        Never narrower than this when the table is short of room: the table scrolls sideways instead (a name
+        squeezed to its first letters is no use). ``0``: the table's ``min_column_width``.
     fmt : str
         printf spec for numbers; empty uses :data:`DEFAULT_FORMAT`.
     display : str
@@ -214,6 +217,7 @@ class TableColumn:
     key: str
     title: str = ""
     width: float = 0.0
+    min_width: float = 0.0
     fmt: str = ""
     display: str = "text"
     range: Optional[tuple] = None
@@ -241,6 +245,7 @@ class TableColumn:
             key=key,
             title=str(title),
             width=float(spec.get("width", 0) or 0),
+            min_width=float(spec.get("min_width", 0) or 0),
             fmt=str(spec.get("format", spec.get("fmt", "")) or ""),
             display=str(spec.get("display", "text") or "text").lower(),
             range=(float(span[0]), float(span[1])) if span and len(span) == 2 else None,
@@ -811,22 +816,22 @@ class DataTable:
         natural = []
         for column in columns:
             width = self._fitted.get(column.key) or column.width
-            natural.append(max(width, floor) if width else None)
+            natural.append(max(width, floor, column.min_width) if width else None)
         known = sum(w for w in natural if w)
         flexible = sum(1 for w in natural if w is None)
         # A column without a width is never squeezed below a few characters by the declared ones: it competes
         # with them for the room (and the table scrolls sideways) instead of collapsing to a pixel.
         share = max((total - known) / flexible, floor, self.FLEX_MIN) if flexible else 0.0
-        widths = [w if w else share for w in natural]
+        widths = [w if w else max(share, c.min_width) for w, c in zip(natural, columns)]
         size = sum(widths)
         if size < total and size > 0.0:
             return [w * total / size for w in widths]
         if size <= total:
             return widths
-        if not (floor > 0.0 or self._fitted):
+        if not (floor > 0.0 or self._fitted or any(c.min_width for c in columns)):
             return [w * total / size for w in widths]
-        # Down to the header (to the contents, for a column of numbers).
-        least = [max(floor, self._title_w.get(c.key, 0.0)) for c in columns]
+        # Down to the header (to the contents, for a column of numbers), never below a column's own minimum.
+        least = [max(floor, self._title_w.get(c.key, 0.0), c.min_width) for c in columns]
         slack = sum(max(w - m, 0.0) for w, m in zip(widths, least))
         deficit = size - total
         if slack <= 0.0:

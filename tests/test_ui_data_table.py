@@ -896,3 +896,14 @@ def test_fit_text_without_room_draws_nothing():
     assert fit_text(p, "protein_1R0A.pdb", 0.0) == ""
     assert fit_text(p, "protein_1R0A.pdb", -5.0) == ""
     assert fit_text(p, "ab", 100.0) == "ab"
+
+
+def test_a_column_minimum_makes_the_table_scroll_instead_of_squeezing():
+    """A narrow table kept every column readable only if it could scroll sideways; without a minimum the names
+    were cut to their first letters ("p51_E.")."""
+    table = DataTable(columns=[TableColumn("name", width=120.0, min_width=96.0), TableColumn("pdb", min_width=80.0),
+                               TableColumn("res", width=60.0, min_width=40.0)])
+    widths = table._column_widths(200.0)
+    assert widths[0] >= 96.0 and widths[1] >= 80.0
+    assert sum(widths) > 200.0  # wider than the box: the sideways bar takes over
+    assert TableColumn.from_spec({"key": "a", "min_width": 50}).min_width == 50.0
