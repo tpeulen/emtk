@@ -140,3 +140,9 @@ def test_screenshot_refreshes_the_latest_control_registry():
     assert "increment" not in app._item_rects
     with pytest.raises(LookupError):
         drv.rect("Increment")
+
+
+def test_png_without_image_header_has_a_clear_failure():
+    """A malformed screenshot cannot reach arithmetic with absent dimensions."""
+    with pytest.raises(ValueError, match="image header"):
+        png_decode(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x00IEND\x00\x00\x00\x00")

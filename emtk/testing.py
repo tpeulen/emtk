@@ -213,6 +213,8 @@ def png_decode(data: bytes):
         elif kind == b"IDAT":
             idat += payload
         pos += 12 + length
+    if width is None or height is None:
+        raise ValueError("PNG has no image header")
     raw = _zlib.decompress(idat)
     stride = width * 4
     out = bytearray(height * stride)

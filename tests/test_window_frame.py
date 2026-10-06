@@ -71,3 +71,20 @@ def test_scaled_painter_scales_border_width_with_geometry():
     ScaledPainter(painter, 3).stroke_rect(5, 5, 20, 10, (255, 255, 255), width=1.5)
     assert painter.strokes[0][:4] == (15, 15, 60, 30)
     assert painter.stroke_widths == [4.5]
+
+
+def test_qt_border_has_same_inside_width_as_pixel_painter(qt_app):
+    """Clipping a window must not halve a centred Qt outline."""
+    from emtk.qt_painter import QtPainter, image_bytes
+    from qtpy import QtGui
+
+    image = QtGui.QImage(40, 30, QtGui.QImage.Format_RGBA8888)
+    image.fill(QtGui.QColor(0, 0, 0, 255))
+    qp = QtGui.QPainter(image)
+    try:
+        QtPainter(qp).stroke_rect(5, 5, 20, 15, (240, 100, 50, 255), width=3)
+    finally:
+        qp.end()
+    expected = PixelPainter(40, 30)
+    expected.stroke_rect(5, 5, 20, 15, (240, 100, 50, 255), width=3)
+    assert image_bytes(image)[2] == expected.px

@@ -474,13 +474,15 @@ class QtPainter:
         """Draw an outline of *width* logical pixels, optionally over a fill."""
         from qtpy import QtCore, QtGui
 
-        self._p.setBrush(
-            self._colour(fill) if fill is not None else QtCore.Qt.NoBrush
-        )
+        if fill is not None:
+            self.fill_rect(x, y, w, h, fill)
+        self._p.setBrush(QtCore.Qt.NoBrush)
+        width = max(0.0, min(float(width), w / 2, h / 2))
         pen = QtGui.QPen(self._colour(edge))
-        pen.setWidthF(max(0.0, float(width)))
+        pen.setWidthF(width)
+        pen.setJoinStyle(QtCore.Qt.MiterJoin)
         self._p.setPen(pen if width > 0 else QtCore.Qt.NoPen)
-        self._p.drawRect(self._rect(x, y, w, h))
+        self._p.drawRect(self._rect(x + width / 2, y + width / 2, w - width, h - width))
 
     def gradient_rect(
         self,
