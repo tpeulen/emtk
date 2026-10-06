@@ -499,6 +499,7 @@ class Canvas:
     #: legible and hit targets stop being hittable; above the upper one a
     #: single node fills the viewport and panning becomes useless.
     ZOOM_RANGE: tuple = (0.15, 4.0)
+    ZOOM_STEP: float = 0.1
 
     def __init__(self) -> None:
         self.panning: tuple = (0.0, 0.0)
@@ -1179,7 +1180,7 @@ def begin_node_editor(ctx: EditorContext, box: typing.Optional[tuple] = None) ->
         node.alive = False
         node.pins = []
 
-    im.begin_child(box, clip=True)
+    im.begin_child(box, clip=True, scrollable=False)
     draw = im.get_window_draw_list()
     ctx._draw = draw
     style = ctx.style
@@ -2612,7 +2613,8 @@ def _update_interaction(ctx: EditorContext, draw) -> None:
             ctx._interaction = None
 
     if ctx._editor_hovered and io.mouse_wheel:
-        ctx.canvas.zoom_at(mouse, 1.0 + 0.1 * io.mouse_wheel)
+        ctx.canvas.zoom_at(mouse, math.exp(ctx.canvas.ZOOM_STEP * io.mouse_wheel))
+        io.mouse_wheel = 0.0
 
 
 def _begin_click(ctx: EditorContext, mouse: tuple) -> None:
