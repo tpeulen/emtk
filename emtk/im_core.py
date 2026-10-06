@@ -807,11 +807,33 @@ class Context:
         self._last_item = box
         self._last_id = item_id
         self._last_item_disabled = bool(self.item_flags & ItemFlags.DISABLED)
-        if item_id is not None:
-            self.nav_add(item_id)
-            if item_id == self.active_id:
-                self._active_id_alive = True
+        if item_id is None:
+            # ImGui's ``ItemAdd(id=0)`` does not call ``ItemHoverable``: an item without an id
+            # (text, a label, an image) never claims HoveredId. Claiming it with the box as key
+            # made a long status text drawn first own the pointer over the buttons drawn after
+            # it on the same line, which then took no clicks. It is still hovered for its own
+            # tooltip, unless something with an id holds the pointer.
+            self._last_item_hovered = self._pointer_on(box)
+            return self._last_item_hovered and not self._last_item_disabled
+        self._last_item_hovered = None
+        self.nav_add(item_id)
+        if item_id == self.active_id:
+            self._active_id_alive = True
         return self.item_hoverable(box, item_id)
+
+    def _pointer_on(self, box: Rect) -> bool:
+        """``item_hoverable``'s tests without claiming HoveredId (for items without an id)."""
+        if self.current_window is not None and self.hovered_window not in (
+            None, self.current_window,
+        ):
+            return False
+        if self.io.mouse_pos == (-1.0, -1.0) or not hit(*self.io.mouse_pos, *box):
+            return False
+        if not self._overlaps_clip(box) or not hit(*self.io.mouse_pos, *self.clip_rect):
+            return False
+        if self.hovered_id is not None and not self.hovered_id_allow_overlap:
+            return False
+        return not (self.active_id is not None and not self.active_id_allow_overlap)
 
     def item_hoverable(self, box: Rect, item_id: Any = None) -> bool:
         """``ItemHoverable``: is the pointer on *box*, and is *box* on top?
@@ -876,6 +898,8 @@ class Context:
         """
         if self._last_item_disabled and not allow_when_disabled:
             return False
+        if self._last_id is None and getattr(self, "_last_item_hovered", None) is not None:
+            return bool(self._last_item_hovered)
         key = self._last_id if self._last_id is not None else self._last_item
         return key is not None and self.hovered_id == key
 

@@ -810,6 +810,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "screenshot": "testing",
     "selectable": "im",
     "selectable_icon_width": "im",
+    "text_ellipsis": "im",
     "separator": "im",
     "separator_text": "im",
     "set_allocator_functions": "im",

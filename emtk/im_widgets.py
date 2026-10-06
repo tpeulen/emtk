@@ -64,7 +64,7 @@ __all__ = [
     "label_text", "math", "math_text", "calc_math_size",
     "button", "small_button", "action_button", "invisible_button", "checkbox",
     "radio_button", "slider_float", "slider_int", "drag_float", "drag_int",
-    "progress_bar", "selectable", "selectable_icon_width", "combo", "separator", "same_line", "spacing",
+    "progress_bar", "selectable", "selectable_icon_width", "text_ellipsis", "combo", "separator", "same_line", "spacing",
     "splitter", "splitter_behavior",
     "dummy", "indent", "unindent", "begin_group", "end_group", "columns",
     "next_column", "new_line", "push_id", "pop_id", "get_id",
@@ -2189,6 +2189,43 @@ def end_disabled() -> None:
 # -- text ------------------------------------------------------------------- #
 def text_unformatted(s: str) -> None:
     text(s)
+
+
+def text_ellipsis(s: str, max_width: float) -> bool:
+    """Draw *s* cut with an ellipsis to *max_width*; the whole text is the tooltip when cut.
+
+    For a line that must not run under what follows it on the same row (a status bar
+    before its buttons): the text keeps to its room, and nothing it says is lost.
+
+    Parameters
+    ----------
+    s : str
+        The text.
+    max_width : float
+        The width it may take, in pixels.
+
+    Returns
+    -------
+    bool
+        Whether the text was cut.
+    """
+    ctx = get_current_context()
+    measure = lambda t: ctx.draw.calc_text_size(t)[0]  # noqa: E731
+    shown = s
+    cut = measure(s) > max_width
+    if cut:
+        lo, hi = 0, len(s)
+        while lo < hi:  # the longest prefix that fits with the ellipsis
+            mid = (lo + hi + 1) // 2
+            if measure(s[:mid].rstrip() + "\u2026") <= max_width:
+                lo = mid
+            else:
+                hi = mid - 1
+        shown = s[:lo].rstrip(" \u00b7,;:") + "\u2026"
+    text(shown)
+    if cut:
+        set_item_tooltip(s)
+    return cut
 
 
 def align_text_to_frame_padding_() -> None:      # kept for symmetry in ports
