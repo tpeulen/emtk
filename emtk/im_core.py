@@ -364,7 +364,10 @@ class Style:
     #: theme needs it, since a white field on a pale window has no edge.
     frame_border_size: float = 0.0
     #: ``WindowBorderSize``: the outline of a window's box (1, as the reference).
-    window_border_size: float = 1.0
+    window_border_size: float = 1.5
+    #: Offset of the shadow rectangle, in logical pixels.
+    window_shadow_size: float = 3.0
+    window_shadow_color: tuple = (0, 0, 0, 72)
     grab_min_size: float = 12.0
     grab_rounding: float = 0.0
     #: What ``BeginDisabled`` multiplies colours by, as ``ImGuiStyle`` does.
@@ -1264,6 +1267,11 @@ class Context:
         self._child.append((self.layout, self.clip_rect))
         self.clip_rect = window.box
         self.layout = Layout(self.p, *window.box, style=self.layout.style)
+        if not flags & _WF.NO_BACKGROUND and self.style.window_shadow_size > 0:
+            sx, sy, sw, sh = window.box
+            offset = self.style.window_shadow_size
+            self.p.fill_rect(sx + offset, sy + offset, sw, sh,
+                             self.style.window_shadow_color)
         self.p.push_clip(*window.box)
         if not flags & _WF.NO_BACKGROUND:
             # Dear ImGui's window: an opaque background and a border, so what
@@ -1272,7 +1280,8 @@ class Context:
             bg = self.style.color(Col.WINDOW_BG)
             self.p.fill_rect(*window.box, (*tuple(bg)[:3], 255))
             if self.style.window_border_size > 0.0:
-                self.p.stroke_rect(*window.box, self.style.color(Col.BORDER))
+                self.p.stroke_rect(*window.box, self.style.color(Col.BORDER),
+                                   width=self.style.window_border_size)
         return True
 
     def end(self) -> None:

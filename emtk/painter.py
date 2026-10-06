@@ -165,8 +165,10 @@ class Painter(Protocol):
         h: float,
         edge: Colour,
         fill: Colour | None = None,
+        *,
+        width: float = 1.0,
     ) -> None:
-        """Draw a one-pixel outline, optionally over a fill."""
+        """Draw an outline of *width* logical pixels, optionally over a fill."""
         ...
 
     def gradient_rect(

@@ -147,13 +147,14 @@ class PilPainter:
     def fill_rect(self, x, y, w, h, colour) -> None:
         self._fill(x, y, w, h, colour)
 
-    def stroke_rect(self, x, y, w, h, edge, fill=None) -> None:
+    def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0) -> None:
         if fill is not None:
             self._fill(x, y, w, h, fill)
-        self._fill(x, y, w, 1.0, edge)
-        self._fill(x, y + h - 1.0, w, 1.0, edge)
-        self._fill(x, y, 1.0, h, edge)
-        self._fill(x + w - 1.0, y, 1.0, h, edge)
+        t = max(0.0, min(float(width), w / 2, h / 2))
+        self._fill(x, y, w, t, edge)
+        self._fill(x, y + h - t, w, t, edge)
+        self._fill(x, y, t, h, edge)
+        self._fill(x + w - t, y, t, h, edge)
 
     def gradient_rect(self, x, y, w, h, stops, edge=None) -> None:
         """Left-to-right gradient through evenly spaced (or ``(t, colour)``) stops."""

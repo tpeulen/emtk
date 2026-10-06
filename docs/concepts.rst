@@ -115,3 +115,21 @@ window::
     painter = RecordingPainter()
     assert painter.text_width("abc") == 3 * 7.0   # 7 px per glyph
     assert painter.line_height() == 16.0            # 16 px per line
+
+Window frames and geometry
+--------------------------
+
+``Style.window_border_size`` is a width in logical pixels (default 1.5),
+including docked panes. ``window_shadow_size`` (default 3) offsets a filled
+``window_shadow_color`` rectangle before the background, outside the window
+clip. Setting either size to zero disables that effect. ``stroke_rect`` accepts
+``width=`` on every shipped painter; ``ScaledPainter`` scales it with geometry.
+
+Hosts honor ``control.window_size`` and optional ``control.window_pos``.
+Qt reports moves through ``window_moved(x, y)``. The native GLFW backend
+reports and restores position when its window APIs are available; offscreen
+and other backends omit position support. ``window_screen_changed(rect)``
+lets clients validate saved coordinates against the primary work area.
+Closing a Qt host calls the app's ``close()`` once, releasing workers and
+persisting state. Text and navigation input schedule a frame even before a
+control has acquired keyboard focus.

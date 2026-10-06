@@ -534,17 +534,20 @@ class QuadPainter:
         h: float,
         edge: Colour,
         fill: Colour | None = None,
+        *,
+        width: float = 1.0,
     ) -> None:
-        """Draw a one-pixel outline, optionally over a fill."""
+        """Draw an outline of *width* logical pixels, optionally over a fill."""
         u, v = self._solid_uv
         quad = self._corner_quad
         if fill is not None:
             quad(x, y, w, h, u, v, 0.0, 0.0, _rgba(fill))
+        t = max(0.0, min(float(width), w / 2, h / 2))
         line = _rgba(edge)
-        quad(x, y, w, 1.0, u, v, 0.0, 0.0, line)
-        quad(x, y + h - 1.0, w, 1.0, u, v, 0.0, 0.0, line)
-        quad(x, y, 1.0, h, u, v, 0.0, 0.0, line)
-        quad(x + w - 1.0, y, 1.0, h, u, v, 0.0, 0.0, line)
+        quad(x, y, w, t, u, v, 0.0, 0.0, line)
+        quad(x, y + h - t, w, t, u, v, 0.0, 0.0, line)
+        quad(x, y, t, h, u, v, 0.0, 0.0, line)
+        quad(x + w - t, y, t, h, u, v, 0.0, 0.0, line)
 
     def fill_triangle(
         self,

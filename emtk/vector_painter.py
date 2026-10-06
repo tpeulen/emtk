@@ -140,12 +140,15 @@ class VectorPainter:
             return
         self._add("rect", ((float(x), float(y), float(w), float(h)), _rgba(colour)))
 
-    def stroke_rect(self, x, y, w, h, edge, fill=None) -> None:
+    def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0) -> None:
         if fill is not None:
             self.fill_rect(x, y, w, h, fill)
-        # A one-pixel outline inside the box, as the raster painters draw it.
-        self._add("rect_stroke", ((float(x) + 0.5, float(y) + 0.5, float(w) - 1.0,
-                                   float(h) - 1.0), _rgba(edge)))
+        width = max(0.0, min(float(width), w / 2, h / 2))
+        if width == 0:
+            return
+        # Centre the stroke inside the box, as the raster painters do.
+        self._add("rect_stroke", ((float(x) + width / 2, float(y) + width / 2,
+                                  float(w) - width, float(h) - width), _rgba(edge), width))
 
     def gradient_rect(self, x, y, w, h, stops, edge=None) -> None:
         stops = list(stops)
@@ -333,9 +336,9 @@ class SvgPainter(VectorPainter):
                 body.append(f'<rect x="{_fmt(x)}" y="{_fmt(y)}" width="{_fmt(rw)}" '
                             f'height="{_fmt(rh)}"{_svg_fill(colour)}{crisp}{attr}/>\n')
             elif kind == "rect_stroke":
-                (x, y, rw, rh), colour = item[2]
+                (x, y, rw, rh), colour, width = item[2]
                 body.append(f'<rect x="{_fmt(x)}" y="{_fmt(y)}" width="{_fmt(rw)}" '
-                            f'height="{_fmt(rh)}" fill="none"{_svg_stroke(colour, 1.0)}{attr}/>\n')
+                            f'height="{_fmt(rh)}" fill="none"{_svg_stroke(colour, width)}{attr}/>\n')
             elif kind == "gradient":
                 (x, y, gw, gh), stops = item[2]
                 gid = f"g{gradients}"
@@ -462,8 +465,8 @@ class PdfPainter(VectorPainter):
                 else:
                     ops.append(f"q {gs(colour[3])}{rgb(colour)} rg {box} f Q")
             elif kind == "rect_stroke":
-                (x, y, rw, rh), colour = item[2]
-                ops.append(f"q {gs(colour[3])}{rgb(colour)} RG 1 w "
+                (x, y, rw, rh), colour, width = item[2]
+                ops.append(f"q {gs(colour[3])}{rgb(colour)} RG {_fmt(width)} w "
                            f"{_fmt(x)} {_fmt(y)} {_fmt(rw)} {_fmt(rh)} re S Q")
             elif kind == "gradient":
                 (x, y, gw, gh), stops = item[2]

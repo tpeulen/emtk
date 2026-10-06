@@ -1,8 +1,8 @@
 """The toolkit driver exercises real widgets through host events."""
+
 from types import SimpleNamespace
 
 import pytest
-
 from emtk import im, keys
 from emtk.app import ImApp
 from emtk.events import CONTROL_MODIFIER
@@ -68,9 +68,11 @@ def test_wheel_and_hover_follow_host_coordinates():
     app = Form()
     seen = []
     wheel = app.wheel
+
     def record(x, y, steps, modifiers=0):
         seen.append((x, y, steps))
         wheel(x, y, steps, modifiers)
+
     app.wheel = record
     drv = Driver(app)
     drv.wheel(-2, at=(50, 60))
@@ -87,7 +89,7 @@ def test_screenshot_is_a_png_at_the_canvas_size(tmp_path):
     assert path.read_bytes() == png
     w, h, px = png_decode(png)
     assert (w, h) == (360, 200)
-    assert len(set(tuple(px[i:i + 4]) for i in range(0, len(px), 4))) > 10
+    assert len(set(tuple(px[i : i + 4]) for i in range(0, len(px), 4))) > 10
 
 
 def test_metric_painters_match_pixels_and_do_not_share_font_state():
@@ -126,3 +128,15 @@ def test_callback_and_resize_are_supported():
 def test_invalid_canvas_size_fails_early(size):
     with pytest.raises(ValueError):
         Driver(Form(), size)
+
+
+def test_screenshot_refreshes_the_latest_control_registry():
+    app = Form()
+    drv = Driver(app)
+    drv.frame(2)
+    app.show_button = False
+    drv.screenshot()
+    assert "increment" not in drv.ids()
+    assert "increment" not in app._item_rects
+    with pytest.raises(LookupError):
+        drv.rect("Increment")

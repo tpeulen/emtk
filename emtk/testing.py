@@ -38,6 +38,7 @@ class RecordingPainter:
         self._font_size_ratio = 1.0
         self.fills: list[tuple] = []
         self.strokes: list[tuple] = []
+        self.stroke_widths: list[float] = []
         self.strings: list[str] = []
         self.texts: list[tuple] = []
         self.clips: list[tuple] = []
@@ -60,9 +61,10 @@ class RecordingPainter:
         self.fills.append((x, y, w, h, colour))
         self.calls.append(("fill_rect", x, y, w, h, colour))
 
-    def stroke_rect(self, x, y, w, h, edge, fill=None) -> None:
+    def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0) -> None:
         """Record an outlined rectangle."""
         self.strokes.append((x, y, w, h, edge, fill))
+        self.stroke_widths.append(float(width))
         self.calls.append(("stroke_rect", x, y, w, h, edge, fill))
 
     def gradient_rect(self, x, y, w, h, stops, edge=None) -> None:
@@ -341,11 +343,11 @@ class PixelPainter:
     def fill_rect(self, x, y, w, h, colour) -> None:
         self._fill(x, y, w, h, colour)
 
-    def stroke_rect(self, x, y, w, h, edge, fill=None) -> None:
+    def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0) -> None:
         edge = self._rgba(edge)
         if fill is not None:
             self._fill(x, y, w, h, fill)
-        t = 1.0
+        t = max(0.0, min(float(width), w / 2, h / 2))
         self._fill(x, y, w, t, edge)
         self._fill(x, y + h - t, w, t, edge)
         self._fill(x, y, t, h, edge)
@@ -828,6 +830,20 @@ class MetricPainter(RecordingPainter):
         self._metrics.set_font_scale(scale)
 
 
+class _ScreenshotPainter(PixelPainter):
+    """Rasterize and record text so screenshot targets are the latest frame."""
+
+    def __init__(self, width, height):
+        super().__init__(width, height)
+        self.texts = []
+        self.strings = []
+
+    def text(self, x, y, w, h, align, string, colour, bold=False):
+        self.texts.append((x, y, w, h, align, string, colour, bold))
+        self.strings.append(string)
+        super().text(x, y, w, h, align, string, colour, bold)
+
+
 class Driver:
     """Drive a control through the host event contract, without a window.
 
@@ -865,17 +881,21 @@ class Driver:
             if isinstance(registry, MutableMapping):
                 yield registry
 
+    def _draw_frame(self, painter):
+        """Refresh the painter and named targets for one complete frame."""
+        for registry in self._registries():
+            registry.clear()
+        self.painter = painter
+        self.app.draw(painter, 0, 0, *self.size)
+        self._rects = {key: tuple(box) for registry in self._registries()
+                       for key, box in registry.items()}
+
     def frame(self, n=1):
         """Draw *n* fresh frames and return the last recording painter."""
         if n < 1:
             raise ValueError("frame count must be positive")
         for _ in range(n):
-            for registry in self._registries():
-                registry.clear()
-            self.painter = MetricPainter()
-            self.app.draw(self.painter, 0, 0, *self.size)
-            self._rects = {key: tuple(box) for registry in self._registries()
-                           for key, box in registry.items()}
+            self._draw_frame(MetricPainter())
         return self.painter
 
     def draw(self, frames=2, size=None):
@@ -952,7 +972,11 @@ class Driver:
     def wheel(self, dy, at=None, *, dx=0.0):
         """Deliver wheel notches at a target (positive *dy* scrolls up)."""
         self.hover(self._pointer if at is None else at)
-        self.app.wheel(*self._pointer, dy, 0)
+        wheel = getattr(self.app, "wheel", None)
+        if callable(wheel):
+            wheel(*self._pointer, dy, 0)
+        else:
+            self.surface.on_wheel(*self._pointer, dy, 0)
         if dx:
             self.app.io.mouse_wheel_h += float(dx)
         return self.frame()
@@ -974,6 +998,7 @@ class Driver:
         deadline = time.monotonic() + timeout
         self.frame()
         while (bool(getattr(self.app, "running", False))
+               or bool(getattr(self.app, "busy", False))
                or bool(getattr(getattr(self.app, "job", None), "busy", False))
                or bool(getattr(getattr(self.app, "model", None), "busy", False))):
             if time.monotonic() >= deadline:
@@ -984,8 +1009,8 @@ class Driver:
 
     def screenshot(self, path=None):
         """Render PNG bytes; optionally write them to *path*."""
-        painter = PixelPainter(*self.size)
-        self.app.draw(painter, 0, 0, *self.size)
+        painter = _ScreenshotPainter(*self.size)
+        self._draw_frame(painter)
         png = png_encode(*self.size, painter.px)
         if path is not None:
             path = _pathlib.Path(path)

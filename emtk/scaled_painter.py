@@ -51,6 +51,11 @@ class ScaledPainter:
         self._apply_font()
 
     # -- geometry goes out in device pixels --------------------------------
+    def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0):
+        """Scale the outline width along with its rectangle."""
+        return self.painter.stroke_rect(x * self.k, y * self.k, w * self.k, h * self.k,
+                                        edge, fill, width=width * self.k)
+
     def __getattr__(self, name):
         operation = getattr(self.painter, name)
         k = self.k

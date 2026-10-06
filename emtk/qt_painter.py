@@ -13,6 +13,8 @@ baked from, and the thing a parity test compares against.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from collections.abc import Sequence
 
 from .font import DEFAULT_FONT_PT
@@ -466,14 +468,18 @@ class QtPainter:
         h: float,
         edge: Colour,
         fill: Colour | None = None,
+        *,
+        width: float = 1.0,
     ) -> None:
-        """Draw a one-pixel outline, optionally over a fill."""
-        from qtpy import QtCore
+        """Draw an outline of *width* logical pixels, optionally over a fill."""
+        from qtpy import QtCore, QtGui
 
         self._p.setBrush(
             self._colour(fill) if fill is not None else QtCore.Qt.NoBrush
         )
-        self._p.setPen(self._colour(edge))
+        pen = QtGui.QPen(self._colour(edge))
+        pen.setWidthF(max(0.0, float(width)))
+        self._p.setPen(pen if width > 0 else QtCore.Qt.NoPen)
         self._p.drawRect(self._rect(x, y, w, h))
 
     def gradient_rect(
