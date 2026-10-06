@@ -4,18 +4,16 @@ ChiSurf tools declare their user interface as data: a ``*.view.json`` file of
 nested sections, each naming the model attribute it edits, its label, its range
 and its one-line description. AutoForm turns that into Qt widgets.
 
-A painted application has no Qt -- its chrome goes into the viewport so that the
-desktop app and the browser run one code path -- and emtk already owns a form
-renderer (:mod:`.settings_editor`: rows, groups, sliders, combos, checkboxes, a
-filter box, per-row descriptions). So supporting AutoForm here is
-**not** a second renderer. It is an adapter: the view spec becomes
-:class:`~.settings_editor.Setting` rows over a
-:class:`~.settings_editor.SettingsModel` bound to the model object, and the
-existing editor draws them.
+A painted application renders the spec through :mod:`emtk.view_form`, so a
+retained :class:`ViewSpecPanel` and an immediate-mode form honour the same
+``n_col``, ``weight``, ``width`` and wrapping declarations. The panel owns an
+:class:`~emtk.app.ImApp` and delegates host input to it. Group selection and
+setting search remain available above the form.
 
-That is the whole design, and it is worth stating because the alternative --
-teaching the painted chrome to build Qt-shaped widgets, or teaching AutoForm to
-paint -- is what a "port" would have meant.
+The conversion helpers still adapt a spec to
+:class:`~.settings_editor.Setting` rows and a
+:class:`~.settings_editor.SettingsModel` for callers that need a settings list.
+The panel itself no longer draws a SettingsEditor.
 
 Tables
 ------
@@ -334,122 +332,167 @@ def table_bindings(spec: dict, model: Any) -> list[TableBinding]:
 
 
 class ViewSpecPanel:
-    """A whole view spec in one box: its settings above, its tables below.
+    """A view spec's grid and tables hosted by one immediate-mode app.
 
     Parameters
     ----------
     spec : dict
-        A parsed ``view.json``.
+        A parsed ``view.json``; ``n_col`` and section layout weights are honoured.
     model : object
         What the settings edit and the tables read.
     on_change : callable, optional
         ``on_change(attr, value)`` after a setting is written.
     visible_rows : int
-        Setting rows shown before the list scrolls.
+        Accepted for existing callers. The form now scrolls with its window
+        rather than limiting the number of setting rows.
 
     Notes
     -----
-    Each table gets its section's ``height``; a table that asks to ``expand``
-    (or the last one, when none does) takes what is left. The control follows
-    the host contract, so a ``ControlHost`` or a ``PixelPainter`` drives it.
+    Group selection and setting search remain available above the form. Tables
+    keep their declared height; expanding tables (or the last table when none
+    expands) share the remaining space. Input is applied on the next draw, as
+    for :class:`emtk.app.ImApp`.
     """
 
     def __init__(self, spec: dict, model: Any,
                  on_change: Callable[[str, Any], None] | None = None,
                  visible_rows: int = 6) -> None:
-        from .settings_editor import SettingsEditor
+        from ..app import ImApp
+        from ..view_form import FormState
 
         self.spec = spec
         self.model = model
         self.settings = model_from_view_spec(spec, model, on_change)
-        self.editor = SettingsEditor(self.settings, visible_rows=visible_rows) \
-            if self.settings.settings else None
+        self.form_state = FormState(on_used=self._used)
         self.tables = table_bindings(spec, model)
-        self._boxes: list[tuple[Any, tuple]] = []
-        self._pressed: Any = None
+        self._on_change = on_change
+        self._group = 0
+        self._filter = ""
+        self._app = ImApp(gui=self._gui)
 
-    def draw(self, p, x: float, y: float, w: float, h: float) -> None:
-        """Lay the settings and the tables out top to bottom and draw them."""
-        line = p.line_height()
-        self._boxes = []
-        cursor = y
-        if self.editor is not None:
-            rows = min(len(self.settings.settings), self.editor.visible_rows)
-            editor_h = min(line * 1.6 * (rows + 2.2), h * 0.6 if self.tables else h)
-            self.editor.visible_rows = max(rows, 1)
-            self.editor.draw(p, x, cursor, w, editor_h)
-            self._boxes.append((self.editor, (x, cursor, w, editor_h)))
-            cursor += editor_h + 6.0
-        if not self.tables:
+    def __getattr__(self, name: str) -> Any:
+        """Expose the inner app's host hooks and input state."""
+        return getattr(self._app, name)
+
+    @property
+    def item_rects(self) -> dict:
+        """Named controls drawn in the last frame, for tours and drivers."""
+        return self.form_state.rects
+
+    def _used(self, name: str) -> None:
+        """Notify a caller about committed fields, excluding action callbacks."""
+        value = getattr(self.model, name, None)
+        if self._on_change is not None and hasattr(self.model, name) and not callable(value):
+            self._on_change(name, value)
+
+    def _sections(self, sections, group: str = "") -> list[dict]:
+        """Filter setting sections while keeping their original nesting."""
+        selected = (["", *self.settings.groups()])[self._group]
+        needle = self._filter.strip().lower()
+        result = []
+        for section in sections or ():
+            if not isinstance(section, dict) or is_table_section(section):
+                continue
+            children = section.get("sections")
+            if isinstance(children, list):
+                nested = self._sections(children, group or str(section.get("title") or ""))
+                if nested:
+                    result.append(dict(section, sections=nested))
+                continue
+            if selected and (group or "settings") != selected:
+                continue
+            text = " ".join(str(section.get(key) or "") for key in
+                            ("attr", "target", "key", "label", "title", "description", "text"))
+            text += " " + " ".join(str(button.get("label") or button.get("action") or "")
+                                  for button in section.get("buttons") or ())
+            if not needle or needle in text.lower():
+                if section.get("type") == "value" and "style" not in section:
+                    kind = _kind_of(section, getattr(self.model, _attr_of(section), None))
+                    if kind in (INT, FLOAT):
+                        section = dict(section, kind=kind, style="spin" if kind == INT else "slider")
+                        if section.get("minimum") is None:
+                            section["minimum"] = 0
+                        if section.get("maximum") is None:
+                            section["maximum"] = 100 if kind == INT else 1
+                result.append(section)
+        return result
+
+    def _toolbar(self) -> None:
+        """Keep the former editor's group selector and setting filter reachable."""
+        from .. import im
+        from ..i18n import tr
+
+        if not self.settings.settings:
             return
-        remaining = max(y + h - cursor, line * 4)
-        stretch = [t for t in self.tables if t.expand] or [self.tables[-1]]
-        fixed = sum(t.height for t in self.tables if t not in stretch)
-        spare = max(remaining - fixed - 6.0 * (len(self.tables) - 1), line * 4)
-        for binding in self.tables:
-            binding.refresh()
-            box_h = spare / len(stretch) if binding in stretch else binding.height
-            binding.control.draw(p, x, cursor, w, box_h)
-            self._boxes.append((binding.control, (x, cursor, w, box_h)))
-            cursor += box_h + 6.0
+        width = max(float(im.get_content_region_avail()[0]), 60.0)
+        spacing = im.get_style().item_spacing[0]
+        field_w = max((width - spacing) / 2.0, 30.0)
+        groups = [tr("< all >"), *self.settings.groups()]
+        self._group = min(self._group, len(groups) - 1)
+        im.set_next_item_width(field_w)
+        _, self._group = im.combo("##view-spec-group", self._group, groups)
+        self.form_state.rects["view_spec.group"] = tuple(im.get_item_rect())
+        im.set_item_tooltip(tr("Show settings from one group or all groups."))
+        im.same_line()
+        im.set_next_item_width(field_w)
+        _, self._filter = im.input_text("##view-spec-filter", self._filter, hint=tr("filter"))
+        self.form_state.rects["view_spec.filter"] = tuple(im.get_item_rect())
+        im.set_item_tooltip(tr("Filter settings by their name or description."))
 
-    def _target(self, px: float, py: float):
-        for control, (bx, by, bw, bh) in self._boxes:
-            if bx <= px <= bx + bw and by <= py <= by + bh:
-                return control
-        return None
+    def _gui(self) -> None:
+        """Draw form sections using their grid, followed by retained tables."""
+        from .. import im
+        from ..view_form import draw_sections
+        from .data_table import draw_table
 
-    def press(self, px: float, py: float, *box: Any, **kw: Any) -> bool:
-        """Route a press to the settings or the table under it."""
-        target = self._pressed = self._target(px, py)
-        for binding in self.tables:
-            if binding.control is not target:
-                binding.control.filter_focused = False
-        if target is None:
-            return False
-        if target is self.editor:
-            return self.editor.press(px, py) is not None
-        return target.press(px, py, *box, **kw)
+        viewport = im.get_main_viewport()
+        box = (*viewport.pos, *viewport.size)
+        flags = (im.WindowFlags.NO_TITLE_BAR | im.WindowFlags.NO_MOVE
+                 | im.WindowFlags.NO_RESIZE | im.WindowFlags.NO_SAVED_SETTINGS)
+        self.form_state.rects.clear()
+        im.begin("##view-spec-panel", box, flags=flags)
+        try:
+            self._toolbar()
+            draw_sections(self._sections(self.spec.get("sections")), self.model,
+                          self.form_state, n_col=int(self.spec.get("n_col") or 1))
+            stretch = [table for table in self.tables if table.expand] or self.tables[-1:]
+            fixed = sum(table.height for table in self.tables if table not in stretch)
+            spacing = im.get_style().item_spacing[1]
+            available = float(im.get_content_region_avail()[1])
+            spare = max(available - fixed - spacing * max(len(self.tables) - 1, 0), 60.0)
+            for index, binding in enumerate(self.tables):
+                height = spare / len(stretch) if binding in stretch else binding.height
+                options = dict(binding.section.get("options") or {})
+                name = str(options.get("source") or binding.section.get("source") or index)
+                draw_table(binding, name, height=height)
+                self.form_state.rects[name] = tuple(im.get_item_rect())
+        finally:
+            im.end()
 
-    def drag(self, px: float, py: float, *box: Any) -> bool:
-        """Continue a drag on whatever the press landed on."""
-        target = self._pressed
-        if target is None:
-            return False
-        if target is self.editor:
-            return self.editor.drag(px, py)
-        return target.drag(px, py, *box)
+    def draw(self, painter, x: float, y: float, w: float, h: float) -> None:
+        """Draw the inner app in the host's box."""
+        self._app.draw(painter, x, y, w, h)
+
+    def press(self, px: float, py: float, *box: Any, **kw: Any) -> Any:
+        """Queue a pointer press for the next frame."""
+        return self._app.press(px, py, *box, **kw)
+
+    def drag(self, px: float, py: float, *box: Any) -> Any:
+        """Queue movement while the pointer is held."""
+        return self._app.drag(px, py, *box)
 
     def release(self, *args: Any, **kw: Any) -> None:
-        """End a drag."""
-        if self._pressed is not None:
-            self._pressed.release()
-        self._pressed = None
+        """Queue the end of a pointer gesture."""
+        self._app.release()
 
     def hover(self, px: float, py: float, *box: Any) -> None:
-        """Track the row under the pointer in the table there."""
-        target = self._target(px, py)
-        for binding in self.tables:
-            if binding.control is target:
-                binding.control.hover(px, py)
-            else:
-                binding.control.hovered = None
+        """Queue pointer movement for tooltips and table hover."""
+        self._app.hover(px, py, *box)
 
-    def scroll(self, rows: int) -> None:
-        """Scroll the hovered table, else the settings list."""
-        for binding in self.tables:
-            if binding.control.hovered is not None:
-                binding.control.scroll(rows)
-                return
-        if self.editor is not None:
-            self.editor.scroll(rows)
+    def scroll(self, rows: int) -> int:
+        """Queue scrolling for the hovered table or form."""
+        return self._app.scroll(rows)
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
-        """Keys go to a table whose filter has focus, else the selected table."""
-        for binding in self.tables:
-            if binding.control.filter_focused:
-                return binding.control.key(key, text, modifiers)
-        for binding in self.tables:
-            if binding.control.selected_key is not None:
-                return binding.control.key(key, text, modifiers)
-        return False
+        """Queue keyboard input for the focused form or table control."""
+        return self._app.key(key, text, modifiers)

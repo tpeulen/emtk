@@ -275,6 +275,25 @@ spans zero). :func:`emtk.widgets.view_spec.table_bindings` and
 :class:`emtk.widgets.view_spec.ViewSpecPanel` render them from a retained
 panel; :mod:`emtk.view_form` draws them in an immediate-mode form.
 
+``ViewSpecPanel`` hosts an inner ``ImApp`` and uses ``view_form.draw_sections``
+for its settings. A spec's ``n_col`` packs fields into rows, and their ``weight``
+shares the available width; ``width``, ``min_width`` and ``wrap_before`` follow
+the same rules as an immediate-mode form. For example, two fields with weights
+1 and 3 receive control widths in a 1:3 ratio when their minimum widths fit.
+A ``button_row`` with ``weight: 1`` stretches to fill its row.
+When a numeric section omits ``style``, the panel preserves its former integer
+stepper or float slider, with default bounds 0–100 or 0–1 respectively. An
+explicit ``style`` wins. This normalization uses a copy of the section and does
+not change the spec or the defaults of ``view_form.draw_form``.
+
+The panel retains the group selector and setting search above the fields.
+Descriptions are hover tooltips. Tables retain filtering, sorting, selection
+callbacks and source refresh, with expanding tables sharing the remaining
+height. Pointer and keyboard events are applied on the next ``draw``, following
+the usual ``ImApp`` contract. ``item_rects`` exposes the current named controls
+for tours and ``emtk.testing.Driver``. ``visible_rows`` remains accepted by the
+constructor; the form now scrolls with its window instead of limiting its rows.
+
 ::
 
     from emtk.widgets.data_table import TableBinding

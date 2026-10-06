@@ -9,9 +9,8 @@ no window, no toolkit.
 """
 from __future__ import annotations
 
-import pytest
-
 import emtk
+import pytest
 from emtk.keys import KEY_BACKSPACE, KEY_DELETE, KEY_DOWN, KEY_ESCAPE, KEY_RETURN, KEY_UP
 from emtk.testing import PixelPainter, RecordingPainter
 from emtk.view_form import FormState, draw_form
@@ -340,6 +339,9 @@ def test_the_retained_panel_draws_settings_and_table_and_routes_presses():
     table = panel.tables[0].control
     bx, by, _bw, _bh = table._body_box
     panel.press(bx + 30.0, by + table._row_h * 0.5)
+    panel.draw(painter, 0.0, 0.0, 420.0, 400.0)
+    panel.release()
+    panel.draw(painter, 0.0, 0.0, 420.0, 400.0)
     assert model.picked[-1]["x"] == "b"
 
 

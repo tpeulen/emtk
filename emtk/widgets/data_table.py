@@ -1684,9 +1684,13 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         wheel_h = getattr(io, "mouse_wheel_h", 0.0) or (io.mouse_wheel if io.key_shift else 0.0)
         if wheel_h and control._hbar_box is not None:
             control.scroll_columns(-1 if wheel_h > 0 else 1)
+            io.mouse_wheel_h = 0.0
+            if io.key_shift:
+                io.mouse_wheel = 0.0
         elif io.mouse_wheel:
             control.scroll(-int(io.mouse_wheel) * DataTable.WHEEL_ROWS or
                            (-DataTable.WHEEL_ROWS if io.mouse_wheel > 0 else DataTable.WHEEL_ROWS))
+            io.mouse_wheel = 0.0
     else:
         control.hovered = None
         if io.mouse_clicked[0]:
