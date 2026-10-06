@@ -40,6 +40,10 @@ __all__ = ["Layout", "TexError", "render_rgba", "typeset"]
 #: Text faces, in preference order; each needs an upright and an italic style.
 TEXT_FAMILIES = ("STIX Two Text", "STIXGeneral", "Times New Roman", "Times", "DejaVu Serif",
                  "Liberation Serif", "Noto Serif", "Georgia")
+#: Sans text faces (``sans=True``): a formula that has to match a sans
+#: interface font, as inline maths does on a help page.
+SANS_FAMILIES = ("Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans", "Liberation Sans",
+                 "Noto Sans", "Segoe UI")
 #: Faces tried for symbols the text face lacks.
 MATH_FAMILIES = ("STIX Two Math", "STIXGeneral", "DejaVu Sans", "Apple Symbols",
                  "Arial Unicode MS", "Noto Sans Math", "Cambria Math")
@@ -89,12 +93,12 @@ class TexError(ValueError):
 # --------------------------------------------------------------------------- #
 # Fonts
 # --------------------------------------------------------------------------- #
-@lru_cache(maxsize=1)
-def _families():
+@lru_cache(maxsize=2)
+def _families(sans: bool = False):
     from .font_render import _faces
 
     faces = _faces()
-    text = next((f for f in TEXT_FAMILIES
+    text = next((f for f in (SANS_FAMILIES if sans else TEXT_FAMILIES)
                  if f in faces and any(x.italic for x in faces[f])
                  and any(not x.italic and not x.bold for x in faces[f])), None)
     if text is None:
@@ -181,26 +185,27 @@ def _alphabet(ch: str, variant: str) -> str:
     return ch
 
 
-@lru_cache(maxsize=1)
-def _bold_family() -> str:
+@lru_cache(maxsize=2)
+def _bold_family(sans: bool = False) -> str:
     """The text face, or the first one that has a bold style if it has none
     (STIX Two Text ships upright and italic only)."""
     from .font_render import _faces
 
     faces = _faces()
-    text = _families()[0]
+    text = _families(sans)[0]
     if any(f.bold for f in faces[text]):
         return text
-    return next((f for f in TEXT_FAMILIES if f in faces and any(x.bold for x in faces[f])), text)
+    return next((f for f in (SANS_FAMILIES if sans else TEXT_FAMILIES)
+                 if f in faces and any(x.bold for x in faces[f])), text)
 
 
-def _pick(ch: str, variant: str):
+def _pick(ch: str, variant: str, sans: bool = False):
     """``(family, italic, bold)`` that draws *ch* in *variant* (rm/it/bf/bfit)."""
-    text, symbols = _families()
+    text, symbols = _families(sans)
     italic = variant in ("it", "bfit")
     bold = variant in ("bf", "bfit")
     if bold:
-        text = _bold_family()
+        text = _bold_family(sans)
     if _has_glyph(text, italic, bold, ch):
         return text, italic, bold
     for family in symbols:
@@ -275,16 +280,17 @@ class _Ctx:
     size: float        # pixels of the text size (style "text")
     style: int = _T
     variant: str = "it"  # default math letters
+    sans: bool = False
 
     @property
     def px(self) -> float:
         return self.size * _STYLE_SCALE[self.style]
 
     def at(self, style: int) -> "_Ctx":
-        return _Ctx(self.size, style, self.variant)
+        return _Ctx(self.size, style, self.variant, self.sans)
 
     def with_variant(self, variant: str) -> "_Ctx":
-        return _Ctx(self.size, self.style, variant)
+        return _Ctx(self.size, self.style, variant, self.sans)
 
     @property
     def sup_style(self) -> int:
@@ -297,7 +303,7 @@ class _Ctx:
 
 def _glyph(ch: str, ctx: _Ctx, variant: Optional[str] = None, scale: float = 1.0) -> Box:
     variant = variant or ctx.variant
-    family, italic, bold = _pick(ch, variant)
+    family, italic, bold = _pick(ch, variant, ctx.sans)
     px = max(1, int(round(ctx.px * scale)))
     font = _font(family, italic, bold, px)
     left, top, right, bottom = _ink(family, italic, bold, px, ch)
@@ -894,8 +900,11 @@ class Layout:
     items: list
 
 
-def typeset(latex: str, size_px: float, display: bool = False) -> Layout:
+def typeset(latex: str, size_px: float, display: bool = False, sans: bool = False) -> Layout:
     """Lay out *latex* (math mode, no ``$``) at a text size of *size_px* pixels.
+
+    ``sans`` sets letters and digits in a sans face (symbols still come from
+    the math face), to sit beside a sans interface font.
 
     Raises
     ------
@@ -904,12 +913,12 @@ def typeset(latex: str, size_px: float, display: bool = False) -> Layout:
     """
     parser = _Parser(latex.strip().strip("$"))
     nodes = parser.until(None)
-    box = _layout_list(nodes, _Ctx(float(size_px), _D if display else _T))
+    box = _layout_list(nodes, _Ctx(float(size_px), _D if display else _T, "it", sans))
     return Layout(box.width, box.height, box.depth, box.items)
 
 
 def render_rgba(latex: str, size_px: float, colour=(0, 0, 0, 255), pad: int = 2,
-                display: bool = False, background=None):
+                display: bool = False, background=None, sans: bool = False):
     """Typeset and rasterise: ``(width, height, RGBA bytes, baseline)``.
 
     Transparent around the ink unless *background* is given. ``baseline`` is
@@ -917,7 +926,7 @@ def render_rgba(latex: str, size_px: float, colour=(0, 0, 0, 255), pad: int = 2,
     """
     from PIL import Image, ImageDraw
 
-    layout = typeset(latex, size_px, display)
+    layout = typeset(latex, size_px, display, sans)
     # Pillow's text and lines are drawn at twice the size and filtered down,
     # so a thin rule and a glyph stem get the same anti-aliasing.
     k = 2
