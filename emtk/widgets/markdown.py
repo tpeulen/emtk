@@ -28,6 +28,9 @@ class MarkdownBlock:
     items: list[str] = field(default_factory=list)
 
 
+#: Line starts that open a block of their own, so they end a wrapped list item.
+_BLOCK_STARTS = ("#", "|", ">", "```", "~~~", ":::", "$$", "![", ".. ")
+
 _OPTION = re.compile(r"^[ \t]*:([\w-]+):\s*(.*)$")
 
 
@@ -304,8 +307,18 @@ def parse_markdown(raw_text: str) -> list[MarkdownBlock]:
         list_m = re.match(r"^([-*+]|\d+\.)\s+(.*)", stripped)
         if list_m:
             flush_p()
-            blocks.append(MarkdownBlock(kind="list_item", text=list_m.group(2).strip(), arg=list_m.group(1)))
+            item = [list_m.group(2).strip()]
             i += 1
+            # A wrapped item continues on the following lines (indented or not, as Markdown's
+            # lazy continuation allows) until a blank line or the start of another block; drawn
+            # as its own paragraph, the second line read as a new item missing its marker.
+            while i < n:
+                nxt = lines[i].strip()
+                if not nxt or re.match(r"^([-*+]|\d+\.)\s+", nxt) or nxt.startswith(_BLOCK_STARTS):
+                    break
+                item.append(nxt)
+                i += 1
+            blocks.append(MarkdownBlock(kind="list_item", text=" ".join(item), arg=list_m.group(1)))
             continue
 
         # Blank line
