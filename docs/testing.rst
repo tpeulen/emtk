@@ -128,3 +128,8 @@ flags and raises ``TimeoutError`` if work does not finish. A driver does
 not own an application's lifetime: close the app at the end of the test
 when it owns workers or other resources. ``screenshot()`` returns PNG bytes;
 passing a path saves those bytes too.
+
+A named target recorded as ``None`` has not been submitted in that frame (for
+example, an image canvas before data loads). Driver omits it from ``ids()``
+and raises ``LookupError`` if it is clicked. It does not invent geometry for
+an unavailable control; normal named rectangles and caption lookup still work.

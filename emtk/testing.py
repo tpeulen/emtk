@@ -890,7 +890,7 @@ class Driver:
         self.painter = painter
         self.app.draw(painter, 0, 0, *self.size)
         self._rects = {key: tuple(box) for registry in self._registries()
-                       for key, box in registry.items()}
+                       for key, box in registry.items() if box is not None}
 
     def frame(self, n=1):
         """Draw *n* fresh frames and return the last recording painter."""

@@ -146,3 +146,20 @@ def test_png_without_image_header_has_a_clear_failure():
     """A malformed screenshot cannot reach arithmetic with absent dimensions."""
     with pytest.raises(ValueError, match="image header"):
         png_decode(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x00IEND\x00\x00\x00\x00")
+
+
+def test_undrawn_named_targets_are_not_clickable():
+    """An unavailable target may be None until its view has been submitted."""
+    app = Form()
+    original = app.gui
+    def gui():
+        original()
+        app._item_rects['unavailable'] = None
+    app.gui = gui
+    driver = Driver(app)
+    driver.frame(2)
+    assert 'unavailable' not in driver.ids()
+    with pytest.raises(LookupError, match='was not drawn'):
+        driver.click('unavailable')
+    driver.screenshot()
+    assert 'unavailable' not in driver.ids()
