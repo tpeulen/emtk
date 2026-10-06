@@ -95,3 +95,36 @@ pixel::
 Deterministic output = doctestable output. The metrics are round, the
 atlas is committed, and a screenshot is identical on every machine that
 runs the same commit.
+
+Driving an application
+----------------------
+
+``Driver`` operates an ``ImApp`` or control through pointer and keyboard
+input, without a toolkit or display. It records frames with ``MetricPainter``,
+which measures the same fonts as ``PixelPainter``. Named controls come from
+``app.remember(name)``, ``app.item_rects`` or ``app.form.rects``; a drawn
+caption, rectangle or coordinate pair is also a click target::
+
+    from emtk.testing import Driver
+    from emtk.keys import KEY_TAB, KEY_RETURN
+
+    driver = Driver(app, (1100, 720))
+    driver.frame(2)
+    print(driver.ids())
+    driver.click("Run")
+    driver.settle(timeout=30)
+    driver.press(KEY_TAB)
+    driver.press(KEY_RETURN)
+    driver.click("name")
+    driver.type("Sample A")
+    driver.wheel(-2, at=(100, 200), dx=0)
+    driver.screenshot("renders/sample.png")
+
+``frame(n=1)`` returns the last recording painter. ``draw(frames=2)`` is
+also available for existing harnesses. Unknown targets raise ``LookupError``
+so a missing control cannot silently become a click at an arbitrary point.
+``settle`` watches optional ``running``, ``job.busy`` and ``model.busy``
+flags and raises ``TimeoutError`` if work does not finish. A driver does
+not own an application's lifetime: close the app at the end of the test
+when it owns workers or other resources. ``screenshot()`` returns PNG bytes;
+passing a path saves those bytes too.

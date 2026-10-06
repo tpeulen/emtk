@@ -15,7 +15,7 @@ from __future__ import annotations
 from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER  # noqa: E402
 
 __all__ = [
-    "RecordingPainter", "FIXED_GLYPH_W", "FIXED_LINE_H",
+    "RecordingPainter", "MetricPainter", "Driver", "FIXED_GLYPH_W", "FIXED_LINE_H",
     "PixelPainter", "png_encode", "png_decode", "render",
     "screenshot", "save_png", "assert_images_equal",
 ]
@@ -796,3 +796,199 @@ def assert_images_equal(actual: bytes, expected_path, max_different: int = 0):
     assert pixels <= max_different, (
         f"{pixels} differing pixels (tolerated {max_different}); "
         f"first at byte {different[0] if different else None}")
+
+
+class MetricPainter(RecordingPainter):
+    """Record a frame using the screenshot painter's font metrics.
+
+    Each instance owns its metrics so one app's font and zoom do not alter
+    another app's hit targets.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._metrics = PixelPainter(1, 1)
+
+    def text_width(self, string):
+        """Measure text with the same font as a screenshot."""
+        return self._metrics.text_width(string)
+
+    def line_height(self):
+        """Measure the active font's line height."""
+        return self._metrics.line_height()
+
+    def set_font(self, value=None, size=0.0):
+        """Apply the font to both recording and measuring painters."""
+        super().set_font(value, size)
+        self._metrics.set_font(value, size)
+
+    def set_font_scale(self, scale):
+        """Apply zoom to both recording and measuring painters."""
+        super().set_font_scale(scale)
+        self._metrics.set_font_scale(scale)
+
+
+class Driver:
+    """Drive a control through the host event contract, without a window.
+
+    Parameters
+    ----------
+    app : control or callable
+        An app with ``draw`` and input hooks, or an immediate-mode GUI callback.
+    size : tuple of int, optional
+        Logical canvas width and height. Named targets come from the app's
+        ``item_rects`` (or ``remember``) and ``form.rects``; captions resolve
+        through the last frame's recorded text. Coordinates and rectangles
+        are accepted too. Unknown targets raise ``LookupError``.
+    """
+
+    def __init__(self, app, size=(1000, 700)):
+        from .app import ControlSurface, ImApp
+
+        self.app = app if hasattr(app, "draw") else ImApp(app)
+        self.size = tuple(map(int, size))
+        if len(self.size) != 2 or min(self.size) <= 0:
+            raise ValueError("size must be a positive (width, height) pair")
+        self.surface = ControlSurface(self.app)
+        self.surface.on_resize(*self.size, 1.0)
+        self.painter = None
+        self._rects = {}
+        self._pointer = (0.0, 0.0)
+
+    def _registries(self):
+        """Return the control's named per-frame rectangle registries."""
+        from collections.abc import MutableMapping
+
+        for owner, name in ((self.app, "item_rects"), (self.app, "_item_rects"),
+                            (getattr(self.app, "form", None), "rects")):
+            registry = getattr(owner, name, None)
+            if isinstance(registry, MutableMapping):
+                yield registry
+
+    def frame(self, n=1):
+        """Draw *n* fresh frames and return the last recording painter."""
+        if n < 1:
+            raise ValueError("frame count must be positive")
+        for _ in range(n):
+            for registry in self._registries():
+                registry.clear()
+            self.painter = MetricPainter()
+            self.app.draw(self.painter, 0, 0, *self.size)
+            self._rects = {key: tuple(box) for registry in self._registries()
+                           for key, box in registry.items()}
+        return self.painter
+
+    def draw(self, frames=2, size=None):
+        """Draw frames, optionally resizing the logical canvas first."""
+        if size is not None:
+            size = tuple(map(int, size))
+            if len(size) != 2 or min(size) <= 0:
+                raise ValueError("size must be a positive (width, height) pair")
+            self.size = size
+            self.surface.on_resize(*size, 1.0)
+        return self.frame(frames)
+
+    def ids(self):
+        """Return the named controls drawn in the last frame."""
+        if self.painter is None:
+            self.frame(2)
+        return list(self._rects)
+
+    def rect(self, target):
+        """Resolve a named control or caption to its drawn rectangle."""
+        if self.painter is None:
+            self.frame(2)
+        if target in self._rects:
+            return self._rects[target]
+        hits = [entry[:4] for entry in self.painter.texts if entry[5] == target]
+        if hits:
+            return hits[0]
+        raise LookupError(f"{target!r} was not drawn; ids: {self.ids()!r}")
+
+    def _point(self, target):
+        """Resolve a target to a point in logical canvas coordinates."""
+        if isinstance(target, (str, int)):
+            target = self.rect(target)
+        if len(target) == 2:
+            return tuple(map(float, target))
+        if len(target) == 4:
+            x, y, w, h = target
+            return x + w / 2, y + h / 2
+        raise ValueError("target must be an id, caption, point or rectangle")
+
+    def hover(self, target):
+        """Move the pointer onto a control and draw the hover frame."""
+        self._pointer = self._point(target)
+        self.surface.on_pointer_move(*self._pointer, 0, 0)
+        return self.frame()
+
+    def click(self, target):
+        """Hover, press and release inside a target, drawing each edge."""
+        from .events import LEFT_BUTTON
+
+        self.hover(target)
+        self.surface.on_pointer_press(*self._pointer, LEFT_BUTTON, 0)
+        self.frame()
+        self.surface.on_pointer_release(*self._pointer, LEFT_BUTTON, 0)
+        return self.frame()
+
+    def press(self, key, mods=0):
+        """Press and release a key with optional emtk modifier bits."""
+        self.key(key, modifiers=mods)
+        self.surface.on_key_release(key, "", mods)
+        return self.frame()
+
+    def key(self, code, text="", modifiers=0):
+        """Deliver a key-press event and draw the frame that consumes it."""
+        self.surface.on_key_press(code, text, modifiers)
+        return self.frame()
+
+    def type(self, text):
+        """Type Unicode text one character event at a time."""
+        for char in text:
+            self.key(ord(char), char)
+        return self.painter
+
+    def wheel(self, dy, at=None, *, dx=0.0):
+        """Deliver wheel notches at a target (positive *dy* scrolls up)."""
+        self.hover(self._pointer if at is None else at)
+        self.app.wheel(*self._pointer, dy, 0)
+        if dx:
+            self.app.io.mouse_wheel_h += float(dx)
+        return self.frame()
+
+    def escape(self):
+        """Press Escape to dismiss an overlay."""
+        from .keys import KEY_ESCAPE
+
+        return self.press(KEY_ESCAPE)
+
+    def settle(self, timeout=30.0, extra=2):
+        """Draw until optional workers stop, or raise ``TimeoutError``.
+
+        Apps may expose ``running``, ``job.busy`` or ``model.busy``. No
+        application-specific worker or model is required by this driver.
+        """
+        import time
+
+        deadline = time.monotonic() + timeout
+        self.frame()
+        while (bool(getattr(self.app, "running", False))
+               or bool(getattr(getattr(self.app, "job", None), "busy", False))
+               or bool(getattr(getattr(self.app, "model", None), "busy", False))):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("app did not settle before the timeout")
+            time.sleep(0.01)
+            self.frame()
+        return self.frame(extra)
+
+    def screenshot(self, path=None):
+        """Render PNG bytes; optionally write them to *path*."""
+        painter = PixelPainter(*self.size)
+        self.app.draw(painter, 0, 0, *self.size)
+        png = png_encode(*self.size, painter.px)
+        if path is not None:
+            path = _pathlib.Path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(png)
+        return png
