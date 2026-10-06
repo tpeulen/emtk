@@ -4826,6 +4826,11 @@ def input_text_multiline(label: str, value: str, size=None) -> tuple[bool, str]:
     elif editor.text != value:
         editor.set_text(value)
     editor.config.read_only = bool(ctx.item_flags & ItemFlags.DISABLED)
+    # A form field shows its caret only while it has the focus, like a one-line
+    # input: an unfocused (or read-only) box with a caret reads as "typing here".
+    item_id = ctx.get_id(label)
+    editor.config.carets_visible = not editor.config.read_only and (
+        ctx.state(("focus",)).get("id") == item_id or ctx.is_nav_focused(item_id))
     if size is None:
         size = (0, _frame_height(ctx) * max(len(value.split("\n")), 3))
     text_editor(label, editor, size)
@@ -4871,8 +4876,13 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
             set_nav_id(item_id)
             clicks = 2 if io.mouse_double_clicked[0] else 1
             editor.press(px, py, *box, 0, clicks)
-        elif focus.get("id") == item_id:
-            focus.pop("id", None)
+        else:
+            # A click anywhere else ends the editing: the click focus *and* the
+            # keyboard focus the press above took, or the keys keep landing here.
+            if focus.get("id") == item_id:
+                focus.pop("id", None)
+            if ctx.is_nav_focused(item_id):
+                set_nav_id(None)
 
     focused = not bool(ctx.item_flags & ItemFlags.DISABLED) and (
         focus.get("id") == item_id or ctx.is_nav_focused(item_id))
