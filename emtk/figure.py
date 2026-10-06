@@ -491,19 +491,24 @@ def _isolated():
     context and im has one current context; drawn without this, the figure
     found the app's plot still open ("begin_plot() inside a plot") and left
     the app's window stack corrupted for the rest of its frame.
+
+    It also takes :data:`emtk.im_core.FRAME_LOCK`: a figure is as often saved
+    by a background job (a DOCX export) while the GUI thread is drawing, and
+    the state swapped here is shared by every thread.
     """
     from . import im_core
     from .implot_internal import PlotContext, gp
 
-    saved_plot = dict(gp.__dict__)
-    saved_im = getattr(im_core, "_CURRENT", None)
-    gp.__dict__.update(PlotContext().__dict__)
-    try:
-        yield
-    finally:
-        gp.__dict__.clear()
-        gp.__dict__.update(saved_plot)
-        im_core.set_current_context(saved_im)
+    with im_core.FRAME_LOCK:
+        saved_plot = dict(gp.__dict__)
+        saved_im = getattr(im_core, "_CURRENT", None)
+        gp.__dict__.update(PlotContext().__dict__)
+        try:
+            yield
+        finally:
+            gp.__dict__.clear()
+            gp.__dict__.update(saved_plot)
+            im_core.set_current_context(saved_im)
 
 
 def _ratios(ratios, count: int, name: str) -> list[float]:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from emtk import implot
@@ -263,3 +265,57 @@ def test_a_figure_saved_inside_another_apps_plot_leaves_it_intact():
     for _ in range(2):
         app.draw(PixelPainter(300, 200), 0.0, 0.0, 300.0, 200.0)
     assert saved and saved[-1][:4] == b"\x89PNG"
+
+
+def test_a_figure_saved_on_a_worker_thread_waits_for_the_gui_frame():
+    """A background export saving a figure while the GUI thread is mid-plot.
+
+    The figure swaps implot's and im's process-wide state; without the frame
+    lock it did so in the middle of the host's frame, and the host's plot
+    calls then ran against the figure's fresh state ("begin_plot() inside a
+    plot", mismatched subplots) -- the trace browser's DOCX export on its job
+    thread.
+    """
+    import threading
+
+    import emtk
+    from emtk.app import ImApp
+    from emtk.testing import PixelPainter
+
+    inside, saved, errors = threading.Event(), [], []
+
+    def worker():
+        inside.wait(5.0)
+        fig = Figure(size=(120, 80))
+        fig.ax().line([0, 1], [1, 0])
+        saved.append(fig.png_bytes())
+
+    def gui():
+        emtk.begin("host", (0.0, 0.0, 300.0, 200.0))
+        if implot.begin_subplots("##grid", 1, 2, (280, 160)):
+            if implot.begin_plot("##left"):
+                implot.plot_line("a", [0, 1], [0, 1])
+                inside.set()
+                # Keep plotting while the worker would run without the lock:
+                # the host's calls interleave with the figure's state swap.
+                deadline = time.monotonic() + 0.3
+                while time.monotonic() < deadline:
+                    implot.plot_line("b", [0, 1], [1, 1])
+                implot.end_plot()
+            if implot.begin_plot("##right"):
+                implot.plot_line("c", [0, 1], [1, 0])
+                implot.end_plot()
+            implot.end_subplots()
+        emtk.end()
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    app = ImApp(gui)
+    try:
+        app.draw(PixelPainter(300, 200), 0.0, 0.0, 300.0, 200.0)
+    except Exception as exc:  # noqa: BLE001 - the regression is any raise here
+        errors.append(exc)
+    thread.join(10.0)
+    assert not errors, errors
+    assert saved and saved[-1][:4] == b"\x89PNG"
+    app.draw(PixelPainter(300, 200), 0.0, 0.0, 300.0, 200.0)  # and the next frame is clean

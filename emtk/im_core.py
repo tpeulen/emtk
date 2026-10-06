@@ -28,6 +28,7 @@ scaffolder ``tools/port_imgui_widget.py`` emits both shapes.
 """
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from contextlib import contextmanager
@@ -1752,6 +1753,14 @@ class Context:
 
 _CURRENT: Optional["Context"] = None
 
+#: Held for the whole of every :func:`frame`. The current context here and
+#: implot's ``gp`` are process globals, so a frame drawn on a worker thread (a
+#: figure saved by a background export job) would otherwise swap them out from
+#: under the GUI thread mid-frame -- a host plot then found "begin_plot()
+#: inside a plot" or mismatched subplots. Reentrant: a figure saved from inside
+#: a frame on the same thread nests as before.
+FRAME_LOCK = threading.RLock()
+
 
 def create_context(painter: Painter, box: Rect, **kwargs) -> "Context":
     """A context, made current. ``ImGui::CreateContext``."""
@@ -1785,15 +1794,16 @@ def frame(painter: Painter, box: Rect, io: Optional[IO] = None,
         with im.frame(painter, (0, 0, 300, 200)) as ctx:
             im.text("Hello, world!")
     """
-    previous = _CURRENT
-    ctx = Context(painter, box, io=io, style=style, storage=storage)
-    set_current_context(ctx)
-    ctx.new_frame(now)
-    try:
-        yield ctx
-    finally:
-        ctx.end_frame()
-        set_current_context(previous)
+    with FRAME_LOCK:
+        previous = _CURRENT
+        ctx = Context(painter, box, io=io, style=style, storage=storage)
+        set_current_context(ctx)
+        ctx.new_frame(now)
+        try:
+            yield ctx
+        finally:
+            ctx.end_frame()
+            set_current_context(previous)
 
 
 def get_io() -> IO:
