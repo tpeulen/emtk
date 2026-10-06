@@ -17,9 +17,9 @@ keys.
 
 The translation is nearly free, and not by accident:
 :mod:`emtk.keys` and :mod:`emtk.events` took **Qt's** numeric
-values as the engine's own, precisely so that a Qt event's ``key()`` and
-``modifiers()`` could be passed straight through. The browser build translates;
-this one does not have to.
+values as the engine's own. Keys pass straight through, and modifiers retain
+Shift, Control, Alt and Meta while dropping platform decorations such as the
+keypad bit. Tab and Backtab stay inside the control's navigation ring.
 
 Why the class is built on first call
 ------------------------------------
@@ -49,6 +49,7 @@ import weakref
 from collections.abc import Callable
 
 from .font import DEFAULT_FONT_PT
+from .events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
 
 __all__ = ["ControlHost", "DEFAULT_WINDOW_SIZE", "make_control_host", "host_class"]
 
@@ -59,6 +60,12 @@ DEFAULT_WINDOW_SIZE = (1200, 800)
 #: The built class, cached. Rebuilding it per widget would give every host its
 #: own type, which breaks ``isinstance`` and makes Qt re-register the signal.
 _CLASS = None
+_MODIFIER_MASK = SHIFT_MODIFIER | CONTROL_MODIFIER | ALT_MODIFIER | META_MODIFIER
+
+
+def _mods(event) -> int:
+    """Return only modifiers understood by painter-level controls."""
+    return int(event.modifiers()) & _MODIFIER_MASK
 
 
 def host_class():
@@ -120,6 +127,7 @@ def host_class():
         ) -> None:
             super().__init__(parent)
             self.control = control
+            self._control_closed = False
             self.frame_requested.connect(self.update)
             set_callback = getattr(control, "set_frame_request_callback", None)
             if callable(set_callback):
@@ -187,7 +195,9 @@ def host_class():
             Either is clamped to 92 % of the screen the window opens on, so a
             large default never opens taller than the display.
             """
-            wanted = getattr(self.control, "preferred_size", None)
+            wanted = getattr(self.control, "window_size", None)
+            if wanted is None:
+                wanted = getattr(self.control, "preferred_size", None)
             if callable(wanted):
                 wanted = wanted()
             try:
@@ -210,6 +220,33 @@ def host_class():
             and is left alone.
             """
             self.resize(*self.window_size_hint())
+            screen = QtGui.QGuiApplication.primaryScreen()
+            if screen is not None:
+                area = screen.availableGeometry()
+                screen_changed = getattr(self.control, "window_screen_changed", None)
+                if callable(screen_changed):
+                    screen_changed((area.x(), area.y(), area.width(), area.height()))
+                pos = getattr(self.control, "window_pos", None)
+                try:
+                    x, y = int(pos[0]), int(pos[1])
+                except (TypeError, ValueError, OverflowError, IndexError):
+                    return
+                if area.contains(x, y):
+                    self.move(x, y)
+
+        def moveEvent(self, event) -> None:  # noqa: N802
+            """Report top-level window moves to the control's persistence hook."""
+            moved = getattr(self.control, "window_moved", None)
+            if self.isWindow() and callable(moved):
+                moved(int(event.pos().x()), int(event.pos().y()))
+            super().moveEvent(event)
+
+        def resizeEvent(self, event) -> None:  # noqa: N802
+            """Report top-level window size in logical pixels."""
+            resized = getattr(self.control, "window_resized", None)
+            if self.isWindow() and callable(resized):
+                resized(int(event.size().width()), int(event.size().height()))
+            super().resizeEvent(event)
 
         # -- painting ----------------------------------------------------- #
         def paintEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
@@ -255,11 +292,16 @@ def host_class():
                 self._wake.stop()
 
         def closeEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
-            """Detach queued repaint callbacks before closing the widget."""
+            """Detach callbacks and close the hosted control once."""
             detach = getattr(self, "_detach_control_callback", None)
             if callable(detach):
                 detach()
                 self._detach_control_callback = None
+            if not self._control_closed:
+                self._control_closed = True
+                close = getattr(self.control, "close", None)
+                if callable(close):
+                    close()
             super().closeEvent(event)
 
         def _box(self) -> tuple[float, float, float, float]:
@@ -283,6 +325,18 @@ def host_class():
             return (float(event.x()), float(event.y()))
 
         # -- input -------------------------------------------------------- #
+        def event(self, event) -> bool:
+            """Keep Tab and Backtab inside the control's navigation ring."""
+            if (event.type() == QtCore.QEvent.KeyPress
+                    and event.key() in (QtCore.Qt.Key_Tab, QtCore.Qt.Key_Backtab)):
+                self.keyPressEvent(event)
+                return True
+            return super().event(event)
+
+        def focusNextPrevChild(self, next) -> bool:  # noqa: N802
+            """Leave focus traversal to painter-level controls."""
+            return False
+
         def _rich(self, name: str):
             """The control's rich pointer hook *name*, when it has all four.
 
@@ -305,13 +359,13 @@ def host_class():
             px, py = self._point(event)
             rich = self._rich("pointer_press")
             if rich is not None:
-                rich(px, py, int(event.button()), int(event.modifiers()), 1)
+                rich(px, py, int(event.button()), _mods(event), 1)
                 self._pressed = True
                 self._notify()
                 return
             press = getattr(self.control, "press", None)
             if callable(press):
-                press(px, py, *self._box(), int(event.modifiers()), 1)
+                press(px, py, *self._box(), _mods(event), 1)
                 self._pressed = True
                 self._notify()
 
@@ -325,13 +379,13 @@ def host_class():
             px, py = self._point(event)
             rich = self._rich("pointer_press")
             if rich is not None:
-                rich(px, py, int(event.button()), int(event.modifiers()), 2)
+                rich(px, py, int(event.button()), _mods(event), 2)
                 self._pressed = True
                 self._notify()
                 return
             press = getattr(self.control, "press", None)
             if callable(press):
-                press(px, py, *self._box(), int(event.modifiers()), 2)
+                press(px, py, *self._box(), _mods(event), 2)
                 self._notify()
 
         def mouseMoveEvent(self, event) -> None:  # noqa: N802
@@ -339,7 +393,7 @@ def host_class():
             px, py = self._point(event)
             rich = self._rich("pointer_move")
             if rich is not None:
-                rich(px, py, int(event.buttons()), int(event.modifiers()))
+                rich(px, py, int(event.buttons()), _mods(event))
                 self.update()
                 return
             if self._pressed:
@@ -359,7 +413,7 @@ def host_class():
             rich = self._rich("pointer_release")
             if rich is not None:
                 px, py = self._point(event)
-                rich(px, py, int(event.button()), int(event.modifiers()))
+                rich(px, py, int(event.button()), _mods(event))
                 self._notify()
                 return
             release = getattr(self.control, "release", None)
@@ -379,7 +433,7 @@ def host_class():
                 # Notches, up positive -- Dear ImGui's sign, and Qt's.
                 point = event.position() if hasattr(event, "position") else event.pos()
                 rich(float(point.x()), float(point.y()), delta / 120.0,
-                     int(event.modifiers()))
+                     _mods(event))
                 self.update()
                 return
             scroll = getattr(self.control, "scroll", None)
@@ -391,11 +445,18 @@ def host_class():
         def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Forward a key press; unhandled keys go on to Qt."""
             key = getattr(self.control, "key", None)
-            if callable(key) and key(
-                int(event.key()), event.text(), int(event.modifiers())
-            ):
-                self._notify()
-                return
+            if callable(key):
+                consumed = key(
+                    int(QtCore.Qt.Key_Tab if event.key() == QtCore.Qt.Key_Backtab else event.key()),
+                    event.text(), _mods(event) | (
+                        SHIFT_MODIFIER if event.key() == QtCore.Qt.Key_Backtab else 0
+                    )
+                )
+                if consumed:
+                    self._notify()
+                    return
+                # Immediate-mode controls queue input before their first focus.
+                self.update()
             super().keyPressEvent(event)
 
         def keyReleaseEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
@@ -414,7 +475,10 @@ def host_class():
                 return
             release = getattr(self.control, "key_release", None)
             if callable(release) and release(
-                int(event.key()), event.text(), int(event.modifiers())
+                int(QtCore.Qt.Key_Tab if event.key() == QtCore.Qt.Key_Backtab else event.key()),
+                event.text(), _mods(event) | (
+                    SHIFT_MODIFIER if event.key() == QtCore.Qt.Key_Backtab else 0
+                )
             ):
                 self._notify()
                 return

@@ -355,3 +355,168 @@ def test_a_drop_the_rich_hook_declines_is_ignored(qt_app, tmp_path):
     QtCore.QCoreApplication.sendEvent(host, drop)
     assert not drop.isAccepted()
     host.close()
+
+
+def test_tab_and_backtab_reach_the_control_through_widget_events(qt_app):
+    """Qt must not turn Tab into a focus change before the control sees it."""
+    from qtpy import QtCore, QtGui
+    from emtk.events import SHIFT_MODIFIER
+    from emtk.keys import KEY_TAB
+    from emtk.qt_host import ControlHost
+
+    class Control(_Keys):
+        def key(self, key, text='', modifiers=0):
+            self.events.append((key, modifiers))
+            return True
+
+    control = Control()
+    host = ControlHost(control)
+    for key in (QtCore.Qt.Key_Tab, QtCore.Qt.Key_Backtab):
+        qt_app.sendEvent(host, QtGui.QKeyEvent(QtCore.QEvent.KeyPress, key,
+                                            QtCore.Qt.NoModifier))
+    assert control.events == [(KEY_TAB, 0), (KEY_TAB, SHIFT_MODIFIER)]
+    assert not host.focusNextPrevChild(True)
+    assert not host.focusNextPrevChild(False)
+    host.close()
+
+
+def test_keypad_is_masked_and_real_modifiers_survive_press_and_release(qt_app):
+    """macOS keypad decoration on arrow keys is not a keyboard shortcut."""
+    from qtpy import QtCore, QtGui
+    from emtk.events import SHIFT_MODIFIER, CONTROL_MODIFIER, ALT_MODIFIER, META_MODIFIER
+    from emtk.qt_host import ControlHost
+
+    class Control(_Keys):
+        def key(self, key, text='', modifiers=0):
+            self.events.append(('press', modifiers))
+            return True
+
+        def key_release(self, key, text='', modifiers=0):
+            self.events.append(('release', modifiers))
+            return True
+
+    control = Control()
+    host = ControlHost(control)
+    mask = SHIFT_MODIFIER | CONTROL_MODIFIER | ALT_MODIFIER | META_MODIFIER
+    for kind in (QtCore.QEvent.KeyPress, QtCore.QEvent.KeyRelease):
+        qt_app.sendEvent(host, QtGui.QKeyEvent(kind, QtCore.Qt.Key_Left,
+                                            QtCore.Qt.KeyboardModifiers(mask)
+                                            | QtCore.Qt.KeypadModifier))
+    assert control.events == [('press', mask), ('release', mask)]
+    host.close()
+
+
+def test_host_close_closes_a_control_once(qt_app):
+    """A repeated close event cannot run shutdown or persistence twice."""
+    from qtpy import QtGui
+    from emtk.qt_host import ControlHost
+
+    class Control(_Ticker):
+        closed = 0
+
+        def close(self):
+            self.closed += 1
+
+    control = Control(0)
+    host = ControlHost(control)
+    host.close()
+    host.closeEvent(QtGui.QCloseEvent())
+    assert control.closed == 1
+
+
+def test_host_restores_position_size_and_reports_moves(qt_app):
+    """Persisted top-level geometry wins over the first-launch size hint."""
+    from emtk.qt_host import ControlHost
+
+    control = _Ticker(0)
+    control.preferred_size = (500, 350)
+    control.window_size = (600, 400)
+    control.window_pos = (70, 80)
+    moves, sizes, screens = [], [], []
+    control.window_moved = lambda x, y: moves.append((x, y))
+    control.window_resized = lambda w, h: sizes.append((w, h))
+    control.window_screen_changed = screens.append
+    host = ControlHost(control)
+    host.show()
+    qt_app.processEvents()
+    assert (host.width(), host.height()) == (600, 400)
+    assert (host.x(), host.y()) == (70, 80)
+    assert screens
+    host.move(110, 120)
+    host.resize(620, 420)
+    qt_app.processEvents()
+    assert moves[-1] == (110, 120)
+    assert sizes[-1] == (620, 420)
+    host.close()
+
+
+def test_saved_offscreen_position_is_not_applied(qt_app):
+    """A monitor removed since the last launch cannot hide the window."""
+    from emtk.qt_host import ControlHost
+
+    control = _Ticker(0)
+    control.window_pos = (100000, 100000)
+    host = ControlHost(control)
+    assert (host.x(), host.y()) != control.window_pos
+    host.close()
+
+
+def test_pointer_and_wheel_modifiers_are_masked(qt_app):
+    """The rich pointer path sees the same modifier vocabulary as keys."""
+    from qtpy import QtCore, QtGui
+    from emtk.events import CONTROL_MODIFIER
+    from emtk.qt_host import ControlHost
+
+    class Control(_Ticker):
+        def __init__(self):
+            super().__init__(0)
+            self.modifiers = []
+
+        def pointer_press(self, x, y, button, modifiers, clicks):
+            self.modifiers.append(modifiers)
+
+        def pointer_move(self, x, y, buttons, modifiers):
+            self.modifiers.append(modifiers)
+
+        def pointer_release(self, x, y, button, modifiers):
+            self.modifiers.append(modifiers)
+
+        def wheel(self, x, y, steps, modifiers):
+            self.modifiers.append(modifiers)
+
+    control = Control()
+    host = ControlHost(control)
+    mods = QtCore.Qt.ControlModifier | QtCore.Qt.KeypadModifier
+    for kind in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.MouseButtonDblClick,
+                 QtCore.QEvent.MouseMove, QtCore.QEvent.MouseButtonRelease):
+        event = QtGui.QMouseEvent(kind, QtCore.QPointF(30, 40), QtCore.Qt.LeftButton,
+                                  QtCore.Qt.LeftButton, mods)
+        qt_app.sendEvent(host, event)
+    wheel = QtGui.QWheelEvent(QtCore.QPointF(30, 40), QtCore.QPointF(30, 40),
+                              QtCore.QPoint(0, 0), QtCore.QPoint(0, 120),
+                              QtCore.Qt.NoButton, mods, QtCore.Qt.NoScrollPhase, False)
+    qt_app.sendEvent(host, wheel)
+    assert control.modifiers == [CONTROL_MODIFIER] * 5
+    host.close()
+
+
+def test_initial_tab_schedules_an_idle_imapp_frame(qt_app):
+    """Queued input needs a redraw before WantCaptureKeyboard can be true."""
+    from emtk import im, keys
+    from emtk.app import ImApp
+    from emtk.testing import RecordingPainter
+    from emtk.qt_host import ControlHost
+    from qtpy import QtCore, QtGui
+
+    app = ImApp(lambda: im.button('Run analysis'))
+    app.draw(RecordingPainter(), 0, 0, 320, 200)
+    host = ControlHost(app)
+    updates = []
+    host.update = lambda: updates.append(True)
+    try:
+        qt_app.sendEvent(host, QtGui.QKeyEvent(QtCore.QEvent.KeyPress, keys.KEY_TAB, QtCore.Qt.NoModifier))
+        assert updates
+        app.draw(RecordingPainter(), 0, 0, 320, 200)
+        assert app.storage.get('__nav_id__') is not None
+    finally:
+        host.close()

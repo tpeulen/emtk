@@ -323,6 +323,9 @@ class CanvasEvents:
         self._pressed_keys = {}
         self.focus_callback = None
         self._previous_focus_callback = None
+        self.position_supported = False
+        self.position_callback = None
+        self._previous_position_callback = None
         self.connect()
 
     # -- wiring ---------------------------------------------------------- #
@@ -347,6 +350,7 @@ class CanvasEvents:
         add(self._on_close, "close")
         self._connect_file_drop()
         self._connect_focus_loss()
+        self._connect_window_position()
 
     def _on_close(self, event) -> None:
         if self._closed:
@@ -354,9 +358,72 @@ class CanvasEvents:
         self._closed = True
         self.release_keys()
         self._restore_focus_callback()
+        self._restore_position_callback()
         close = getattr(self.sink, "close", None)
         if callable(close):
             close()
+
+    def _connect_window_position(self) -> None:
+        """Persist geometry where a GLFW backend exposes a movable window.
+
+        rendercanvas has no public move event or position setter. Other
+        backends, including offscreen, deliberately leave this unsupported.
+        """
+        window = getattr(self.canvas, "_window", None)
+        if window is None:
+            return
+        control = getattr(self.sink, "control", self.sink)
+        try:
+            import glfw  # noqa: PLC0415
+
+            capabilities = ("set_window_pos_callback", "set_window_pos", "get_window_pos",
+                            "get_primary_monitor", "get_monitor_workarea")
+            if not all(callable(getattr(glfw, name, None)) for name in capabilities):
+                return
+            monitor = glfw.get_primary_monitor()
+            if not monitor:
+                return
+            left, top, width, height = glfw.get_monitor_workarea(monitor)
+            screen_changed = getattr(control, "window_screen_changed", None)
+            if callable(screen_changed):
+                screen_changed((left, top, width, height))
+            previous = glfw.set_window_pos_callback(window, None)
+
+            def moved(native_window, x, y) -> None:
+                hook = getattr(control, "window_moved", None)
+                if callable(hook):
+                    hook(int(x), int(y))
+                if previous is not None:
+                    previous(native_window, x, y)
+
+            self._previous_position_callback = previous
+            self.position_callback = moved
+            glfw.set_window_pos_callback(window, moved)
+            self.position_supported = True
+            pos = getattr(control, "window_pos", None)
+            try:
+                x, y = int(pos[0]), int(pos[1])
+            except (TypeError, ValueError, OverflowError, IndexError):
+                x = y = None
+            if (x is not None and left <= x < left + width
+                    and top <= y < top + height):
+                glfw.set_window_pos(window, x, y)
+            moved(window, *glfw.get_window_pos(window))
+        except Exception:  # noqa: BLE001 - unavailable native backend capability
+            self._restore_position_callback()
+            self.position_supported = False
+
+    def _restore_position_callback(self) -> None:
+        """Restore a backend callback before its native window is destroyed."""
+        if self.position_callback is None:
+            return
+        try:
+            import glfw  # noqa: PLC0415
+
+            glfw.set_window_pos_callback(self.canvas._window, self._previous_position_callback)
+        except Exception:  # noqa: BLE001 - the backend may already have closed
+            pass
+        self.position_callback = None
 
     def _connect_file_drop(self) -> None:
         """Deliver dropped files where the backend has a glfw window."""
@@ -650,7 +717,7 @@ class NativeHost:
         canvas' own loop by default.
     """
 
-    def __init__(self, app, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
+    def __init__(self, app, size=None, title: str = "emtk",
                  backend: str | None = None, canvas=None, device=None,
                  loop=None) -> None:
         from .app import as_surface  # noqa: PLC0415
@@ -662,6 +729,14 @@ class NativeHost:
         self._pending_external_redraw = threading.Event()
         self.surface = as_surface(app)
         if canvas is None:
+            if size is None:
+                size = getattr(app, "window_size", None)
+                if size is None:
+                    size = getattr(app, "preferred_size", None)
+                if callable(size):
+                    size = size()
+                if size is None:
+                    size = DEFAULT_WINDOW_SIZE
             module = canvas_module(backend)
             self._loop = getattr(module, "loop", None)
             self.backend = module.__name__.rsplit(".", 1)[-1]
