@@ -38,7 +38,7 @@ from typing import Any, Iterable, Sequence
 
 from . import colormaps
 
-__all__ = ["Axes", "Figure"]
+__all__ = ["Axes", "Figure", "colorbar_space"]
 
 #: Matplotlib-style marker codes -> implot marker index (``MARKER_NAMES`` order).
 _MARKERS = {"o": 0, "s": 1, "D": 2, "d": 2, "^": 3, "v": 4, "<": 5, ">": 6,
@@ -53,7 +53,16 @@ _LEGEND_AT = {"nw": "LOCATION_NORTH_WEST", "ne": "LOCATION_NORTH_EAST",
 
 #: Width of a colour bar beside a heatmap, in pixels.
 _COLORBAR_WIDTH = 70.0
+#: A log colour bar is a plot of its own, with its ticks and label on the right
+#: of a narrow strip: it needs more room than implot's linear scale.
+_LOG_COLORBAR_WIDTH = 110.0
 _GAP = 8.0
+
+
+def colorbar_space(log: bool = False) -> float:
+    """Pixels a colour bar takes beside its panel (bar and gap) -- for a layout
+    that has to leave room for it, such as a map with marginals."""
+    return (_LOG_COLORBAR_WIDTH if log else _COLORBAR_WIDTH) + _GAP
 
 
 def _floats(values: Iterable) -> list[float]:
@@ -268,6 +277,55 @@ class Axes:
                          high=float(high), extent=tuple(float(e) for e in extent),
                          colormap=colormap, fmt=cell_labels or "", label=label)
 
+    def mesh(self, x_edges, y_edges, values, *, colormap: str = "viridis", levels=None,
+             log: bool = False, colorbar: str | None = None, label: str | None = None) -> Axes:
+        """Coloured cells between *x_edges* and *y_edges* (``pcolormesh``).
+
+        ``values[j][i]`` fills ``x_edges[i]..x_edges[i+1]`` by
+        ``y_edges[j]..y_edges[j+1]``: row 0 at the *first* y edge, so a 2-D
+        histogram goes in as it was counted. The edges need not be even, and
+        the cells follow a log axis (:meth:`set_log`) -- unlike
+        :meth:`heatmap`, whose cells are even in the data. ``log`` colours by
+        ``log10`` of the value (``LogNorm``); a cell that is not positive is
+        then left empty, as are non-finite cells always. ``levels`` is
+        ``(low, high)`` for the colours (default: the data's range, the
+        smallest *positive* value for ``log``); ``colorbar`` a label, which
+        draws a colour bar -- on a log scale for ``log`` -- beside the panel.
+        """
+        xs, ys = _floats(x_edges), _floats(y_edges)
+        rows = [list(map(float, r)) for r in values]
+        if len(rows) != len(ys) - 1 or any(len(r) != len(xs) - 1 for r in rows):
+            raise ValueError(f"values must be {len(ys) - 1} rows of {len(xs) - 1}, one per cell")
+        flat = [v for r in rows for v in r if math.isfinite(v) and (v > 0.0 or not log)]
+        if levels is not None:
+            low, high = float(levels[0]), float(levels[1])
+        elif flat:
+            low, high = min(flat), max(flat)
+        else:
+            low, high = (1.0, 10.0) if log else (0.0, 1.0)
+        if log:
+            low = max(low, 1e-300)
+            high = max(high, low * 10.0) if high <= low else high
+        elif high <= low:
+            high = low + 1.0
+        if not colormaps.has(colormap):
+            raise KeyError(f"no colormap named {colormap!r}")
+        table = colormaps.lookup_table(colormap, 256)
+        lo_t, hi_t = (math.log10(low), math.log10(high)) if log else (low, high)
+        cells = []
+        for j, r in enumerate(rows):
+            for i, v in enumerate(r):
+                if not math.isfinite(v) or (log and v <= 0.0):
+                    continue
+                t = ((math.log10(v) if log else v) - lo_t) / (hi_t - lo_t)
+                k = min(255, max(0, int(t * 255.0 + 0.5)))
+                cells.append((xs[i], xs[i + 1], ys[j], ys[j + 1], table[k]))
+        if colorbar is not None:
+            self.colorbar = {"label": colorbar, "low": low, "high": high,
+                             "colormap": colormap, "log": bool(log)}
+        return self._add("mesh", cells=cells, extent=(xs[0], xs[-1], ys[0], ys[-1]),
+                         label=label)
+
     def text(self, x: float, y: float, s: str, *, color="k", offset=(0.0, 0.0)) -> Axes:
         """``s`` centred on the data point ``(x, y)``, shifted by ``offset`` pixels."""
         return self._add("text", x=float(x), y=float(y), s=str(s), color=_rgba(color),
@@ -292,14 +350,17 @@ class Axes:
         self.no_yticklabels = self.no_yticklabels or bool(y)
         return self
 
-    def add_colorbar(self, label: str, low: float, high: float, colormap: str = "viridis") -> Axes:
+    def add_colorbar(self, label: str, low: float, high: float, colormap: str = "viridis",
+                     log: bool = False) -> Axes:
         """A colour bar beside this panel for ``low``..``high`` -- also for a map
         drawn in another panel (the colour bar of a map with marginals sits
-        right of the y-marginal)."""
+        right of the y-marginal). ``log`` puts the bar on a log scale."""
         if not colormaps.has(colormap):
             raise KeyError(f"no colormap named {colormap!r}")
+        if log and not (0.0 < float(low) < float(high)):
+            raise ValueError("a log colour bar needs 0 < low < high")
         self.colorbar = {"label": str(label), "low": float(low), "high": float(high),
-                         "colormap": colormap}
+                         "colormap": colormap, "log": bool(log)}
         return self
 
     def set_right_label(self, label: str) -> Axes:
@@ -394,12 +455,74 @@ class Figure:
         return [a for row in self._axes for a in row]
 
     # -- output -----------------------------------------------------------
-    def png_bytes(self) -> bytes:
-        """The figure encoded as PNG."""
-        from .export import png_bytes
+    def png_bytes(self, dpi: float | None = None) -> bytes:
+        """The figure encoded as PNG.
 
+        ``dpi`` draws the same layout at ``dpi / 96`` device pixels per logical
+        pixel -- text included -- for print; ``None`` is one to one.
+        """
+        from .export import png_bytes
+        from .testing import png_encode
+
+        k = 1.0 if dpi is None else float(dpi) / 96.0
+        if abs(k - 1.0) < 1e-9:
+            with _isolated():
+                return png_bytes(self._app(), self.size, frames=2, painter=_painter())
+        canvas = self._scaled_canvas(k)
+        return png_encode(canvas.width, canvas.height, canvas.px)
+
+    def _scaled_canvas(self, k: float):
+        from .scaled_painter import ScaledPainter
+
+        if _painter() == "pil":
+            from .pil_painter import PilPainter as make
+        else:
+            from .testing import PixelPainter as make
+        w, h = float(self.size[0]), float(self.size[1])
+        dw, dh = max(1, int(round(w * k))), max(1, int(round(h * k)))
+        app = self._app()
+        canvas = None
         with _isolated():
-            return png_bytes(self._app(), self.size, frames=2, painter=_painter())
+            for _ in range(2):
+                # White under the layout: a rounded-up last row or column is
+                # outside it and would keep the painter's default black.
+                canvas = make(dw, dh, background=(255, 255, 255, 255))
+                app.draw(ScaledPainter(canvas, k), 0.0, 0.0, w, h)
+        return canvas
+
+    def svg_bytes(self) -> bytes:
+        """The figure as an SVG document: lines, fills and text stay vectors."""
+        from .vector_painter import SvgPainter
+
+        return self._vector(SvgPainter).svg_bytes()
+
+    def pdf_bytes(self) -> bytes:
+        """The figure as a one-page PDF: lines, fills and text stay vectors."""
+        from .vector_painter import PdfPainter
+
+        return self._vector(PdfPainter).pdf_bytes()
+
+    def _vector(self, make):
+        w, h = float(self.size[0]), float(self.size[1])
+        painter = make(w, h)
+        app = self._app()
+        with _isolated():
+            # The first frame fits the axes; only the second is kept.
+            app.draw(painter, 0.0, 0.0, w, h)
+            painter.reset()
+            app.draw(painter, 0.0, 0.0, w, h)
+        return painter
+
+    def to_bytes(self, fmt: str, dpi: float | None = None) -> bytes:
+        """The figure as a ``"png"``, ``"svg"`` or ``"pdf"`` file's bytes."""
+        fmt = fmt.lower().lstrip(".")
+        if fmt == "png":
+            return self.png_bytes(dpi=dpi)
+        if fmt == "svg":
+            return self.svg_bytes()
+        if fmt == "pdf":
+            return self.pdf_bytes()
+        raise ValueError(f"emtk figures are written as png, svg or pdf, not {fmt!r}")
 
     def rgba(self) -> tuple[int, int, bytes]:
         """``(width, height, RGBA bytes)``, for a texture or an image widget."""
@@ -413,12 +536,14 @@ class Figure:
         """Shown inline by Jupyter, as a plotting library's figure is."""
         return self.png_bytes()
 
-    def save(self, path) -> pathlib.Path:
-        """Write the figure to *path* (``.png``); returns the path."""
+    def save(self, path, dpi: float | None = None) -> pathlib.Path:
+        """Write the figure to *path*: ``.png``, ``.svg`` or ``.pdf`` by suffix."""
         target = pathlib.Path(path)
-        if target.suffix.lower() != ".png":
-            raise ValueError(f"emtk figures are written as PNG, not {target.suffix or 'no suffix'}")
-        target.write_bytes(self.png_bytes())
+        suffix = target.suffix.lower()
+        if suffix not in (".png", ".svg", ".pdf"):
+            raise ValueError(f"emtk figures are written as .png, .svg or .pdf, "
+                             f"not {target.suffix or 'no suffix'}")
+        target.write_bytes(self.to_bytes(suffix, dpi=dpi))
         return target
 
     # -- drawing ----------------------------------------------------------
@@ -456,24 +581,29 @@ class Figure:
                 im.set_cursor_pos_x(max(0.0, (im.get_content_region_avail()[0] - text_w) / 2.0))
                 im.text(self.title)
             avail_w, avail_h = im.get_content_region_avail()
+            top = im.get_cursor_pos()[1]
             free_w = avail_w - (self.cols - 1) * _GAP
             free_h = avail_h - (self.rows - 1) * _GAP
-            # One aligned group: every panel gets the widest y-axis gutter, so
-            # stacked panels share their x position (a curve above its
-            # residuals) and a grid's columns line up.
-            aligned = self.rows > 1 and implot.begin_aligned_plots("##emtk-figure-align")
-            try:
-                for r, row in enumerate(self._axes):
-                    for c, axes in enumerate(row):
-                        if c:
-                            im.same_line(0.0, _GAP)
-                        else:
-                            im.set_cursor_pos_x(left)
-                        _draw_axes(axes, f"##p{r}_{c}", free_w * self.width_ratios[c],
-                                   free_h * self.height_ratios[r], implot, I)
-            finally:
-                if aligned:
-                    implot.end_aligned_plots()
+            widths = [free_w * f for f in self.width_ratios]
+            heights = [free_h * f for f in self.height_ratios]
+            xs = [left + sum(widths[:c]) + c * _GAP for c in range(self.cols)]
+            ys = [top + sum(heights[:r]) + r * _GAP for r in range(self.rows)]
+            # Column by column, one aligned group each: the panels of a column
+            # share the widest y-axis gutter, so stacked panels share their x
+            # position (a curve above its residuals). A group across the whole
+            # grid gave a narrow right column -- a y-marginal, its colour bar
+            # -- the left column's gutter, and squeezed it to nothing.
+            for c in range(self.cols):
+                aligned = self.rows > 1 and implot.begin_aligned_plots(f"##emtk-figure-col{c}")
+                try:
+                    for r in range(self.rows):
+                        im.set_cursor_pos((xs[c], ys[r]))
+                        _draw_axes(self._axes[r][c], f"##p{r}_{c}", widths[c], heights[r],
+                                   implot, I)
+                finally:
+                    if aligned:
+                        implot.end_aligned_plots()
+            im.set_cursor_pos((left, ys[-1] + heights[-1]))
             im.end()
             im.pop_style_color(pushed)
         finally:
@@ -569,7 +699,7 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
         im.dummy(width, height)
         return
 
-    plot_w = width - (_COLORBAR_WIDTH + _GAP if axes.colorbar else 0.0)
+    plot_w = width - (colorbar_space(axes.colorbar.get("log", False)) if axes.colorbar else 0.0)
     flags = I.FLAGS_NO_MENUS | I.FLAGS_NO_MOUSE_TEXT | I.FLAGS_NO_INPUTS
     if not axes.title:
         flags |= I.FLAGS_NO_TITLE
@@ -590,7 +720,7 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
         if axes.ylog:
             implot.setup_axis_scale(I.AXIS_Y1, I.SCALE_LOG10)
         xlim, ylim = axes.xlim, axes.ylim
-        maps = [d for kind, d in axes._items if kind == "heatmap"]
+        maps = [d for kind, d in axes._items if kind in ("heatmap", "mesh")]
         if maps:
             # An image fills its frame: no fit margin around a heatmap.
             x0, x1, y0, y1 = maps[0]["extent"]
@@ -617,8 +747,72 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
     if axes.colorbar:
         im.same_line(0.0, _GAP)
         bar = axes.colorbar
-        implot.colormap_scale(bar["label"], bar["low"], bar["high"], (_COLORBAR_WIDTH, height),
-                              cmap=_colormap_index(implot, bar["colormap"]))
+        if bar.get("log"):
+            # A colour bar is no panel of the column: keep it out of the
+            # column's gutter alignment.
+            from .implot_internal import gp
+
+            held = gp.current_alignment_v, gp.current_alignment_h
+            gp.current_alignment_v = gp.current_alignment_h = None
+            try:
+                _log_colorbar(bar, ident, height, implot, I,
+                              like=(bool(axes.xlabel), not axes.no_xticklabels))
+            finally:
+                gp.current_alignment_v, gp.current_alignment_h = held
+        else:
+            implot.colormap_scale(bar["label"], bar["low"], bar["high"],
+                                  (_COLORBAR_WIDTH, height),
+                                  cmap=_colormap_index(implot, bar["colormap"]))
+
+
+def _log_colorbar(bar: dict, ident: str, height: float, implot, I,
+                  like: tuple[bool, bool] = (False, False)) -> None:
+    """A colour bar on a log axis: implot's own scale is linear only.
+
+    Drawn as a narrow plot holding one column of 256 cells spaced evenly in
+    ``log10``, with the ticks and the label on its right, as a colour bar has.
+    ``like`` is whether the panel beside it has an x label and x tick labels:
+    the bar reserves the same (blank) room under it, so its strip ends where
+    the panel's plot area does instead of running down past the axis.
+    """
+    low, high = bar["low"], bar["high"]
+    flags = (I.FLAGS_NO_MENUS | I.FLAGS_NO_MOUSE_TEXT | I.FLAGS_NO_INPUTS | I.FLAGS_NO_TITLE
+             | I.FLAGS_NO_LEGEND)
+    if not implot.begin_plot("##cbar" + ident, (_LOG_COLORBAR_WIDTH, height), flags):
+        return
+    try:
+        has_label, has_ticks = like
+        x_flags = I.AXIS_FLAGS_NO_GRID_LINES | I.AXIS_FLAGS_NO_TICK_MARKS
+        if not has_ticks:
+            x_flags |= I.AXIS_FLAGS_NO_TICK_LABELS
+        implot.setup_axes(" " if has_label else None, bar["label"] or None, x_flags,
+                          I.AXIS_FLAGS_OPPOSITE | I.AXIS_FLAGS_NO_GRID_LINES)
+        if has_ticks:
+            implot.setup_axis_ticks(I.AXIS_X1, [0.5], labels=[" "])
+        implot.setup_axis_scale(I.AXIS_Y1, I.SCALE_LOG10)
+        implot.setup_axis_limits(I.AXIS_X1, 0.0, 1.0, I.COND_ALWAYS)
+        implot.setup_axis_limits(I.AXIS_Y1, low, high, I.COND_ALWAYS)
+        table = colormaps.lookup_table(bar["colormap"], 256)
+        l0, l1 = math.log10(low), math.log10(high)
+        n = len(table)
+        cells = [(0.0, 1.0, 10.0 ** (l0 + (l1 - l0) * k / n), 10.0 ** (l0 + (l1 - l0) * (k + 1) / n),
+                  table[k]) for k in range(n)]
+        _draw_mesh(cells, implot)
+    finally:
+        implot.end_plot()
+
+
+def _draw_mesh(cells, implot) -> None:
+    """Fill each ``(x0, x1, y0, y1, rgba)`` cell in data coordinates, clipped to the plot."""
+    draw = implot.get_plot_draw_list()
+    implot.push_plot_clip_rect()
+    try:
+        for x0, x1, y0, y1, colour in cells:
+            ax, ay = implot.plot_to_pixels(x0, y0)
+            bx, by = implot.plot_to_pixels(x1, y1)
+            draw.add_rect_filled((min(ax, bx), min(ay, by)), (max(ax, bx), max(ay, by)), colour)
+    finally:
+        implot.pop_plot_clip_rect()
 
 
 def _draw_item(kind: str, d: dict, label: str, implot, I) -> None:
@@ -694,6 +888,8 @@ def _draw_item(kind: str, d: dict, label: str, implot, I) -> None:
                                 spec=_spec(I, flags=hidden))
         finally:
             implot.pop_colormap()
+    elif kind == "mesh":
+        _draw_mesh(d["cells"], implot)
     elif kind == "text":
         from . import implot_internal
 

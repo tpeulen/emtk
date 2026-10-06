@@ -91,7 +91,7 @@ def test_what_is_not_offered_raises():
     with pytest.raises(ValueError):
         ax.legend("upper left")
     with pytest.raises(ValueError):
-        Figure().save("figure.svg")
+        Figure().save("figure.jpg")  # png, svg and pdf are what is offered
     with pytest.raises(ValueError):
         Figure(rows=0)
 
