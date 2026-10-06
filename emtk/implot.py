@@ -283,7 +283,7 @@ def setup_axis_limits(axis: int, v_min: float, v_max: float, cond: int = I.COND_
     if not ax.enabled:
         setup_axis(axis)
     request = (float(v_min), float(v_max))
-    new_request = cond != I.COND_ALWAYS and ax.once_request is not None and ax.once_request != request
+    new_request = cond != I.COND_ALWAYS and ax.once_request != request
     if not plot.initialized or cond == I.COND_ALWAYS or new_request:
         ax.set_range(*request)
         ax.follow = True
