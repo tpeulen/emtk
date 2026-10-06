@@ -100,9 +100,26 @@ _NOT_DRAWN = {
     "widgets/text.py": "　、。",
 }
 
+#: Modules that draw text with real fonts (FreeType through Pillow) and never
+#: through ``Painter.text``, so the atlas's charset does not bound them. Each
+#: is held to that by :func:`test_a_freetype_module_never_draws_through_a_painter`.
+_FREETYPE_MODULES = {
+    # The math typesetter: glyphs from a serif/math face onto an RGBA image.
+    "tex.py",
+}
+
 _CONTROL_MODULES = sorted(
-    p.relative_to(_EMTK).as_posix() for p in _EMTK.rglob("*.py") if p.name != "__init__.py"
+    p.relative_to(_EMTK).as_posix() for p in _EMTK.rglob("*.py")
+    if p.name != "__init__.py" and p.relative_to(_EMTK).as_posix() not in _FREETYPE_MODULES
 )
+
+
+@pytest.mark.parametrize("module", sorted(_FREETYPE_MODULES))
+def test_a_freetype_module_never_draws_through_a_painter(module):
+    """The exemption above is only true while the module keeps out of the painter."""
+    source = (_EMTK / module).read_text(encoding="utf-8")
+    assert "from .painter" not in source and "import painter" not in source
+    assert ".text(" not in source.replace("draw.text(", "")
 
 
 def _drawn_literals(tree: ast.AST) -> set[str]:

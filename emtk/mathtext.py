@@ -1,13 +1,12 @@
 """Math typesetting and LaTeX rendering for EMTK.
 
-Renders LaTeX mathematics into transparent textures using matplotlib's mathtext
-engine when available, with fast caching and a graceful Unicode fallback.
+Renders LaTeX mathematics into transparent textures with emtk's own
+typesetter (:mod:`emtk.tex`, FreeType glyphs through Pillow), with fast caching
+and a graceful Unicode fallback where no math-capable font is installed.
 """
 
 from __future__ import annotations
 
-import base64
-import io
 import logging
 import re
 from typing import TYPE_CHECKING
@@ -491,40 +490,23 @@ def render_math_to_texture(
         return cached
 
     try:
-        from matplotlib.figure import Figure
-        from matplotlib.font_manager import FontProperties
-        from PIL import Image
-
+        from .tex import TexError, render_rgba
         from .texture import Texture
-    except Exception as e:
-        logger.debug("matplotlib or PIL not available for math rendering: %s", e)
+    except Exception as e:  # pragma: no cover - Pillow missing
+        logger.debug("emtk.tex unavailable for math rendering: %s", e)
         return None
 
     try:
-        fig = Figure(figsize=(0.01, 0.01), dpi=dpi)
-        fig.patch.set_alpha(0.0)
-
-        # Normalise colour for matplotlib (0.0 to 1.0)
-        c_norm = (rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, rgba[3] / 255.0)
-        prop = FontProperties(size=font_size)
-
-        fig.text(0, 0, f"${norm}$", fontproperties=prop, color=c_norm)
-
-        buf = io.BytesIO()
-        fig.savefig(
-            buf,
-            format="png",
-            dpi=dpi,
-            transparent=True,
-            bbox_inches="tight",
-            pad_inches=0.03,
-        )
-        buf.seek(0)
-        img = Image.open(buf).convert("RGBA")
-        w, h = img.size
-        tex = Texture(w, h, img.tobytes(), filter="linear")
+        # Display style: limits stacked on sums, fractions at text size -- the
+        # look help pages had from the engine this replaces.
+        w, h, px, _baseline = render_rgba(norm, font_size * dpi / 72.0, colour=rgba,
+                                          pad=max(1, int(round(0.03 * dpi))), display=True)
+        tex = Texture(w, h, px, filter="linear")
         cache.put(norm, rgba, font_size, dpi, tex)
         return tex
+    except TexError as e:
+        logger.debug("render_math_to_texture: %r is outside emtk.tex: %s", formula, e)
+        return None
     except Exception as e:
         logger.debug("render_math_to_texture failed for %r: %s", formula, e)
         return None
@@ -536,10 +518,17 @@ def calc_math_size(
     dpi: int = 144,
     scale: float = 0.5,
 ) -> tuple[float, float]:
-    """Calculate the layout size of a LaTeX formula."""
-    tex = render_math_to_texture(formula, font_size=font_size, dpi=dpi)
-    if tex is not None:
-        return (tex.width * scale, tex.height * scale)
+    """Calculate the layout size of a LaTeX formula (typeset, not drawn)."""
+    norm = normalize_latex(formula)
+    if norm:
+        try:
+            from .tex import typeset
+
+            layout = typeset(norm, font_size * dpi / 72.0, display=True)
+            pad = 2 * max(1, int(round(0.03 * dpi)))
+            return ((layout.width + pad) * scale, (layout.height + layout.depth + pad) * scale)
+        except Exception as e:  # noqa: BLE001 - fall back to the Unicode estimate
+            logger.debug("calc_math_size: %r not typeset: %s", formula, e)
     # Fallback approximation based on Unicode text
     u = latex_to_unicode(formula)
     return (len(u) * font_size * 0.6, font_size * 1.4)
