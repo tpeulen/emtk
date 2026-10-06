@@ -270,7 +270,6 @@ def test_a_dock_space_fills_the_box_it_was_given():
 #   if (focus_1) ImGui::SetKeyboardFocusHere(); ImGui::InputText(...);
 def _fields_gui(state):
     def gui():
-        emtk.process_nav_keys()
         for index in range(3):
             _c, state["text%d" % index] = emtk.input_text(
                 "%d" % index, state.get("text%d" % index, ""))
@@ -309,6 +308,7 @@ def test_tab_wraps_around_the_ring():
 def test_tab_is_ignored_when_navigation_is_off():
     state: dict = {}
     frames = Frames(_fields_gui(state))
+    frames.io.config_flags = emtk.ConfigFlags.NONE
     frames.draw()
     frames.press_key(keys.KEY_TAB)
     assert state["nav"] is None, "Tab moved the focus with navigation disabled"

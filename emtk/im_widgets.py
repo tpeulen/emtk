@@ -809,6 +809,17 @@ def _labelled_item_width(ctx, wanted, label_width):
     return min(wanted + label_width, available) if label_width else wanted
 
 
+def _nav_ring(ctx, box, item_id):
+    """Outline the control holding keyboard focus, inside its drawn bounds."""
+    if (ctx.is_nav_focused(item_id) and ctx.nav_visible
+            and ctx.state(("nav",)).get("visible", True)
+            and not ctx.item_flags & ItemFlags.DISABLED):
+        x, y, w, h = box
+        ctx.draw.add_rect((x + 1, y + 1), (x + w - 1, y + h - 1),
+                          _col(Col.NAV_HIGHLIGHT), ctx.style.frame_rounding,
+                          thickness=1.0)
+
+
 def button(label: str, size=None) -> bool:
     """``ImGui::Button``: True on the frame the click completes."""
     ctx = get_current_context()
@@ -823,6 +834,7 @@ def button(label: str, size=None) -> bool:
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              colour, ctx.style.frame_rounding)
     _frame_border(ctx, box)
+    _nav_ring(ctx, box, ctx.get_id(label))
     if shown:
         tw, th = ctx.draw.calc_text_size(shown)
         ctx.draw.add_text((box[0] + (box[2] - tw) * 0.5,
@@ -890,6 +902,7 @@ def checkbox(label: str, value: bool) -> tuple[bool, bool]:
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
     _frame_border(ctx, mark)
+    _nav_ring(ctx, box, ctx.get_id(label))
     if value:
         pad = height * 0.28
         ctx.draw.add_line((mark[0] + pad, mark[1] + height * 0.5),
@@ -927,6 +940,7 @@ def radio_button(label: str, active, value=None):
                                _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG))
     if active:
         ctx.draw.add_circle_filled(centre, height * 0.22, _col(Col.CHECK_MARK))
+    _nav_ring(ctx, box, ctx.get_id(label))
     if shown:
         ctx.draw.add_text((box[0] + height + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), shown)
@@ -1088,6 +1102,19 @@ def _slider(label, value, v_min, v_max, fmt, integral: bool, flags: int = 0):
                 raw = round_to_format(fmt, raw)
             value = raw
             changed = True
+        from .keys import KEY_LEFT, KEY_RIGHT  # noqa: PLC0415
+        if (ctx.is_nav_focused(item_id)
+                and ctx.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD
+                and not ctx.item_flags & ItemFlags.DISABLED
+                and ctx.io.key in (KEY_LEFT, KEY_RIGHT)):
+            step = 1.0 if integral else (hi - lo) / 100.0
+            new = max(lo, min(hi, value + (step if ctx.io.key == KEY_RIGHT else -step)))
+            changed = changed or new != value
+            value = new
+            key = ctx.io.key
+            ctx.io.key = 0
+            ctx.io.key_events[:] = [event for event in ctx.io.key_events if event[0] != key]
+            ctx.request_frame()
 
     value = int(value) if integral else float(value)
     if not (edit_changed or held):
@@ -1106,6 +1133,7 @@ def _slider(label, value, v_min, v_max, fmt, integral: bool, flags: int = 0):
     ctx.draw.add_rect_filled((grab_x, track[1]), (grab_x + grab_w, track[1] + track[3]),
                              _col(Col.SLIDER_GRAB_ACTIVE) if held else _col(Col.SLIDER_GRAB),
                              ctx.style.grab_rounding)
+    _nav_ring(ctx, track, item_id)
 
     ctx.draw.push_clip_rect((track[0], track[1]),
                             (track[0] + track[2], track[1] + track[3]))
@@ -1361,6 +1389,18 @@ def combo(label: str, current: int, items: Sequence[str],
     if picked is not None and 0 <= picked < len(items) and picked != current:
         current, changed = picked, True
     hovered, _held, pressed = ctx.button_behavior(frame, item_id)
+    from .keys import KEY_DOWN, KEY_UP  # noqa: PLC0415
+    if (ctx.is_nav_focused(item_id)
+            and ctx.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD
+            and not ctx.item_flags & ItemFlags.DISABLED
+            and ctx.io.key in (KEY_UP, KEY_DOWN) and items):
+        new = max(0, min(len(items) - 1, current + (1 if ctx.io.key == KEY_DOWN else -1)))
+        changed = changed or new != current
+        current = new
+        key = ctx.io.key
+        ctx.io.key = 0
+        ctx.io.key_events[:] = [event for event in ctx.io.key_events if event[0] != key]
+        ctx.request_frame()
     ctx.draw.add_rect_filled((frame[0], frame[1]), (frame[0] + frame_w, frame[1] + height),
                              _col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
@@ -1374,6 +1414,7 @@ def combo(label: str, current: int, items: Sequence[str],
     cy = frame[1] + height / 2.0
     ctx.draw.add_triangle_filled((ax, cy - arrow * 0.45), (ax + arrow * 1.2, cy - arrow * 0.45),
                                  (ax + arrow * 0.6, cy + arrow * 0.45), _col(Col.TEXT))
+    _nav_ring(ctx, frame, item_id)
     if visible:
         ctx.draw.add_text((frame[0] + frame_w + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), visible)
@@ -1631,7 +1672,7 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         width=_labelled_item_width(ctx, ctx.take_next_item_width(None), label_width))
     box = (total[0], total[1], max(1.0, total[2] - label_width), total[3])
     item_id = ctx.get_id(label)
-    hovered, _held, pressed = ctx.button_behavior(box, item_id)
+    hovered, _held, pressed = ctx.button_behavior(box, item_id, ButtonFlags.NO_NAV_ACTIVATE)
     focus = ctx.state(("focus",))
     # Focused on the *down* edge, so the same press places the caret (or
     # starts a drag-select) -- ButtonBehavior's press fires on the release.
@@ -1670,6 +1711,7 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         else (_col(Col.FRAME_BG_HOVERED) if hovered else _col(Col.FRAME_BG)),
         ctx.style.frame_rounding)
     _frame_border(ctx, box)
+    _nav_ring(ctx, box, item_id)
     display_value = "*" * len(value) if password else value
     shown = display_value if (value or not hint) else hint
     text_w = width(shown)
@@ -5496,21 +5538,6 @@ def nav_tab(shift: bool = False) -> None:
     get_current_context().nav_move(-1 if shift else 1)
 
 
-def process_nav_keys() -> None:
-    """Read Tab out of ``io`` and move the focus. Call once a frame.
-
-    Only when ``ConfigFlags.NAV_ENABLE_KEYBOARD`` is on, as the reference
-    gates it -- an application that wants the Tab key for itself keeps it.
-    """
-    from . import keys as _keys
-
-    ctx = get_current_context()
-    if not (ctx.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD):
-        return
-    if ctx.io.key == _keys.KEY_TAB:
-        ctx.nav_move(-1 if ctx.io.key_shift else 1)
-
-
 def get_nav_id():
     """Which item has the keyboard focus, or ``None``."""
     return get_current_context().nav_id
@@ -5675,7 +5702,7 @@ def end_docked() -> None:
 
 
 __all__ += [
-    "ConfigFlags", "BackendFlags", "nav_tab", "process_nav_keys", "get_nav_id",
+    "ConfigFlags", "BackendFlags", "nav_tab", "get_nav_id",
     "set_nav_id", "is_item_nav_focused", "get_nav_ring", "dock_space",
     "dock_space_over_viewport", "set_next_window_dock_id", "get_window_dock_id",
     "is_window_docked", "dock_builder_split_node", "dock_builder_dock_window",

@@ -781,7 +781,6 @@ _NAME_TO_MODULE: dict[str, str] = {
     "pop_style_color": "im",
     "pop_style_var": "im",
     "pop_text_wrap_pos": "im",
-    "process_nav_keys": "im",
     "progress_bar": "im",
     "push_clip_rect": "im",
     "push_font": "im",

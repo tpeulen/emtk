@@ -102,6 +102,8 @@ class ButtonFlags:
     REPEAT = 1 << 6                   # pressed again while held (needs ticks)
     ALLOW_OVERLAP = 1 << 7
     NO_HOLDING_ACTIVE_ID = 1 << 8
+    #: Text fields own Enter and Space rather than activating as buttons.
+    NO_NAV_ACTIVATE = 1 << 9
 
 
 @dataclass
@@ -151,7 +153,7 @@ class IO:
     #: order to be *testable* at all.
     wall_clock: bool = True
     #: ``io.ConfigFlags`` -- what the application asked for.
-    config_flags: int = 0
+    config_flags: int = field(default_factory=lambda: ConfigFlags.NAV_ENABLE_KEYBOARD)
     #: ``io.BackendFlags`` -- what the painter in hand can do. Filled in by
     #: the context each frame, so it is never a stale promise.
     backend_flags: int = 0
@@ -254,7 +256,8 @@ class Col:
     TAB_SELECTED = 26
     PLOT_LINES = 27
     PLOT_HISTOGRAM = 28
-    COUNT = 29
+    NAV_HIGHLIGHT = 29
+    COUNT = 30
 
 
 def _default_colors() -> dict[int, tuple]:
@@ -290,6 +293,7 @@ def _default_colors() -> dict[int, tuple]:
         Col.TAB_SELECTED: _style.TAB_SELECTED,
         Col.PLOT_LINES: _style.PLOT_LINES,
         Col.PLOT_HISTOGRAM: _style.PLOT_HISTOGRAM,
+        Col.NAV_HIGHLIGHT: _style.NAV_CURSOR,
     }
 
 
@@ -521,6 +525,7 @@ class Context:
         #: reference derives it the same way rather than keeping a second list.
         self.nav_id: Any = self.storage.get("__nav_id__")
         self.nav_ring: list = []
+        self._nav_windows: dict = {}
         self.nav_request = 0          # -1 back, +1 forward, 0 none
         self.nav_focus_next = False   # `SetKeyboardFocusHere`
         self.nav_visible = True
@@ -585,6 +590,14 @@ class Context:
             window.was_active, window.active = window.active, False
         self.hovered_window = self.find_hovered_window(*self.io.mouse_pos)
         self.layout.reset(*self.box)
+        # Navigation owns Tab before application code can spend the key.
+        from .keys import KEY_TAB  # noqa: PLC0415
+        if self.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD and self.io.key == KEY_TAB:
+            self.nav_move(-1 if self.io.key_shift else 1)
+            self.io.key = 0
+            self.io.key_events[:] = [event for event in self.io.key_events if event[0] != KEY_TAB]
+            self.io.text = self.io.text.replace("\t", "")
+            self.request_frame()
 
     def end_frame(self) -> None:
         """``ImGui::EndFrame``: move the focus, then spend the edges.
@@ -603,12 +616,21 @@ class Context:
         self.io.next_frame_in = (None if self.frame_due_at is None
                                  else max(self.frame_due_at - self.io.now, 0.0))
         if self.nav_request and self.nav_ring:
-            if self.nav_id in self.nav_ring:
-                at = self.nav_ring.index(self.nav_id) + self.nav_request
+            window = self._nav_windows.get(self.nav_id)
+            if self.nav_id not in self.nav_ring:
+                window = (self.hovered_window.name if self.hovered_window is not None
+                          else self._nav_windows[self.nav_ring[0]])
+            ring = [item for item in self.nav_ring if self._nav_windows[item] == window]
+            if not ring:
+                ring = self.nav_ring
+            if self.nav_id in ring:
+                at = ring.index(self.nav_id) + self.nav_request
             else:
-                at = 0 if self.nav_request > 0 else len(self.nav_ring) - 1
-            self.nav_id = self.nav_ring[at % len(self.nav_ring)]
+                at = 0 if self.nav_request > 0 else len(ring) - 1
+            self.nav_id = ring[at % len(ring)]
             self.storage["__nav_id__"] = self.nav_id
+            # Mouse text focus must not survive a move to another control.
+            self.state(("focus",)).pop("id", None)
         self.nav_request = 0
         # ImGui's ``ActiveIdIsAlive``: an active item that was not submitted
         # this frame is gone (a list entry that navigated away on its own
@@ -630,11 +652,13 @@ class Context:
     # -- keyboard navigation --------------------------------------------- #
     def nav_add(self, item_id: Any) -> None:
         """Put an item in the tab ring, and take focus if it was asked for."""
-        if self.item_flags & (ItemFlags.NO_NAV | ItemFlags.NO_TAB_STOP):
+        if self.item_flags & (ItemFlags.NO_NAV | ItemFlags.NO_TAB_STOP | ItemFlags.DISABLED):
             return
         if item_id is None or item_id in self.nav_ring:
             return
         self.nav_ring.append(item_id)
+        self._nav_windows[item_id] = (self.current_window.name
+                                     if self.current_window is not None else None)
         if self.nav_focus_next:
             self.nav_focus_next = False
             self.nav_id = item_id
@@ -942,6 +966,17 @@ class Context:
             button = 2
         hovered = self.item_add(box, item_id)
         pressed = False
+        from .keys import KEY_ENTER, KEY_RETURN, KEY_SPACE  # noqa: PLC0415
+        if (not flags & ButtonFlags.NO_NAV_ACTIVATE
+                and io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD
+                and self.is_nav_focused(item_id)
+                and io.key in (KEY_RETURN, KEY_ENTER, KEY_SPACE)):
+            key = io.key
+            pressed = True
+            io.key = 0
+            io.key_events[:] = [event for event in io.key_events if event[0] != key]
+            io.text = ""
+            self.request_frame()
         if hovered and io.mouse_clicked[button]:
             if flags & ButtonFlags.PRESSED_ON_CLICK:
                 pressed = True

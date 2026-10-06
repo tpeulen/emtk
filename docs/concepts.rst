@@ -34,7 +34,14 @@ On entry, the context ages the previous frame's state (last frame's hovered
 item becomes ``hovered_id_previous_frame``), finds the window under the
 pointer, and resets the layout cursor. On exit, it moves keyboard focus
 according to any ``Tab`` pressed during the frame and clears per-delivery
-input edges (``mouse_clicked``, ``mouse_released``).
+input edges (``mouse_clicked``, ``mouse_released``). Keyboard navigation is on
+by default: ``new_frame`` consumes Tab before application key handlers run;
+Shift+Tab moves backwards and the item order wraps. Set
+``io.config_flags &= ~emtk.ConfigFlags.NAV_ENABLE_KEYBOARD`` when an application
+needs to handle Tab itself. Focused buttons, checkboxes and radio buttons
+activate with Enter or Space; slider arrows step through the value range,
+combo Up/Down selects an item, and text inputs show a caret when reached by
+Tab. Each of these controls draws an inset ``Col.NAV_HIGHLIGHT`` focus ring.
 
 The host provides three things, and that is the whole contract:
 
