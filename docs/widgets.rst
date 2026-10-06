@@ -533,3 +533,16 @@ DrawList
         im.end()
 
     assert painter.fills
+
+View declaration vocabulary
+----------------------------
+
+``emtk.view_form.COMMON_KEYS`` and ``SECTION_KEYS`` describe the keys consumed
+by the immediate-mode form readers. ``TABLE_KEYS`` is the shared table's
+option vocabulary; ``VIEW_KEYS`` describes a form envelope. Client validators
+can combine these with their own loader or preprocessing contracts without
+copying a second toolkit key list. Type-specific keys stay scoped: a choice
+uses ``style`` rather than ``kind``, and an info field does not declare grid
+columns. ``tests/test_view_form_schema.py`` guards every literal section read
+in both form and view-spec readers so a new read cannot silently outrun the
+published dialect.

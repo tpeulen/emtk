@@ -94,6 +94,43 @@ __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_n
 #: Section types that hold other sections.
 _CONTAINERS = frozenset({"panel", "group", "box", "tab", "tabs", "row", "column"})
 
+#: The immediate-mode view dialect, declared beside its readers. Client schema
+#: builders may union legacy dataclass fields with these keys, but must keep
+#: type-specific keys scoped so misspellings do not become universally valid.
+COMMON_KEYS = frozenset({
+    "type", "_comment", "attr", "target", "key", "label", "title", "description",
+    "visible", "hidden_when", "width", "weight", "min_width", "min_chars",
+    "wrap_before", "wrap_indent", "elide",
+})
+_CONTAINER_KEYS = frozenset({"sections", "n_col", "collapsible", "collapsed"})
+_VALUE_KEYS = frozenset({
+    "kind", "minimum", "maximum", "decimals", "step", "special_text", "suffix",
+    "style", "read_only", "field", "spin", "placeholder", "lines", "call",
+})
+TABLE_KEYS = frozenset({
+    "source", "target", "columns_source", "columns", "selected_call", "selected_attr",
+    "activated_call", "activated_cell_call", "edited_call", "delete_call", "context_call",
+    "colour_source", "editable", "editable_call", "height", "expand", "reserve",
+    "expanded_attr", "muted_key", "status", "column_picker", "tree_key", "filter",
+    "tooltip_key", "row_key", "min_column_width", "fit_columns", "sort",
+})
+SECTION_KEYS: dict[str, frozenset[str]] = {
+    **{name: _CONTAINER_KEYS for name in _CONTAINERS},
+    "value": _VALUE_KEYS,
+    "choice": frozenset({"options", "choices", "options_source", "labels", "descriptions",
+                         "style", "filter", "call"}),
+    "toggle": frozenset({"call"}),
+    "toggle_row": frozenset({"items"}),
+    "button_row": frozenset({"buttons"}),
+    "progress": frozenset({"text_source"}),
+    "info": frozenset({"source", "text", "is_markdown", "is_html"}),
+    "custom": frozenset({"source", "options", "height", "read_only"}),
+    "table": TABLE_KEYS,
+}
+VIEW_KEYS = frozenset({"sections", "title", "model", "n_col", "hidden_when", "visible"})
+__all__ += ["COMMON_KEYS", "SECTION_KEYS", "TABLE_KEYS", "VIEW_KEYS"]
+
+
 
 class FormState:
     """What a form remembers between frames.
