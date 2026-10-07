@@ -162,7 +162,7 @@ class FormState:
         self.folds: dict[str, bool] = {}
         self.tabs: dict[tuple, str] = {}
         self._tab_rects: dict[tuple, dict[str, tuple]] = {}
-        self.custom: dict[str, Callable[[dict, Any, "FormState", float], None]] = {}
+        self.custom: dict[str, Callable[[dict, Any, FormState, float], None]] = {}
         self.buffers: dict[str, str] = {}
         self.rects: dict[str, tuple] = {}
         self.on_used = on_used
@@ -662,7 +662,6 @@ def _stepper(name: str, width: float) -> int:
     box = ctx.layout.row(height=height, width=width)
     x, y, w, h = box
     draw = _core.get_window_draw_list()
-    style = ctx.style
     delta = 0
     for sign, top in ((1, y), (-1, y + h / 2.0)):
         half = (x, top, w, h / 2.0)
@@ -1444,6 +1443,7 @@ def _draw_code_editor(section: dict, model: Any, state: FormState) -> None:
         height = max(height, float(avail_h))
     box = ctx.layout.row(height=height, width=float(avail_w))
     hovered = ctx.item_add(box, ctx.get_id(f"##code-editor-{name}"))
+    _tooltip(section)
     state.rects[name] = tuple(box)
     io = ctx.io
     px, py = io.mouse_pos
