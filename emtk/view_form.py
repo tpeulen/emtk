@@ -150,6 +150,8 @@ class FormState:
     folds : dict
         Whether each collapsible container is open, by title. Absent until the
         user folds it: the spec's ``collapsed`` decides until then.
+    tabs : dict
+        Selected page of each semantic tab bar, by its section path and identity.
     custom : dict
         ``key -> draw(section, model, state, width)`` for ``custom`` sections the
         host draws itself.
@@ -158,6 +160,8 @@ class FormState:
     def __init__(self, on_used: Callable[[str], None] | None = None) -> None:
         self.tables: dict[str, Any] = {}
         self.folds: dict[str, bool] = {}
+        self.tabs: dict[tuple, str] = {}
+        self._tab_rects: dict[tuple, dict[str, tuple]] = {}
         self.custom: dict[str, Callable[[dict, Any, "FormState", float], None]] = {}
         self.buffers: dict[str, str] = {}
         self.rects: dict[str, tuple] = {}
@@ -431,6 +435,19 @@ def _tooltip(section: dict) -> None:
         _w.set_item_tooltip(str(description))
 
 
+def _commit_value_buffer(section: dict, model: Any, state: FormState,
+                         shown_value: str, bounds: tuple) -> None:
+    """Finish a value edit using its normal parsing and callback contract."""
+    name = section_name(section)
+    if name not in state.buffers:
+        return
+    typed = state.buffers.pop(name)
+    if typed != shown_value:
+        parsed = parse_value(typed, section, bounds)
+        if parsed is not None:
+            _commit(model, section, parsed, state)
+
+
 def _draw_value(section: dict, model: Any, state: FormState, width: float) -> None:
     name = section_name(section)
     value = getattr(model, section.get("attr", ""), None) if section.get("attr") else None
@@ -495,11 +512,7 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     io = _core.get_io()
     clicked_away = io.mouse_clicked[0] and not _w.is_item_hovered()
     if name in state.buffers and (entered or clicked_away):
-        typed = state.buffers.pop(name)
-        if typed != shown_value:
-            parsed = parse_value(typed, section, bounds)
-            if parsed is not None:
-                _commit(model, section, parsed, state)
+        _commit_value_buffer(section, model, state, shown_value, bounds)
 
     if colour and name in state.pickers:
         changed, rgb = _w.color_picker3(f"##{name}.picker", _rgb(value))
@@ -1242,8 +1255,94 @@ def _draw_table_section(section: dict, model: Any, state: FormState) -> None:
     _remember(state, name)
 
 
+def _commit_tab_edits(sections: Sequence, model: Any, state: FormState,
+                      drawn: dict) -> None:
+    """Commit pending value fields from the page being left, without drawing it."""
+    for section in sections or ():
+        if not isinstance(section, dict) or _hidden(section, model):
+            continue
+        name = section_name(section)
+        if (section.get("type") == "value" and name in state.buffers
+                and (name in drawn or f"{name}.edit" in drawn)):
+            value = getattr(model, section.get("attr", ""), None)
+            _commit_value_buffer(section, model, state, format_value(value, section),
+                                 _bounds(model, section))
+            state.typing.discard(name)
+        _commit_tab_edits(section.get("sections") or (), model, state, drawn)
+
+
+def _draw_tabs(section: dict, model: Any, state: FormState, path: tuple,
+               titles: bool) -> None:
+    """Draw real tab headers first, then submit only the final selected page."""
+    from .i18n import tr
+
+    children = [(index, child) for index, child in enumerate(section.get("sections") or ())
+                if isinstance(child, dict) and not _hidden(child, model)]
+    name = section_name(section) or str(section.get("title") or repr(path))
+    identity = (path, name)
+    # Retire only this bar's previous targets. Other forms can share state.
+    drawn = state._tab_rects.pop(identity, {})
+    for target, box in drawn.items():
+        if state.rects.get(target) == box:
+            state.rects.pop(target, None)
+    if not children:
+        return
+    if section.get("collapsible"):
+        if not _fold(section, state):
+            return
+    elif titles and section.get("title"):
+        _w.text(tr(str(section["title"])))
+    before = dict(state.rects)
+    ctx = _core.get_current_context()
+    bar_id = repr(ctx.get_id(f"##form-tabs-{id(state)}-{identity!r}"))
+    labels = []
+    for index, child in children:
+        token = section_name(child) or str(child.get("title") or index)
+        title = str(child.get("title") or child.get("label") or token)
+        labels.append((index, child, token, _id(tr(title), token)))
+    store = ctx.state(("tabbar", bar_id))
+    ctx.push_id(bar_id)
+    item_ids = {token: ctx.get_id(label) for _, _, token, label in labels}
+    ctx.pop_id()
+    if store.get("selected") not in item_ids.values():
+        token = state.tabs.get(identity, labels[0][2])
+        store["selected"] = item_ids.get(token, item_ids[labels[0][2]])
+    previous = store["selected"]
+    if not _w.begin_tab_bar(bar_id):
+        return
+    try:
+        for _, child, token, label in labels:
+            active = _w.begin_tab_item(label)
+            _remember(state, f"{name}.{token}")
+            if child.get("description"):
+                _w.set_item_tooltip(tr(str(child["description"])))
+            if active:
+                _w.end_tab_item()
+        selected = next(row for row in labels if item_ids[row[2]] == store["selected"])
+        index, child, token, _ = selected
+        state.tabs[identity] = token
+        if previous != store["selected"]:
+            old_page = next((row[1] for row in labels if item_ids[row[2]] == previous), None)
+            if old_page is not None:
+                _commit_tab_edits(old_page.get("sections") or (), model, state, drawn)
+            state.used(f"{name}.{token}")
+        ctx.layout = ctx._tabbar_layouts[-1]["body"]
+        ctx.push_id(token)
+        try:
+            draw_sections(child.get("sections") or [], model, state,
+                          int(child.get("n_col") or 1), titles,
+                          bool(child.get("wrap_indent", True)), path + (index,))
+        finally:
+            ctx.pop_id()
+        state._tab_rects[identity] = {target: box for target, box in state.rects.items()
+                                     if before.get(target) != box}
+    finally:
+        _w.end_tab_bar()
+
+
 def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int = 1,
-                  titles: bool = True, indent_wraps: bool = True) -> None:
+                  titles: bool = True, indent_wraps: bool = True,
+                  _path: tuple = ()) -> None:
     """Draw a list of sections into the current window.
 
     Parameters
@@ -1261,6 +1360,8 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
     indent_wraps : bool
         Start a wrapped line under the first control rather than at the left
         edge (:func:`_draw_grid`); a container's ``wrap_indent`` sets it.
+    _path : tuple
+        Internal section path distinguishing nested tab bars.
     """
     leaves: list = []
 
@@ -1269,7 +1370,7 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             _draw_grid(list(leaves), model, state, n_col, indent_wraps)
             leaves.clear()
 
-    for section in sections or ():
+    for index, section in enumerate(sections or ()):
         if not isinstance(section, dict) or _hidden(section, model):
             continue
         kind = str(section.get("type", "")).lower()
@@ -1286,6 +1387,10 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
             flush()
             _draw_code_editor(section, model, state)
             continue
+        if kind == "tabs":
+            flush()
+            _draw_tabs(section, model, state, _path + (index,), titles)
+            continue
         if kind in _CONTAINERS or isinstance(section.get("sections"), list):
             flush()
             if section.get("collapsible"):
@@ -1295,7 +1400,7 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
                 _w.text(str(section["title"]))
             draw_sections(section.get("sections") or [], model, state,
                           int(section.get("n_col") or 1), titles,
-                          bool(section.get("wrap_indent", True)))
+                          bool(section.get("wrap_indent", True)), _path + (index,))
             continue
         leaves.append(section)
     flush()

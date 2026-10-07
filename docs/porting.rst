@@ -37,3 +37,21 @@ Mechanical auto-porting
 ``tools/autoport`` ports Dear ImGui C++ to emtk mechanically — the same
 rules a person applies, written down so they apply the same way every
 time. See ``README.md`` for the full account.
+
+AutoForm tab pages
+------------------
+
+A ``tabs`` section renders its child ``tab`` sections as native emtk headers.
+Only the selected page's ordinary AutoForm controls are drawn. Mouse clicks and
+keyboard focus followed by Enter or Space select a page; no host adapter is
+needed. ``FormState`` remembers the selected page when a host reopens the form.
+
+Give the bar and each page a stable ``key``. The header's guided-tour and test
+rectangle is ``<bar key>.<page key>`` (for example ``simulator.preview``); a
+missing key falls back to the section's title. Page ``description`` strings
+become header tooltips. Titles and descriptions are translated for display,
+while keys and model attributes stay unchanged. Field widget identities are
+scoped to their bar and page, and inactive pages retire their control targets.
+Leaving a page commits pending declared value fields through the normal parser,
+runtime bounds and callbacks before its replacement page is drawn. Custom
+sections own any nested form state and its pending edits themselves.
