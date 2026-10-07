@@ -573,6 +573,8 @@ class DataTable:
         """Hide or show one column, as the picker does. The last one stays."""
         if hidden and len([c for c in self.visible_columns() if c.key != key]) == 0:
             return
+        if (key in self.hidden) == bool(hidden):
+            return
         (self.hidden.add if hidden else self.hidden.discard)(key)
         self.first_column = 0
         self.changed()

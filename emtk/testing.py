@@ -384,6 +384,62 @@ class PixelPainter:
                            for i in range(4))
             self._fill(xx, y, 1, h, colour)
 
+    def box_has_colour(self, x, y, w, h, colour) -> bool:
+        """Whether every possibly touched pixel in a box is already opaque *colour*."""
+        import math
+
+        rgba = self._rgba(colour)
+        if rgba[3] != 255:
+            return False
+        cx, cy, cw, ch = self._clip()
+        left = max(0, cx, math.floor(x))
+        right = min(self.width, cx + cw, math.floor(x + w) + 1)
+        top = max(0, cy, math.floor(y))
+        bottom = min(self.height, cy + ch, math.floor(y + h) + 1)
+        if right <= left or bottom <= top:
+            return True
+        row = bytes(rgba) * (right - left)
+        for yy in range(top, bottom):
+            offset = (yy * self.width + left) * 4
+            if self.px[offset:offset + len(row)] != row:
+                return False
+        return True
+
+    def fill_convex(self, points, colour) -> None:
+        """Rasterize opaque convex spans; retain translucent fan compositing exactly."""
+        import math
+
+        vertices = list(points)
+        if len(vertices) < 3:
+            return
+        if self._rgba(colour)[3] != 255:
+            for index in range(1, len(vertices) - 1):
+                self.fill_triangle(vertices[0], vertices[index], vertices[index + 1], colour)
+            return
+        cx, cy, cw, ch = self._clip()
+        top = max(cy, math.floor(min(y for x, y in vertices)))
+        bottom = min(cy + ch, math.floor(max(y for x, y in vertices)) + 1)
+        edges = list(zip(vertices, vertices[1:] + vertices[:1]))
+        ox, oy = vertices[0]
+        area = sum((ax - ox) * (by - oy) - (ay - oy) * (bx - ox)
+                   for (ax, ay), (bx, by) in edges)
+        if area == 0.0:
+            return
+        for yy in range(top, bottom):
+            scan = yy + 0.5
+            cuts = []
+            for (ax, ay), (bx, by) in edges:
+                if ay == by:
+                    if scan == ay:
+                        cuts.extend((ax, bx))
+                elif min(ay, by) <= scan <= max(ay, by):
+                    cuts.append(ax + (scan - ay) * (bx - ax) / (by - ay))
+            if len(cuts) >= 2:
+                left = max(cx, math.ceil(min(cuts) - 0.5))
+                right = min(cx + cw, math.floor(max(cuts) - 0.5) + 1)
+                if right > left:
+                    self._fill(left, yy, right - left, 1, colour)
+
     def fill_triangle(self, p0, p1, p2, colour) -> None:
         (x0, y0), (x1, y1), (x2, y2) = p0, p1, p2
         minx = max(int(min(x0, x1, x2)), self._clip()[0])

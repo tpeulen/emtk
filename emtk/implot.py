@@ -3115,7 +3115,10 @@ def _apply_legacy_styles(spec: I.PlotSpec) -> None:
                 spec.marker_line_color = mfill
         if outline is not None:
             spec.marker_line_color = outline
-        if weight is not None and weight != I.IMPLOT_AUTO and weight > 0:
+        if weight == 0:
+            # Marker outline and plot line are separate style decisions.
+            spec.marker_line_color = (0, 0, 0, 0)
+        elif weight is not None and weight != I.IMPLOT_AUTO and weight > 0:
             spec.line_weight = float(weight)
 
 

@@ -414,3 +414,25 @@ Beta. The API is Dear ImGui's, so it is stable by construction; what moves is
 what has been implemented behind it. emtk grew inside
 [chimol](https://github.com/tpeulen/chimol), a molecular viewer, and was moved
 out once its own tests, examples and documentation stood on their own.
+
+
+## Dense scatter and stable column visibility (0.1.6)
+
+Qt marker rendering caches exact triangle commands in a bounded QPicture
+cache. Software rendering uses equivalent opaque spans and skips an opaque
+marker only when every conservatively covered pixel already has the same
+colour. Source coordinates, arrays and hover records remain available; alpha,
+clip, transform and DPI behavior are verified against the original primitives.
+An explicit zero marker weight suppresses the outline while automatic fill and
+visible legend colours remain correct.
+
+Repeated `DataTable.set_column_hidden` calls with unchanged membership preserve
+horizontal scrolling, selection and revision. Real visibility changes still
+reset the cursor and emit one change notification; the last visible column
+stays visible.
+
+65 focused renderer/painter/plot/visibility tests pass. The measured FCS scene
+retains 183,657 source photons and plots its existing 183,648 positive delta-time
+points. The original ready-to-PNG capture took 41.81 seconds; final draw timings
+are 4.44 seconds in Qt and 7.08 seconds in software. These timings have different
+start/end scopes; source and selection hashes are identical.

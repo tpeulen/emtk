@@ -19,7 +19,7 @@ class OffsetPainter:
     def __getattr__(self, name):
         operation = getattr(self.painter, name)
         if name in {"fill_rect", "stroke_rect", "gradient_rect", "text",
-                    "push_clip", "image"}:
+                    "push_clip", "image", "marker", "box_has_colour"}:
             def rectangle(x, y, *args, **kwargs):
                 return operation(x + self.x, y + self.y, *args, **kwargs)
             return rectangle

@@ -664,6 +664,58 @@ class QtPainter:
         finally:
             self._p.restore()
 
+    def marker(self, x, y, fill_shape, line_shape, fill, outline, radius, weight) -> None:
+        """Replay the exact triangle glyph in Qt, avoiding per-sample Python paths.
+
+        QPicture retains the original primitives and their order, including
+        translucent overlaps. Position is never quantized or used as a cache key.
+        """
+        from qtpy import QtCore, QtGui
+
+        from .painter import line
+
+        cache = getattr(self, "_marker_cache", None)
+        if cache is None:
+            cache = self._marker_cache = {}
+        key = (tuple(fill_shape or ()), tuple(line_shape or ()),
+               tuple(fill) if fill is not None else None,
+               tuple(outline) if outline is not None else None, radius, weight,
+               int(self._p.renderHints()), self._p.opacity(), int(self._p.compositionMode()))
+        picture = cache.get(key)
+        if picture is None:
+            picture = QtGui.QPicture()
+            recorder = QtGui.QPainter(picture)
+            recorder.setRenderHints(self._p.renderHints())
+            recorder.setOpacity(self._p.opacity())
+            recorder.setCompositionMode(self._p.compositionMode())
+            target = QtPainter(recorder, font_pt=self.font_pt)
+            try:
+                if fill_shape:
+                    points = [(mx * radius, my * radius) for mx, my in fill_shape]
+                    for index in range(1, len(points) - 1):
+                        target.fill_triangle(points[0], points[index], points[index + 1], fill)
+                if line_shape:
+                    for index in range(0, len(line_shape), 2):
+                        a, b = line_shape[index], line_shape[index + 1]
+                        line(target, a[0] * radius, a[1] * radius,
+                             b[0] * radius, b[1] * radius, weight, outline)
+            finally:
+                recorder.end()
+            if len(cache) >= 64:
+                cache.pop(next(iter(cache)))
+            cache[key] = picture
+        self._p.save()
+        try:
+            # QPicture playback rescales for document DPI. These vertices already
+            # use the caller's logical coordinates, so cancel only that correction.
+            self._p.translate(x, y)
+            device = self._p.device()
+            self._p.scale(picture.logicalDpiX() / device.logicalDpiX(),
+                          picture.logicalDpiY() / device.logicalDpiY())
+            picture.play(self._p)
+        finally:
+            self._p.restore()
+
     def fill_triangle(
         self,
         p0: tuple[float, float],

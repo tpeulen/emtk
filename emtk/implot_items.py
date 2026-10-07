@@ -650,11 +650,27 @@ def render_markers(pts, marker: int, rend_fill: bool, fill, rend_line: bool, lin
     line_list = isinstance(line, list)
     size_list = isinstance(size, (list, tuple))
     hw = _weight(weight)
+    glyph = getattr(p, "marker", None) if marker == I.MARKER_CIRCLE else None
+    covered = getattr(p, "box_has_colour", None) if marker == I.MARKER_CIRCLE else None
     for i, (x, y) in enumerate(pts):
         px, py = t(x, y)
         if not (px >= cull[0] and py >= cull[1] and px <= cull[2] and py <= cull[3]):
             continue
         r = float(size[i]) if size_list else float(size)
+        fc = (fill[i] if fill_list else fill) if fill_shape is not None else None
+        lc = (line[i] if line_list else line) if line_shape is not None else None
+        solid = fc if fc is not None else lc
+        if fc is not None and lc is not None and fc != lc:
+            solid = None
+        if callable(covered) and solid is not None and I.rgba(solid)[3] == 255:
+            extent = abs(r) + (hw * 0.5 if line_shape is not None else 0.0)
+            # The backend inspects actual clipped pixels, not rounded centres.
+            # Only a bounding box already painted identically can be skipped.
+            if covered(px - extent, py - extent, extent * 2, extent * 2, solid):
+                continue
+        if callable(glyph):
+            glyph(px, py, fill_shape, line_shape, fc, lc, r, hw)
+            continue
         if fill_shape is not None:
             _fill_convex(p, [(px + mx * r, py + my * r) for mx, my in fill_shape],
                          fill[i] if fill_list else fill)
@@ -794,7 +810,15 @@ def plot_line_g(label_id: str, getter, data, count: int, spec=None, **kw) -> Non
 # --------------------------------------------------------------------------- #
 def _plot_scatter_ex(label_id, pts, spec) -> None:
     marker = I.MARKER_AUTO if spec.marker == I.MARKER_NONE else spec.marker
-    if begin_item_ex(label_id, _fitter1(pts), spec, spec.marker_line_color, marker):
+    colour = spec.marker_line_color
+    outline = I.rgba(colour)
+    if outline is not None and outline[3] == 0:
+        fill = I.rgba(spec.marker_fill_color)
+        if fill is None:
+            colour = spec.line_color  # automatic series colour still supplies the fill
+        elif fill[3] > 0:
+            colour = spec.marker_fill_color
+    if begin_item_ex(label_id, _fitter1(pts), spec, colour, marker):
         if len(pts) <= 0:
             end_item()
             return
