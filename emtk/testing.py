@@ -427,7 +427,7 @@ class PixelPainter:
             return
         for yy in range(top, bottom):
             scan = yy + 0.5
-            cuts = []
+            cuts: list[float] = []
             for (ax, ay), (bx, by) in edges:
                 if ay == by:
                     if scan == ay:
@@ -715,11 +715,12 @@ class PixelPainter:
         u0, v0 = uv0
         du, dv = (uv1[0] - u0), (uv1[1] - v0)
         span_x, span_y = max(x1 - x0, 1), max(y1 - y0, 1)
-        for py in range(max(y0, 0), min(y1, self.height)):
+        cx, cy, cw, ch = self._clip()
+        for py in range(max(y0, cy), min(y1, cy + ch)):
             v = v0 + dv * ((py - y0) + 0.5) / span_y
             sy = min(max(int(v * tex.height), 0), tex.height - 1)
             row = sy * tex.width
-            for px in range(max(x0, 0), min(x1, self.width)):
+            for px in range(max(x0, cx), min(x1, cx + cw)):
                 u = u0 + du * ((px - x0) + 0.5) / span_x
                 sx = min(max(int(u * tex.width), 0), tex.width - 1)
                 si = (row + sx) * 4
