@@ -290,7 +290,10 @@ The panel retains the group selector and setting search above the fields.
 Descriptions are hover tooltips. Tables retain filtering, sorting, selection
 callbacks and source refresh, with expanding tables sharing the remaining
 height. Pointer and keyboard events are applied on the next ``draw``, following
-the usual ``ImApp`` contract. ``item_rects`` exposes the current named controls
+the usual ``ImApp`` contract. Table cell editors and filters preserve the
+host-normalized keyboard modifiers: Ctrl+A (Command+A on macOS) selects all,
+and typing replaces the selection. Enter commits a cell; Escape cancels it.
+``item_rects`` exposes the current named controls
 for tours and ``emtk.testing.Driver``. ``visible_rows`` remains accepted by the
 constructor; the form now scrolls with its window instead of limiting its rows.
 

@@ -436,3 +436,10 @@ retains 183,657 source photons and plots its existing 183,648 positive delta-tim
 points. The original ready-to-PNG capture took 41.81 seconds; final draw timings
 are 4.44 seconds in Qt and 7.08 seconds in software. These timings have different
 start/end scopes; source and selection hashes are identical.
+
+## Table editing shortcuts (0.1.7)
+
+Editable table cells and filters support the same text shortcuts as other
+fields. Ctrl+A (Command+A on macOS) selects the whole value; typing replaces
+it. Enter commits a cell, Escape cancels it, and copy/paste and Shift-arrow
+selection preserve the host's keyboard conventions.

@@ -132,6 +132,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from .. import style as _style
+from ..events import SHIFT_MODIFIER
 from ..keys import (
     KEY_BACKSPACE,
     KEY_DELETE,
@@ -149,9 +150,9 @@ from ..keys import (
 )
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 from ..style import fit_text
-from ..events import SHIFT_MODIFIER
 from .basic import ScrollBar, TextInput
-from .text_field import index_at, paint as paint_field
+from .text_field import TextField, index_at
+from .text_field import paint as paint_field
 
 __all__ = [
     "BAR_COLOUR",
@@ -232,7 +233,7 @@ class TableColumn:
     background: Optional[dict] = None
 
     @classmethod
-    def from_spec(cls, spec: Mapping, editable: bool = False) -> "TableColumn":
+    def from_spec(cls, spec: Mapping, editable: bool = False) -> TableColumn:
         """Read either dialect's column mapping."""
         key = str(spec.get("key", ""))
         title = spec.get("title", spec.get("label", "")) or key
@@ -500,7 +501,7 @@ class DataTable:
         #: draw: a click there places the caret, a drag selects.
         self._editor_xs: list = []
         self._filter_xs: list = []
-        self._field_drag = None
+        self._field_drag: Optional[tuple[TextField, list[float]]] = None
         self.show_filter = bool(filter_box)
         self.tooltip_key = str(tooltip_key or "")
         self.row_key = str(row_key or "")
@@ -653,7 +654,7 @@ class DataTable:
                     keep.add(i)
         rank = {i: n for n, i in enumerate(kept)}
         children: dict = {}
-        roots = []
+        roots: list[int] = []
         for i in sorted(keep, key=lambda i: (rank.get(i, len(rank)), i)):
             (children.setdefault(parent_of[i], []) if i in parent_of else roots).append(i)
         out: list[int] = []
@@ -780,6 +781,7 @@ class DataTable:
             column = self.column_at(x)
             full = self._elided.get((index, column.key)) if column is not None else None
             if full:
+                assert column is not None
                 return (full, ("cell", index, column.key))
             if self.tooltip_key:
                 note = str(self.value(index, self.tooltip_key) or "")
@@ -1046,6 +1048,7 @@ class DataTable:
     def _draw_row(self, p: Painter, position: int, index: int, columns, order, x: float,
                   y: float, h: float) -> None:
         key = self.key_of(index)
+        background: tuple[int, int, int, int] | None
         if (self.selected_key is not None and key == self.selected_key) \
                 or key in self.also_selected:
             background = _style.ROW_SEL
@@ -1109,6 +1112,7 @@ class DataTable:
 
     def _draw_hbar(self, p: Painter, widths: Sequence[float], list_w: float) -> None:
         """The sideways scrollbar: the thumb covers the columns in view."""
+        assert self._hbar_box is not None
         bx, by, bw, bh = self._hbar_box
         p.fill_rect(bx, by, bw, bh, _style.TABLE_ROW_BG_ALT)
         total = max(sum(widths), 1.0)
@@ -1119,6 +1123,7 @@ class DataTable:
                     _style.CHECK_MARK if self._hbar_held else _style.DIM)
 
     def _hbar_to(self, x: float) -> None:
+        assert self._hbar_box is not None
         bx, _by, bw, _bh = self._hbar_box
         count = len(self.visible_columns())
         fraction = min(max((x - bx) / max(bw, 1e-6), 0.0), 1.0)
@@ -1707,7 +1712,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         control.release()
     if io.key or io.text:
         if hovered or control.filter_focused or control.editing is not None:
-            control.key(int(io.key), io.text, 0)
+            control.key(int(io.key), io.text, widgets._current_modifiers(io))
     _column_picker(control, name)
     control.draw(ctx.p, *box)
     if hovered:
