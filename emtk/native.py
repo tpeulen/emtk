@@ -731,11 +731,14 @@ class NativeHost:
         if canvas is None:
             if size is None:
                 size = getattr(app, "window_size", None)
-                if size is None:
-                    size = getattr(app, "preferred_size", None)
                 if callable(size):
                     size = size()
-                if size is None:
+                try:
+                    if isinstance(size, (str, bytes, dict)):
+                        raise TypeError("window_size must be a width/height pair")
+                    width, height = int(size[0]), int(size[1])
+                    size = (width, height) if width > 0 and height > 0 else DEFAULT_WINDOW_SIZE
+                except (TypeError, ValueError, OverflowError, IndexError):
                     size = DEFAULT_WINDOW_SIZE
             module = canvas_module(backend)
             self._loop = getattr(module, "loop", None)
@@ -903,7 +906,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         width, _, height = str(args.size).partition("x")
         size = (int(width), int(height or width))
     else:
-        size = getattr(app, "window_size", None) or DEFAULT_WINDOW_SIZE
+        size = None  # NativeHost resolves the canonical saved/default size, including callables.
     backend = "offscreen" if args.screenshot else args.backend
     host = NativeHost(app, size=size,
                       title=args.title or args.app, backend=backend)

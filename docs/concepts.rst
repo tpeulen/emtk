@@ -126,6 +126,12 @@ clip. Setting either size to zero disables that effect. ``stroke_rect`` accepts
 ``width=`` on every shipped painter; ``ScaledPainter`` scales it with geometry.
 
 Hosts honor ``control.window_size`` and optional ``control.window_pos``.
+The size is a width/height pair or a callable returning one. Both Qt and
+native hosts use this same declaration; ``preferred_size`` is no longer read.
+Missing, malformed, nonfinite or nonpositive sizes use the host default.
+Qt clamps initial dimensions to the available display. An explicit native
+``--size`` overrides the declaration; without it the host resolves the
+application size, including saved geometry restored by the application.
 Qt reports moves through ``window_moved(x, y)``. The native GLFW backend
 reports and restores position when its window APIs are available; offscreen
 and other backends omit position support. ``window_screen_changed(rect)``

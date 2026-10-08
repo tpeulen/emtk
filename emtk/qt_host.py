@@ -190,19 +190,21 @@ def host_class():
         def window_size_hint(self) -> tuple[int, int]:
             """The size a stand-alone window for this control opens at.
 
-            The control's own ``preferred_size`` (a ``(w, h)`` pair, or a
+            The control's own ``window_size`` (a ``(w, h)`` pair, or a
             callable returning one) wins; otherwise :data:`DEFAULT_WINDOW_SIZE`.
             Either is clamped to 92 % of the screen the window opens on, so a
             large default never opens taller than the display.
             """
             wanted = getattr(self.control, "window_size", None)
-            if wanted is None:
-                wanted = getattr(self.control, "preferred_size", None)
             if callable(wanted):
                 wanted = wanted()
             try:
+                if isinstance(wanted, (str, bytes, dict)):
+                    raise TypeError("window_size must be a width/height pair")
                 width, height = (int(wanted[0]), int(wanted[1]))
-            except (TypeError, ValueError, IndexError):
+                if width <= 0 or height <= 0:
+                    width, height = DEFAULT_WINDOW_SIZE
+            except (TypeError, ValueError, OverflowError, IndexError):
                 width, height = DEFAULT_WINDOW_SIZE
             screen = QtGui.QGuiApplication.primaryScreen()
             if screen is not None:

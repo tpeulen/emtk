@@ -232,7 +232,7 @@ def test_a_control_names_its_own_window_size(qt_app):
     from emtk.qt_host import ControlHost
 
     control = _Ticker(frames_wanted=0)
-    control.preferred_size = (700, 500)
+    control.window_size = (700, 500)
     host = ControlHost(control)
     assert (host.width(), host.height()) == (700, 500)
 
@@ -243,11 +243,57 @@ def test_an_embedded_host_is_left_to_its_layout(qt_app):
     from emtk.qt_host import ControlHost
 
     parent = QtWidgets.QWidget()
-    host = ControlHost(_Ticker(frames_wanted=0), parent=parent)
+    control = _Ticker(frames_wanted=0)
+    control.window_size = (700, 500)
+    host = ControlHost(control, parent=parent)
     from emtk.qt_host import DEFAULT_WINDOW_SIZE
 
     assert (host.width(), host.height()) != DEFAULT_WINDOW_SIZE
+    assert (host.width(), host.height()) != control.window_size
     parent.close()
+
+
+def test_window_size_hint_ignores_preferred_size_and_accepts_a_callable(qt_app):
+    """Only the canonical window_size contract chooses a top-level host's size."""
+    from emtk.qt_host import ControlHost
+
+    default = ControlHost(_Ticker(0))
+    expected = default.window_size_hint()
+    default.close()
+    control = _Ticker(0)
+    control.preferred_size = (700, 500)
+    host = ControlHost(control)
+    try:
+        assert host.window_size_hint() == expected
+        control.window_size = lambda: (700, 500)
+        assert host.window_size_hint() == (700, 500)
+    finally:
+        host.close()
+
+
+def test_invalid_declared_window_sizes_use_the_usable_default(qt_app):
+    """Malformed or nonpositive persisted dimensions cannot hide or crash a window."""
+    from emtk.qt_host import ControlHost
+
+    control = _Ticker(0)
+    host = ControlHost(control)
+    expected = host.window_size_hint()
+    try:
+        for invalid in (
+            None,
+            "1234",
+            {"width": 700, "height": 500},
+            ("bad", 400),
+            (500,),
+            (float("nan"), 400),
+            (float("inf"), 400),
+            (-1, 400),
+            (500, 0),
+        ):
+            control.window_size = invalid
+            assert host.window_size_hint() == expected, invalid
+    finally:
+        host.close()
 
 
 def test_an_on_paths_dropped_control_takes_drops(qt_app, tmp_path):
