@@ -63,6 +63,7 @@ smearing text off the pixel grid one row at a time.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil, floor
 
 from .painter import Painter
 
@@ -350,9 +351,14 @@ class Layout:
         self._prev_line_x = self._cursor_x + float(width)
         self._prev_line_y = line_y1
         self._cursor_x = _trunc(self.x + self._indent + self._columns_offset)
-        self._cursor_y = _trunc(line_y1 + line_height + self.style.item_spacing_y)
+        # Scrolled rows can have negative screen coordinates. Floor keeps the
+        # same pixel pitch on either side of zero; truncation adds a pixel to
+        # each negative fractional row and changes the child's scroll range.
+        self._cursor_y = float(floor(line_y1 + line_height + self.style.item_spacing_y))
         self._max_x = max(self._max_x, self._prev_line_x)
-        self._max_y = max(self._max_y, self._cursor_y - self.style.item_spacing_y)
+        # The last item occupies its final fractional pixel even though the
+        # next cursor is snapped. Include that pixel, without trailing spacing.
+        self._max_y = max(self._max_y, float(ceil(line_y1 + line_height)))
 
         self._prev_line_h = line_height
         self._curr_line_h = 0.0

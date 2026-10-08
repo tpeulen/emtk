@@ -189,3 +189,11 @@ AutoForm commits that value once, with unchanged repeated submission producing
 no extra model callback. Escape discards a pending single-line buffer and restores
 the model value on redraw. Numeric emptiness and read-only fields retain their
 existing validation behavior.
+
+Fractional row extents in scrolling panels
+-----------------------------------------
+
+Vertical row cursors use the same pixel pitch above and below zero. Content
+extents include the final occupied fractional pixel without trailing spacing.
+This lets the last control scroll fully into view while keeping content height
+and maximum scroll stable; an expanding child does not grow with each scroll.
