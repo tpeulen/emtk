@@ -41,6 +41,15 @@ class RecordingPainter:
         self.stroke_widths: list[float] = []
         self.strings: list[str] = []
         self.texts: list[tuple] = []
+        #: Parallel to texts, with the same eight fields. Bounds describe the
+        #: aligned glyph advances intersected with every active clip; fully
+        #: hidden/blank text has zero width and height. A submitted text box
+        #: controls alignment, not clipping: overflowing glyphs stay visible.
+        #: These are logical font bounds, not rasterized antialiased ink.
+        self.visible_texts: list[tuple] = []
+        #: Per-text metrics and clip snapshots, retained even after font/clip
+        #: state changes. Original texts, strings and calls remain unchanged.
+        self.text_metadata: list[dict] = []
         self.clips: list[tuple] = []
         self.triangles: list[tuple] = []
         #: ``gradient_triangle`` and ``image_triangle``, the optional
@@ -77,6 +86,73 @@ class RecordingPainter:
         self.strings.append(string)
         self.texts.append((x, y, w, h, align, string, colour, bold))
         self.calls.append(("text", x, y, w, h, align, string, colour, bold))
+        self._record_visible_text(x, y, w, h, align, string, colour, bold)
+
+    def _record_visible_text(self, x, y, w, h, align, string, colour, bold) -> None:
+        """Measure glyph advances now, before subsequent draws change font or clip state."""
+        actual_font = self._font_spec
+        measure = self.text_width
+        line_height = self.line_height()
+        if actual_font is not None:
+            from .font_render import FontSpec, text_width
+            from .font_render import line_height as font_height
+
+            actual_font = FontSpec(
+                actual_font.family, actual_font.size, actual_font.bold or bold, actual_font.italic
+            )
+
+            def selected_width(text):
+                """Measure the selected face, including this draw's bold style."""
+                return text_width(actual_font, text, self._font_scale)
+
+            measure = selected_width
+            line_height = font_height(actual_font, self._font_scale)
+        lines = string.split("\n")
+        block_height = line_height * len(lines)
+        top = y + (h - block_height) * 0.5 if align & ALIGN_VCENTER else y
+        bounds = []
+        for index, line in enumerate(lines):
+            span = measure(line)
+            left = (
+                x + w - span
+                if align & ALIGN_RIGHT
+                else x + (w - span) * 0.5
+                if align & ALIGN_HCENTER
+                else x
+            )
+            shown = line.strip()
+            if shown:
+                prefix = line[: len(line) - len(line.lstrip())]
+                bounds.append(
+                    (left + measure(prefix), top + index * line_height, measure(shown), line_height)
+                )
+        if bounds:
+            left = min(box[0] for box in bounds)
+            upper = min(box[1] for box in bounds)
+            right = max(box[0] + box[2] for box in bounds)
+            lower = max(box[1] + box[3] for box in bounds)
+            measured = (left, upper, right - left, lower - upper)
+        else:
+            measured = (x, top, 0.0, 0.0)
+            left, upper, right, lower = x, top, x, top
+        for cx, cy, cw, ch in self.clips:
+            left, upper = max(left, cx), max(upper, cy)
+            right, lower = min(right, cx + max(cw, 0)), min(lower, cy + max(ch, 0))
+        hidden = right <= left or lower <= upper or (len(colour) > 3 and colour[3] == 0)
+        visible = (left, upper, 0.0, 0.0) if hidden else (left, upper, right - left, lower - upper)
+        self.visible_texts.append((*visible, align, string, colour, bold))
+        self.text_metadata.append(
+            {
+                "measured_bounds": measured,
+                "visible_bounds": visible,
+                "text_box": (x, y, w, h),
+                "clips": tuple(self.clips),
+                "font_spec": actual_font,
+                "font_scale": self._font_scale,
+                "font_size_ratio": self._font_size_ratio,
+                "line_height": line_height,
+            }
+        )
 
     def fill_triangle(self, p0, p1, p2, colour) -> None:
         """Record a filled triangle."""

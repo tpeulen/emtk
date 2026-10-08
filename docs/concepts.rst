@@ -159,3 +159,14 @@ extents; a saved destination transform supplies the reflection. This matches
 the software painter's corner orientation. Tint multiplies RGB channels and
 alpha without mutating the texture, and opacity composes with the caller's
 painter state. Clipping, transforms and render hints are restored after drawing.
+
+Recorded visible text bounds
+----------------------------
+
+``RecordingPainter.visible_texts`` parallels ``texts`` with the same eight
+fields. Its rectangles describe aligned logical font advances intersected
+with active clips, measured with the font and scale selected at each draw.
+Fully clipped text has zero area. The text's alignment box is recorded in
+``text_metadata``; it is not an implicit clip and cannot conceal real overflow.
+Existing text, string and operation records retain their shape. Bounds are
+logical advances, so actual screenshots remain necessary to inspect raster ink.
