@@ -436,19 +436,31 @@ class QtPainter:
             return
 
         img = self._qimage(handle, handle.width, handle.height)
-
-        src = QtCore.QRectF(uv0[0] * handle.width, uv0[1] * handle.height,
-                            (uv1[0] - uv0[0]) * handle.width,
-                            (uv1[1] - uv0[1]) * handle.height)
+        colour = (list(tint) + [255])[:4]
+        if tuple(colour[:3]) != (255, 255, 255):
+            pixels = bytearray(handle.px)
+            for channel, factor in enumerate(colour[:3]):
+                pixels[channel::4] = pixels[channel::4].translate(
+                    bytes(value * factor // 255 for value in range(256)))
+            img = QtGui.QImage(bytes(pixels), handle.width, handle.height,
+                              handle.width * 4, QtGui.QImage.Format_RGBA8888)
+        flip_x, flip_y = uv1[0] < uv0[0], uv1[1] < uv0[1]
+        # QPainter does not interpret a negative source extent as a UV flip.
+        # Keep its source positive and reverse the destination transform.
+        src = QtCore.QRectF(min(uv0[0], uv1[0]) * handle.width,
+                           min(uv0[1], uv1[1]) * handle.height,
+                           abs(uv1[0] - uv0[0]) * handle.width,
+                           abs(uv1[1] - uv0[1]) * handle.height)
         painter = self._p
         painter.save()
         try:
-            if tuple(tint)[:3] != (255, 255, 255):
-                painter.setOpacity((list(tint) + [255])[3] / 255.0)
+            painter.setOpacity(painter.opacity() * colour[3] / 255.0)
+            painter.translate(x + (w if flip_x else 0), y + (h if flip_y else 0))
+            painter.scale(-1 if flip_x else 1, -1 if flip_y else 1)
             # nearest neighbour: a scientific image scaled up should show its
             # pixels rather than a smooth guess between them
             painter.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, False)
-            painter.drawImage(self._rect(x, y, w, h), img, src)
+            painter.drawImage(self._rect(0, 0, w, h), img, src)
         finally:
             painter.restore()
 

@@ -149,3 +149,13 @@ level. Explicit custom labels remain visible as requested, even when they
 overlap each other. Suppressing an automatic label leaves tick positions,
 grid lines, data transforms and fitting ranges unchanged. This applies to
 horizontal, vertical and inverted axes in narrow views.
+
+Scientific image orientation
+----------------------------
+
+Qt image painting supports reversed UV coordinates for horizontal and vertical
+reflections, including cropped images. Source rectangles retain positive
+extents; a saved destination transform supplies the reflection. This matches
+the software painter's corner orientation. Tint multiplies RGB channels and
+alpha without mutating the texture, and opacity composes with the caller's
+painter state. Clipping, transforms and render hints are restored after drawing.
