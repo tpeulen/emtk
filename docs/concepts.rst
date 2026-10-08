@@ -139,3 +139,13 @@ lets clients validate saved coordinates against the primary work area.
 Closing a Qt host calls the app's ``close()`` once, releasing workers and
 persisting state. Text and navigation input schedule a frame even before a
 control has acquired keyboard focus.
+
+Automatic plot labels
+---------------------
+
+Plot axes fit automatic labels to their final measured and edge-clamped
+bounds. Major labels take precedence over minor labels on each independent
+level. Explicit custom labels remain visible as requested, even when they
+overlap each other. Suppressing an automatic label leaves tick positions,
+grid lines, data transforms and fitting ranges unchanged. This applies to
+horizontal, vertical and inverted axes in narrow views.

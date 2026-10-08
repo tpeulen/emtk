@@ -67,7 +67,8 @@ from . import im_widgets as _w
 from . import implot_internal as I
 from . import implot_items as _items
 from .implot_internal import *  # noqa: F401,F403  (the enumerations)
-from .implot_internal import gp, has_flag, rgba as _rgba
+from .implot_internal import gp, has_flag
+from .implot_internal import rgba as _rgba
 from .implot_items import *  # noqa: F401,F403  (the items)
 from .painter import line as _line
 
@@ -1234,6 +1235,7 @@ def _render_background(plot) -> None:
             for tk in axis.ticker.ticks:
                 tk.pixel_pos = float(round(axis.plot_to_pixels(tk.plot_pos))) \
                     if math.isfinite(axis.plot_to_pixels(tk.plot_pos)) else -1e9
+            _space_tick_labels(axis, plot.plot_rect, plot.frame_rect)
     for i in range(I.NUM_X_AXES):
         ax = plot.x_axis(i)
         if ax.enabled and ax.has_grid_lines() and not ax.is_foreground():
@@ -1288,6 +1290,35 @@ def _render_background(plot) -> None:
                     _add_text((datum, _inside(tk.pixel_pos - 0.5 * tk.label_size[1],
                                               tk.label_size[1], fr[1], fr[3])),
                               ax.color_txt, tk.text)
+
+
+def _space_tick_labels(axis, plot_rect, frame_rect) -> None:
+    """Fit automatic labels to their final measured bounds, retaining custom ticks.
+
+    The locator estimates density before the final transform and edge clamp.
+    Those estimates cannot guarantee that adjacent labels fit. Reserve the
+    caller's explicit labels first, then major labels, then minor labels on
+    each independent level. Tick positions and grid lines are left untouched.
+    """
+    dim = 1 if axis.vertical else 0
+    lo, hi = plot_rect[dim], plot_rect[dim + 2]
+    flo, fhi = frame_rect[dim], frame_rect[dim + 2]
+    custom = getattr(axis, "custom_ticks", None)
+    custom_count = len(custom[0]) if custom is not None else 0
+    candidates = []
+    for i, tick in enumerate(axis.ticker.ticks):
+        if not tick.show_label or not tick.text or not lo - 1 <= tick.pixel_pos <= hi + 1:
+            continue
+        size = tick.label_size[dim]
+        start = _inside(tick.pixel_pos - size * 0.5, size, flo, fhi)
+        candidates.append((i >= custom_count, not tick.major, start, start + size, tick))
+    occupied = {}
+    for automatic, _minor, start, end, tick in sorted(candidates, key=lambda item: item[:3]):
+        intervals = occupied.setdefault(tick.level, [])
+        if automatic and any(start < right + 1.0 and end > left - 1.0 for left, right in intervals):
+            tick.show_label = False
+        else:
+            intervals.append((start, end))
 
 
 def _inside(start: float, size: float, lo: float, hi: float) -> float:
