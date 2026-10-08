@@ -180,3 +180,12 @@ It updates the Reset declaration as well. Restored or user-customized layouts
 retain precedence; empty restore metadata remains fresh. Validation failures
 leave the tree, windows, defaults and store untouched. The caller's tree is
 copied, and visibility, callbacks, floating boxes and selected windows survive.
+
+Text commit and cancellation
+----------------------------
+
+An Enter-returning text input reports submission even when its value is empty.
+AutoForm commits that value once, with unchanged repeated submission producing
+no extra model callback. Escape discards a pending single-line buffer and restores
+the model value on redraw. Numeric emptiness and read-only fields retain their
+existing validation behavior.

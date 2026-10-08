@@ -1702,7 +1702,7 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     changed = field.text != value
     value = field.text
     if enter_returns:
-        changed = focused and entered and bool(value)
+        changed = focused and entered
     st["seen"] = value
 
     ctx.draw.add_rect_filled(

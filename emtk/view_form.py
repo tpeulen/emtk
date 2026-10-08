@@ -521,7 +521,9 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         state.buffers[name] = text
     io = _core.get_io()
     clicked_away = io.mouse_clicked[0] and not _w.is_item_hovered()
-    if name in state.buffers and (entered or clicked_away):
+    if io.key == KEY_ESCAPE:
+        state.buffers.pop(name, None)
+    elif name in state.buffers and (entered or clicked_away):
         _commit_value_buffer(section, model, state, shown_value, bounds)
 
     if colour and name in state.pickers:
