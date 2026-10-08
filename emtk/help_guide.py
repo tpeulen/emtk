@@ -447,7 +447,12 @@ class EmTkGuidedTour:
         lines = sum(max(1, int(len(part) / per_line) + 1) for part in body.split("\n"))
         hint = step.get("hint") or (step.get("await", {}).get("hint") if isinstance(step.get("await"), dict) else None)
         lines += (int(len(str(hint)) / per_line) + 2) if hint else 0
-        card_h = max(120.0, min(260.0, 78.0 + 16.0 * lines))
+        title_text = f"Step {self.step_idx + 1} of {len(self.steps)}: {step.get('title', '')}"
+        title_lines = max(1, int(len(title_text) / per_line) + 1)
+        header_height = 26.0
+        card_h = header_height + 16.0 * (title_lines - 1) + max(
+            120.0, min(260.0, 78.0 + 16.0 * lines)
+        )
 
         if target_rect:
             tx, ty, tw, th = target_rect
@@ -497,11 +502,13 @@ class EmTkGuidedTour:
         # 4. Content Area with Native Word Wrapping
         content_margin = 14.0
         im.begin_child(
-            (cx + content_margin, cy + 10.0, card_w - 2 * content_margin, card_h - 48.0),
+            (cx + content_margin, cy + header_height + 10.0,
+             card_w - 2 * content_margin, card_h - header_height - 48.0),
             clip=True,
         )
-        title = step.get("title", "")
-        im.text_colored(f"Step {self.step_idx + 1} of {len(self.steps)}: {title}", ACCENT_BLUE)
+        im.push_style_color(Col.TEXT, ACCENT_BLUE)
+        im.text_wrapped(title_text)
+        im.pop_style_color()
         im.spacing()
         raw_text = str(step.get("text", ""))
         clean_text = _clean_html_text(raw_text)
