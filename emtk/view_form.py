@@ -128,7 +128,17 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     "table": TABLE_KEYS,
 }
 VIEW_KEYS = frozenset({"sections", "title", "model", "n_col", "hidden_when", "visible"})
-__all__ += ["COMMON_KEYS", "SECTION_KEYS", "TABLE_KEYS", "VIEW_KEYS"]
+
+#: JSON fields carrying authored user-facing text, including lists of labels or
+#: tooltips. Choice options/choices are displayed when explicit labels are absent;
+#: special_text is a numeric sentinel's displayed spelling. Binding identifiers
+#: (attr, source, call, action, key) are deliberately not translation keys.
+TEXT_KEYS = frozenset({
+    "label", "title", "description", "text", "hint", "placeholder", "suffix",
+    "tooltip", "units", "descriptions", "labels", "caption", "special_text",
+    "options", "choices",
+})
+__all__ += ["COMMON_KEYS", "SECTION_KEYS", "TABLE_KEYS", "VIEW_KEYS", "TEXT_KEYS"]
 
 
 

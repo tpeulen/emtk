@@ -549,3 +549,15 @@ uses ``style`` rather than ``kind``, and an info field does not declare grid
 columns. ``tests/test_view_form_schema.py`` guards every literal section read
 in both form and view-spec readers so a new read cannot silently outrun the
 published dialect.
+
+
+Translatable form fields
+------------------------
+
+``emtk.view_form.TEXT_KEYS`` exports the immutable JSON vocabulary carrying
+user-facing form text. Extractors should include labels, descriptions, hints,
+placeholders, units, numeric ``special_text`` and displayed choice values when
+explicit labels are absent. Binding keys (``attr``, ``source``, ``call`` and
+``action``) identify model APIs and should not enter translation catalogues.
+The declaration does not change rendering; it gives schema/translation tools
+the same text contract as the renderer.
