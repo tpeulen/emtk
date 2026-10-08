@@ -170,3 +170,13 @@ Fully clipped text has zero area. The text's alignment box is recorded in
 ``text_metadata``; it is not an implicit clip and cannot conceal real overflow.
 Existing text, string and operation records retain their shape. Bounds are
 logical advances, so actual screenshots remain necessary to inspect raster ink.
+
+Viewport-specific fresh dock defaults
+------------------------------------
+
+``DockManager.configure_default_layout(layout, docks)`` atomically selects a
+fresh viewport's initial tree and default window regions before the first draw.
+It updates the Reset declaration as well. Restored or user-customized layouts
+retain precedence; empty restore metadata remains fresh. Validation failures
+leave the tree, windows, defaults and store untouched. The caller's tree is
+copied, and visibility, callbacks, floating boxes and selected windows survive.

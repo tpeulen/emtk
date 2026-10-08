@@ -78,6 +78,7 @@ import json
 import logging
 import pathlib
 import sys
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
@@ -705,11 +706,101 @@ class DockManager:
         self._title_h = 20.0
         #: The layout changed since it was last written; flushed by :meth:`draw`.
         self._dirty = False
+        #: A viewport-specific declaration is chosen once, before any saved,
+        #: drawn or explicitly changed layout becomes authoritative.
+        self._default_layout_locked = False
         #: The application's own layout values (a splitter inside a window, a
         #: panel's size), kept and saved with the layout: :meth:`set_extra`.
         self.extras: Dict[str, Any] = {}
 
     # ------------------------------------------------------------ the tree
+    def configure_default_layout(self, layout: Node, docks: dict[str, str]) -> bool:
+        """Choose the first viewport's layout and Reset default for a fresh manager.
+
+        Parameters
+        ----------
+        layout : Region or Split
+            The declared tree for this viewport. Copied before indexing so the
+            caller's tree is not modified.
+        docks : mapping of str to str
+            Window keys to their new default regions. Unmapped docked windows
+            retain their region names; every such region must remain present.
+            Unmapped floating windows retain their boxes and stacking order.
+
+        Returns
+        -------
+        bool
+            True when both the live layout and its Reset declaration changed.
+            False, without changes, after meaningful restoration, drawing,
+            explicit layout changes, or an earlier successful configuration.
+            Empty restoration, including ``restore({})``, remains fresh.
+
+        Raises
+        ------
+        KeyError
+            A mapping names an unknown window or a region absent from the new
+            tree, including an unmapped window's previous region.
+        ValueError
+            The tree is invalid. Validation is atomic: failures leave current
+            state, Reset defaults, window properties and the store unchanged.
+
+        Notes
+        -----
+        Call before the manager's first ``draw``. Visibility, collapse, titles,
+        callbacks and other window properties are preserved. This declaration
+        does not write or clear the store; Reset keeps its existing clearing
+        behavior and restores the newly declared tree and placements.
+        """
+        if self._default_layout_locked or self._dirty:
+            return False
+        if not isinstance(layout, (Region, Split)):
+            raise ValueError("default layout must be a Region or Split")
+        try:
+            candidate = DockManager(deepcopy(layout))
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise ValueError("invalid default layout tree") from exc
+        placements = {key: self.region_of(key) for key in self.windows}
+        for key, region in docks.items():
+            if key not in self.windows:
+                raise KeyError(f"no window {key!r}")
+            if region not in candidate.regions:
+                raise KeyError(f"no region {region!r} in the default layout")
+            placements[key] = region
+        for key, region in placements.items():
+            if region is not None and region not in candidate.regions:
+                raise KeyError(f"window {key!r} needs a default mapping for region {region!r}")
+
+        tabs: dict[str, list[str]] = {region: [] for region in candidate.regions}
+        selected: dict[str, str | None] = dict.fromkeys(candidate.regions)
+        order = [key for keys in self.tabs.values() for key in keys]
+        order.extend(key for key in self.windows if key not in order)
+        for key in order:
+            region = placements[key]
+            if region is not None:
+                tabs[region].append(key)
+        for key in self.selected.values():
+            if key is None:
+                continue
+            region = placements.get(key)
+            if region is not None and selected[region] is None:
+                selected[region] = key
+        for region, keys in tabs.items():
+            if selected[region] is None and keys:
+                selected[region] = keys[0]
+
+        self.layout = candidate.layout
+        self.regions, self.splits = candidate.regions, candidate.splits
+        self._initial_layout = candidate._initial_layout
+        self._default_ratios = dict(candidate._default_ratios)
+        self.tabs, self.selected = tabs, selected
+        self.z = [key for key in self.z if placements[key] is None]
+        for key, region in placements.items():
+            self._defaults[key]["dock"] = region
+        self.region_boxes, self.splitters = {}, []
+        self._tab_rects, self._tab_scroll = {}, {}
+        self._default_layout_locked = True
+        return True
+
     def _index(self, node: Node, path: str) -> None:
         if isinstance(node, Region):
             if node.name in self.regions:
@@ -1180,6 +1271,9 @@ class DockManager:
         """
         if not isinstance(state, dict):
             return
+        if self._dirty or any(
+                state.get(key) for key in ("layout", "splits", "regions", "windows", "z", "extras")):
+            self._default_layout_locked = True
         self._saved = state
         if "layout" in state and isinstance(state["layout"], dict):
             new_layout = self._deserialize_node(state["layout"])
@@ -1332,6 +1426,7 @@ class DockManager:
         """
         if not self._dirty:
             return False
+        self._default_layout_locked = True
         self._dirty = False
         if self.store is not None:
             self.save()
@@ -1712,6 +1807,7 @@ class DockManager:
         is fine). The windows' ``draw`` callbacks run from here.
         """
         ctx = _core.get_current_context()
+        self._default_layout_locked = True
         io = ctx.io
         # The windows submitted before this call -- the application's own,
         # under the docks -- and so the ones the docks must hit-test in front of.
