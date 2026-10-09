@@ -1262,6 +1262,7 @@ def _draw_table_section(section: dict, model: Any, state: FormState) -> None:
         binding = state.tables[name] = TableBinding(section, model)
     if section.get("title") and str(section.get("type", "")).lower() == "custom":
         _w.text(str(section["title"]))
+        _tooltip(section)
     draw_table(binding, name)
     _remember(state, name)
 
@@ -1303,6 +1304,7 @@ def _draw_tabs(section: dict, model: Any, state: FormState, path: tuple,
             return
     elif titles and section.get("title"):
         _w.text(tr(str(section["title"])))
+        _tooltip(section)
     before = dict(state.rects)
     ctx = _core.get_current_context()
     bar_id = repr(ctx.get_id(f"##form-tabs-{id(state)}-{identity!r}"))
@@ -1409,6 +1411,7 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
                     continue
             elif titles and section.get("title"):
                 _w.text(str(section["title"]))
+                _tooltip(section)
             draw_sections(section.get("sections") or [], model, state,
                           int(section.get("n_col") or 1), titles,
                           bool(section.get("wrap_indent", True)), _path + (index,))

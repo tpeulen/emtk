@@ -1669,6 +1669,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     """
     from .. import im_core as core
     from .. import im_widgets as widgets
+    from ..i18n import tr
 
     ctx = core.get_current_context()
     binding.refresh()
@@ -1717,6 +1718,8 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     control.draw(ctx.p, *box)
     if hovered:
         tip, part = control.tooltip_at(px, py)
+        if not tip and binding.options.get("description"):
+            tip, part = tr(str(binding.options["description"])), "section"
         if tip:
             ctx.set_tooltip(tip, owner=(item_id, part))
 

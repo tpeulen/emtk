@@ -326,6 +326,13 @@ Three things, and that is the whole contract:
 
 ## Hit-testing is a by-product of drawing
 
+AutoForm section descriptions appear when hovering existing panel captions,
+parent tab captions and custom-table captions. Tables also show their section
+description where no more specific header, row or shortened-cell help applies.
+These descriptions use the normal translated, delayed tooltip path and add no
+controls or layout rows. A host that suppresses captions remains responsible
+for help on its own headers; an untitled panel has no caption hover target.
+
 There is no second list of where things are. Every widget calls
 `ItemAdd(box, id)` **as it draws**, so a widget cannot be clickable where it is
 not visible. Between windows the rule is the same one shape up: one list in
