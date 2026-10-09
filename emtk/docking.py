@@ -2033,6 +2033,10 @@ class DockManager:
         title_rect = (x + th, y, max(right - x - th, 0.0), th)
         item = self._id("title", win.key)
         hovered = ctx.item_add(title_rect, item)
+        if hovered and win.tooltip:
+            from .i18n import tr
+
+            ctx.set_tooltip(tr(win.tooltip), owner=item)
         context = f"floating.{win.key}"
         if hovered and io.mouse_clicked[1]:
             self._open_context(ctx, context, win.key)

@@ -333,6 +333,10 @@ These descriptions use the normal translated, delayed tooltip path and add no
 controls or layout rows. A host that suppresses captions remains responsible
 for help on its own headers; an untitled panel has no caption hover target.
 
+Floating dock title bars display their authored `DockWindow.tooltip` through
+that same translated, delayed path. Fold and close buttons retain their own
+specific help; empty panel descriptions add no tooltip or layout element.
+
 There is no second list of where things are. Every widget calls
 `ItemAdd(box, id)` **as it draws**, so a widget cannot be clickable where it is
 not visible. Between windows the rule is the same one shape up: one list in
