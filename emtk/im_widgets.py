@@ -2221,7 +2221,9 @@ def pop_clip_rect() -> None:
 
 def begin_disabled(disabled: bool = True) -> None:
     """``BeginDisabled``: the items inside draw dim and cannot be used."""
-    _ctx().push_item_flag(ItemFlags.DISABLED, disabled)
+    ctx = _ctx()
+    # A nested enabled scope cannot override a disabled parent.
+    ctx.push_item_flag(ItemFlags.DISABLED, disabled or bool(ctx.item_flags & ItemFlags.DISABLED))
 
 
 def end_disabled() -> None:
