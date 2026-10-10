@@ -62,7 +62,7 @@ __all__ = [
     "begin", "end", "begin_child", "end_child",
     "text", "text_colored", "text_disabled", "text_wrapped", "bullet_text",
     "label_text", "math", "math_text", "calc_math_size",
-    "button", "small_button", "action_button", "invisible_button", "checkbox",
+    "button", "small_button", "action_button", "toggle_button", "invisible_button", "checkbox",
     "radio_button", "slider_float", "slider_int", "drag_float", "drag_int",
     "progress_bar", "selectable", "selectable_icon_width", "text_ellipsis", "combo", "separator", "same_line", "spacing",
     "splitter", "splitter_behavior",
@@ -874,6 +874,28 @@ def action_button(label: str, tooltip: str, callback, accent: bool = False) -> b
 
 #: The green every tool's headline action uses, so the accent reads as one voice.
 ACCENT_GREEN_BUTTON = (46, 160, 67, 255)
+
+
+def toggle_button(label: str, value: bool, size=None) -> tuple[bool, bool]:
+    """A button that stays pressed while *value* is on: ``(changed, value)``.
+
+    The checkbox contract (one boolean, flipped by a click, reported the same
+    way) drawn as a button, for an on/off control that sits in a row of action
+    buttons -- a checkbox there reads as a form field, a plain button hides
+    its state. On is drawn in the active button colour, off in the normal one;
+    the frame height and padding are the button's, so the row stays aligned.
+    """
+    from .im_core import Col  # noqa: PLC0415
+
+    value = bool(value)
+    if value:
+        push_style_color(Col.BUTTON, _col(Col.BUTTON_ACTIVE))
+    pressed = button(label, size)
+    if value:
+        pop_style_color(1)
+    if pressed:
+        value = not value
+    return pressed, value
 
 
 def invisible_button(label: str, size) -> bool:
