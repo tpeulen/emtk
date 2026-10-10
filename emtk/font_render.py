@@ -118,7 +118,10 @@ def available_fonts(monospaced: bool = False) -> tuple[str, ...]:
     )
 
 
+@lru_cache(maxsize=256)
 def _face(spec: FontSpec) -> Face:
+    # Resolved once per spec: the lookup casefolds every installed family, which
+    # text measurement was paying on every call (hundreds of times per frame).
     family = next(
         (name for name in _faces() if name.casefold() == spec.family.casefold()), None
     )
@@ -208,6 +211,7 @@ def _font(spec: FontSpec, scale: float, bold: bool = False):
     return _loaded(_face(actual), max(1, round(actual.size * PX_PER_PT * scale)))
 
 
+@lru_cache(maxsize=16384)
 def text_width(spec: FontSpec, string: str, scale: float) -> float:
     return float(_font(spec, scale).getlength(string))
 
