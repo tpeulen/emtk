@@ -26,7 +26,8 @@ It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
 ``call``; a slider with ``"field": false`` is the slider alone, its value
 written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``descriptions`` (a tooltip per radio option), ``options_source``,
-``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row``,
+``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row`` (a button's
+``icon`` is drawn in front of its ``label``),
 ``info``, ``progress`` (a bar over a fraction, indeterminate while it is
 ``None``), ``value`` of ``kind: "text"`` (a multi-line field, ``lines`` tall,
 committed on a click elsewhere), ``value`` with ``style: "spin"`` (up/down arrows at its right edge,
@@ -88,7 +89,7 @@ from .flags import InputTextFlags
 from .keys import KEY_ESCAPE
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
-           "format_value", "parse_value", "parse_colour_text", "spin_step"]
+           "format_value", "parse_value", "parse_colour_text", "spin_step", "icon_caption"]
 
 
 #: Section types that hold other sections.
@@ -795,13 +796,28 @@ def _draw_toggle(section: dict, model: Any, state: FormState, label: str) -> Non
         _commit(model, section, bool(new), state)
 
 
+def icon_caption(icon: str, text: str) -> str:
+    """*text* with the pictogram *icon* set clear in front of it (``"❓  Help"``).
+
+    A colour pictogram is drawn wider than the font measures it, so it takes
+    two spaces; a plain geometric glyph (the ▶ of a run button, U+25A0–U+25FF)
+    one. An empty *icon* leaves *text* as it is.
+    """
+    if not icon:
+        return str(text)
+    gap = " " if 0x25A0 <= ord(icon[0]) <= 0x25FF else "  "
+    return f"{icon}{gap}{text}"
+
+
 def _button_label(item: dict, model: Any) -> str:
+    """The caption a button-row entry draws: its ``label`` (or ``label_source``),
+    behind its ``icon`` when it declares one."""
     action = str(item.get("action", ""))
     label = item.get("label", action)
     source = item.get("label_source")
     if source and callable(getattr(model, source, None)):
         label = str(getattr(model, source)())
-    return str(label)
+    return icon_caption(str(item.get("icon") or ""), str(label))
 
 
 def _button_natural(label: str) -> float:
