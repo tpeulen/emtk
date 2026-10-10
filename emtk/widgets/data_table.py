@@ -136,7 +136,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from .. import style as _style
-from ..events import SHIFT_MODIFIER
+from ..events import CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
 from ..keys import (
     KEY_BACKSPACE,
     KEY_DELETE,
@@ -472,6 +472,9 @@ class DataTable:
         self.picker_panel: Any = None
         self._picker_keys: list = []
         self.on_select = on_select
+        #: ``on_selection_change(indices)`` after the set of selected rows changed
+        #: (a click, ctrl/shift-click, Select All, a delete); *indices* are source indices.
+        self.on_selection_change: Optional[Callable[[list], None]] = None
         self.on_activate = on_activate
         self.activated_key: Optional[str] = None
         self.on_edit = on_edit
@@ -520,6 +523,8 @@ class DataTable:
         #: Keys of rows selected *besides* :attr:`selected_key` (Select All);
         #: a click on a row or a move of the selection clears them.
         self.also_selected: set = set()
+        #: The row a shift-click extends from (the last row clicked without shift).
+        self.anchor_key: Any = None
         self.hovered: Optional[int] = None
         self.bar = ScrollBar()
         self.revision = 0
@@ -728,6 +733,18 @@ class DataTable:
         self.also_selected = {self.key_of(i) for i in order}
         if order and self.selected_key not in self.also_selected:
             self.selected_key = self.key_of(order[0])
+        self._selection_changed()
+
+    def _selection_changed(self) -> None:
+        if self.on_selection_change is not None:
+            self.on_selection_change(self.selected_indices())
+
+    def clear_selection(self) -> None:
+        """Select nothing (no ``on_select`` call; ``on_selection_change`` is told)."""
+        self.selected_key = None
+        self.also_selected = set()
+        self.anchor_key = None
+        self._selection_changed()
 
     def selected_indices(self) -> list[int]:
         """Source indices of every selected row, in source order."""
@@ -1232,7 +1249,9 @@ class DataTable:
         returns whether the press landed on the table.
         """
         clicks = int(kw.get("clicks", box[5] if len(box) > 5 else 1) or 1)
-        shift = bool(int(box[4] if len(box) > 4 else kw.get("modifiers", 0) or 0) & SHIFT_MODIFIER)
+        modifiers = int(box[4] if len(box) > 4 else kw.get("modifiers", 0) or 0)
+        shift = bool(modifiers & SHIFT_MODIFIER)
+        toggle = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER))
         if self.editing is not None:
             if self._inside(self._editor_box, x, y):
                 self._press_field(self.editor.field, self._editor_xs, x, clicks, shift)
@@ -1258,6 +1277,9 @@ class DataTable:
         position = self.row_at(x, y)
         if position is None:
             return self._inside(self._body_box, x, y)
+        if (shift or toggle) and self.editing is None and not self.is_parent(self.order()[position]):
+            self._extend_selection(position, shift)
+            return True
         self._select_position(position)
         index = self.order()[position]
         column = self.column_at(x)
@@ -1287,6 +1309,37 @@ class DataTable:
         left = self._header_box[0] + self._indent(index) - self.TREE_INDENT
         return left <= x <= left + self.TREE_INDENT + 4.0
 
+    def _extend_selection(self, position: int, range_: bool) -> None:
+        """Shift-click selects the rows from the anchor to *position*; ctrl-click flips one row."""
+        order = self.order()
+        index = order[position]
+        key = self.key_of(index)
+        if range_ and self.anchor_key is not None:
+            anchor = next((p for p, i in enumerate(order) if self.key_of(i) == self.anchor_key), None)
+            if anchor is not None:
+                low, high = sorted((anchor, position))
+                self.also_selected = {self.key_of(order[p]) for p in range(low, high + 1)}
+                self.selected_key = key
+                self._selection_changed()
+                return
+        chosen = set(self.also_selected)
+        if self.selected_key is not None:
+            chosen.add(self.selected_key)
+        if key in chosen:
+            chosen.discard(key)
+            if key == self.selected_key:
+                self.selected_key = next(iter(sorted(chosen, key=str)), None) if chosen else None
+        else:
+            chosen.add(key)
+            self.selected_key = key
+        self.anchor_key = key
+        self.also_selected = chosen
+        if self.selected_key is not None:
+            self._scroll_to(position)
+        self._selection_changed()
+        if self.on_select is not None and self.selected_key == key:
+            self.on_select(index)
+
     def _select_position(self, position: int) -> None:
         order = self.order()
         if not order:
@@ -1295,11 +1348,15 @@ class DataTable:
         index = order[position]
         key = self.key_of(index)
         changed = key != self.selected_key
+        grew = bool(self.also_selected)
         self.selected_key = key
+        self.anchor_key = key
         self.also_selected = set()
         self._scroll_to(position)
         if changed and self.on_select is not None:
             self.on_select(index)
+        if changed or grew:
+            self._selection_changed()
 
     def _press_field(self, field, xs, x: float, clicks: int, shift: bool) -> None:
         """A press in the cell editor or the filter: caret, word, or all."""
@@ -1399,8 +1456,7 @@ class DataTable:
             # earlier indices valid.
             for index in reversed(indices):
                 self.on_delete(index)
-            self.selected_key = None
-            self.also_selected = set()
+            self.clear_selection()
             return True
         current = next((pos for pos, i in enumerate(order)
                         if self.key_of(i) == self.selected_key), None)
@@ -1475,6 +1531,7 @@ class TableBinding:
         self.columns_source = str(merged.get("columns_source", "") or "")
         self.selected_call = str(merged.get("selected_call", "") or "")
         self.selected_attr = str(merged.get("selected_attr", "") or "")
+        self.selection_attr = str(merged.get("selection_attr", "") or "")
         self.activated_call = str(merged.get("activated_call", "") or "")
         self.activated_cell_call = str(merged.get("activated_cell_call", "") or "")
         self.edited_call = str(merged.get("edited_call", "") or "")
@@ -1509,6 +1566,8 @@ class TableBinding:
             min_column_width=float(merged.get("min_column_width", 0) or 0),
         )
         self.control.auto_fit = bool(merged.get("fit_columns", False))
+        if self.selection_attr:
+            self.control.on_selection_change = self._on_selection
         sort = merged.get("sort")
         if isinstance(sort, Mapping) and sort.get("key"):
             self.control.sort_by(str(sort["key"]), bool(sort.get("descending", False)))
@@ -1635,6 +1694,18 @@ class TableBinding:
             if callable(fn):
                 fn(payload)
 
+    def selected_records(self) -> list:
+        """The records of every selected row (source order); empty when none is."""
+        return [self.record(i) for i in self.control.selected_indices()]
+
+    def _on_selection(self, indices: list) -> None:
+        owner, _, attr = self.selection_attr.rpartition(".")
+        try:
+            setattr(self._lookup(owner) if owner else self.model, attr,
+                    [self.record(i) for i in indices])
+        except Exception:  # noqa: BLE001
+            pass
+
     def _on_edit(self, index: int, key: str, value: Any) -> None:
         if self.edited_call:
             fn = self._lookup(self.edited_call)
@@ -1695,7 +1766,12 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     if hovered:
         control.hover(px, py)
         if io.mouse_clicked[0]:
-            control.press(px, py, *box, 0, 2 if io.mouse_double_clicked[0] else 1)
+            modifiers = (
+                (SHIFT_MODIFIER if io.key_shift else 0)
+                | (CONTROL_MODIFIER if io.key_ctrl else 0)
+                | (META_MODIFIER if io.key_super else 0)
+            )
+            control.press(px, py, *box, modifiers, 2 if io.mouse_double_clicked[0] else 1)
         if io.mouse_clicked[1]:
             control.context(px, py)
         wheel_h = getattr(io, "mouse_wheel_h", 0.0) or (io.mouse_wheel if io.key_shift else 0.0)

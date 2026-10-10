@@ -909,3 +909,25 @@ def test_a_column_minimum_makes_the_table_scroll_instead_of_squeezing():
     assert widths[0] >= 96.0 and widths[1] >= 80.0
     assert sum(widths) > 200.0  # wider than the box: the sideways bar takes over
     assert TableColumn.from_spec({"key": "a", "min_width": 50}).min_width == 50.0
+
+
+def test_ctrl_click_toggles_rows_and_shift_click_selects_a_range():
+    from emtk.events import CONTROL_MODIFIER, SHIFT_MODIFIER
+
+    model = Gates()
+    binding = TableBinding({**GATE_TABLE, "selection_attr": "picked"}, model)
+    control = binding.control
+    draw(control)
+    control.press(*cell(control, 0, 0))
+    assert control.selected_indices() == [0]
+    control.press(*cell(control, 1, 0), modifiers=CONTROL_MODIFIER)
+    assert control.selected_indices() == [0, 1] and [r["name"] for r in model.picked] == ["Tau", "PR"]
+    control.press(*cell(control, 1, 0), modifiers=CONTROL_MODIFIER)
+    assert control.selected_indices() == [0]
+    control.clear_selection()
+    assert control.selected_indices() == [] and model.picked == []
+    control.press(*cell(control, 0, 0))
+    control.press(*cell(control, 1, 0), modifiers=SHIFT_MODIFIER)
+    assert control.selected_indices() == [0, 1]
+    control.key(KEY_DELETE)
+    assert model.deleted == ["PR", "Tau"] and model.picked == []
