@@ -59,6 +59,10 @@ table needs them and neither dialect had them:
     under the pointer (selected first; ``None`` on the header) and the column
     key. The model opens its own menu there -- a painter has no popup of its
     own;
+``context_menu``
+    a list of ``{"label", "call", "description", "enabled_when"}`` items opened
+    as a popup by a right click on a row or Shift+F10 / Menu; see
+    :mod:`emtk.widgets.table_menu`;
 ``colour_source``
     a model attribute (or method) saying how numeric cells are shaded by
     value: ``None`` (not at all), ``"column"`` (each column over its own
@@ -1476,6 +1480,8 @@ class TableBinding:
         self.edited_call = str(merged.get("edited_call", "") or "")
         self.delete_call = str(merged.get("delete_call", "") or "")
         self.context_call = str(merged.get("context_call", "") or "")
+        self.context_menu = list(merged.get("context_menu") or [])
+        self.menu_request = self.menu_panel = None
         self.colour_source = str(merged.get("colour_source", "") or "")
         self.editable = bool(merged.get("editable", False))
         self.height = float(merged.get("height", 240) or 240)
@@ -1642,6 +1648,9 @@ class TableBinding:
                 fn(self.record(index))
 
     def _on_context(self, index: Optional[int], key: Optional[str], x: float, y: float) -> None:
+        if self.context_menu and index is not None:
+            from . import table_menu
+            table_menu.request(self, self.record(index), key, x, y)
         if self.context_call:
             fn = self._lookup(self.context_call)
             if callable(fn):
@@ -1715,6 +1724,8 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         if hovered or control.filter_focused or control.editing is not None:
             control.key(int(io.key), io.text, widgets._current_modifiers(io))
     _column_picker(control, name)
+    from . import table_menu
+    table_menu.draw(binding, name, hovered)
     control.draw(ctx.p, *box)
     if hovered:
         tip, part = control.tooltip_at(px, py)

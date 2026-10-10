@@ -110,7 +110,7 @@ _VALUE_KEYS = frozenset({
 })
 TABLE_KEYS = frozenset({
     "source", "target", "columns_source", "columns", "selected_call", "selected_attr",
-    "activated_call", "activated_cell_call", "edited_call", "delete_call", "context_call",
+    "activated_call", "activated_cell_call", "edited_call", "delete_call", "context_call", "context_menu",
     "colour_source", "editable", "editable_call", "height", "expand", "reserve",
     "expanded_attr", "muted_key", "status", "column_picker", "tree_key", "filter",
     "tooltip_key", "row_key", "min_column_width", "fit_columns", "sort",
