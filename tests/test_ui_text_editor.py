@@ -557,3 +557,17 @@ def test_im_text_editor_widget():
     assert editor.text == "hello world"
     assert len(p.texts) > 0
 
+
+
+def test_find_previous_walks_the_matches_backwards_and_wraps():
+    """Shift+F3: the match before the selection, the last one after the first."""
+    editor = te.TextEditor("a b a b a\n")
+    editor.set_find_text("a")
+    assert editor.find_next() and editor.find_next()
+    assert editor.cursors.main.end.index == 5  # second "a"
+    assert editor.find_previous()
+    assert editor.cursors.main.end.index == 1  # first "a"
+    assert editor.find_previous()
+    assert editor.cursors.main.end.index == 9  # wrapped to the last
+    editor.set_find_text("zzz")
+    assert not editor.find_previous()

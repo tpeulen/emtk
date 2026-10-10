@@ -2239,6 +2239,21 @@ class TextEditor:
         self._follow_main()
         return True
 
+    def find_previous(self) -> bool:
+        """Select the occurrence of the remembered text before the selection, wrapping to the last one."""
+        if not self._find_text:
+            return False
+        matches = self.document.find_all(
+            self._find_text, self._find_case_sensitive, self._find_whole_word
+        )
+        if not matches:
+            return False
+        low = self.cursors.current.selection()[0]
+        earlier = [m for m in matches if (m[0].line, m[0].index) < (low.line, low.index)]
+        self.cursors.set_cursor(*(earlier[-1] if earlier else matches[-1]))
+        self._follow_main()
+        return True
+
     def find_all(self) -> int:
         """Put a caret on every occurrence of the remembered text."""
         matches = self.document.find_all(
