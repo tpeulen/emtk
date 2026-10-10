@@ -1701,8 +1701,13 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     if pressed or (hovered and ctx.io.mouse_clicked[0]):
         focus["id"] = item_id
         set_nav_id(item_id)
-    elif ctx.io.mouse_clicked[0] and not hovered and focus.get("id") == item_id:
-        focus.pop("id", None)
+    elif ctx.io.mouse_clicked[0] and not hovered:
+        # A click anywhere else ends the editing: the click focus *and* the
+        # keyboard focus the press took, or typed keys keep landing here.
+        if focus.get("id") == item_id:
+            focus.pop("id", None)
+        if ctx.is_nav_focused(item_id):
+            set_nav_id(None)
     # ...or the keyboard put the focus here, which is what Tab is for.
     focused = not bool(ctx.item_flags & ItemFlags.DISABLED) and (
         focus.get("id") == item_id or ctx.is_nav_focused(item_id))

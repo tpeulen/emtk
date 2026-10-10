@@ -452,3 +452,22 @@ def test_a_paste_hook_alone_is_kept():
         assert clipboard.paste() == "only paste"
     finally:
         clipboard.set_hook(None)
+
+
+def test_input_text_click_elsewhere_releases_the_keyboard():
+    """After Enter in a field, a click elsewhere must stop keys landing in it."""
+    from emtk.events import LEFT_BUTTON
+    from emtk.keys import KEY_ENTER
+
+    d = _Driver("path")
+    d.frame()
+    d.click()
+    d.key(KEY_ENTER)
+    x, y, w, h = d.box
+    d.app.pointer_press(x + w / 2, y + 60, LEFT_BUTTON, 0, 1)   # empty window area below
+    d.frame()
+    d.app.pointer_release(x + w / 2, y + 60, LEFT_BUTTON, 0)
+    d.frame()
+    d.key(0, "2")
+    d.key(0, "4")
+    assert d.value == "path"
