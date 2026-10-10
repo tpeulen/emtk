@@ -964,6 +964,11 @@ class Context:
             # fires. Setting the flag and leaving the behaviour alone made the
             # demo's disabled block fully clickable.
             self.item_add(box, item_id)
+            if self.active_id == item_id:
+                # A grab that was disabled while it was held (a worker started by its own change greys the
+                # whole pane) must let go: no release will ever reach it, and while it stays active every
+                # other item refuses the next click (ImGui clears the active id of a disabled item too).
+                self.clear_active_id()
             return (False, False, False)
         button = 0
         if flags & ButtonFlags.MOUSE_BUTTON_RIGHT:
