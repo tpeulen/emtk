@@ -717,7 +717,9 @@ class ColormapData:
         self.names.append(name)
         idx = len(self.keys) - 1
         self.map[name] = idx
-        self.tables.append(self._build_table(idx))
+        # Built on first use: the 16 default maps cost ~50 ms to interpolate, paid by every
+        # process at ``import emtk.implot`` although a session draws one or two of them.
+        self.tables.append(None)
         return idx
 
     def _build_table(self, cmap: int) -> list:
@@ -733,7 +735,13 @@ class ColormapData:
         return out
 
     def rebuild_tables(self) -> None:
-        self.tables = [self._build_table(i) for i in range(self.count)]
+        self.tables = [None] * self.count
+
+    def _table(self, cmap: int) -> list:
+        table = self.tables[cmap]
+        if table is None:
+            table = self.tables[cmap] = self._build_table(cmap)
+        return table
 
     def is_qual(self, cmap: int) -> bool:
         return self.quals[cmap]
@@ -758,14 +766,14 @@ class ColormapData:
         self.rebuild_tables()
 
     def get_table(self, cmap: int) -> list:
-        return self.tables[cmap]
+        return self._table(cmap)
 
     def get_table_size(self, cmap: int) -> int:
-        return len(self.tables[cmap])
+        return len(self._table(cmap))
 
     def lerp_table(self, cmap: int, t: float) -> tuple:
         """``LerpTable``."""
-        table = self.tables[cmap]
+        table = self._table(cmap)
         siz = len(table)
         if t != t:
             t = 0.0
