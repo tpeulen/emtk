@@ -801,8 +801,11 @@ def icon_caption(icon: str, text: str) -> str:
 
     A colour pictogram is drawn wider than the font measures it, so it takes
     two spaces; a plain geometric glyph (the ▶ of a run button, U+25A0–U+25FF)
-    one. An empty *icon* leaves *text* as it is.
+    one. Presentation modifiers (``"▶️"`` is U+25B6 then U+FE0F) are dropped:
+    the atlas has no cell for them and would draw a missing-glyph box. An empty
+    *icon* leaves *text* as it is.
     """
+    icon = _w.icon_text(icon)
     if not icon:
         return str(text)
     gap = " " if 0x25A0 <= ord(icon[0]) <= 0x25FF else "  "

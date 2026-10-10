@@ -12,6 +12,8 @@ def test_icon_caption_spacing():
     assert icon_caption("❓", "Help") == "❓  Help"
     assert icon_caption("▶", "Run") == "▶ Run"
     assert icon_caption("", "Run") == "Run"
+    assert icon_caption("▶\ufe0f", "Run") == "▶ Run"
+    assert icon_caption("♻\ufe0f", "Reset") == "♻  Reset"
 
 
 def test_button_row_draws_icon_before_label():
