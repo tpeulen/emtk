@@ -5006,6 +5006,7 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
     revision = getattr(editor, "revision", None)
 
     if focused:
+        ctx.storage["__tab_owned__"] = True  # Tab indents here; navigation must not take it
         events = list(io.key_events)
         if not events and (io.key or io.text):
             mods = _current_modifiers(io)

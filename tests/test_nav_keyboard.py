@@ -187,3 +187,21 @@ def test_enter_remains_available_to_text_input():
     driver.frame(2)
     driver.press(keys.KEY_RETURN)
     assert any(entered)
+
+
+def test_tab_in_a_focused_text_editor_indents_instead_of_moving_focus():
+    from emtk.widgets.text_editor import TextEditor
+
+    editor = TextEditor("x\n")
+
+    def render():
+        im.begin("Editor", (0, 0, 420, 320))
+        im.text_editor("##code", editor, (400, 200))
+        im.end()
+
+    app = ImApp(render)
+    driver = Driver(app, (420, 320))
+    driver.frame(2)
+    driver.click((200, 100))
+    driver.key(keys.KEY_TAB)
+    assert editor.text.endswith("    ")  # indented at the caret, focus did not move

@@ -595,7 +595,10 @@ class Context:
         self.layout.reset(*self.box)
         # Navigation owns Tab before application code can spend the key.
         from .keys import KEY_TAB  # noqa: PLC0415
-        if self.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD and self.io.key == KEY_TAB:
+        # ... except while a text editor holds the keyboard: Tab is its indent key.
+        tab_owned = self.storage.pop("__tab_owned__", False)
+        if (self.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD and self.io.key == KEY_TAB
+                and not tab_owned):
             self.nav_move(-1 if self.io.key_shift else 1)
             self.io.key = 0
             self.io.key_events[:] = [event for event in self.io.key_events if event[0] != KEY_TAB]
