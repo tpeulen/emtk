@@ -6,8 +6,10 @@ Pillow's existing FreeType support, without Qt or a platform font server.
 
 from __future__ import annotations
 
+import json
 import math
 import os
+import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -31,6 +33,81 @@ class Face:
     italic: bool
     monospaced: bool
     style: str
+
+
+_FACE_CACHE_VERSION = 1
+
+
+def _face_cache_path() -> Path:
+    """Where the scanned face table persists between processes.
+
+    ``EMTK_CACHE_DIR`` overrides; otherwise the platform user cache directory.
+    """
+    override = os.environ.get("EMTK_CACHE_DIR")
+    if override:
+        return Path(override) / "font_faces.json"
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        base = Path(xdg)
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Caches"
+    elif os.name == "nt":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        base = Path.home() / ".cache"
+    return base / "emtk" / "font_faces.json"
+
+
+def _scan_file(path: Path, image_font) -> list[list]:
+    """Open every face in one font file: ``[index, family, style, bold, italic, mono]`` rows."""
+    rows: list[list] = []
+    for index in range(64 if path.suffix.lower() == ".ttc" else 1):
+        try:
+            font = image_font.truetype(str(path), 16, index=index)
+            family, style = font.getname()
+            # Names alone are insufficient: only faces FreeType actually
+            # opens and measures are offered to the caller.
+            advances = [font.getlength(char) for char in "ilMW@08."]
+            mono = max(advances) - min(advances) < 0.1 and bytes(
+                font.getmask("i")
+            ) != bytes(font.getmask("M"))
+            style = style.casefold()
+            rows.append(
+                [
+                    index,
+                    family,
+                    style,
+                    "bold" in style or "black" in style,
+                    "italic" in style or "oblique" in style,
+                    bool(mono),
+                ]
+            )
+        except (OSError, ValueError):
+            break
+    return rows
+
+
+def _load_face_cache(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict) or data.get("version") != _FACE_CACHE_VERSION:
+        return {}
+    files = data.get("files")
+    return files if isinstance(files, dict) else {}
+
+
+def _store_face_cache(path: Path, files: dict) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(
+            json.dumps({"version": _FACE_CACHE_VERSION, "files": files}), encoding="utf-8"
+        )
+        os.replace(tmp, path)
+    except OSError:
+        pass  # A read-only cache directory only costs the rescan next time.
 
 
 @lru_cache(maxsize=1)
@@ -57,30 +134,29 @@ def _faces() -> dict[str, tuple[Face, ...]]:
             if p.suffix.lower() in {".ttf", ".otf", ".ttc"}
         }
     )
+    # Opening every installed face with FreeType costs ~250 ms; walking and
+    # stat-ing the files costs ~10 ms. The scan result is persisted per file
+    # (path, mtime, size), so only new or changed font files are reopened.
+    cache_path = _face_cache_path()
+    cached = _load_face_cache(cache_path)
+    files: dict[str, dict] = {}
     result: dict[str, list[Face]] = {}
     for path in paths[:4096]:
-        for index in range(64 if path.suffix.lower() == ".ttc" else 1):
-            try:
-                font = ImageFont.truetype(str(path), 16, index=index)
-                family, style = font.getname()
-                # Names alone are insufficient: only faces FreeType actually
-                # opens and measures are offered to the caller.
-                advances = [font.getlength(char) for char in "ilMW@08."]
-                mono = max(advances) - min(advances) < 0.1 and bytes(
-                    font.getmask("i")
-                ) != bytes(font.getmask("M"))
-                style = style.casefold()
-                face = Face(
-                    str(path),
-                    index,
-                    "bold" in style or "black" in style,
-                    "italic" in style or "oblique" in style,
-                    mono,
-                    style,
-                )
-                result.setdefault(family, []).append(face)
-            except (OSError, ValueError):
-                break
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        signature = [stat.st_mtime_ns, stat.st_size]
+        entry = cached.get(str(path))
+        if not (isinstance(entry, dict) and entry.get("sig") == signature):
+            entry = {"sig": signature, "faces": _scan_file(path, ImageFont)}
+        files[str(path)] = entry
+        for index, family, style, bold, italic, mono in entry["faces"]:
+            result.setdefault(family, []).append(
+                Face(str(path), index, bold, italic, mono, style)
+            )
+    if files != cached:
+        _store_face_cache(cache_path, files)
     preferred = {
         "regular",
         "normal",
