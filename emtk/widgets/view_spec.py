@@ -99,6 +99,8 @@ FIELD_KINDS: dict[str, str] = {
     "secret": TEXT,
     "file": TEXT,
     "directory": TEXT,
+    "color": COLOUR,
+    "colour": COLOUR,
 }
 
 #: Where a section's edited attribute is named. ``attr`` is the usual spelling;

@@ -122,3 +122,11 @@ def test_explicit_numeric_style_overrides_legacy_panel_defaults():
     assert {"count", "fraction"} <= panel.item_rects.keys()
     assert "count.stepper" not in panel.item_rects
     assert "fraction.slider" not in panel.item_rects
+
+
+def test_every_colour_kind_of_a_value_section_paints_a_colour_row():
+    """``kind: "color"`` / ``"colour"`` (AutoForm's dialect) edit with a colour row, not a text row."""
+    from emtk.widgets.view_spec import FIELD_KINDS
+    from emtk.widgets.settings_editor import COLOUR
+
+    assert FIELD_KINDS["color"] == FIELD_KINDS["colour"] == COLOUR
