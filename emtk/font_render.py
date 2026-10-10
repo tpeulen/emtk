@@ -141,6 +141,7 @@ def _faces() -> dict[str, tuple[Face, ...]]:
     cached = _load_face_cache(cache_path)
     files: dict[str, dict] = {}
     result: dict[str, list[Face]] = {}
+    changed = False
     for path in paths[:4096]:
         try:
             stat = path.stat()
@@ -150,12 +151,13 @@ def _faces() -> dict[str, tuple[Face, ...]]:
         entry = cached.get(str(path))
         if not (isinstance(entry, dict) and entry.get("sig") == signature):
             entry = {"sig": signature, "faces": _scan_file(path, ImageFont)}
+            changed = True
         files[str(path)] = entry
         for index, family, style, bold, italic, mono in entry["faces"]:
             result.setdefault(family, []).append(
                 Face(str(path), index, bold, italic, mono, style)
             )
-    if files != cached:
+    if changed or len(files) != len(cached):  # a font added, changed or removed
         _store_face_cache(cache_path, files)
     preferred = {
         "regular",
