@@ -59,15 +59,16 @@ class AudioOutput:
     Parameters
     ----------
     player : tuple, optional
-        ``(binary, template)`` as from :func:`find_player`; default is to look one up.  ``None`` passed
-        explicitly through ``find=lambda: None`` makes an output that is not :attr:`available`.
+        ``(binary, template)`` as from :func:`find_player`; default is to look one up (``find``, default
+        the module's :func:`find_player`, so a test can patch it).  ``player=None`` is an output that is
+        not :attr:`available`.
     launcher : callable, optional
         ``launcher(argv) -> process`` with ``poll``/``terminate``/``wait``; default :class:`subprocess.Popen`
         with silenced output.  Tests inject a fake.
     """
 
-    def __init__(self, player=..., launcher=None, find=find_player):
-        self._player = find() if player is ... else player
+    def __init__(self, player=..., launcher=None, find=None):
+        self._player = (find or find_player)() if player is ... else player
         self._launch = launcher or self._popen
         self._dir = None
         self._voices: dict[str, _Voice] = {}

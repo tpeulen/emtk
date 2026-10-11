@@ -112,3 +112,10 @@ def test_a_failing_launcher_reports_false():
     out = AudioOutput(player=("/p", ("{path}",)), launcher=boom)
     assert out.play("a", PCM, 44100) is False
     out.close()
+
+
+def test_the_default_lookup_goes_through_the_module_attribute(monkeypatch):
+    import emtk.audio as audio
+
+    monkeypatch.setattr(audio, "find_player", lambda: None)
+    assert not AudioOutput().available
