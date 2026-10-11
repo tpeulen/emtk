@@ -641,7 +641,7 @@ class HostedDriver(RealisticDriver):
         self.scale = float(canvas.get_pixel_ratio())
 
     def _open(self, size, scale) -> None:
-        from .native import CanvasEvents, NativeHost  # noqa: PLC0415
+        from .native import NativeHost  # noqa: PLC0415
 
         if self.backend == "glfw":
             import glfw  # noqa: PLC0415
