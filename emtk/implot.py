@@ -994,6 +994,21 @@ def _add_text_centered(top_center, col, text: str) -> None:
 _ROTATION_SIGNATURE: dict = {}
 
 
+def _fit_label(label: str, room: float) -> str:
+    """The shown part of axis *label*, ended with "…" where it is longer than *room* pixels."""
+    text = I.split_label(label)
+    if not text or I.calc_text_size(text)[0] <= room:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if I.calc_text_size(text[:mid].rstrip() + "…")[0] <= room:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "…"
+
+
 def _add_text_vertical(pos, col, text: str) -> None:
     """``AddTextVertical``: text running bottom to top, *pos* its bottom-left.
 
@@ -1279,11 +1294,15 @@ def _render_background(plot) -> None:
         tkr = ax.ticker
         opp = ax.is_opposite()
         if ax.has_label():
-            tw, th = I.calc_text_size(ax.label)
+            # A label longer than the frame is tall (a short panel) is elided, and a label that
+            # fits is kept inside the frame: centred on the plot area, it ran off both ends.
+            label = _fit_label(ax.label, (fr[3] - fr[1]) - 2.0 * style.label_padding[1])
+            tw, th = I.calc_text_size(label)
             off = (tkr.max_size[0] + style.label_padding[0] if ax.has_tick_labels() else 0.0) \
                 + style.label_padding[0]
-            _add_text_vertical((ax.datum1 + off if opp else ax.datum1 - off - th,
-                                (pr[1] + pr[3]) * 0.5 + tw * 0.5), ax.color_txt, ax.label)
+            bottom = min(max((pr[1] + pr[3]) * 0.5 + tw * 0.5, fr[1] + tw), fr[3])
+            _add_text_vertical((ax.datum1 + off if opp else ax.datum1 - off - th, bottom),
+                               ax.color_txt, label)
         if ax.has_tick_labels():
             for tk in tkr.ticks:
                 datum = ax.datum1 + (style.label_padding[0] if opp
