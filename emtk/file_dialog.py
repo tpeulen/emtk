@@ -117,7 +117,7 @@ class FileDialog:
         Shown in red under the buttons; cleared by the next successful choice.
     """
 
-    def __init__(self, title: str = "Open", mode: str = "open",
+    def __init__(self, title: str = mark("Open", domain="emtk"), mode: str = "open",
                  filters: Sequence | str = ((mark("All files", domain="emtk"), ("*",)),),
                  directory: str | None = None, filename: str = "",
                  multiselect: bool = False, action: str | None = None,

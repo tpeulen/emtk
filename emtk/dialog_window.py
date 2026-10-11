@@ -30,6 +30,7 @@ from typing import Optional, Sequence, Tuple
 
 from . import im_core as _core
 from . import im_widgets as _w
+from .i18n import tr
 from .keys import KEY_ESCAPE
 
 __all__ = ["DialogWindow"]
@@ -130,23 +131,25 @@ class DialogWindow:
                              style.color(_core.Col.TITLE_BG_ACTIVE))
         draw.add_rect((x, y), (x + w, y + h), style.color(_core.Col.BORDER))
         io = _core.get_io()
-        th = _w.calc_text_size(self.title)[1]
+        # Translated once, then measured and drawn as the same string; the
+        # pressed label stays the caller's source label.
+        title = tr(self.title)
+        th = _w.calc_text_size(title)[1]
         draw.add_text((x + self.PADDING, y + (self.HEADER_H - th) / 2.0),
-                      style.color(_core.Col.TEXT), self.title)
+                      style.color(_core.Col.TEXT), title)
 
         pressed = None
         labels = list(buttons) + ["×"]
-        widths = [_w.calc_text_size(label)[0] + 14.0 for label in labels]
+        shown = [tr(label) for label in labels]
+        widths = [_w.calc_text_size(text)[0] + 14.0 for text in shown]
         bh = _core.get_frame_height()
         bx = x + w - sum(widths) - 4.0 * len(labels) - 2.0
         on_button = False
-        for label, bw in zip(labels, widths):
+        for label, text, bw in zip(labels, shown, widths):
             _w.set_cursor_screen_pos((bx, y + (self.HEADER_H - bh) / 2.0))
-            if _w.button(f"{label}##{self.key}.header.{label}", (bw, bh)):
+            if _w.button(f"{text}##{self.key}.header.{label}", (bw, bh)):
                 pressed = "close" if label == "×" else label
             if label == "×":
-                from .i18n import tr
-
                 _w.set_item_tooltip(tr("Close this window (Escape).", domain="emtk"))
             on_button = on_button or _w.is_item_hovered()
             bx += bw + 4.0

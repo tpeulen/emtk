@@ -55,6 +55,7 @@ import re
 from . import im_core as _core
 from . import painter as _painter
 from .painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER
+from .i18n import mark
 
 IMPLOT3D_VERSION = "0.5 WIP"
 IMPLOT3D_VERSION_NUM = 500
@@ -2404,9 +2405,11 @@ def add_ticks_custom(values, labels, n: int, ticker: Ticker, formatter, data) ->
 # [SECTION] Context Menus
 # --------------------------------------------------------------------------- #
 AXIS_CONTEXTS = ("##XAxisContext", "##YAxisContext", "##ZAxisContext")
-AXIS_LABELS = ("X-Axis", "Y-Axis", "Z-Axis")
+AXIS_LABELS = (mark("X-Axis", domain="emtk"), mark("Y-Axis", domain="emtk"),
+               mark("Z-Axis", domain="emtk"))
 PLANE_CONTEXTS = ("##YZPlaneContext", "##XZPlaneContext", "##XYPlaneContext")
-PLANE_LABELS = ("YZ-Plane", "XZ-Plane", "XY-Plane")
+PLANE_LABELS = (mark("YZ-Plane", domain="emtk"), mark("XZ-Plane", domain="emtk"),
+                mark("XY-Plane", domain="emtk"))
 
 
 def _popup_name(plot: Plot, name: str) -> str:

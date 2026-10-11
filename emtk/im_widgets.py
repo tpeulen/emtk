@@ -33,7 +33,7 @@ from .flags import Axis, MouseCursor, SliderFlags
 from .im_core import (BackendFlags, ButtonFlags, Col, ConfigFlags,
                       ItemFlags, get_current_context)
 from .painter import Colour, colour_bytes, ALIGN_LEFT, ALIGN_VCENTER
-from .i18n import tr
+from .i18n import mark, tr
 
 
 def _frame_border(ctx, box) -> None:
@@ -606,7 +606,7 @@ def text_colored(col, s: str) -> None:
         col, s = s, col
     col = colour_bytes(col)
     ctx = get_current_context()
-    lines = [tr(line) for line in str(s).split("\n")]
+    lines = _tr_block(s).split("\n")
     wrap_width = _active_wrap_width(ctx, ctx.layout.cursor[0])
     if wrap_width is not None:
         lines = [wrapped for line in lines for wrapped in _wrapped_lines(ctx, line, wrap_width)]
@@ -649,10 +649,23 @@ def _wrapped_lines(ctx, s, width):
     return lines
 
 
+def _tr_block(s: Any) -> str:
+    """A text block translated whole when the catalogue has it, else line by line.
+
+    A catalogue entry is the authored string -- a multi-line help paragraph
+    is one entry -- while short lines joined by a caller are separate ones.
+    """
+    text = str(s)
+    whole = tr(text)
+    if whole != text or "\n" not in text:
+        return whole
+    return "\n".join(tr(line) for line in text.split("\n"))
+
+
 def text_wrapped(s: str) -> None:
     """Draw one measured text block, wrapping to the remaining content width."""
     ctx = get_current_context()
-    source = "\n".join(tr(line) for line in str(s).split("\n"))
+    source = _tr_block(s)
     lines = _wrapped_lines(ctx, source, max(1.0, ctx.layout.avail()[0]))
     width = max((ctx.p.text_width(line) for line in lines), default=0.0)
     box = ctx.layout.row(height=len(lines) * ctx.p.line_height(), width=width)
@@ -4604,7 +4617,7 @@ def get_font_tex_uv_white_pixel() -> tuple:
     return (0.0, 0.0)
 
 
-def show_font_selector(label: str = "Fonts") -> None:
+def show_font_selector(label: str = mark("Fonts", domain="emtk")) -> None:
     """``ShowFontSelector``: the fonts a host registered, as a combo."""
     ctx = get_current_context()
     fonts = list(ctx.state(("font",)).get("available") or [])
@@ -5289,7 +5302,7 @@ def show_user_guide() -> None:
     bullet_text("While inputing text: CTRL+A or double-click to select all.")
 
 
-def show_style_selector(label: str = "Style") -> bool:
+def show_style_selector(label: str = mark("Style", domain="emtk")) -> bool:
     """``ShowStyleSelector``."""
     ctx = get_current_context()
     store = ctx.state(("style_selector",))

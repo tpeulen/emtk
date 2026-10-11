@@ -388,7 +388,8 @@ def test_emtk_builtin_widgets_have_no_untranslated_literals():
     from pathlib import Path
 
     package = Path(i18n.__file__).resolve().parents[1]
-    found = untranslated_literals(package, exclude=("implot_demo", "implot3d_demo"))
+    found = untranslated_literals(package, exclude=("implot_demo", "implot3d_demo"),
+                                  constants=True)
     assert found == [], "\n".join(f.key for f in found)
 
 
@@ -437,3 +438,39 @@ def test_default_domain_catalogue_wins_over_hand_added_strings():
     i18n.set_language("es")
     assert i18n.tr("Colormap") == "Mapa de color"
     assert i18n.tr("Only here") == "Solo aquí"
+
+
+def test_isolated_restores_every_registration():
+    from emtk.i18n.testing import isolated
+
+    i18n.set_language("fr")
+    with isolated():
+        assert i18n.language() == "en"
+        i18n.add_translations("de", {"Temp": "Vorübergehend"})
+        i18n.add_catalogue("app", {"de": {"Run": "Starten"}})
+        i18n.set_default_domain("app")
+        i18n.set_language("de")
+        assert i18n.tr("Temp") == "Vorübergehend" and i18n.tr("Run") == "Starten"
+    assert i18n.language() == "fr"
+    assert "app" not in i18n.domains() and i18n.default_domain() is None
+    i18n.set_language("de")
+    assert i18n.tr("Temp") == "Temp" and i18n.tr("Run") == "Run"
+
+
+def test_guard_reports_display_constants_and_defaults():
+    from emtk.i18n.testing import literals_in_source
+
+    source = (
+        'HINT = "press Return to type a command"\n'
+        'TEXT_FAMILIES = ("Times New Roman",)\n'
+        'MARKED = mark("Fine")\n'
+        'class Box:\n'
+        '    title = "Box title"\n'
+        'def open(title: str = "Open", mode: str = "open", *, tooltip="Shows it"):\n'
+        '    pass\n'
+    )
+    found = [(f.call, f.text) for f in literals_in_source(source, "x.py", constants=True)]
+    assert found == [("constant:HINT", "press Return to type a command"),
+                     ("constant:title", "Box title"), ("default:title", "Open"),
+                     ("default:tooltip", "Shows it")]
+    assert literals_in_source(source, "x.py") == []

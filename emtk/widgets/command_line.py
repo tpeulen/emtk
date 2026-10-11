@@ -37,6 +37,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from ..events import CONTROL_MODIFIER, META_MODIFIER
+from ..i18n import mark
 from ..keys import (
     KEY_BACKSPACE,
     KEY_DELETE,
@@ -61,8 +62,9 @@ __all__ = ["CommandLine", "LogLine"]
 PROMPT = ">"
 
 #: Shown instead of the prompt when nothing has focus. It is the only place the
-#: focus rule is stated, so it states it.
-HINT = "press Return to type a command"
+#: focus rule is stated, so it states it. Marked for the ``emtk`` catalogue:
+#: show it as ``tr(HINT, domain="emtk")``.
+HINT = mark("press Return to type a command", domain="emtk")
 
 
 @dataclass(frozen=True)

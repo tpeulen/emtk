@@ -235,6 +235,22 @@ class TableColumn:
     shade: bool = True
     #: ``{cell text: (r, g, b[, a])}``: a fixed fill per value (a status column).
     background: Optional[dict] = None
+    #: The unit a spec appended to :attr:`title` as ``" (units)"``.
+    units: str = ""
+
+    def shown_title(self) -> str:
+        """The title in the active language: measured and drawn, never :attr:`title`.
+
+        The source title stays the identity a test or a spec refers to; the
+        translation is taken where the header is laid out, so a language
+        switch re-lays the header on the next frame.
+        """
+        from ..i18n import tr
+
+        base, suffix = self.title, ""
+        if self.units and base.endswith(f" ({self.units})"):
+            base, suffix = base[:-len(self.units) - 3], f" ({self.units})"
+        return tr(base) + suffix
 
     @classmethod
     def from_spec(cls, spec: Mapping, editable: bool = False) -> TableColumn:
@@ -249,6 +265,7 @@ class TableColumn:
         return cls(
             key=key,
             title=str(title),
+            units=str(units or ""),
             width=float(spec.get("width", 0) or 0),
             min_width=float(spec.get("min_width", 0) or 0),
             fmt=str(spec.get("format", spec.get("fmt", "")) or ""),
@@ -794,7 +811,9 @@ class DataTable:
         if self._inside(self._header_box, x, y):
             column = self.column_at(x)
             if column is not None and column.tooltip:
-                return (column.tooltip, ("header", column.key))
+                from ..i18n import tr
+
+                return (tr(column.tooltip), ("header", column.key))
             return ("", None)
         position = self.row_at(x, y)
         if position is not None:
@@ -877,7 +896,7 @@ class DataTable:
             # The cell margins (6 each side), a little air, and room for the
             # sort mark only on the column that carries it.
             mark = p.text_width("▴ ") if column.key == self.sort_key_name else 0.0
-            widest = p.text_width(column.title) + 16.0 + mark
+            widest = p.text_width(column.shown_title()) + 16.0 + mark
             self._title_w[column.key] = widest
             numeric = False
             for index in rows:
@@ -1010,8 +1029,8 @@ class DataTable:
             mark = ""
             if column.key == self.sort_key_name:
                 mark = "▾" if self.descending else "▴"
-            title = (f"{mark} {column.title}" if right else f"{column.title} {mark}") if mark \
-                else column.title
+            shown = column.shown_title()
+            title = (f"{mark} {shown}" if right else f"{shown} {mark}") if mark else shown
             p.text(col_x + 6.0, cursor, max(width - 12.0, 1.0), header_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
                    fit_text(p, title, width - 12.0), _style.TABLE_HEADER_TEXT, bold=True)
@@ -1819,7 +1838,7 @@ def _column_picker(control: DataTable, name: str) -> None:
 
     if control.picker_at is not None:
         keys = [c.key for c in control.columns if c.visible]
-        items = [MenuItem(c.title or c.key, checked=c.key not in control.hidden, checkable=True)
+        items = [MenuItem(c.shown_title() or c.key, checked=c.key not in control.hidden, checkable=True)
                  for c in control.columns if c.visible]
         panel = Popup(items, title=mark("Columns", domain="emtk"))
         panel.open_at(*control.picker_at)

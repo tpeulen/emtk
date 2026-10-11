@@ -148,7 +148,7 @@
             <translation>Diesen Bereich schließen; über das Kontextmenü einer Dock-Kopfzeile wieder öffnen.</translation>
         </message>
         <message>
-            <location filename="emtk/dialog_window.py" line="153" />
+            <location filename="emtk/dialog_window.py" line="156" />
             <source>Close this window (Escape).</source>
             <translation>Dieses Fenster schließen (Esc).</translation>
         </message>
@@ -164,13 +164,13 @@
             <translation>Diesen Bereich ein- oder ausklappen.</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="2000" />
-            <location filename="emtk/im_widgets.py" line="2005" />
+            <location filename="emtk/im_widgets.py" line="2013" />
+            <location filename="emtk/im_widgets.py" line="2018" />
             <source>Color</source>
             <translation>Farbe</translation>
         </message>
         <message>
-            <location filename="emtk/widgets/data_table.py" line="1824" />
+            <location filename="emtk/widgets/data_table.py" line="1843" />
             <source>Columns</source>
             <translation>Spalten</translation>
         </message>
@@ -191,7 +191,7 @@
             <translation>Fadenkreuz</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="1648" />
+            <location filename="emtk/im_widgets.py" line="1661" />
             <source>Decrease the value by {step}; hold the primary modifier for the larger step.</source>
             <translation>Den Wert um {step} verringern; für den größeren Schritt die Hauptsondertaste halten.</translation>
         </message>
@@ -266,7 +266,7 @@
             <translation>Hilfe &amp; Referenz</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="1653" />
+            <location filename="emtk/im_widgets.py" line="1666" />
             <source>Increase the value by {step}; hold the primary modifier for the larger step.</source>
             <translation>Den Wert um {step} erhöhen; für den größeren Schritt die Hauptsondertaste halten.</translation>
         </message>
@@ -358,6 +358,7 @@
             <translation>Ordner nicht gefunden.</translation>
         </message>
         <message>
+            <location filename="emtk/file_dialog.py" line="120" />
             <location filename="emtk/file_dialog.py" line="140" />
             <source>Open</source>
             <translation>Öffnen</translation>
@@ -607,11 +608,13 @@
         </message>
         <message>
             <location filename="emtk/implot.py" line="1830" />
+            <location filename="emtk/implot3d.py" line="2408" />
             <source>X-Axis</source>
             <translation>X-Achse</translation>
         </message>
         <message>
             <location filename="emtk/implot.py" line="1839" />
+            <location filename="emtk/implot3d.py" line="2408" />
             <source>Y-Axis</source>
             <translation>Y-Achse</translation>
         </message>
@@ -656,14 +659,49 @@
             <translation>Seite {page} / {pages}</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="2004" />
+            <location filename="emtk/im_widgets.py" line="2017" />
             <source>{name} preview</source>
             <translation>Vorschau: {name}</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="1999" />
+            <location filename="emtk/im_widgets.py" line="2012" />
             <source>{name}: {channel} channel (0–255)</source>
             <translation>{name}: Kanal {channel} (0–255)</translation>
+        </message>
+        <message>
+            <location filename="emtk/im_widgets.py" line="4620" />
+            <source>Fonts</source>
+            <translation>Schriften</translation>
+        </message>
+        <message>
+            <location filename="emtk/im_widgets.py" line="5305" />
+            <source>Style</source>
+            <translation>Stil</translation>
+        </message>
+        <message>
+            <location filename="emtk/implot3d.py" line="2412" />
+            <source>XY-Plane</source>
+            <translation>XY-Ebene</translation>
+        </message>
+        <message>
+            <location filename="emtk/implot3d.py" line="2411" />
+            <source>XZ-Plane</source>
+            <translation>XZ-Ebene</translation>
+        </message>
+        <message>
+            <location filename="emtk/implot3d.py" line="2411" />
+            <source>YZ-Plane</source>
+            <translation>YZ-Ebene</translation>
+        </message>
+        <message>
+            <location filename="emtk/implot3d.py" line="2409" />
+            <source>Z-Axis</source>
+            <translation>Z-Achse</translation>
+        </message>
+        <message>
+            <location filename="emtk/widgets/command_line.py" line="67" />
+            <source>press Return to type a command</source>
+            <translation>Eingabetaste drücken, um einen Befehl einzugeben</translation>
         </message>
     </context>
 </TS>

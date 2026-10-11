@@ -17,12 +17,14 @@ of :attr:`Literal.key` values.
 from __future__ import annotations
 
 import ast
+import contextlib
+import copy
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-__all__ = ["DEFAULT_KEYWORDS", "DEFAULT_SINKS", "Literal", "literals_in_source",
+__all__ = ["DEFAULT_KEYWORDS", "DEFAULT_SINKS", "DISPLAY_NAMES", "Literal", "isolated", "literals_in_source",
            "untranslated_literals"]
 
 #: Widget calls whose positional argument (index) is shown to the user.
@@ -44,6 +46,63 @@ DEFAULT_RECEIVERS = frozenset({"im", "emtk.im", "_w", "_im", "imgui"})
 ANY_RECEIVER = frozenset({"set_item_tooltip", "set_tooltip"})
 
 _SKIP_PARTS = frozenset({"test", "tests", "__pycache__", ".git", "node_modules"})
+
+#: Name fragments that make an assigned constant, attribute or parameter
+#: default display text (matched case-insensitively against whole ``_`` words
+#: of the name): ``HINT = "press Return"``, ``title: str = "Open"``.
+DISPLAY_NAMES = frozenset({
+    "hint", "label", "labels", "title", "tooltip", "tip", "text", "caption", "placeholder",
+    "message", "prompt", "description", "help", "action", "heading", "status", "subtitle",
+    "summary", "empty",
+})
+
+
+#: Name fragments that make a name *not* display text despite a display word
+#: (``TEXT_FAMILIES`` lists fonts, ``LABEL_KEY`` is an identifier).
+NOT_DISPLAY_NAMES = frozenset({"family", "families", "font", "fonts", "key", "keys", "id",
+                               "ids", "attr", "attrs", "path", "paths", "format"})
+
+
+def _display_name(name: str) -> bool:
+    parts = name.lower().strip("_").split("_")
+    return any(p in DISPLAY_NAMES for p in parts) and not any(p in NOT_DISPLAY_NAMES
+                                                                for p in parts)
+
+
+def _display_constants(tree: ast.AST, path: str) -> list[Literal]:
+    """Module/class constants and parameter defaults named like display text."""
+    found: list[Literal] = []
+
+    def report(node: ast.AST, name: str, value: ast.expr | None, how: str) -> None:
+        values = value.elts if isinstance(value, (ast.Tuple, ast.List)) else [value]
+        for item in values:
+            text = _literal_text(item) if item is not None else None
+            if text is not None and _display_name(name) and " " in text.strip() \
+                    or (text is not None and _display_name(name) and text[:1].isupper()):
+                found.append(Literal(path, item.lineno, item.col_offset, f"{how}:{name}", text))
+
+    def scope(body: list[ast.stmt]) -> None:
+        for stmt in body:
+            if isinstance(stmt, ast.Assign):
+                for target in stmt.targets:
+                    if isinstance(target, ast.Name):
+                        report(stmt, target.id, stmt.value, "constant")
+            elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                report(stmt, stmt.target.id, stmt.value, "constant")
+            elif isinstance(stmt, ast.ClassDef):
+                scope(stmt.body)
+
+    scope(getattr(tree, "body", []))
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            positional = args.posonlyargs + args.args
+            for arg, default in zip(positional[len(positional) - len(args.defaults):],
+                                    args.defaults):
+                report(node, arg.arg, default, "default")
+            for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+                report(node, arg.arg, default, "default")
+    return found
 
 
 @dataclass(frozen=True)
@@ -98,8 +157,14 @@ def _literal_text(value: ast.expr) -> str | None:
 
 def literals_in_source(source: str, path: str, *, sinks: Mapping[str, int] = DEFAULT_SINKS,
                        keywords: Iterable[str] = DEFAULT_KEYWORDS,
-                       receivers: Iterable[str] = DEFAULT_RECEIVERS) -> list[Literal]:
+                       receivers: Iterable[str] = DEFAULT_RECEIVERS,
+                       constants: bool = False) -> list[Literal]:
     """Display literals at widget sinks of one Python source.
+
+    With ``constants``, also module and class constants and parameter
+    defaults named like display text (:data:`DISPLAY_NAMES`) whose value is a
+    bare string: text defined in one place and shown in another, which no
+    sink check can see. Wrap them in ``mark()`` and ``tr()`` where shown.
 
     A ``SyntaxError`` propagates: a file that does not parse must fail the
     guard rather than silently count as clean.
@@ -143,6 +208,8 @@ def literals_in_source(source: str, path: str, *, sinks: Mapping[str, int] = DEF
             text = _literal_text(value)
             if text is not None:
                 found.append(Literal(path, node.lineno, node.col_offset, method, text))
+    if constants:
+        found.extend(_display_constants(tree, path))
     return found
 
 
@@ -150,7 +217,8 @@ def untranslated_literals(package_dir: str | os.PathLike, *,
                           sinks: Mapping[str, int] = DEFAULT_SINKS,
                           keywords: Iterable[str] = DEFAULT_KEYWORDS,
                           receivers: Iterable[str] = DEFAULT_RECEIVERS,
-                          exclude: Iterable[str] = ()) -> list[Literal]:
+                          exclude: Iterable[str] = (), constants: bool = False
+                          ) -> list[Literal]:
     """Every display literal at a widget sink in a package's shipped Python.
 
     Tests (``test``/``tests`` directories, ``test_*.py``) are skipped, as are
@@ -161,7 +229,8 @@ def untranslated_literals(package_dir: str | os.PathLike, *,
     without a letter (``"…"``, ``"123"``). An f-string with prose is a
     literal too (reported with its ``{…}`` placeholders): translate the
     template and format after, ``tr("Loaded {n} files").format(n=n)``, which
-    :mod:`emtk.i18n.extract` collects.
+    :mod:`emtk.i18n.extract` collects. ``constants`` adds display-named
+    constants and parameter defaults (see :func:`literals_in_source`).
     """
     root = Path(package_dir).resolve()
     exclude = tuple(exclude)
@@ -174,5 +243,45 @@ def untranslated_literals(package_dir: str | os.PathLike, *,
         if any(token in rel for token in exclude):
             continue
         found.extend(literals_in_source(path.read_text(encoding="utf-8"), rel, sinks=sinks,
-                                        keywords=keywords, receivers=receivers))
+                                        keywords=keywords, receivers=receivers,
+                                        constants=constants))
     return found
+
+
+@contextlib.contextmanager
+def isolated(language: str | None = "en"):
+    """Run a block against a private copy of every translation registration.
+
+    Catalogues, hand-added strings, the language (``language``, or left as it
+    is with ``None``), the default domain and the language provider are
+    restored on exit, so a test can ``add_translations``/``add_catalogue``/
+    ``set_language`` freely::
+
+        @pytest.fixture(autouse=True)
+        def _translations():
+            with isolated():
+                yield
+    """
+    from .. import i18n as state
+
+    saved = {name: getattr(state, name) for name in
+             ("_language", "_explicit", "_provider", "_default_domain")}
+    memory = copy.deepcopy(state._memory)
+    sources = {domain: [copy.deepcopy(s) if isinstance(s, dict) else s for s in found]
+               for domain, found in state._sources.items()}
+    cache = dict(state._cache)
+    try:
+        if language is not None:
+            state.set_language(language)
+        yield
+    finally:
+        with state._lock:
+            for name, value in saved.items():
+                setattr(state, name, value)
+            state._memory.clear()
+            state._memory.update(memory)
+            state._sources.clear()
+            state._sources.update(sources)
+            state._cache.clear()
+            state._cache.update(cache)
+            state._bump()

@@ -86,6 +86,7 @@ from . import im_core as _core
 from . import im_widgets as _w
 from . import overlays as _overlays
 from .flags import InputTextFlags
+from .i18n import tr
 from .keys import KEY_ESCAPE
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
@@ -254,7 +255,7 @@ def format_value(value: Any, section: dict) -> str:
     if special and kind in ("int", "float") and section.get("minimum") is not None:
         try:
             if float(value) == float(section["minimum"]):
-                return str(special)
+                return tr(str(special))
         except (TypeError, ValueError):
             pass
     suffix = str(section.get("suffix") or "") if kind in ("int", "float") else ""
@@ -306,7 +307,9 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
         return text
     text = str(text).strip()
     special = str(section.get("special_text") or "").strip()
-    if special and text.lower() == special.lower() and section.get("minimum") is not None:
+    # The shown spelling is the translated one; the source spelling still parses.
+    if special and text.lower() in (special.lower(), tr(special).lower()) \
+            and section.get("minimum") is not None:
         lo = section["minimum"] if bounds is None or bounds[0] is None else bounds[0]
         return int(round(float(lo))) if kind == "int" else float(lo)
     suffix = str(section.get("suffix") or "").strip()
@@ -392,9 +395,9 @@ def _options(section: dict, model: Any) -> tuple[list, list[str]]:
         values = list(produced or [])
     values = list(values or [])
     if values and all(isinstance(v, (list, tuple)) and len(v) == 2 for v in values):
-        return [v[0] for v in values], [str(v[1]) for v in values]
+        return [v[0] for v in values], [tr(str(v[1])) for v in values]
     labels = section.get("labels") or [str(v) for v in values]
-    return values, [str(label) for label in labels]
+    return values, [tr(str(label)) for label in labels]
 
 
 def _commit(model: Any, section: dict, value: Any, state: FormState) -> None:
@@ -478,6 +481,13 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     field_w = width
     if slider:
         field_w = max(40.0, min(90.0, 0.12 * width))
+        special = section.get("special_text")
+        if special:
+            # Room for the sentinel's spelling in the active language.
+            # (plus a frame height: the field's caret and inner margin)
+            need = _w.calc_text_size(tr(str(special)))[0] \
+                + 2.0 * _core.get_style().frame_padding[0] + _core.get_frame_height()
+            field_w = min(max(field_w, need), 0.5 * width)
     if colour:
         swatch = _core.get_frame_height() * 1.6
         if _w.color_button(f"##{name}.swatch", (*_rgb(value), 255), 0,
@@ -820,7 +830,7 @@ def _button_label(item: dict, model: Any) -> str:
     source = item.get("label_source")
     if source and callable(getattr(model, source, None)):
         label = str(getattr(model, source)())
-    return icon_caption(str(item.get("icon") or ""), str(label))
+    return icon_caption(str(item.get("icon") or ""), _tr_label(label))
 
 
 def _button_natural(label: str) -> float:
@@ -831,6 +841,18 @@ def _button_natural(label: str) -> float:
 
 def _visible(label: str) -> str:
     return str(label).split("##", 1)[0]
+
+
+def _tr_label(label: Any) -> str:
+    """A spec label translated once, where it is read: ``"Run##go"`` → ``"Starten##go"``.
+
+    The form measures what it draws, so the text is translated here -- before
+    any width is taken -- and the widget's own ``tr()`` then finds nothing more
+    to translate. Measuring the source and drawing the translation is what
+    clipped every German toolbar button.
+    """
+    text, sep, ident = str(label).partition("##")
+    return tr(text) + sep + ident if text else str(label)
 
 
 def _flow(widths: Sequence[float], room: float, spacing: float) -> list[list[int]]:
@@ -890,7 +912,7 @@ def _label_of(section: dict) -> str:
     kind = str(section.get("type", "")).lower()
     if kind in ("button_row", "toggle", "toggle_row", "info"):
         return ""
-    return str(section.get("label", ""))
+    return _tr_label(section.get("label", ""))
 
 
 def _weight(section: dict) -> float:
@@ -931,11 +953,11 @@ def _fixed_width(section: dict, model: Any = None) -> float:
         # weight 0: as wide as the labels, and no wider
         return _min_width(section, model)
     if kind == "toggle":
-        return _toggle_width(str(section.get("label", "")))
+        return _toggle_width(_tr_label(section.get("label", "")))
     if kind == "toggle_row":
         spacing = _core.get_style().item_spacing[0]
         items = section.get("items") or []
-        return sum(_toggle_width(str(item.get("label", ""))) for item in items) \
+        return sum(_toggle_width(_tr_label(item.get("label", ""))) for item in items) \
             + spacing * max(len(items) - 1, 0)
     return 0.0
 
@@ -978,6 +1000,10 @@ def _min_width(section: dict, model: Any = None) -> float:
     if kind == "value":
         style_name = str(section.get("style", "")).lower()
         spin = style_name == "spin" or bool(section.get("spin"))
+        special = section.get("special_text")
+        if special:
+            # The sentinel's spelling is shown in the field; in its language.
+            text = max(text, _w.calc_text_size(tr(str(special)))[0])
         return text + 2.0 * pad + (fh * 0.75 if spin else 0.0) \
             + (40.0 if style_name == "slider" else 0.0)
     return 30.0
@@ -991,12 +1017,13 @@ def _draw_control(section: dict, model: Any, state: FormState, width: float) -> 
     elif kind == "choice":
         _draw_choice(section, model, state, width)
     elif kind == "toggle":
-        _draw_toggle(section, model, state, str(section.get("label", "")))
+        _draw_toggle(section, model, state, _tr_label(section.get("label", "")))
     elif kind == "toggle_row":
         for i, item in enumerate(section.get("items") or []):
             if i:
                 _w.same_line()
-            _draw_toggle(dict(item, type="toggle"), model, state, str(item.get("label", "")))
+            _draw_toggle(dict(item, type="toggle"), model, state,
+                         _tr_label(item.get("label", "")))
     elif kind == "button_row":
         _draw_buttons(section, model, state, width)
     elif kind == "progress":
@@ -1280,7 +1307,7 @@ def _draw_table_section(section: dict, model: Any, state: FormState) -> None:
     if binding is None or binding.model is not model:
         binding = state.tables[name] = TableBinding(section, model)
     if section.get("title") and str(section.get("type", "")).lower() == "custom":
-        _w.text(str(section["title"]))
+        _w.text(tr(str(section["title"])))
         _tooltip(section)
     draw_table(binding, name)
     _remember(state, name)
@@ -1429,7 +1456,7 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
                 if not _fold(section, state):
                     continue
             elif titles and section.get("title"):
-                _w.text(str(section["title"]))
+                _w.text(tr(str(section["title"])))
                 _tooltip(section)
             draw_sections(section.get("sections") or [], model, state,
                           int(section.get("n_col") or 1), titles,
@@ -1468,7 +1495,7 @@ def _draw_code_editor(section: dict, model: Any, state: FormState) -> None:
             editor.set_text(text)
         editor._bound_text = text
     if section.get("title"):
-        _w.text(str(section["title"]))
+        _w.text(tr(str(section["title"])))
 
     ctx = _core.get_current_context()
     avail_w, avail_h = _w.get_content_region_avail()[:2]
@@ -1545,7 +1572,8 @@ def _fold(section: dict, state: FormState) -> bool:
     draw.add_rect_filled((x, y), (x + w, y + h),
                          (*colour[:3], int(round(alpha * share))), style.frame_rounding)
     text_colour = style.color(_core.Col.TEXT)
-    th = _w.calc_text_size(title)[1]
+    shown = tr(title)  # the fold is keyed by the spec's title, drawn translated
+    th = _w.calc_text_size(shown)[1]
     mark = th * 0.5
     gap = style.item_inner_spacing[0] + 1.0
     left = x + style.frame_padding[0]
@@ -1557,7 +1585,7 @@ def _fold(section: dict, state: FormState) -> bool:
         draw.add_triangle_filled((left + mark * 0.1, cy - mark / 2.0),
                                  (left + mark * 0.1, cy + mark / 2.0),
                                  (left + mark, cy), text_colour)
-    draw.add_text((left + mark + gap, y + (h - th) / 2.0), text_colour, title)
+    draw.add_text((left + mark + gap, y + (h - th) / 2.0), text_colour, shown)
     return is_open
 
 
