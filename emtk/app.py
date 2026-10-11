@@ -54,7 +54,6 @@ from .events import (
     RIGHT_BUTTON,
     SHIFT_MODIFIER,
 )
-from .font import DEFAULT_FONT_PT
 
 __all__ = [
     "Surface",
@@ -268,15 +267,16 @@ class ControlSurface(Surface):
         ``wheel(x, y, steps, modifiers)``, ``files_dropped(paths)`` and
         ``animating()``.
     font_pt : float, optional
-        Point size of the interface font.
+        Point size of the interface font. By default the surface follows the
+        user's setting, :func:`emtk.type_scale.ui_font_pt`, from frame to frame.
     background : tuple, optional
         0-255 RGB(A) cleared to before the control draws.
     """
 
-    def __init__(self, control, font_pt: float = DEFAULT_FONT_PT,
+    def __init__(self, control, font_pt: float | None = None,
                  background: tuple = (30, 32, 38)) -> None:
         self.control = control
-        self.font_pt = float(font_pt)
+        self._font_pt = None if font_pt is None else float(font_pt)
         self.background = tuple(background)
         self.renderer = None
         self.format: str | None = None
@@ -284,8 +284,22 @@ class ControlSurface(Surface):
         self.ratio = 1.0
         self._painter = None
         self._painter_ratio: float | None = None
+        self._painter_font_pt: float | None = None
         self._pressed = False
         self._closed = False
+
+    @property
+    def font_pt(self) -> float:
+        """The interface font size: the one given, else the user's setting."""
+        if self._font_pt is not None:
+            return self._font_pt
+        from .type_scale import ui_font_pt  # noqa: PLC0415
+
+        return ui_font_pt()
+
+    @font_pt.setter
+    def font_pt(self, value: float | None) -> None:
+        self._font_pt = None if value is None else float(value)
 
     # -- geometry -------------------------------------------------------- #
     def _box(self) -> tuple[float, float, float, float]:
@@ -342,10 +356,12 @@ class ControlSurface(Surface):
         # Rebuilt when the ratio changes (a window dragged to another
         # display); a stale scale draws at half size while hit tests answer
         # for full size, so every click misses by the ratio.
-        if self._painter is None or self._painter_ratio != self.ratio:
-            self._painter = self.renderer.painter(font_pt=self.font_pt,
-                                                  scale=self.ratio)
+        font_pt = self.font_pt
+        if (self._painter is None or self._painter_ratio != self.ratio
+                or self._painter_font_pt != font_pt):
+            self._painter = self.renderer.painter(font_pt=font_pt, scale=self.ratio)
             self._painter_ratio = self.ratio
+            self._painter_font_pt = font_pt
         painter = self._painter
         painter.clear()
         self.control.draw(painter, *self._box())

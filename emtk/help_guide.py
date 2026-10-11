@@ -28,6 +28,11 @@ from emtk.dialog_window import DialogWindow
 from emtk.i18n import mark, tr
 from emtk.im_core import Col
 from emtk.keys import KEY_ESCAPE
+from emtk.type_scale import text_style
+
+#: The close mark: the one the dialog's own header button draws (a baked glyph,
+#: so it renders the same on every host).
+CLOSE_CAPTION_ICON = "\u00d7"
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +208,9 @@ class EmTkHelpWindow:
             im.pop_style_color()
 
         im.same_line()
-        if im.button(tr("Close", domain="emtk") + "##help_top"):
+        # The one labelled Close of the window (besides Escape and the header ×):
+        # the close mark, then the word -- no second "Close Help" in a footer.
+        if im.button(CLOSE_CAPTION_ICON + "  " + tr("Close", domain="emtk") + "###help_top"):
             pressed = "close"
         im.set_item_tooltip(tr("Close this help window.", domain="emtk"))
 
@@ -231,7 +238,7 @@ class EmTkHelpWindow:
         # Content scrolling area
         avail_w, avail_h = ctx.layout.avail()
         im.begin_child(
-            (*im.get_cursor_screen_pos(), max(100.0, avail_w), max(80.0, avail_h - 38.0)), clip=True
+            (*im.get_cursor_screen_pos(), max(100.0, avail_w), max(80.0, avail_h)), clip=True
         )
 
         for heading, lines in self.sections:
@@ -239,34 +246,33 @@ class EmTkHelpWindow:
                 continue
 
             im.spacing()
-            im.text_colored(tr(heading, domain=self.domain), (0.4, 0.8, 1.0, 1.0))
+            with text_style("h2"):
+                im.text_colored(tr(heading, domain=self.domain), (0.4, 0.8, 1.0, 1.0))
             im.separator()
 
             for line in lines:
                 s = line.strip()
                 if not s:
                     im.spacing()
-                elif s.startswith(("- ", "* ")):
-                    im.bullet()
-                    im.text_wrapped(s[2:])
-                elif len(s) >= 3 and s[0].isdigit() and s[1:3] in (". ", ") "):
-                    im.text_colored(f"  {s[:3]}", (0.3, 0.85, 0.5, 1.0))
-                    im.same_line()
-                    im.text_wrapped(s[3:])
                 elif s.startswith("### "):
-                    im.text_colored(s[4:], (0.3, 0.85, 0.5, 1.0))
+                    with text_style("h4"):
+                        im.text_colored(s[4:], (0.3, 0.85, 0.5, 1.0))
                 elif s.startswith("## "):
-                    im.text_colored(s[3:], (0.4, 0.8, 1.0, 1.0))
+                    with text_style("h3"):
+                        im.text_colored(s[3:], (0.4, 0.8, 1.0, 1.0))
                 else:
-                    im.text_wrapped(s)
+                    with text_style("body"):
+                        if s.startswith(("- ", "* ")):
+                            im.bullet()
+                            im.text_wrapped(s[2:])
+                        elif len(s) >= 3 and s[0].isdigit() and s[1:3] in (". ", ") "):
+                            im.text_colored(f"  {s[:3]}", (0.3, 0.85, 0.5, 1.0))
+                            im.same_line()
+                            im.text_wrapped(s[3:])
+                        else:
+                            im.text_wrapped(s)
 
         im.end_child()
-
-        # Footer action bar
-        im.separator()
-        if im.button(tr("Close Help", domain="emtk") + "##footer"):
-            pressed = "close"
-        im.set_item_tooltip(tr("Close this help window.", domain="emtk"))
 
         self.dlg.end()
 

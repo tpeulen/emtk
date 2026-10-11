@@ -1,5 +1,4 @@
 """emtk.help_guide: the help window and the guided tour draw and step."""
-from emtk import im
 from emtk.help_guide import EmTkGuidedTour, EmTkHelpWindow
 from emtk.im_core import IO, frame
 from emtk.testing import RecordingPainter
@@ -46,3 +45,12 @@ def test_tour_waits_for_the_awaited_control():
     assert t.step_idx == 2
     t.stop()
     assert not t.active
+
+
+def test_help_has_one_labelled_close_and_no_footer():
+    """One close control: the header's "× Close" (the dialog's own × aside); no "Close Help" footer."""
+    h = EmTkHelpWindow(title="Help", text=HELP)
+    h.show()
+    painter = _frames(lambda: h.draw((0.0, 0.0, 900.0, 700.0)))
+    closes = [s for s in painter.strings if "Close" in s]
+    assert closes == ["×  Close"], closes

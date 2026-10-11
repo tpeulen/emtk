@@ -91,8 +91,15 @@ class GlyphCache:
     """
 
     def __init__(self, cell, ascent: int, columns: int = 16, rows: int = 16,
-                 pad: int = 0, advance: int | None = None) -> None:
+                 pad: int = 0, advance: int | None = None,
+                 em: float | None = None) -> None:
         self.cell_w, self.cell_h = int(cell[0]), int(cell[1])
+        #: The baked face's em, in texels: the size a runtime glyph is drawn
+        #: at. Without it the size was guessed from the cell height (0.72 of
+        #: it), which is the em *plus* the line gap and the pads -- 1.66x too
+        #: large, so a ✕ came out as a tall letter squeezed into one advance:
+        #: an "X" beside the word Close, not the close mark.
+        self.em = float(em) if em else None
         self.ascent = int(ascent)
         #: Where the pen sits in a baked cell (``pad`` texels from its left and
         #: top) and how wide one advance is, in texels: a cell is the advance
@@ -219,7 +226,7 @@ class GlyphCache:
         # Sized from the cell's height rather than a point size: the baked
         # atlas is supersampled, and matching its *cell* is what makes a
         # runtime glyph the same size as a baked one.
-        size = max(int(self.cell_h * 0.72), 6)
+        size = max(int(round(self.em)) if self.em else int(self.cell_h * 0.72), 6)
         try:
             font = ImageFont.truetype(path, size)
         except Exception:

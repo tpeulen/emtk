@@ -237,9 +237,10 @@ class TkHost:
         self._tk = tk
         self.control = control
         self.background = tuple(background)
-        from .font import DEFAULT_FONT_PT  # noqa: PLC0415
+        from .type_scale import ui_font_pt  # noqa: PLC0415
 
-        self.font_pt = float(DEFAULT_FONT_PT if font_pt is None else font_pt)
+        # The user's interface size (emtk.type_scale) unless one is given.
+        self.font_pt = float(ui_font_pt() if font_pt is None else font_pt)
         self.interval_ms = int(interval_ms)
         self.on_close = on_close
         self.root = root if root is not None else tk.Tk()

@@ -138,6 +138,16 @@
             <translation>Fermer la visite guidée et revenir à l’outil.</translation>
         </message>
         <message>
+            <location filename="emtk/im_widgets.py" line="5378" />
+            <source>Interface font size (pt)</source>
+            <translation>Taille de police de l’interface (pt)</translation>
+        </message>
+        <message>
+            <location filename="emtk/im_widgets.py" line="5381" />
+            <source>Size of all interface text; headings and captions keep their steps above and below it.</source>
+            <translation>Taille de tout le texte de l’interface ; titres et légendes gardent leurs paliers au-dessus et en dessous.</translation>
+        </message>
+        <message>
             <location filename="emtk/help_guide.py" line="208" />
             <location filename="emtk/help_guide.py" line="269" />
             <source>Close this help window.</source>

@@ -277,7 +277,7 @@ def font_spec(value=None, size: float | None = 0.0) -> FontSpec:
     return spec
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=128)
 def _loaded(face: Face, pixels: int):
     from PIL import ImageFont
 
@@ -289,23 +289,104 @@ def _font(spec: FontSpec, scale: float, bold: bool = False):
     return _loaded(_face(actual), max(1, round(actual.size * PX_PER_PT * scale)))
 
 
+#: Pixel size text is *laid out* at, whatever size it is drawn at.
+#:
+#: Measuring at the drawn size is what made proportional text look squeezed:
+#: FreeType hints a face to whole pixels at small sizes, so an 11 px layout
+#: is not the 22 px layout halved, and the glyphs -- rasterised at 11 px and
+#: stretched onto a 2x display -- were both soft and set on tighter advances
+#: than the face has. At this size hinting is lost in the noise, so widths
+#: and pen positions are exactly linear in the size: what a layout measures
+#: at ratio 1 is what is drawn at ratio 2, and at every font scale.
+LAYOUT_PX = 512
+
+
+def _px(spec: FontSpec, scale: float) -> float:
+    """Logical pixel size of *spec* at *scale*: an em, unrounded."""
+    return spec.size * PX_PER_PT * scale
+
+
+@lru_cache(maxsize=256)
+def _layout_metrics(spec: FontSpec) -> tuple[float, float]:
+    """``(ascent, descent)`` of *spec* at :data:`LAYOUT_PX`."""
+    ascent, descent = _loaded(_face(spec), LAYOUT_PX).getmetrics()
+    return float(ascent), float(descent)
+
+
+@lru_cache(maxsize=64)
+def _cmap(path: str, index: int):
+    """Codepoints a face covers, or ``None`` when its tables cannot be read."""
+    try:
+        from fontTools.ttLib import TTFont  # noqa: PLC0415
+
+        return frozenset(TTFont(path, fontNumber=index, lazy=True).getBestCmap())
+    except Exception:  # noqa: BLE001 - unknown coverage is "assume covered"
+        return None
+
+
+@lru_cache(maxsize=4096)
+def _face_for(face: Face, char: str) -> Face:
+    """*face* when it has *char*, else the first fallback face that has it.
+
+    A proportional face (Arial, Helvetica) lacks much of what documentation
+    writes -- subscript digits (R\u2080), arrows, dingbats -- and drawing its
+    ``.notdef`` box is the bug the baked chrome solved long ago with its own
+    fallback list. The same list serves here, so a character looks the same
+    in prose as in a button.
+    """
+    covered = _cmap(face.path, face.index)
+    if covered is None or ord(char) in covered or char.isspace():
+        return face
+    from .dynamic_font import FONT_CANDIDATES  # noqa: PLC0415
+
+    for path in FONT_CANDIDATES:
+        if "emoji" in path.lower() or not os.path.exists(path):
+            continue  # colour strikes cannot be rasterised as outlines
+        other = _cmap(path, 0)
+        if other is not None and ord(char) in other:
+            return Face(path, 0, face.bold, face.italic, False, "fallback")
+    return face
+
+
+@lru_cache(maxsize=4096)
+def _runs(spec: FontSpec, string: str) -> tuple[tuple[Face, int, str], ...]:
+    """*string* split into ``(face, start, text)`` runs of one face each."""
+    primary = _face(spec)
+    runs: list[list] = []
+    for index, char in enumerate(string):
+        face = _face_for(primary, char)
+        if runs and runs[-1][0] == face:
+            runs[-1][2] += char
+        else:
+            runs.append([face, index, char])
+    return tuple((face, start, text) for face, start, text in runs)
+
+
+@lru_cache(maxsize=16384)
+def _layout_width(spec: FontSpec, string: str) -> float:
+    return float(sum(_loaded(face, LAYOUT_PX).getlength(text)
+                     for face, _, text in _runs(spec, string)))
+
+
 @lru_cache(maxsize=16384)
 def text_width(spec: FontSpec, string: str, scale: float) -> float:
-    return float(_font(spec, scale).getlength(string))
+    """Advance width of *string*, in the caller's pixels; linear in *scale*."""
+    return _layout_width(spec, string) * _px(spec, scale) / LAYOUT_PX
 
 
 def line_height(spec: FontSpec, scale: float) -> float:
-    ascent, descent = _font(spec, scale).getmetrics()
-    return float(ascent + descent)
+    """Ascent plus descent, in the caller's pixels; linear in *scale*."""
+    ascent, descent = _layout_metrics(spec)
+    return (ascent + descent) * _px(spec, scale) / LAYOUT_PX
 
 
 @lru_cache(maxsize=512)
-def _glyph(spec: FontSpec, pixels: int, char: str):
+def _glyph(face: Face, pixels: int, char: str):
     from PIL import Image, ImageDraw
 
     from .texture import Texture
 
-    font = _loaded(_face(spec), pixels)
+    font = _loaded(face, pixels)
     left, top, right, bottom = font.getbbox(char, anchor="ls")
     # Guard degenerate spaces; every real glyph has a tiny owned texture.
     width, height = max(1, right - left + 2), max(1, bottom - top + 2)
@@ -316,42 +397,57 @@ def _glyph(spec: FontSpec, pixels: int, char: str):
     return Texture(width, height, image.tobytes()), float(left - 1), float(top - 1)
 
 
-def glyphs(spec: FontSpec, string: str, scale: float, bold: bool = False):
-    """Yield texture, baseline-relative bounds and real shaped advance.
+#: Largest glyph raster, in device pixels. Bounds GPU image-atlas occupancy;
+#: larger text scales the raster of the real face.
+MAX_RASTER_PX = 64
 
-    The shared glyph LRU is bounded. Raster pixels cap at 48px for bounded
-    GPU image-atlas occupancy; larger fonts scale the selected real face.
+
+def glyphs(spec: FontSpec, string: str, scale: float, bold: bool = False,
+           device: float = 1.0):
+    """Yield texture, baseline-relative bounds and pen position of each glyph.
+
+    Geometry is in the caller's pixels (logical for a GPU painter, which
+    applies the device ratio itself). *device* is how many device pixels one
+    of those is: the glyph is **rasterised at the device size**, so a 2x
+    display gets a 2x raster rather than a 1x one stretched. Pen positions
+    come from the :data:`LAYOUT_PX` layout, the same numbers
+    :func:`text_width` returns, so measurement and drawing agree.
     """
     actual = FontSpec(spec.family, spec.size, spec.bold or bold, spec.italic)
-    font = _font(actual, scale)
-    size = max(1, round(actual.size * PX_PER_PT * scale))
-    raster_size = min(size, 48)
-    factor = size / raster_size
-    ascent, _ = font.getmetrics()
-    positions = _positions(actual, size, string)
+    em = _px(actual, scale)
+    device = float(device) if device and device > 0 else 1.0
+    raster = max(1, min(round(em * device), MAX_RASTER_PX))
+    unit = em / raster  # caller pixels per raster texel
+    k = em / LAYOUT_PX
+    ascent = _layout_metrics(actual)[0] * k
+    positions = _positions(actual, string)
+    faces = [face for face, _, text in _runs(actual, string) for _ in text]
     for index, char in enumerate(string):
         if char.isspace():
             continue
-        texture, left, top = _glyph(actual, raster_size, char)
-        # Prefix measurement includes kerning. Glyph positions and the width
-        # query therefore agree for proportional as well as fixed-width faces.
-        advance = positions[index]
+        texture, left, top = _glyph(faces[index], raster, char)
         yield (
             texture,
-            advance + left * factor,
-            ascent + top * factor,
-            texture.width * factor,
-            texture.height * factor,
+            positions[index] * k + left * unit,
+            ascent + top * unit,
+            texture.width * unit,
+            texture.height * unit,
         )
 
 
-@lru_cache(maxsize=128)
-def _positions(spec, size, string):
-    font = _loaded(_face(spec), size)
-    return tuple(
-        float(font.getlength(string[: index + 1]) - font.getlength(char))
-        for index, char in enumerate(string)
-    )
+@lru_cache(maxsize=1024)
+def _positions(spec, string):
+    """Pen position of every character at :data:`LAYOUT_PX`, kerning included."""
+    out: list[float] = []
+    offset = 0.0
+    for face, _, text in _runs(spec, string):
+        font = _loaded(face, LAYOUT_PX)
+        out.extend(
+            offset + float(font.getlength(text[: index + 1]) - font.getlength(char))
+            for index, char in enumerate(text)
+        )
+        offset += float(font.getlength(text))
+    return tuple(out)
 
 
 def draw_text(
@@ -368,8 +464,14 @@ def draw_text(
     bold=False,
     degrees=0.0,
     require_resolver=False,
+    device=1.0,
 ):
-    """Draw shared real-font glyph textures through the existing image seam."""
+    """Draw shared real-font glyph textures through the existing image seam.
+
+    *device* is device pixels per caller pixel (a GPU painter's ratio): the
+    glyphs are rasterised at that resolution and their boxes snapped to the
+    device pixel grid, so text is as sharp on a 2x display as the chrome is.
+    """
     from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER
 
     if require_resolver and not callable(painter.image_uv_resolver):
@@ -389,10 +491,15 @@ def draw_text(
     top = y + ((h - height) / 2 if align & ALIGN_VCENTER else 0)
     co, si = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
     centre = (x + w / 2, y + h / 2)
-    for texture, dx, dy, gw, gh in glyphs(spec, string, scale, bold):
+    device = float(device) if device and device > 0 else 1.0
+    for texture, dx, dy, gw, gh in glyphs(spec, string, scale, bold, device):
         if require_resolver and painter.image_uv_resolver(texture) is None:
             raise RuntimeError("Selected font glyph does not fit the host image atlas")
         gx, gy = left + dx, top + dy
+        if not degrees:
+            # One raster texel per device pixel: a box straddling pixels
+            # would be resampled, which blurs every stem.
+            gx, gy = round(gx * device) / device, round(gy * device) / device
         if not degrees:
             painter.image(gx, gy, gw, gh, texture, tint=colour)
         else:

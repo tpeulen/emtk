@@ -89,7 +89,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .font import DEFAULT_FONT_PT
 from .gpu_atlas import (
     ATTRIBUTES,
     BAKED_FONT_PT,
@@ -351,13 +350,14 @@ class WgpuRenderer:
             self._device = default_device()
         return self._device
 
-    def painter(self, font_pt: float = DEFAULT_FONT_PT, scale: float = 1.0):
+    def painter(self, font_pt: float | None = None, scale: float = 1.0):
         """A :class:`~.quad_painter.QuadPainter` wired to this renderer.
 
         Parameters
         ----------
         font_pt : float, optional
-            Point size of the interface font. Converted to the atlas's
+            Point size of the interface font (default: the user's setting,
+            :func:`emtk.type_scale.ui_font_pt`). Converted to the atlas's
             ``font_scale``: the atlas is a bitmap face, so there is no
             second size to bake.
         scale : float, optional
@@ -373,6 +373,10 @@ class WgpuRenderer:
         """
         from .quad_painter import QuadPainter  # noqa: PLC0415
 
+        if font_pt is None:
+            from .type_scale import ui_font_pt  # noqa: PLC0415
+
+            font_pt = ui_font_pt()
         baked = float(getattr(self.atlas, "font_pt", BAKED_FONT_PT))
         painter = QuadPainter(
             atlas=self.atlas,
@@ -850,7 +854,8 @@ def wgpu_host_class():
             ``release``, ``hover``, ``key`` and ``scroll`` are used when
             present, so a control with none of them still hosts fine.
         font_pt : float, optional
-            Point size of the interface font.
+            Point size of the interface font; by default the user's setting
+            (:func:`emtk.type_scale.ui_font_pt`), followed from frame to frame.
         background : tuple, optional
             Cleared to before the control draws, as 0-255 RGB.
         on_change : callable, optional
@@ -886,7 +891,7 @@ def wgpu_host_class():
         def __init__(
             self,
             control,
-            font_pt: float = DEFAULT_FONT_PT,
+            font_pt: float | None = None,
             background: tuple = (30, 32, 38),
             on_change: Callable[[object], None] | None = None,
             images=None,
@@ -899,7 +904,8 @@ def wgpu_host_class():
             from .qt_host import use_qt_clipboard  # noqa: PLC0415
 
             use_qt_clipboard()        # copy *and* paste through QClipboard
-            self.font_pt = float(font_pt)
+            #: ``None`` follows the user's setting (:mod:`emtk.type_scale`).
+            self.font_pt = None if font_pt is None else float(font_pt)
             self.background = tuple(background)
             self.on_change = on_change
             if renderer is None:
@@ -955,7 +961,13 @@ def wgpu_host_class():
             """
             painter = self.renderer.painter(font_pt=self.font_pt, scale=scale)
             self._painter_scale = scale
+            self._painter_font_pt = self._resolved_font_pt()
             return painter
+
+        def _resolved_font_pt(self) -> float:
+            from .type_scale import ui_font_pt  # noqa: PLC0415
+
+            return ui_font_pt() if self.font_pt is None else float(self.font_pt)
 
         def _draw_frame(self) -> None:
             """Build the frame's vertices and draw them. One call."""
@@ -971,7 +983,8 @@ def wgpu_host_class():
             # where it should be, so every click misses by the ratio and the
             # interface looks inert rather than misplaced.
             scale = float(self.get_pixel_ratio())
-            if self._painter is None or self._painter_scale != scale:
+            if (self._painter is None or self._painter_scale != scale
+                    or getattr(self, "_painter_font_pt", None) != self._resolved_font_pt()):
                 self._painter = self._make_painter(scale)
             painter = self._painter
             painter.clear()

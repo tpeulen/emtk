@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Callable
 
 from .. import im
 from ..i18n import tr
 from ..im_core import Col
+from ..type_scale import math_args, pop_text_style, push_text_style
 
 __all__ = ["MarkdownBlock", "parse_markdown", "render_markdown"]
 
@@ -423,47 +424,39 @@ def render_markdown(
 
         if block.kind == "h1":
             im.dummy(0.0, 12.0)
-            im.push_font({"family": "sans-serif", "bold": True})
-            im.push_font_scale(1.55)
+            push_text_style("h1")
             im.text_colored((125, 205, 255, 255), block.text)
-            im.pop_font_scale()
-            im.pop_font()
+            pop_text_style()
             im.dummy(0.0, 2.0)
             im.separator()
             im.dummy(0.0, 6.0)
 
         elif block.kind == "h2":
             im.dummy(0.0, 10.0)
-            im.push_font({"family": "sans-serif", "bold": True})
-            im.push_font_scale(1.3)
+            push_text_style("h2")
             im.text_colored((145, 225, 160, 255), block.text)
-            im.pop_font_scale()
-            im.pop_font()
+            pop_text_style()
             im.dummy(0.0, 4.0)
 
         elif block.kind == "h3":
             im.dummy(0.0, 8.0)
-            im.push_font({"family": "sans-serif", "bold": True})
-            im.push_font_scale(1.15)
+            push_text_style("h3")
             im.text_colored((245, 205, 115, 255), block.text)
-            im.pop_font_scale()
-            im.pop_font()
+            pop_text_style()
             im.dummy(0.0, 3.0)
 
         elif block.kind == "h4":
             im.dummy(0.0, 6.0)
-            im.push_font({"family": "sans-serif", "bold": True})
-            im.push_font_scale(1.05)
+            push_text_style("h4")
             im.text_colored((220, 225, 235, 255), block.text)
-            im.pop_font_scale()
-            im.pop_font()
+            pop_text_style()
             im.dummy(0.0, 2.0)
 
         elif block.kind == "p":
             clean_text, links = _format_inline_text(block.text)
-            im.push_font("sans-serif")
+            push_text_style("body")
             im.text_wrapped(clean_text)
-            im.pop_font()
+            pop_text_style()
             if links:
                 im.dummy(0.0, 1.0)
                 _link_row(links, f"plnk_{idx}", on_link)
@@ -474,8 +467,7 @@ def render_markdown(
             im.math(
                 block.text,
                 colour=(216, 222, 233, 255),
-                font_size=15.0,
-                scale=0.55,
+                **math_args("body"),
                 align_center=True,
                 max_width=max(50.0, avail_w - 28.0),
             )
@@ -498,11 +490,11 @@ def render_markdown(
             if block.text:
                 im.dummy(0.0, 2.0)
                 caption, _ = _format_inline_text(block.text)
-                im.push_font("sans-serif")
+                push_text_style("caption")
                 im.push_style_color(Col.TEXT, (175, 185, 200, 255))
                 im.text_wrapped(tr("Figure: {caption}", domain="emtk").format(caption=caption))
                 im.pop_style_color()
-                im.pop_font()
+                pop_text_style()
             im.dummy(0.0, 6.0)
 
         elif block.kind == "code":
@@ -518,11 +510,11 @@ def render_markdown(
                 except Exception:
                     pass
 
-            im.push_font("monospace")
+            push_text_style("code")
             im.push_style_color(Col.FRAME_BG, (20, 24, 30, 255))
             im.text_wrapped(block.text)
             im.pop_style_color()
-            im.pop_font()
+            pop_text_style()
             im.dummy(0.0, 4.0)
 
         elif block.kind in ("admonition", "quote"):
@@ -540,13 +532,13 @@ def render_markdown(
             adm_color = adm_colors.get(block.arg, (110, 190, 255, 255))
             adm_title = block.items[0] if block.items else block.arg.capitalize()
             im.dummy(0.0, 2.0)
-            im.push_font({"family": "sans-serif", "bold": True})
+            push_text_style("body", bold=True)
             im.text_colored(adm_color, f"[{adm_title}]")
-            im.pop_font()
+            pop_text_style()
             clean_body, adm_links = _format_inline_text(block.text)
-            im.push_font("sans-serif")
+            push_text_style("body")
             im.text_wrapped(clean_body)
-            im.pop_font()
+            pop_text_style()
             if adm_links:
                 im.dummy(0.0, 1.0)
                 _link_row(adm_links, f"admlnk_{idx}", on_link)
@@ -564,22 +556,22 @@ def render_markdown(
                         im.table_next_column()
                         clean_cell, _ = _format_inline_text(cell_text)
                         if r_idx == 0:
-                            im.push_font({"family": "sans-serif", "bold": True})
+                            push_text_style("body", bold=True)
                             im.text_colored((140, 205, 255, 255), clean_cell)
-                            im.pop_font()
+                            pop_text_style()
                         else:
-                            im.push_font("sans-serif")
+                            push_text_style("body")
                             im.text_wrapped(clean_cell)
-                            im.pop_font()
+                            pop_text_style()
                 im.end_table()
             im.dummy(0.0, 4.0)
 
         elif block.kind == "list_item":
             clean_item, item_links = _format_inline_text(block.text)
             bullet_sym = block.arg if block.arg and not block.arg.startswith(("-", "*", "+")) else "•"
-            im.push_font("sans-serif")
+            push_text_style("body")
             im.text_wrapped(f"  {bullet_sym}  {clean_item}")
-            im.pop_font()
+            pop_text_style()
             if item_links:
                 im.dummy(0.0, 1.0)
                 _link_row(item_links, f"llnk_{idx}", on_link)

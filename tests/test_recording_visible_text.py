@@ -128,7 +128,9 @@ def test_selected_font_and_bold_metrics_are_retained_after_font_changes():
     actual = FontSpec(family, 14, True, False)
     width = text_width(actual, "WWW iii", 1.25)
     height = line_height(actual, 1.25)
-    assert painter.visible_texts[0][:4] == (410 - width, 20, width, height)
+    # Real-face widths are fractional (a size-linear layout), so the clip
+    # arithmetic is compared to rounding, not bit for bit.
+    assert painter.visible_texts[0][:4] == pytest.approx((410 - width, 20, width, height))
     assert painter.text_metadata[0]["font_spec"] == actual
     painter.set_font(None)
     assert painter.text_metadata[0]["font_spec"] == actual

@@ -138,6 +138,16 @@
             <translation>Die Tour beenden und zum Werkzeug zurückkehren.</translation>
         </message>
         <message>
+            <location filename="emtk/im_widgets.py" line="5378" />
+            <source>Interface font size (pt)</source>
+            <translation>Schriftgröße der Oberfläche (pt)</translation>
+        </message>
+        <message>
+            <location filename="emtk/im_widgets.py" line="5381" />
+            <source>Size of all interface text; headings and captions keep their steps above and below it.</source>
+            <translation>Größe aller Oberflächentexte; Überschriften und Bildunterschriften behalten ihre Stufen darüber und darunter.</translation>
+        </message>
+        <message>
             <location filename="emtk/help_guide.py" line="208" />
             <location filename="emtk/help_guide.py" line="269" />
             <source>Close this help window.</source>

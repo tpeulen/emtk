@@ -5371,6 +5371,17 @@ def show_style_editor(style=None) -> None:
     ctx = get_current_context()
     target = style or ctx.style
     show_style_selector()
+    separator_text("Text")
+    # The one size setting of the type scale: every role (body, headings,
+    # captions, code) follows it, in every host that was not given its own.
+    from .type_scale import MAX_UI_FONT_PT, MIN_UI_FONT_PT, set_ui_font_pt, ui_font_pt
+    changed, value_ = slider_float(tr("Interface font size (pt)", domain="emtk"),
+                                   float(ui_font_pt()), MIN_UI_FONT_PT, MAX_UI_FONT_PT,
+                                   "%.1f")
+    set_item_tooltip(tr("Size of all interface text; headings and captions keep their "
+                        "steps above and below it.", domain="emtk"))
+    if changed:
+        set_ui_font_pt(value_)
     separator_text("Metrics")
     for name in ("frame_rounding", "grab_min_size", "grab_rounding"):
         changed, value_ = slider_float(name, float(getattr(target, name)),

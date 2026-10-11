@@ -171,6 +171,9 @@ class QuadPainter:
     def __init__(self, atlas: Atlas | None = None, scale: float = 1.0,
                  font_scale: float = 1.0) -> None:
         self._atlas = atlas if atlas is not None else load_atlas()
+        #: The interface size, as a multiple of the baked one: what
+        #: :meth:`set_font_scale` multiplies, and what ``1.0`` restores.
+        self._base_font_scale = float(font_scale)
         self._font_scale = float(font_scale)
         self._font_spec = None
         self._font_size_ratio = 1.0
@@ -253,15 +256,22 @@ class QuadPainter:
         self._pad = atlas.pad
 
     def set_font_scale(self, scale: float) -> None:
-        """Draw and measure text `scale` times the baked size.
+        """Draw and measure text `scale` times the **interface** size.
+
+        Relative to the ``font_scale`` the painter was built with (the host's
+        ``font_pt``), as the :class:`~.painter.Painter` contract says: ``1.0``
+        restores the interface size. It used to *replace* it, so a heading
+        drawn at 1.3x on a 12 pt interface came out at 1.3x the 8 pt bake --
+        smaller than the body around it -- and everything after it at 8 pt.
 
         The atlas is a bitmap face, so the glyph *quads* and their advance
-        scale together -- text above 1.0 softens the way any scaled bitmap
-        does, while text below it stays clean. The resolved metrics are
-        recomputed here rather than per call: the quad loop reads them once
-        per glyph, and a property in that loop was measurable.
+        scale together. The resolved metrics are recomputed here rather than
+        per call: the quad loop reads them once per glyph.
         """
-        self._font_scale = float(scale)
+        self._font_scale = self._base_font_scale * float(scale)
+        self._refresh_text_metrics()
+
+    def _refresh_text_metrics(self) -> None:
         atlas = self._atlas
         self._advance = atlas.advance() * self._font_scale * self._font_size_ratio
         self._shrink = atlas.render_scale * self._font_scale * self._font_size_ratio
@@ -275,7 +285,7 @@ class QuadPainter:
         self._font_spec = spec if spec.family != "monospace" else None
         self._font_bold = spec.bold
         self._font_size_ratio = spec.size / self._atlas.font_pt if self._font_spec is None else 1.0
-        self.set_font_scale(self._font_scale)
+        self._refresh_text_metrics()
 
     # -- output ------------------------------------------------------------
 
@@ -671,7 +681,8 @@ class QuadPainter:
         if self._font_spec is not None:
             from .font_render import draw_text
             draw_text(self, self._font_spec, self._font_scale, x, y, w, h, align,
-                      string, colour, degrees=degrees, require_resolver=True)
+                      string, colour, degrees=degrees, require_resolver=True,
+                      device=self._scale)
             return
         shrink = self._shrink
         quad_w, quad_h = self._glyph_w, self._glyph_h
@@ -844,7 +855,7 @@ class QuadPainter:
         if self._font_spec is not None:
             from .font_render import draw_text
             draw_text(self, self._font_spec, self._font_scale, x, y, w, h, align,
-                      string, colour, bold, require_resolver=True)
+                      string, colour, bold, require_resolver=True, device=self._scale)
             return
         bold = bold or self._font_bold
         advance = self._advance

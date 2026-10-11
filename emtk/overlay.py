@@ -50,9 +50,12 @@ class _Over(ControlSurface):
     def render(self, view) -> None:
         if self.renderer is None:
             raise RuntimeError("OverlaySurface: render before attach()")
-        if self._painter is None or self._painter_ratio != self.ratio:
-            self._painter = self.renderer.painter(font_pt=self.font_pt, scale=self.ratio)
+        font_pt = self.font_pt
+        if (self._painter is None or self._painter_ratio != self.ratio
+                or self._painter_font_pt != font_pt):
+            self._painter = self.renderer.painter(font_pt=font_pt, scale=self.ratio)
             self._painter_ratio = self.ratio
+            self._painter_font_pt = font_pt
             self.dirty = True
         painter = self._painter
         hook = self._hook("animating")
