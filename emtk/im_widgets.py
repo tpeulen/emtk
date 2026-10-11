@@ -2547,15 +2547,18 @@ def end_menu() -> None:
 
 
 def menu_item(label: str, shortcut: str = "", selected: bool = False,
-              enabled: bool = True) -> bool:
+              enabled: bool = True, icon: str | None = None) -> bool:
     """``MenuItem``: label on the left, shortcut on the right.
 
     Within a context popup, this records a floating menu row and yields its
     activation to the same ``if menu_item(...)`` block on the next frame.
+    *icon* is a pictogram (normally an emoji, as plugin manifests carry them)
+    drawn in the menu's icon column; every label of a menu with icons starts
+    in the same column, with or without one of its own.
     """
     ctx = _ctx()
     if ctx._context_popup_stack:
-        return ctx.context_menu_item(label, shortcut, selected, enabled)
+        return ctx.context_menu_item(label, shortcut, selected, enabled, icon=icon)
     box = ctx.layout.row(height=_frame_height(ctx))
     hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
     if hovered and enabled:
@@ -2563,7 +2566,11 @@ def menu_item(label: str, shortcut: str = "", selected: bool = False,
                                  _col(Col.HEADER_HOVERED), 0.0)
     colour = _col(Col.TEXT if enabled else Col.TEXT_DISABLED)
     mark = "* " if selected else "  "
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), colour,
+    x = box[0] + ctx.style.frame_padding[0]
+    if icon:
+        ctx.draw.add_text((x, box[1] + ctx.style.frame_padding[1]), colour, icon_text(icon))
+        x += selectable_icon_width()
+    ctx.draw.add_text((x, box[1] + ctx.style.frame_padding[1]), colour,
                       mark + _visible_label(label))
     if shortcut:
         width = ctx.draw.calc_text_size(shortcut)[0]

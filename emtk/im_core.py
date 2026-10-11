@@ -1760,8 +1760,8 @@ class Context:
         self.add_overlay(("context-popup", name), draw_overlay)
 
     def context_menu_item(self, label: str, shortcut: str = "", selected: bool = False,
-                          enabled: bool = True) -> bool:
-        """Record a context-popup menu row and return its deferred selection."""
+                          enabled: bool = True, icon: str | None = None) -> bool:
+        """Record a context-popup menu row (with an optional *icon*) and return its deferred selection."""
         if not self._context_popup_stack:
             return False
         from .widgets.menus import MenuItem
@@ -1769,7 +1769,7 @@ class Context:
 
         name = self._context_popup_stack[-1]
         entries = self._context_popup_builds[name]
-        item = MenuItem(tr(label), shortcut=shortcut, checked=selected, enabled=enabled)
+        item = MenuItem(tr(label), shortcut=shortcut, checked=selected, enabled=enabled, icon=icon)
         entries.append(item)
         state = self.state(("context_popup", name))
         self._context_popup_last_item = item

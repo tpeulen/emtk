@@ -22,7 +22,9 @@ What was taken from the reference implementation
   inserted only between columns that are actually used. That is what makes a
   shortcut a *column* rather than a suffix on the label, and it is why a menu
   carrying shortcuts is wider than the same menu without them. The icon column
-  is not ported (emtk has no per-item icons); the other three are.
+  is there when any row of the panel names an ``icon`` (a pictogram, normally an
+  emoji): every label then starts one slot to the right, so the rows without an
+  icon still line up with the ones that have one.
 * **The placement rule.** ``FindBestWindowPosForPopupEx`` is ported whole, as
   :func:`best_popup_pos`. It tries right, down, up, left -- skipping any
   direction that does not have room on its own axis -- against a rectangle to
@@ -120,6 +122,9 @@ ROW_SCALE = 1.4
 #: reference's ``FontSize * 1.20``, and it is reserved even in a menu with no
 #: checkmarks in it -- otherwise a menu changes width when an item is ticked.
 MARK_SCALE = 1.2
+#: The icon column's slot, in line heights: a colour pictogram is drawn wider
+#: than one line height, and a narrower slot lets it run into the label.
+ICON_SCALE = 1.4
 
 #: A separator row's height, as a multiple of a normal row's.
 SEPARATOR_SCALE = 0.5
@@ -361,6 +366,26 @@ def _draw_marked(p: Painter, x: float, y: float, room: float, h: float, shown: s
                shown[start:end], style.GOLD if marked[start] else colour)
 
 
+def _icon_column(p: Painter, entries: Sequence[Entry]) -> float:
+    """The icon column's width -- a square slot one line high and its gap -- or 0 without icons."""
+    if any(getattr(entry, "icon", "") for entry in entries if entry is not None):
+        return p.line_height() * ICON_SCALE + SPACING * 0.5
+    return 0.0
+
+
+def _draw_icon(p: Painter, icon: str, column: float, x: float, y: float, h: float,
+               colour) -> float:
+    """Draw *icon* centred in the icon column at *x*; return the column's width (where the label starts)."""
+    if column <= 0.0:
+        return 0.0
+    if icon:
+        from ..im_widgets import icon_text
+
+        slot = p.line_height() * ICON_SCALE
+        p.text(x, y, slot, h, ALIGN_VCENTER | ALIGN_HCENTER, icon_text(icon), colour)
+    return column
+
+
 def _columns_width(label_w: float, shortcut_w: float, mark_w: float) -> float:
     """Total content width of a row laid out in the reference's columns.
 
@@ -418,7 +443,7 @@ def _panel_metrics(
         label_w = max(label_w, p.text_width(entry.display_label))
         if entry.shortcut:
             shortcut_w = max(shortcut_w, p.text_width(entry.shortcut))
-    content = _columns_width(label_w, shortcut_w, mark_w)
+    content = _columns_width(label_w + _icon_column(p, entries), shortcut_w, mark_w)
     width = max(content, p.text_width(tr(title))) + 2.0 * PAD
     height = title_h + 2.0 * PAD + sum(
         row_h * SEPARATOR_SCALE if entry is None else row_h for entry in entries
@@ -459,6 +484,7 @@ def _lay_rows(
         ``(entry, (x, y, w, h))`` pairs, separators included.
     """
     _width, _height, row_h, title_h, shortcut_w = _panel_metrics(p, entries, title)
+    icon_w = _icon_column(p, entries)
     rows: list[Row] = []
     row_y = y + PAD + title_h
     for entry in entries:
@@ -467,6 +493,7 @@ def _lay_rows(
             row_y += row_h * SEPARATOR_SCALE
             continue
         entry.column_shortcut_width = shortcut_w
+        entry.column_icon_width = icon_w
         if isinstance(entry, Menu):
             entry.horizontal = False
             entry.viewport = viewport
@@ -595,6 +622,10 @@ class MenuItem:
         Whether activating the row flips :attr:`checked`. The reference has the
         same two spellings -- one takes ``bool selected``, the other
         ``bool* p_selected`` and toggles it.
+    tooltip : str, optional
+        Shown while the pointer rests on the row.
+    icon : str, optional
+        A pictogram drawn in the panel's icon column, in front of the label.
 
     Attributes
     ----------
@@ -607,6 +638,9 @@ class MenuItem:
         :class:`Menu` so every row's shortcut lands in the same column. Zero
         when the row is drawn on its own, which right-aligns its own shortcut in
         its own box -- the same result for a menu of one.
+    column_icon_width : float
+        The icon column's width (slot and gap) in the panel this row belongs
+        to, set by the owner; zero when no row of the panel has an icon.
     marks : tuple of (int, int)
         Spans of the label a filter matched, drawn in the accent colour. Set by
         the :class:`Popup` filtering the row; empty otherwise.
@@ -620,6 +654,7 @@ class MenuItem:
         enabled: bool = True,
         checkable: bool = False,
         tooltip: str | None = None,
+        icon: str | None = None,
     ) -> None:
         self.label = str(label)
         self.shortcut = str(shortcut)
@@ -627,8 +662,10 @@ class MenuItem:
         self.enabled = bool(enabled)
         self.checkable = bool(checkable)
         self.tooltip = str(tooltip) if tooltip else None
+        self.icon = str(icon) if icon else ""
         self.hovered = False
         self.column_shortcut_width = 0.0
+        self.column_icon_width = 0.0
         self.marks: tuple[tuple[int, int], ...] = ()
 
     @property
@@ -669,10 +706,11 @@ class MenuItem:
         colour = style.TEXT if self.enabled else style.TEXT_DISABLED
         label = self.display_label
         shown = _ellipsize(p, label, room)
+        left = x + PAD + _draw_icon(p, self.icon, self.column_icon_width, x + PAD, y, h, colour)
         if self.marks and self.enabled:
-            _draw_marked(p, x + PAD, y, room, h, shown, label, self.marks, colour)
+            _draw_marked(p, left, y, room, h, shown, label, self.marks, colour)
         else:
-            p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, shown, colour)
+            p.text(left, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, shown, colour)
 
         if self.shortcut:
             dim = style.DIM if self.enabled else style.with_alpha(style.TEXT_DISABLED, 140)
@@ -693,7 +731,7 @@ class MenuItem:
 
     def label_room(self, p: Painter, w: float) -> float:
         """How wide the label may be drawn in a row *w* wide."""
-        room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING
+        room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING - self.column_icon_width
         shortcut_w = self._shortcut_width(p)
         if shortcut_w > 0.0:
             room -= shortcut_w + SPACING
@@ -796,9 +834,12 @@ class Menu:
         entries: Sequence[Entry] = (),
         title: str = "",
         enabled: bool = True,
+        icon: str | None = None,
     ) -> None:
         self.label = str(label)
         self.shortcut = ""
+        self.icon = str(icon) if icon else ""
+        self.column_icon_width = 0.0
         self.title = str(title)
         self.entries: list[Entry] = list(entries)
         self.enabled = bool(enabled)
@@ -939,8 +980,9 @@ class Menu:
             p.fill_rect(x + 1.0, y, max(w - 2.0, 1.0), h,
                         style.HEADER_HOVERED if self.hovered else style.HEADER)
         mark_w = p.line_height() * MARK_SCALE
-        room = max(w - 2.0 * PAD - mark_w - SPACING, 1.0)
-        p.text(x + PAD, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
+        left = x + PAD + _draw_icon(p, self.icon, self.column_icon_width, x + PAD, y, h, colour)
+        room = max(w - 2.0 * PAD - mark_w - SPACING - self.column_icon_width, 1.0)
+        p.text(left, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
                style.fit_text(p, self.display_label, room), colour)
         # "▸" and not ">": the baked atlas has this one, and it is the marker
         # the panel's inline menus already use.
@@ -948,7 +990,7 @@ class Menu:
 
     def cut(self, p: Painter, w: float) -> bool:
         """Whether the label does not fit a row *w* wide."""
-        room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING
+        room = w - 2.0 * PAD - p.line_height() * MARK_SCALE - SPACING - self.column_icon_width
         return p.text_width(self.display_label) > room + 0.5
 
     def draw_panel(
