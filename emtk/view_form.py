@@ -1288,13 +1288,20 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
         if indent + least > avail + 0.5:
             indent = 0.0
         widths = _share(run, label_w, fixed_w, min_w, weight, avail - indent, spacing)
+        # A lone control whose label leaves it less than its minimum would start past the right edge (or as a
+        # sliver of it) and draw empty: the label goes on a line of its own above the control instead.
+        stacked = (len(run) == 1 and label_w[run[0]] > 0
+                   and indent + least > avail + 0.5 and (fixed_w[run[0]] or weight[run[0]] > 0))
+        if stacked:
+            c = run[0]
+            widths = {c: max(avail - indent, 30.0)}
         x, column_x = indent, {}
         for c in run:
             column_x[c] = x
-            x += label_w[c] + widths[c] + spacing
-        layout.append((run, widths, column_x))
+            x += (0.0 if stacked else label_w[c]) + widths[c] + spacing
+        layout.append((run, widths, column_x, stacked))
     for row in rows:
-        for run, widths, column_x in layout:
+        for run, widths, column_x, stacked in layout:
             first = True
             for c in run:
                 if c >= len(row):
@@ -1308,7 +1315,13 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
                     _w.dummy(column_x[c], 0.0)
                     _w.same_line(column_x[c])
                 first = False
-                if label_w[c] > 0:
+                if stacked:
+                    text = _label_of(section)
+                    shown = _fit_text(text, max(avail - column_x[c], 30.0))
+                    _label(shown)
+                    if shown != text and _w.is_item_hovered():
+                        _w.set_tooltip(text)
+                elif label_w[c] > 0:
                     _label(_label_of(section), label_w[c])
                     _w.same_line(column_x[c] + label_w[c])
                 _draw_control(section, model, state, max(widths[c], 30.0))
