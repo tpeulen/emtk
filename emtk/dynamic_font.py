@@ -90,9 +90,18 @@ class GlyphCache:
         different backends and knows about none of them.
     """
 
-    def __init__(self, cell, ascent: int, columns: int = 16, rows: int = 16) -> None:
+    def __init__(self, cell, ascent: int, columns: int = 16, rows: int = 16,
+                 pad: int = 0, advance: int | None = None) -> None:
         self.cell_w, self.cell_h = int(cell[0]), int(cell[1])
         self.ascent = int(ascent)
+        #: Where the pen sits in a baked cell (``pad`` texels from its left and
+        #: top) and how wide one advance is, in texels: a cell is the advance
+        #: plus a pad on each side, and the painters place every cell -- baked or
+        #: rasterised here -- as a whole, ``pad`` to the left of the pen. A glyph
+        #: drawn across the whole cell therefore ran ``pad`` texels into each
+        #: neighbour, which is how CJK came out as overlapping strokes.
+        self.pad = max(0, int(pad))
+        self.advance = int(advance) if advance else max(1, self.cell_w - 2 * self.pad)
         self.columns = int(columns)
         self.rows = int(rows)
         self.image = np.zeros(
@@ -234,25 +243,30 @@ class GlyphCache:
             if "emoji" in str(getattr(font, "path", "")).lower():
                 return self._rasterise_strike(char, font)
 
-            # Measured first: a glyph wider than the cell is scaled to fit
-            # rather than allowed to run into its neighbour, because the
-            # layout is monospaced and nothing downstream would notice.
-            box = font.getbbox(char)
+            # Measured first: a glyph wider than one advance is narrowed to
+            # fit it rather than allowed to run into its neighbour, because the
+            # layout is monospaced and nothing downstream would notice. The
+            # glyph sits on the baked glyphs' baseline (``pad + ascent`` from
+            # the cell's top) and inside the advance (``pad`` from its left).
+            baseline = self.pad + self.ascent
+            box = font.getbbox(char, anchor="ls")
             if box is None:
                 return None
             width = max(int(box[2] - box[0]), 1)
-            scale = min(1.0, (self.cell_w - 2) / float(width)) if width else 1.0
-
-            canvas = Image.new("RGBA", (self.cell_w * 2, self.cell_h * 2), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(canvas)
-            draw.text((1, 0), char, fill=(255, 255, 255, 255), font=font, anchor="la")
-
-            if scale < 1.0:
-                canvas = canvas.resize(
-                    (max(int(canvas.width * scale), 1), canvas.height),
-                    Image.LANCZOS,
-                )
-            alpha = np.asarray(canvas.split()[-1], dtype=np.uint8)[: self.cell_h, : self.cell_w]
+            room = max(self.advance - 1, 1)
+            canvas = Image.new("RGBA", (width + 2, self.cell_h), (0, 0, 0, 0))
+            ImageDraw.Draw(canvas).text(
+                (1 - box[0], baseline), char, fill=(255, 255, 255, 255), font=font, anchor="ls"
+            )
+            if width + 2 > room:
+                canvas = canvas.resize((room, canvas.height), Image.LANCZOS)
+            ink = np.asarray(canvas.split()[-1], dtype=np.uint8)
+            alpha = np.zeros((self.cell_h, self.cell_w), dtype=np.uint8)
+            # A narrow glyph keeps its own place in the advance (its bearing);
+            # one that was narrowed fills the advance.
+            left = self.pad + (max(int(box[0]) - 1, 0) if width + 2 <= room else 0)
+            span = min(ink.shape[1], self.cell_w - left)
+            alpha[:, left:left + span] = ink[: self.cell_h, :span]
             if alpha.max() == 0:
                 # The font has no glyph and drew its own blank. Reported as a
                 # miss so the caller shows the placeholder: a blank cell here

@@ -192,7 +192,8 @@ class Atlas:
             try:
                 from .dynamic_font import GlyphCache  # noqa: PLC0415
 
-                self._cache = GlyphCache(self.cell, self.ascent)
+                self._cache = GlyphCache(self.cell, self.ascent, pad=self.pad,
+                                         advance=int(round(float(self._meta["advance"]))))
             except Exception:  # noqa: BLE001 - a cache is not worth a frame
                 self._cache_failed = True
         return self._cache

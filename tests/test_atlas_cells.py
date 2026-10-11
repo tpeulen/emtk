@@ -209,3 +209,28 @@ def test_extended_atlas_keeps_existing_layout_metrics(atlas):
     assert meta['ascent_1x'] == 10
     assert meta['line_height_1x'] == 13
     assert max(meta['size']) <= 8192
+
+
+@pytest.mark.parametrize("char", ["日", "語", "ж", "€"])
+def test_a_rasterised_glyph_stays_inside_its_advance(char):
+    """A glyph rasterised on first use inks only its own advance, as a baked one does.
+
+    The painters place every cell ``pad`` texels left of the pen, so a glyph
+    drawn across the whole cell ran into both neighbours -- CJK came out as
+    overlapping strokes (and an IME's committed text with it).
+    """
+    pytest.importorskip("PIL.ImageFont")
+    atlas = font.load_atlas()
+    cache = atlas.cache
+    if cache is None:
+        pytest.skip("no font engine")
+    rect = cache.cell_of(char)
+    if rect is None:
+        pytest.skip(f"no system font covers {char!r}")
+    x, y, w, h = rect
+    alpha = cache.image[y:y + h, x:x + w, 3]
+    columns = np.nonzero(alpha.max(axis=0))[0]
+    assert columns.size, "inked"
+    assert columns.min() >= cache.pad and columns.max() < cache.pad + cache.advance, (
+        f"ink in columns {columns.min()}..{columns.max()}, advance is "
+        f"{cache.pad}..{cache.pad + cache.advance - 1}")
