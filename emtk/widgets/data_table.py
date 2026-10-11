@@ -52,6 +52,17 @@ table needs them and neither dialect had them:
     ``{value: "#rrggbb"}``: a cell whose text is one of the keys is filled
     with that colour -- a status column reads at a glance; its text is drawn
     in the ink that contrasts with the fill (dark on pale, light on dark);
+``drag_call``
+    rows can be pulled out of the table: ``drag_call(record, x, y, dropped)``
+    while a pressed row moves past a few pixels, and once more with
+    ``dropped=True`` where the button comes up -- the model decides what lies
+    under that point (a dataset dropped onto a fit);
+``fit_rows``
+    the table is as tall as its header and rows, no scrolling (``height``
+    then caps it);
+``display: "script"`` on a column
+    ``_{…}`` / ``^{…}`` in the cell text are drawn as sub- and superscripts
+    (``w_{z} [nm]``), see :mod:`emtk.script_text`;
 ``delete_call``
     called with the selected record when Delete (or Backspace) is pressed;
 ``context_call``
@@ -132,6 +143,7 @@ puts a binding into an immediate-mode window.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
@@ -153,6 +165,7 @@ from ..keys import (
     KEY_UP,
 )
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
+from ..script_text import draw_script_text, script_width
 from ..style import fit_text
 from .basic import ScrollBar, TextInput
 from .text_field import TextField, index_at
@@ -206,7 +219,9 @@ class TableColumn:
     fmt : str
         printf spec for numbers; empty uses :data:`DEFAULT_FORMAT`.
     display : str
-        ``"text"`` or ``"bar"``.
+        ``"text"``, ``"bar"``, ``"link"``, or ``"script"``: text whose ``_{…}`` /
+        ``^{…}`` runs are drawn as sub- and superscripts (:mod:`emtk.script_text`),
+        for labels such as ``w_{z} [nm]``.
     range : tuple or None
         ``(lo, hi)`` for a bar.
     tooltip : str
@@ -526,6 +541,15 @@ class DataTable:
         self._editor_xs: list = []
         self._filter_xs: list = []
         self._field_drag: Optional[tuple[TextField, list[float]]] = None
+        #: ``on_row_drag(index, x, y, dropped)``: a row pulled out of the table
+        #: (a dataset dragged onto a fit). Called while it moves, and once more
+        #: with ``dropped=True`` where the button came up. ``None``: rows do not drag.
+        self.on_row_drag: Optional[Callable[[int, float, float, bool], None]] = None
+        #: The row pressed and where (``(index, x, y)``), until the button comes up.
+        self._row_press: Optional[tuple[int, float, float]] = None
+        #: Whether that press has become a drag (moved past :attr:`DRAG_THRESHOLD`).
+        self.row_dragging = False
+        self._row_at: tuple[float, float] = (0.0, 0.0)
         self.show_filter = bool(filter_box)
         self.tooltip_key = str(tooltip_key or "")
         self.row_key = str(row_key or "")
@@ -883,6 +907,13 @@ class DataTable:
         take = min(deficit / slack, 1.0)
         return [w - take * max(w - m, 0.0) for w, m in zip(widths, least)]
 
+    def natural_height(self, line: float) -> float:
+        """Height that shows the header and every row without scrolling, for a *line* height."""
+        rows = max(len(self.order()), 1)
+        filter_h = line * 1.5 + 4.0 if self.show_filter else 0.0
+        status_h = line * 1.2 if self.show_status else 0.0
+        return filter_h + line * 1.35 + rows * line * self.row_scale + status_h + 4.0
+
     def fit_columns(self) -> None:
         """Size every column to its header and the rows in view, on the next draw."""
         self._fit_pending = True
@@ -903,7 +934,9 @@ class DataTable:
                 value = self.value(index, column.key)
                 numeric = numeric or (_is_number(value) and not isinstance(value, (bool, _np_bool())))
                 indent = self._indent(index) if column is first else 0.0
-                widest = max(widest, p.text_width(column.text(value)) + 14.0 + indent)
+                text = column.text(value)
+                shown_w = script_width(p, text) if column.display == "script" else p.text_width(text)
+                widest = max(widest, shown_w + 14.0 + indent)
             fitted[column.key] = widest
             if numeric:
                 # A number is never shortened to fit: '2048' cut to '20.' is a
@@ -1136,6 +1169,13 @@ class DataTable:
                             max((end - start) * inner, 1.0), bar_h, colour)
             right = self._right_aligned(column, order) and not indent
             text = column.text(value)
+            if column.display == "script":
+                # Scripts are not elided: a label cut inside "w_{z}" would show its markup.
+                draw_script_text(p, col_x + 6.0 + indent, y + 1.0, max(width - 12.0 - indent, 1.0),
+                                 text_h, ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
+                                 text, colour)
+                col_x += width
+                continue
             shown = fit_text(p, text, width - 12.0 - indent)
             if shown != text:
                 self._elided[(index, column.key)] = text
@@ -1301,6 +1341,8 @@ class DataTable:
             return True
         self._select_position(position)
         index = self.order()[position]
+        if self.on_row_drag is not None and clicks == 1:
+            self._row_press, self.row_dragging = (index, x, y), False
         column = self.column_at(x)
         if self.is_parent(index) and self._on_disclosure(index, x):
             self.toggle(index)
@@ -1396,8 +1438,19 @@ class DataTable:
             return True
         return self._drag_table(x, y, *_box)
 
+    #: Pixels a pressed row must move before it is dragged rather than clicked.
+    DRAG_THRESHOLD = 6.0
+
     def _drag_table(self, x: float, y: float, *_box: Any) -> bool:
-        """Continue a scrollbar drag."""
+        """Continue a scrollbar drag, or a row's drag out of the table."""
+        if self._row_press is not None and self.on_row_drag is not None:
+            index, px, py = self._row_press
+            if not self.row_dragging and math.hypot(x - px, y - py) >= self.DRAG_THRESHOLD:
+                self.row_dragging = True
+            if self.row_dragging:
+                self._row_at = (x, y)
+                self.on_row_drag(index, x, y, False)
+                return True
         if self._hbar_held and self._hbar_box is not None:
             self._hbar_to(x)
             return True
@@ -1408,7 +1461,11 @@ class DataTable:
         self._release_table(*_args, **_kw)
 
     def _release_table(self, *_args: Any, **_kw: Any) -> None:
-        """End a scrollbar drag."""
+        """End a scrollbar drag; a row being dragged is dropped where the pointer is."""
+        pressed, dragging = self._row_press, self.row_dragging
+        self._row_press, self.row_dragging = None, False
+        if pressed is not None and dragging and self.on_row_drag is not None:
+            self.on_row_drag(pressed[0], self._row_at[0], self._row_at[1], True)
         self._hbar_held = False
         self.bar.release()
 
@@ -1562,6 +1619,10 @@ class TableBinding:
         self.editable = bool(merged.get("editable", False))
         self.height = float(merged.get("height", 240) or 240)
         self.expand = bool(merged.get("expand", False))
+        #: Size the table to its rows (header plus one line per row, no scrolling)
+        #: rather than to ``height``; ``height``, when given, then caps it.
+        self.fit_rows = bool(merged.get("fit_rows", False))
+        self.max_height = float(merged["height"]) if merged.get("height") else 0.0
         #: Height an expanding table leaves free under it, for the rows that follow.
         self.reserve = float(merged.get("reserve", 0) or 0)
         self._declared_columns = list(merged.get("columns") or [])
@@ -1585,6 +1646,10 @@ class TableBinding:
             min_column_width=float(merged.get("min_column_width", 0) or 0),
         )
         self.control.auto_fit = bool(merged.get("fit_columns", False))
+        #: ``drag_call(record, x, y, dropped)`` on the model: rows can be dragged out.
+        self.drag_call = str(merged.get("drag_call", "") or "")
+        if self.drag_call:
+            self.control.on_row_drag = self._on_row_drag
         if self.selection_attr:
             self.control.on_selection_change = self._on_selection
         sort = merged.get("sort")
@@ -1699,6 +1764,11 @@ class TableBinding:
     def _muted(self, index: int) -> bool:
         return bool(self.control.value(index, self.muted_key))
 
+    def _on_row_drag(self, index: int, x: float, y: float, dropped: bool) -> None:
+        fn = self._lookup(self.drag_call)
+        if callable(fn):
+            fn(self.record(index), x, y, dropped)
+
     def _on_select(self, index: Optional[int]) -> None:
         payload = self.record(index)
         if self.selected_attr:
@@ -1774,8 +1844,14 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     binding.refresh()
     avail_w, avail_h = widgets.get_content_region_avail()[:2]
     w = float(width) if width is not None else float(avail_w)
-    h = float(height) if height is not None else (
-        max(float(avail_h) - binding.reserve, 60.0) if binding.expand else binding.height)
+    if height is not None:
+        h = float(height)
+    elif binding.fit_rows:
+        h = binding.control.natural_height(ctx.p.line_height())
+        if binding.max_height:
+            h = min(h, binding.max_height)
+    else:
+        h = max(float(avail_h) - binding.reserve, 60.0) if binding.expand else binding.height
     box = ctx.layout.row(height=h, width=w)
     item_id = ctx.get_id(f"##table-{name}")
     hovered = ctx.item_add(box, item_id)
@@ -1811,7 +1887,8 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         # Enter does; without it the cell stayed open, and uncommitted.
         if (io.mouse_clicked[0] or io.mouse_clicked[1]) and control.editing is not None:
             control.commit_edit()
-    if io.mouse_down[0] and (control.bar.needed() or control._hbar_held):
+    if io.mouse_down[0] and (control.bar.needed() or control._hbar_held
+                             or control._row_press is not None):
         control.drag(px, py)
     if io.mouse_released[0]:
         control.release()
