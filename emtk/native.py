@@ -56,10 +56,14 @@ __all__ = [
     "CanvasEvents",
     "NativeHost",
     "canvas_module",
+    "centred_position",
+    "configure_surface",
     "event_types",
     "fit_to_screen",
+    "screen_rect",
     "screen_workarea",
     "open_canvas",
+    "window_hints",
     "wheel_steps",
     "main",
 ]
@@ -140,7 +144,9 @@ def canvas_module(backend: str | None = None, env: str = "EMTK_CANVAS"):
 
 
 def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
-                max_fps: float = DEFAULT_MAX_FPS, present_method: str = "auto"):
+                max_fps: float = DEFAULT_MAX_FPS, present_method: str = "auto",
+                decorated: bool = True, floating: bool = False,
+                transparent: bool = False, centred: bool = False):
     """Open a canvas on *module*, drawing on demand.
 
     Parameters
@@ -158,23 +164,130 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
         backend that cannot honour an explicit choice falls back to the
         library's, with a warning -- a setting for debugging a display must
         not stop the window opening.
+    decorated, floating, transparent, centred : bool, optional
+        The window's kind, honoured by the glfw backend (others open an
+        ordinary window): ``decorated=False`` has no title bar or border,
+        ``floating`` stays above other windows, ``transparent`` lets the
+        framebuffer's alpha show the desktop through (the surface must then
+        be configured premultiplied, see :class:`NativeHost`), ``centred``
+        opens it in the middle of the primary screen's work area. A splash
+        screen is all four.
 
     Returns
     -------
     rendercanvas.BaseRenderCanvas
     """
     options = {} if present_method in (None, "", "auto") else {"present_method": present_method}
-    size = fit_to_screen(size, screen_workarea(module))
+    workarea = screen_workarea(module)
+    size = fit_to_screen(size, workarea)
+    hints = window_hints(decorated=decorated, floating=floating, transparent=transparent,
+                         position=centred_position(size, screen_rect(module)) if centred
+                         else None)
+    with _glfw_hints(module, hints):
+        try:
+            return module.RenderCanvas(size=size, title=title, max_fps=max_fps,
+                                       update_mode="ondemand", **options)
+        except Exception:  # noqa: BLE001 - a backend that cannot honour it
+            if not options:
+                raise
+            logger.warning("present_method=%r is not available here; falling back "
+                           "to the library's own choice", present_method)
+            return module.RenderCanvas(size=size, title=title, max_fps=max_fps,
+                                       update_mode="ondemand")
+
+
+def window_hints(decorated: bool = True, floating: bool = False, transparent: bool = False,
+                 position: tuple | None = None) -> dict:
+    """The glfw window hints for a window of this kind, by glfw attribute name.
+
+    Only what differs from glfw's defaults is listed, so an ordinary window
+    gets no hints at all. *position* is in screen coordinates (``POSITION_X``
+    and ``POSITION_Y``, glfw 3.4): the window opens there instead of being
+    moved after it has been shown.
+    """
+    hints: dict = {}
+    if not decorated:
+        hints["DECORATED"] = False
+    if floating:
+        hints["FLOATING"] = True
+    if transparent:
+        hints["TRANSPARENT_FRAMEBUFFER"] = True
+    if position is not None:
+        hints["POSITION_X"] = int(position[0])
+        hints["POSITION_Y"] = int(position[1])
+    return hints
+
+
+class _glfw_hints:
+    """Set *hints* (see :func:`window_hints`) for the next glfw window, then back to glfw's defaults.
+
+    rendercanvas sets its own hints and never resets the others, so a hint
+    left behind would shape every window opened after it.
+    """
+
+    def __init__(self, module, hints: dict) -> None:
+        self.hints = hints if getattr(module, "__name__", "").rsplit(".", 1)[-1] == "glfw" else {}
+
+    def __enter__(self):
+        if self.hints:
+            import glfw  # noqa: PLC0415
+
+            glfw.init()
+            for name, value in self.hints.items():
+                attribute = getattr(glfw, name, None)
+                if attribute is not None:  # an older glfw lacks the 3.4 hints
+                    glfw.window_hint(attribute, value)
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        if self.hints:
+            import glfw  # noqa: PLC0415
+
+            glfw.default_window_hints()
+
+
+def screen_rect(module) -> tuple | None:
+    """The primary screen's work area as ``(x, y, width, height)`` in glfw screen coordinates.
+
+    ``None`` when *module* is not the glfw backend or glfw cannot say.
+    """
+    if getattr(module, "__name__", "").rsplit(".", 1)[-1] != "glfw":
+        return None
     try:
-        return module.RenderCanvas(size=size, title=title, max_fps=max_fps,
-                                   update_mode="ondemand", **options)
-    except Exception:  # noqa: BLE001 - a backend that cannot honour it
-        if not options:
-            raise
-        logger.warning("present_method=%r is not available here; falling back "
-                       "to the library's own choice", present_method)
-        return module.RenderCanvas(size=size, title=title, max_fps=max_fps,
-                                   update_mode="ondemand")
+        import glfw  # noqa: PLC0415
+
+        if not glfw.init():
+            return None
+        monitor = glfw.get_primary_monitor()
+        if not monitor:
+            return None
+        x, y, width, height = glfw.get_monitor_workarea(monitor)
+        scale = 1.0
+        if sys.platform != "darwin":  # screen coordinates are physical there
+            scale = float(glfw.get_monitor_content_scale(monitor)[0]) or 1.0
+    except Exception:  # noqa: BLE001 - no display, or an old glfw
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return (x, y, width, height, scale)
+
+
+def centred_position(size, rect) -> tuple | None:
+    """Where a window of logical *size* sits centred in *rect* (from :func:`screen_rect`).
+
+    Returns screen coordinates, or ``None`` when *rect* is unknown.
+
+    >>> centred_position((500, 300), (0, 25, 1512, 957, 1.0))
+    (506, 353)
+    >>> centred_position((500, 300), (0, 0, 3840, 2160, 2.0))  # physical screen coordinates
+    (1420, 780)
+    """
+    if not rect:
+        return None
+    x, y, width, height = rect[:4]
+    scale = float(rect[4]) if len(rect) > 4 else 1.0
+    w, h = float(size[0]) * scale, float(size[1]) * scale
+    return (int(x + max(0.0, (width - w) / 2.0)), int(y + max(0.0, (height - h) / 2.0)))
 
 
 #: Logical pixels a window's frame takes beyond its content -- a title bar.
@@ -930,11 +1043,18 @@ class NativeHost:
         Something with ``call_later(delay, callback, *args)`` for the
         wake-ups an idle app asks for (:func:`emtk.app.next_frame_in`); the
         canvas' own loop by default.
+    decorated, floating, transparent, centred : bool, optional
+        The window's kind (:func:`open_canvas`); a splash screen is
+        undecorated, floating, transparent and centred. *transparent* also
+        configures the surface premultiplied when the platform offers it, so
+        a surface cleared to alpha 0 (``ControlSurface(background=(0, 0, 0, 0))``)
+        shows the desktop through.
     """
 
     def __init__(self, app, size=None, title: str = "emtk",
                  backend: str | None = None, canvas=None, device=None,
-                 loop=None) -> None:
+                 loop=None, decorated: bool = True, floating: bool = False,
+                 transparent: bool = False, centred: bool = False) -> None:
         from .app import as_surface  # noqa: PLC0415
 
         self.app = app
@@ -958,7 +1078,12 @@ class NativeHost:
             module = canvas_module(backend)
             self._loop = getattr(module, "loop", None)
             self.backend = module.__name__.rsplit(".", 1)[-1]
-            canvas = open_canvas(module, size=size, title=title)
+            # Only a window of another kind passes its kind: an ordinary one opens as it always has.
+            kind = {key: value for key, value in (("decorated", decorated), ("floating", floating),
+                                                  ("transparent", transparent),
+                                                  ("centred", centred))
+                    if value != (key == "decorated")}
+            canvas = open_canvas(module, size=size, title=title, **kind)
         else:
             self._loop = None
             self.backend = type(canvas).__module__.rsplit(".", 1)[-1]
@@ -986,7 +1111,9 @@ class NativeHost:
         # twin of whatever the surface prefers.
         preferred = str(self.context.get_preferred_format(device.adapter))
         self.format = preferred[:-len("-srgb")] if preferred.endswith("-srgb") else preferred
-        self.context.configure(device=device, format=self.format)
+        #: ``"premultiplied"`` for a transparent window whose surface can show
+        #: the desktop through (the app clears to alpha 0), else ``"opaque"``.
+        self.alpha_mode = configure_surface(self.context, device, self.format, transparent)
         width, height = canvas.get_physical_size()
         self.surface.attach(device, self.format, int(width), int(height),
                             float(canvas.get_pixel_ratio()))
@@ -999,7 +1126,17 @@ class NativeHost:
         width, height = self.canvas.get_physical_size()
         if width <= 0 or height <= 0:
             return
-        self.surface.render(self.context.get_current_texture().create_view())
+        try:
+            texture = self.context.get_current_texture()
+        except Exception as error:
+            if type(error).__name__ == "DrawCancelled":
+                # macOS reports a window that has just opened (or sits under a floating
+                # one) as occluded: rendercanvas cancels the frame and, drawing on
+                # demand, never asks again -- the window stays blank until an input
+                # event. Ask again; the scheduler waits a moment after a cancel.
+                self.canvas.request_draw()
+            raise
+        self.surface.render(texture.create_view())
         self._retitle()
         if getattr(self.app, "close_requested", False):
             if self._loop is not None and not getattr(self, "_close_scheduled", False):
@@ -1094,6 +1231,30 @@ class NativeHost:
             self.events._on_close({"event_type": "close"})
         finally:
             self.canvas.close()
+
+
+def configure_surface(context, device, format: str, transparent: bool = False) -> str:
+    """Configure *context* for *device*; returns the alpha mode it got.
+
+    A *transparent* window needs a surface that is not opaque. emtk's renderer
+    writes premultiplied colour (``ONE, ONE_MINUS_SRC_ALPHA``), so
+    ``"premultiplied"`` is asked for first. Metal offers only ``"opaque"`` and
+    ``"unpremultiplied"``; the latter is what makes its layer non-opaque, and
+    Core Animation composites a layer's pixels as premultiplied whatever the
+    mode says, so it is the right mode there. Where neither is offered the
+    window draws opaque: it shows its clear colour where it would have been
+    see-through, which is a look, not a failure.
+    """
+    if transparent:
+        for mode in ("premultiplied", "unpremultiplied"):
+            try:
+                context.configure(device=device, format=format, alpha_mode=mode)
+                return mode
+            except Exception:  # noqa: BLE001 - not offered here
+                continue
+        logger.info("this surface cannot be transparent; drawing it opaque")
+    context.configure(device=device, format=format)
+    return "opaque"
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -271,11 +271,17 @@ class ControlSurface(Surface):
         user's setting, :func:`emtk.type_scale.ui_font_pt`, from frame to frame.
     background : tuple, optional
         0-255 RGB(A) cleared to before the control draws.
+    images : emtk.gpu_atlas.ImageAtlas, optional
+        Where this surface's images are packed on the GPU; a 1024-texel atlas
+        by default. A window showing one large picture -- a splash screen's art
+        at device resolution -- passes a bigger one: an image that does not fit
+        the atlas is declined and drawn as a blank rectangle.
     """
 
     def __init__(self, control, font_pt: float | None = None,
-                 background: tuple = (30, 32, 38)) -> None:
+                 background: tuple = (30, 32, 38), images=None) -> None:
         self.control = control
+        self.images = images
         self._font_pt = None if font_pt is None else float(font_pt)
         self.background = tuple(background)
         self.renderer = None
@@ -338,7 +344,7 @@ class ControlSurface(Surface):
     def attach(self, device, format, width, height, ratio) -> None:
         from .wgpu_host import WgpuRenderer  # noqa: PLC0415
 
-        self.renderer = WgpuRenderer(device=device, format=format)
+        self.renderer = WgpuRenderer(device=device, format=format, images=self.images)
         self.format = str(format)
         self.on_resize(width, height, ratio)
 
