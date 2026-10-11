@@ -333,6 +333,16 @@ def host_class():
                 return (float(point.x()), float(point.y()))
             return (float(event.x()), float(event.y()))
 
+        @staticmethod
+        def _drop_point(event):
+            """A drop event's position (``position()`` in Qt 6, ``posF()`` / ``pos()`` in Qt 5)."""
+            for name in ("position", "posF", "pos"):
+                getter = getattr(event, name, None)
+                if callable(getter):
+                    point = getter()
+                    return (float(point.x()), float(point.y()))
+            return None
+
         # -- input -------------------------------------------------------- #
         def event(self, event) -> bool:
             """Keep Tab and Backtab inside the control's navigation ring."""
@@ -571,6 +581,11 @@ def host_class():
             """
             paths = [url.toLocalFile() for url in event.mimeData().urls()]
             paths = [p for p in paths if p]
+            # The drop lands where the pointer is: say so first (an OS drag sends no moves).
+            move = self._rich("pointer_move")
+            at = self._drop_point(event)
+            if move is not None and at is not None:
+                move(at[0], at[1], 0, 0)
             rich = getattr(self.control, "files_dropped", None)
             if callable(rich):
                 if rich(paths) is False:      # the hook declined (None still counts as taken)

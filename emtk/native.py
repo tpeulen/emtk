@@ -602,7 +602,7 @@ class CanvasEvents:
             return
 
         def dropped(_window, paths) -> None:
-            self._deliver("on_files_dropped", [str(p) for p in (paths or ())])
+            self.files_dropped([str(p) for p in (paths or ())])
 
         # Held here: glfw keeps no reference, so a local callback is collected
         # and drops silently stop after the first garbage collection.
@@ -660,6 +660,39 @@ class CanvasEvents:
         for key, text, modifiers in pressed.values():
             self._deliver("on_key_release", key, text, modifiers)
 
+    def files_dropped(self, paths, position=None) -> bool:
+        """Files were dropped at *position* (logical px; the live cursor when not given).
+
+        A drop lands where the pointer is, not where the keyboard is. While the
+        OS drags files in, the window sees no pointer moves (macOS delivers
+        none), so the app's idea of the pointer is wherever it last was. The
+        drop position therefore arrives first, as a pointer move, and the
+        files after it: an app routing the drop to what is under the pointer
+        (a docked tool among several) gets the right one.
+        """
+        if position is None:
+            position = self._live_cursor()
+        if position is not None:
+            self._deliver("on_pointer_move", float(position[0]), float(position[1]),
+                          NO_BUTTON, 0)
+        return self._deliver("on_files_dropped", [str(p) for p in (paths or ())])
+
+    def _live_cursor(self):
+        """Where glfw says the cursor is, in logical pixels; ``None`` off glfw."""
+        window = getattr(self.canvas, "_window", None)
+        if window is None:
+            return None
+        try:
+            import glfw  # noqa: PLC0415
+
+            gx, gy = glfw.get_cursor_pos(window)
+            if not getattr(self.canvas, "_screen_size_is_logical", True):
+                ratio = float(self.canvas.get_pixel_ratio()) or 1.0
+                gx, gy = gx / ratio, gy / ratio
+            return float(gx), float(gy)
+        except Exception:  # noqa: BLE001 - not a glfw window after all
+            return None
+
     @property
     def supports_file_drop(self) -> bool:
         """Whether this canvas delivers drops (a real glfw window does)."""
@@ -714,20 +747,8 @@ class CanvasEvents:
         the old frame -- on another control. Asked of glfw instead where the
         canvas has a glfw window.
         """
-        x, y = float(event["x"]), float(event["y"])
-        window = getattr(self.canvas, "_window", None)
-        if window is None:
-            return x, y
-        try:
-            import glfw  # noqa: PLC0415
-
-            gx, gy = glfw.get_cursor_pos(window)
-            if not getattr(self.canvas, "_screen_size_is_logical", True):
-                ratio = float(self.canvas.get_pixel_ratio()) or 1.0
-                gx, gy = gx / ratio, gy / ratio
-            return float(gx), float(gy)
-        except Exception:  # noqa: BLE001 - not a glfw window after all
-            return x, y
+        live = self._live_cursor()
+        return live if live is not None else (float(event["x"]), float(event["y"]))
 
     def _on_double_click(self, _event: dict) -> None:
         """Ignored: the second press already said double (:meth:`_on_pointer_down`).

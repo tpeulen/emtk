@@ -33,7 +33,10 @@ No button is ever unreachable, at any width.
 **The tab row** also holds a search field (typing filters every tab's buttons
 into one band of results, grouped by where they live), a toggle that folds the
 band away (a folded ribbon shows the band again when a tab is clicked, until a
-button of it is pressed), and a *corner* the host may draw into (help, a
+button of it is pressed), a **pin** (a pinned ribbon stays as the user left it;
+an unpinned one folds itself again after every button pressed -- *auto-fold*;
+:meth:`Ribbon.state` / :meth:`Ribbon.restore` let a host keep a pinned ribbon's
+fold and tab between sessions), and a *corner* the host may draw into (help, a
 language switch).
 
 Labels, captions and tooltips are English source text and go through
@@ -41,7 +44,7 @@ Labels, captions and tooltips are English source text and go through
 
 Every drawn control is in :attr:`Ribbon.item_rects` (``ribbon.tab.<title>``,
 ``ribbon.button.<key>``, ``ribbon.group.<tab>.<group>``, ``ribbon.overflow``,
-``ribbon.search``, ``ribbon.fold``), so a :class:`emtk.testing.Driver` can press
+``ribbon.search``, ``ribbon.fold``, ``ribbon.pin``), so a :class:`emtk.testing.Driver` can press
 them by name.
 """
 
@@ -73,7 +76,9 @@ DROP = "▾"
 
 mark("Search…")
 mark("Fold the ribbon: show only its tabs.")
-mark("Pin the ribbon: keep its buttons shown.")
+mark("Unfold the ribbon: show its buttons again.")
+mark("Unpin the ribbon: it folds away after each command (auto-fold).")
+mark("Pin the ribbon: it stays as you leave it, also at the next start.")
 mark("More")
 mark("No tool matches the search.")
 
@@ -149,13 +154,18 @@ class Ribbon:
         Prefix of the ids and popups (two ribbons in one frame need two names).
     search : bool
         Whether the tab row has the search field.
+    pin : bool
+        Whether the tab row has the pin toggle (:attr:`pinned`).
     """
 
     def __init__(self, tabs: Sequence[RibbonTab] = (), *, name: str = "ribbon",
-                 search: bool = True) -> None:
+                 search: bool = True, pin: bool = False) -> None:
         self.tabs: list[RibbonTab] = list(tabs)
         self.name = name
         self.search = search
+        self.pin = pin
+        #: A pinned ribbon stays as the user left it; an unpinned one folds again after every pick.
+        self.pinned = True
         #: The selected tab's title (the first tab when empty or unknown).
         self.current = ""
         #: Whether the band is folded away (only the tab row is shown).
@@ -202,6 +212,31 @@ class Ribbon:
         if self.folded and not self.peek and not self.query:
             return self.tab_row_height()
         return self.tab_row_height() + self.band_height()
+
+    def state(self) -> dict:
+        """What a host keeps between sessions: ``pinned``, and while pinned the fold and the tab."""
+        out: dict = {"pinned": bool(self.pinned)}
+        if self.pinned:
+            out.update(folded=bool(self.folded), current=str(self.current))
+        return out
+
+    def restore(self, state: dict | None) -> None:
+        """Adopt a :meth:`state`: an unpinned ribbon starts folded, a pinned one as it was left."""
+        state = state if isinstance(state, dict) else {}
+        self.pinned = bool(state.get("pinned", True))
+        self.peek = False
+        if not self.pinned:
+            self.folded = True
+            return
+        self.folded = bool(state.get("folded", self.folded))
+        if state.get("current"):
+            self.current = str(state["current"])
+
+    def set_pinned(self, pinned: bool) -> None:
+        """Pin (the band is shown and stays) or unpin (auto-fold: the band folds away now)."""
+        self.pinned = bool(pinned)
+        self.peek = False
+        self.folded = not self.pinned
 
     def current_tab(self) -> RibbonTab | None:
         """The selected tab."""
@@ -315,6 +350,8 @@ class Ribbon:
         right = x + width - 4.0
         if corner is not None:
             right -= float(corner(right, y + 1.0, row_h - 2.0) or 0.0) + 4.0
+        if self.pin:
+            right = self._draw_pin_toggle(right, y + 1.0)
         right = self._draw_fold_toggle(right, y + 1.0)
         if self.search:
             right = self._draw_search(right, y + 1.0)
@@ -336,6 +373,8 @@ class Ribbon:
         hit = self._draw_band(groups, x, band_y, width, band_h)
         if hit is not None and self.peek:
             self.peek = False
+        if hit is not None and not self.pinned:
+            self.folded, self.peek = True, False  # auto-fold: the pick is made, the band goes
         return pressed or hit
 
     def _fire(self, button: RibbonButton) -> str:
@@ -375,7 +414,7 @@ class Ribbon:
         box = (right - w, y, w, h)
         hovered, _held, clicked = ctx.button_behavior(box, (self.name, "fold"))
         _w.set_item_tooltip(tr("Fold the ribbon: show only its tabs.") if not self.folded
-                            else tr("Pin the ribbon: keep its buttons shown."))
+                            else tr("Unfold the ribbon: show its buttons again."))
         if clicked:
             self.folded = not self.folded
             self.peek = False
@@ -385,6 +424,35 @@ class Ribbon:
         gw, gh = ctx.draw.calc_text_size(glyph)
         ctx.draw.add_text((box[0] + (w - gw) * 0.5, box[1] + (h - gh) * 0.5), _col(Col.TEXT), glyph)
         self.item_rects[f"{self.name}.fold"] = box
+        return box[0] - 4.0
+
+    def _draw_pin_toggle(self, right: float, y: float) -> float:
+        ctx = get_current_context()
+        h = self._frame_height()
+        w = h * 1.3
+        box = (right - w, y, w, h)
+        hovered, _held, clicked = ctx.button_behavior(box, (self.name, "pin"))
+        _w.set_item_tooltip(tr("Unpin the ribbon: it folds away after each command (auto-fold).")
+                            if self.pinned else
+                            tr("Pin the ribbon: it stays as you leave it, also at the next start."))
+        if clicked:
+            self.set_pinned(not self.pinned)
+        if self.pinned or hovered:
+            colour = _col(Col.BUTTON_ACTIVE) if self.pinned else _col(Col.BUTTON_HOVERED)
+            ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + w, box[1] + h), colour,
+                                     ctx.style.frame_rounding)
+        # A drawn push-pin (no glyph: the atlas keeps only what controls spell): a round head
+        # over a needle, upright while pinned, tilted while the ribbon auto-folds.
+        colour = _col(Col.TEXT) if self.pinned else _col(Col.TEXT_DISABLED)
+        cx, cy = box[0] + w * 0.5, box[1] + h * 0.5
+        r = h * 0.18
+        tilt = 0.0 if self.pinned else h * 0.18
+        head = (cx + tilt, cy - h * 0.16)
+        ctx.draw.add_circle_filled(head, r, colour)
+        ctx.draw.add_line((head[0] - r * 1.4, head[1] + r), (head[0] + r * 1.4, head[1] + r),
+                          colour, 1.5)
+        ctx.draw.add_line((head[0], head[1] + r), (cx - tilt, cy + h * 0.32), colour, 1.5)
+        self.item_rects[f"{self.name}.pin"] = box
         return box[0] - 4.0
 
     def _draw_search(self, right: float, y: float) -> float:

@@ -174,3 +174,38 @@ def test_menu_rows_with_icons_share_one_label_column():
     xs = {t[5]: t[0] for t in painter.texts}
     assert "🔬" in xs
     assert xs["With icon"] == xs["Plain"] > xs["🔬"]
+
+
+def test_an_unpinned_ribbon_folds_after_a_pick_and_a_pinned_one_keeps_its_state():
+    pressed: list[str] = []
+    ribbon = Ribbon(_tabs(pressed), pin=True)
+    app = _App(ribbon)
+    driver = Driver(app, size=(1200, 300))
+    driver.frame(2)
+    assert ribbon.pinned and not ribbon.folded
+    driver.click("ribbon.pin")  # unpin: auto-fold
+    driver.frame(2)
+    assert not ribbon.pinned and ribbon.folded
+    driver.click("ribbon.tab.Spectroscopy")  # the band shows for one pick
+    driver.frame(2)
+    assert ribbon.height() > ribbon.tab_row_height()
+    driver.click("ribbon.button.fcs")
+    driver.frame(2)
+    assert pressed == ["cb:fcs"] and ribbon.folded and ribbon.height() == ribbon.tab_row_height()
+    assert ribbon.state() == {"pinned": False}
+    driver.click("ribbon.pin")  # pin again: unfolded and staying
+    driver.frame(2)
+    assert ribbon.pinned and not ribbon.folded
+    ribbon.folded, ribbon.current = True, "Tools"
+    kept = ribbon.state()
+    assert kept == {"pinned": True, "folded": True, "current": "Tools"}
+    fresh = Ribbon(_tabs([]), pin=True)
+    fresh.restore(kept)
+    assert fresh.folded and fresh.current == "Tools" and fresh.pinned
+    fresh.restore({"pinned": False})
+    assert fresh.folded and not fresh.pinned
+
+
+def test_the_pin_is_drawn_only_when_asked_for():
+    driver, ribbon, _app, _pressed = _driver()
+    assert "ribbon.pin" not in ribbon.item_rects

@@ -248,3 +248,44 @@ def test_hidden_glfw_window_wheel_after_the_window_moved_under_a_still_hand():
         assert seen == [(150, 120)], seen
     finally:
         driver.close()
+
+
+class _TwoDrops(ImApp):
+    """Two drop targets side by side; a drop goes to the one under the pointer."""
+
+    def __init__(self) -> None:
+        self.item_rects: dict = {}
+        self.received: list = []
+        super().__init__(self.gui)
+
+    def gui(self) -> None:
+        width, height = im.get_main_viewport().size
+        im.set_next_window_pos((0.0, 0.0), im.Cond.ALWAYS)
+        im.set_next_window_size((width, height), im.Cond.ALWAYS)
+        if im.begin("drops", flags=im.WindowFlags.NO_TITLE_BAR | im.WindowFlags.NO_RESIZE):
+            im.button("Left", (width * 0.4, 60.0))
+            self.item_rects["left"] = im.get_item_rect()
+            im.same_line()
+            im.button("Right", (width * 0.4, 60.0))
+            self.item_rects["right"] = im.get_item_rect()
+        im.end()
+
+    def on_files_dropped(self, paths) -> bool:
+        x, y = self.io.mouse_pos
+        for name in ("left", "right"):
+            bx, by, bw, bh = self.item_rects[name]
+            if bx <= x < bx + bw and by <= y < by + bh:
+                self.received.append((name, list(paths)))
+                return True
+        self.received.append((None, list(paths)))
+        return True
+
+
+def test_a_drop_lands_where_the_pointer_is_not_where_it_last_moved():
+    """An OS drag delivers no moves; the drop itself says where it landed."""
+    app = _TwoDrops()
+    driver = RealisticDriver(app, size=(600, 200), real_painter=False)
+    driver.frame(2)
+    driver.click("left")  # the app last saw the pointer (and focus) on the left
+    driver.drop_files(["/tmp/a.ptu"], "right")
+    assert app.received == [("right", ["/tmp/a.ptu"])]

@@ -448,10 +448,19 @@ class ControlSurface(Surface):
         return True
 
     def on_files_dropped(self, paths) -> bool:
+        # As the Qt host does: the rich hook, else the surface verb an ImApp answers for,
+        # else the ``on_paths_dropped`` spelling many apps use (no flag returned).
+        paths = [str(p) for p in paths]
         handler = self._hook("files_dropped")
+        if handler is not None:
+            return handler(paths) is not False
+        handler = self._hook("on_files_dropped")
+        if handler is not None:
+            return bool(handler(paths))
+        handler = self._hook("on_paths_dropped")
         if handler is None:
             return False
-        handler([str(p) for p in paths])
+        handler(paths)
         return True
 
 

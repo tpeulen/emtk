@@ -41,8 +41,9 @@ Gestures
 holds for ``hold_frames`` frames while the hand drifts ``jitter`` pixels, and releases in a
 later frame. ``drag``, ``double_click``, ``wheel`` (one notch per frame), ``hold_key``
 (platform key repeat on the virtual clock), ``type`` (key down, ``char``, key up per
-character), ``blur``/``focus``, ``resize`` (the window manager resizes under a still pointer)
-and ``set_scale`` (dragged to a display of another density).
+character), ``blur``/``focus``, ``resize`` (the window manager resizes under a still pointer),
+``set_scale`` (dragged to a display of another density) and ``drop_files`` (files dragged in
+from the OS, which delivers no pointer moves on the way; the drop says where it landed).
 """
 from __future__ import annotations
 
@@ -465,6 +466,25 @@ class RealisticDriver(Driver):
         self._travel(point)
         return self.painter
 
+    def drop_files(self, paths, target, frames: int = 2):
+        """Files dragged in from the OS and dropped on *target*.
+
+        The hand arrives over the window *during* an OS drag, which delivers no
+        pointer moves (macOS sends none): the app last saw the pointer wherever
+        it was before, and keyboard focus where it was before. Only the drop
+        itself says where it landed, as the platform layer reads it from the
+        live cursor (:meth:`emtk.native.CanvasEvents.files_dropped`).
+        """
+        self._pointer = self._point(target)
+        self._sync_cursor()
+        with self._clock():
+            self.events.files_dropped([str(p) for p in paths], self._live_position())
+        return self.frame(frames)
+
+    def _live_position(self):
+        """The drop position the platform reports: the hand, where no live cursor query exists."""
+        return self._pointer
+
     def _button_event(self, kind, button):
         number = _CANVAS_BUTTON.get(button, 1)
         held = set(self._buttons)
@@ -694,6 +714,10 @@ class HostedDriver(RealisticDriver):
 
     def _sync_cursor(self) -> None:
         self._cursor = self._screen(*self._pointer)
+
+    def _live_position(self):
+        """On glfw the platform layer asks the (simulated) OS cursor itself."""
+        return None if self.backend == "glfw" else self._pointer
 
     # -- the platform's side of input ---------------------------------- #
     def _screen(self, x, y):

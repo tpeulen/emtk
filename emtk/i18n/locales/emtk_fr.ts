@@ -29,12 +29,12 @@
             <translation>&gt; Vous</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1815" />
+            <location filename="emtk/implot.py" line="1834" />
             <source>Align</source>
             <translation>Aligner</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="219" />
+            <location filename="emtk/help_guide.py" line="226" />
             <source>All</source>
             <translation>Tout</translation>
         </message>
@@ -56,12 +56,12 @@
             <translation>Assistant</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1757" />
+            <location filename="emtk/implot.py" line="1776" />
             <source>Auto-Fit</source>
             <translation>Ajustement auto</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1855" />
+            <location filename="emtk/implot.py" line="1874" />
             <source>Box Select</source>
             <translation>Sélection rectangulaire</translation>
         </message>
@@ -108,17 +108,17 @@
             <translation>Effacer l’historique de la conversation.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="206" />
+            <location filename="emtk/help_guide.py" line="213" />
             <source>Close</source>
             <translation>Fermer</translation>
         </message>
         <message>
             <location filename="emtk/help_guide.py" line="267" />
             <source>Close Help</source>
-            <translation>Fermer l’aide</translation>
+            <translation type="obsolete">Fermer l’aide</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="544" />
+            <location filename="emtk/help_guide.py" line="550" />
             <source>Close Tour</source>
             <translation>Fermer la visite</translation>
         </message>
@@ -133,23 +133,22 @@
             <translation>Fermer le sélecteur de fichiers sans choisir de chemin.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="546" />
+            <location filename="emtk/help_guide.py" line="552" />
             <source>Close the guided tour and return to the tool.</source>
             <translation>Fermer la visite guidée et revenir à l’outil.</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="5378" />
+            <location filename="emtk/im_widgets.py" line="5455" />
             <source>Interface font size (pt)</source>
             <translation>Taille de police de l’interface (pt)</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="5381" />
+            <location filename="emtk/im_widgets.py" line="5458" />
             <source>Size of all interface text; headings and captions keep their steps above and below it.</source>
             <translation>Taille de tout le texte de l’interface ; titres et légendes gardent leurs paliers au-dessus et en dessous.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="208" />
-            <location filename="emtk/help_guide.py" line="269" />
+            <location filename="emtk/help_guide.py" line="215" />
             <source>Close this help window.</source>
             <translation>Fermer cette fenêtre d’aide.</translation>
         </message>
@@ -159,13 +158,13 @@
             <translation>Fermer ce panneau ; le rouvrir depuis le menu contextuel d’un en-tête de dock.</translation>
         </message>
         <message>
-            <location filename="emtk/dialog_window.py" line="156" />
+            <location filename="emtk/dialog_window.py" line="161" />
             <source>Close this window (Escape).</source>
             <translation>Fermer cette fenêtre (Échap).</translation>
         </message>
         <message>
             <location filename="emtk/widgets/chat.py" line="215" />
-            <location filename="emtk/widgets/markdown.py" line="511" />
+            <location filename="emtk/widgets/markdown.py" line="529" />
             <source>Code</source>
             <translation>Code</translation>
         </message>
@@ -175,19 +174,19 @@
             <translation>Réduire ou développer ce panneau.</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="2028" />
-            <location filename="emtk/im_widgets.py" line="2033" />
+            <location filename="emtk/im_widgets.py" line="2086" />
+            <location filename="emtk/im_widgets.py" line="2091" />
             <source>Color</source>
             <translation>Couleur</translation>
         </message>
         <message>
-            <location filename="emtk/widgets/data_table.py" line="1920" />
+            <location filename="emtk/widgets/data_table.py" line="1923" />
             <source>Columns</source>
             <translation>Colonnes</translation>
         </message>
         <message>
             <location filename="emtk/widgets/chat.py" line="217" />
-            <location filename="emtk/widgets/markdown.py" line="513" />
+            <location filename="emtk/widgets/markdown.py" line="531" />
             <source>Copy</source>
             <translation>Copier</translation>
         </message>
@@ -197,12 +196,12 @@
             <translation>Copier ce bloc de code dans le presse-papiers.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1858" />
+            <location filename="emtk/implot.py" line="1877" />
             <source>Crosshairs</source>
             <translation>Réticule</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="1661" />
+            <location filename="emtk/im_widgets.py" line="1719" />
             <source>Decrease the value by {step}; hold the primary modifier for the larger step.</source>
             <translation>Diminuer la valeur de {step} ; maintenir la touche de modification principale pour le pas plus grand.</translation>
         </message>
@@ -227,12 +226,12 @@
             <translation>Saisir le nom du fichier de sortie ; le format choisi fournit l’extension.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1855" />
+            <location filename="emtk/implot.py" line="1874" />
             <source>Equal</source>
             <translation>Échelle égale</translation>
         </message>
         <message>
-            <location filename="emtk/widgets/markdown.py" line="503" />
+            <location filename="emtk/widgets/markdown.py" line="521" />
             <source>Figure: {caption}</source>
             <translation>Figure : {caption}</translation>
         </message>
@@ -242,42 +241,42 @@
             <translation>Filtrer les réglages par nom ou description.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="561" />
+            <location filename="emtk/help_guide.py" line="567" />
             <source>Finish</source>
             <translation>Terminer</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="569" />
+            <location filename="emtk/help_guide.py" line="575" />
             <source>Finish the guided tour.</source>
             <translation>Terminer la visite guidée.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="570" />
+            <location filename="emtk/help_guide.py" line="576" />
             <source>Go to the next tour step.</source>
             <translation>Passer à l’étape suivante de la visite.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="556" />
+            <location filename="emtk/help_guide.py" line="562" />
             <source>Go to the previous tour step.</source>
             <translation>Revenir à l’étape précédente de la visite.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1766" />
+            <location filename="emtk/implot.py" line="1785" />
             <source>Grid Lines</source>
             <translation>Lignes de grille</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1783" />
+            <location filename="emtk/implot.py" line="1802" />
             <source>H</source>
             <translation>H</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="96" />
+            <location filename="emtk/help_guide.py" line="101" />
             <source>Help &amp; Reference</source>
             <translation>Aide et référence</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="1666" />
+            <location filename="emtk/im_widgets.py" line="1724" />
             <source>Increase the value by {step}; hold the primary modifier for the larger step.</source>
             <translation>Augmenter la valeur de {step} ; maintenir la touche de modification principale pour le pas plus grand.</translation>
         </message>
@@ -292,69 +291,69 @@
             <translation>Insérer ce code au curseur de l’éditeur actif.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1759" />
+            <location filename="emtk/implot.py" line="1778" />
             <source>Invert</source>
             <translation>Inverser</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1763" />
+            <location filename="emtk/implot.py" line="1782" />
             <source>Label</source>
             <translation>Étiquette</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1696" />
-            <location filename="emtk/implot.py" line="1701" />
-            <location filename="emtk/implot.py" line="1846" />
+            <location filename="emtk/implot.py" line="1715" />
+            <location filename="emtk/implot.py" line="1720" />
+            <location filename="emtk/implot.py" line="1865" />
             <source>Legend</source>
             <translation>Légende</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1805" />
+            <location filename="emtk/implot.py" line="1824" />
             <source>Link All X</source>
             <translation>Lier tous les X</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1805" />
+            <location filename="emtk/implot.py" line="1824" />
             <source>Link All Y</source>
             <translation>Lier tous les Y</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1804" />
+            <location filename="emtk/implot.py" line="1823" />
             <source>Link Cols</source>
             <translation>Lier les colonnes</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1804" />
+            <location filename="emtk/implot.py" line="1823" />
             <source>Link Rows</source>
             <translation>Lier les lignes</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1803" />
+            <location filename="emtk/implot.py" line="1822" />
             <source>Linking</source>
             <translation>Liaison</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1737" />
+            <location filename="emtk/implot.py" line="1756" />
             <source>Max</source>
             <translation>Max</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1737" />
+            <location filename="emtk/implot.py" line="1756" />
             <source>Min</source>
             <translation>Min</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1857" />
+            <location filename="emtk/implot.py" line="1876" />
             <source>Mouse Position</source>
             <translation>Position de la souris</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="562" />
+            <location filename="emtk/help_guide.py" line="568" />
             <source>Next</source>
             <translation>Suivant</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="129" />
+            <location filename="emtk/help_guide.py" line="134" />
             <source>No documentation available.</source>
             <translation>Aucune documentation disponible.</translation>
         </message>
@@ -385,7 +384,7 @@
             <translation>Ouvrir ce dossier.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1760" />
+            <location filename="emtk/implot.py" line="1779" />
             <source>Opposite</source>
             <translation>Côté opposé</translation>
         </message>
@@ -395,13 +394,13 @@
             <translation>Sortie :</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1782" />
+            <location filename="emtk/implot.py" line="1801" />
             <source>Outside</source>
             <translation>À l’extérieur</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="550" />
-            <location filename="emtk/help_guide.py" line="554" />
+            <location filename="emtk/help_guide.py" line="556" />
+            <location filename="emtk/help_guide.py" line="560" />
             <source>Prev</source>
             <translation>Préc.</translation>
         </message>
@@ -436,7 +435,7 @@
             <translation>Remplacer ce fichier existant par la nouvelle sortie.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1813" />
+            <location filename="emtk/implot.py" line="1832" />
             <source>Resizable</source>
             <translation>Redimensionnable</translation>
         </message>
@@ -481,23 +480,23 @@
             <translation>Envoyer ce message à l’assistant.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1809" />
-            <location filename="emtk/implot.py" line="1854" />
+            <location filename="emtk/implot.py" line="1828" />
+            <location filename="emtk/implot.py" line="1873" />
             <source>Settings</source>
             <translation>Réglages</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1817" />
+            <location filename="emtk/implot.py" line="1836" />
             <source>Share Items</source>
             <translation>Partager les éléments</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1779" />
+            <location filename="emtk/implot.py" line="1798" />
             <source>Show</source>
             <translation>Afficher</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="222" />
+            <location filename="emtk/help_guide.py" line="229" />
             <source>Show all help sections.</source>
             <translation>Afficher toutes les sections de l’aide.</translation>
         </message>
@@ -517,7 +516,7 @@
             <translation>Afficher la page de fichiers précédente.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="223" />
+            <location filename="emtk/help_guide.py" line="230" />
             <source>Show the {section} help section.</source>
             <translation>Afficher la section d’aide « {section} ».</translation>
         </message>
@@ -527,12 +526,12 @@
             <translation>Afficher {title}</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="198" />
+            <location filename="emtk/help_guide.py" line="203" />
             <source>Start Guided Tour</source>
             <translation>Lancer la visite guidée</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="462" />
+            <location filename="emtk/help_guide.py" line="468" />
             <source>Step {index} of {count}: {title}</source>
             <translation>Étape {index} sur {count} : {title}</translation>
         </message>
@@ -547,28 +546,28 @@
             <translation>Arrêter la réponse en cours de l’assistant.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1867" />
+            <location filename="emtk/implot.py" line="1886" />
             <source>Subplots</source>
             <translation>Sous-graphiques</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="557" />
+            <location filename="emtk/help_guide.py" line="563" />
             <source>This is the first tour step.</source>
             <translation>Ceci est la première étape de la visite.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1770" />
+            <location filename="emtk/implot.py" line="1789" />
             <source>Tick Labels</source>
             <translation>Étiquettes des graduations</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1768" />
+            <location filename="emtk/implot.py" line="1787" />
             <source>Tick Marks</source>
             <translation>Graduations</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1810" />
-            <location filename="emtk/implot.py" line="1856" />
+            <location filename="emtk/implot.py" line="1829" />
+            <location filename="emtk/implot.py" line="1875" />
             <source>Title</source>
             <translation>Titre</translation>
         </message>
@@ -588,7 +587,7 @@
             <translation>Détacher</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="567" />
+            <location filename="emtk/help_guide.py" line="573" />
             <source>Use the highlighted control to continue.</source>
             <translation>Utiliser la commande mise en évidence pour continuer.</translation>
         </message>
@@ -598,12 +597,12 @@
             <translation>Utiliser le dossier sélectionné.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1786" />
+            <location filename="emtk/implot.py" line="1805" />
             <source>V</source>
             <translation>V</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="201" />
+            <location filename="emtk/help_guide.py" line="206" />
             <source>Walk through the tool controls and workflow step by step.</source>
             <translation>Parcourir pas à pas les commandes et le déroulement de l’outil.</translation>
         </message>
@@ -618,13 +617,13 @@
             <translation>Écrire un message pour l’assistant.</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1831" />
+            <location filename="emtk/implot.py" line="1850" />
             <location filename="emtk/implot3d.py" line="2408" />
             <source>X-Axis</source>
             <translation>Axe X</translation>
         </message>
         <message>
-            <location filename="emtk/implot.py" line="1840" />
+            <location filename="emtk/implot.py" line="1859" />
             <location filename="emtk/implot3d.py" line="2408" />
             <source>Y-Axis</source>
             <translation>Axe Y</translation>
@@ -645,7 +644,7 @@
             <translation>et les algorithmes ChiSurf.</translation>
         </message>
         <message>
-            <location filename="emtk/help_guide.py" line="514" />
+            <location filename="emtk/help_guide.py" line="520" />
             <source>drag here to move</source>
             <translation>glisser ici pour déplacer</translation>
         </message>
@@ -670,22 +669,22 @@
             <translation>page {page} / {pages}</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="2032" />
+            <location filename="emtk/im_widgets.py" line="2090" />
             <source>{name} preview</source>
             <translation>Aperçu : {name}</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="2027" />
+            <location filename="emtk/im_widgets.py" line="2085" />
             <source>{name}: {channel} channel (0–255)</source>
             <translation>{name} : canal {channel} (0–255)</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="4642" />
+            <location filename="emtk/im_widgets.py" line="4719" />
             <source>Fonts</source>
             <translation>Polices</translation>
         </message>
         <message>
-            <location filename="emtk/im_widgets.py" line="5357" />
+            <location filename="emtk/im_widgets.py" line="5434" />
             <source>Style</source>
             <translation>Style</translation>
         </message>
@@ -731,20 +730,20 @@
             <translation>Oui</translation>
         </message>
         <message>
-            <location filename="emtk/ribbon.py" line="75" />
-            <location filename="emtk/ribbon.py" line="372" />
+            <location filename="emtk/ribbon.py" line="78" />
+            <location filename="emtk/ribbon.py" line="416" />
             <source>Fold the ribbon: show only its tabs.</source>
             <translation>Replier le ruban : n’afficher que ses onglets.</translation>
         </message>
         <message>
-            <location filename="emtk/ribbon.py" line="77" />
-            <location filename="emtk/ribbon.py" line="566" />
+            <location filename="emtk/ribbon.py" line="82" />
+            <location filename="emtk/ribbon.py" line="633" />
             <source>More</source>
             <translation>Plus</translation>
         </message>
         <message>
-            <location filename="emtk/ribbon.py" line="78" />
-            <location filename="emtk/ribbon.py" line="329" />
+            <location filename="emtk/ribbon.py" line="83" />
+            <location filename="emtk/ribbon.py" line="371" />
             <source>No tool matches the search.</source>
             <translation>Aucun outil ne correspond à la recherche.</translation>
         </message>
@@ -752,13 +751,31 @@
             <location filename="emtk/ribbon.py" line="76" />
             <location filename="emtk/ribbon.py" line="373" />
             <source>Pin the ribbon: keep its buttons shown.</source>
-            <translation>Épingler le ruban : garder ses boutons affichés.</translation>
+            <translation type="obsolete">Épingler le ruban : garder ses boutons affichés.</translation>
         </message>
         <message>
-            <location filename="emtk/ribbon.py" line="74" />
-            <location filename="emtk/ribbon.py" line="389" />
+            <location filename="emtk/ribbon.py" line="77" />
+            <location filename="emtk/ribbon.py" line="455" />
             <source>Search…</source>
             <translation>Rechercher…</translation>
+        </message>
+        <message>
+            <location filename="emtk/ribbon.py" line="81" />
+            <location filename="emtk/ribbon.py" line="437" />
+            <source>Pin the ribbon: it stays as you leave it, also at the next start.</source>
+            <translation>Épingler le ruban : il reste tel que vous le laissez, y compris au prochain démarrage.</translation>
+        </message>
+        <message>
+            <location filename="emtk/ribbon.py" line="79" />
+            <location filename="emtk/ribbon.py" line="417" />
+            <source>Unfold the ribbon: show its buttons again.</source>
+            <translation>Déplier le ruban : afficher à nouveau ses boutons.</translation>
+        </message>
+        <message>
+            <location filename="emtk/ribbon.py" line="80" />
+            <location filename="emtk/ribbon.py" line="435" />
+            <source>Unpin the ribbon: it folds away after each command (auto-fold).</source>
+            <translation>Désépingler le ruban : il se replie après chaque commande (repli automatique).</translation>
         </message>
     </context>
 </TS>
