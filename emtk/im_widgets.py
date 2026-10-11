@@ -622,28 +622,86 @@ def text_disabled(s: str) -> None:
     text_colored(_col(Col.TEXT_DISABLED), s)
 
 
+#: ``(measure key, text, width) -> lines``: wrapping measures every candidate line, which is
+#: quadratic in a paragraph's length, and a document re-wraps every frame. A bibliography page of
+#: the help browser spent 4.5 s per frame here (found by chisurf's real-use QA matrix).
+_WRAP_CACHE: dict = {}
+_WRAP_CACHE_MAX = 4096
+
+
+def _measure_key(p) -> tuple:
+    """What a painter's text measurement depends on: its type and font state, through adapters."""
+    key = []
+    seen = 0
+    while p is not None and seen < 8:
+        seen += 1
+        state = getattr(p, "__dict__", {})
+        # Every painter keeps its font state in ``_font*`` attributes (the Qt painter also in
+        # ``_custom_font_size``); a scaling adapter in ``k``.
+        font = tuple(sorted((name, repr(value)) for name, value in state.items()
+                            if name.startswith(("_font", "_custom_font"))))
+        key.append((type(p).__name__, font, getattr(p, "k", None)))
+        metrics = getattr(p, "_metrics", None)
+        if metrics is not None and metrics is not p:
+            key.append(_measure_key(metrics))
+        p = getattr(p, "painter", None) or getattr(p, "_real", None)
+    return tuple(key)
+
+
 def _wrapped_lines(ctx, s, width):
-    """The shared wrapping rules for text measurement and drawing."""
+    """The shared wrapping rules for text measurement and drawing (memoised per font and width)."""
+    key = (_measure_key(ctx.p), str(s), round(float(width), 3))
+    cached = _WRAP_CACHE.get(key)
+    if cached is not None:
+        return list(cached)
+    lines = _wrap(ctx, s, width)
+    if len(_WRAP_CACHE) >= _WRAP_CACHE_MAX:
+        _WRAP_CACHE.clear()
+    _WRAP_CACHE[key] = tuple(lines)
+    return lines
+
+
+def _wrap(ctx, s, width):
+    """Break *s* into lines no wider than *width* (words, then characters of a long word).
+
+    A candidate line's width is estimated from its words' widths and the space's; only a
+    candidate whose estimate lies within the accumulated rounding of the limit is measured
+    whole. Measuring every candidate whole made wrapping quadratic in the paragraph.
+    """
+    measure = ctx.p.text_width
+    space = measure(" ")
     lines = []
     for paragraph in str(s).split("\n"):
         words = paragraph.split()
         if not words:
             lines.append("")
             continue
-        line = ""
+        line, line_w, count = "", 0.0, 0
         for word in words:
-            candidate = f"{line} {word}".strip() if line else word
-            if line and ctx.p.text_width(candidate) > width:
-                lines.append(line)
-                line = ""
-            if ctx.p.text_width(word) > width:
+            word_w = measure(word)
+            if line:
+                estimate = line_w + space + word_w
+                slack = 1.0 + 0.5 * count
+                if estimate > width + slack:
+                    fits = False
+                elif estimate < width - slack:
+                    fits = True
+                else:
+                    fits = measure(f"{line} {word}") <= width
+                if not fits:
+                    lines.append(line)
+                    line, line_w, count = "", 0.0, 0
+            if word_w > width:
                 for character in word:
-                    if line and ctx.p.text_width(line + character) > width:
+                    if line and measure(line + character) > width:
                         lines.append(line)
                         line = ""
                     line += character
+                line_w, count = measure(line), 1
+            elif line:
+                line, line_w, count = f"{line} {word}", line_w + space + word_w, count + 1
             else:
-                line = f"{line} {word}".strip() if line else word
+                line, line_w, count = word, word_w, 1
         if line:
             lines.append(line)
     return lines
