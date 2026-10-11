@@ -2912,6 +2912,8 @@ class _Table:
         self.row = -1
         self.row_top = box[1]
         self.row_height = 0.0
+        #: Top edge of every row opened so far, for the horizontal rules.
+        self.row_tops: list = []
         self.current = -1
         self.cell_padding = (4.0, 2.0)
         self.freeze = (0, 0)
@@ -3045,7 +3047,8 @@ def end_table() -> None:
         table.row_top += table.row_height + table.cell_padding[1] * 2.0
     # This frame's widest content per column sizes the fixed columns next frame.
     _table_shared(table.name)["fit"] = dict(table.fit_next)
-    if table.flags & (TableFlags.BORDERS_OUTER_V | TableFlags.BORDERS_INNER_V):
+    if table.flags & (TableFlags.BORDERS_OUTER_V | TableFlags.BORDERS_INNER_V
+                      | TableFlags.BORDERS_OUTER_H | TableFlags.BORDERS_INNER_H):
         _table_borders(table)
     if table.saved_layout is not None:
         x, y, w, h, origin_x, origin_y, max_x, max_y = table.saved_layout
@@ -3068,10 +3071,24 @@ def _table_borders(table: _Table) -> None:
     for index, column in enumerate(columns):
         if index == 0 and not (table.flags & TableFlags.BORDERS_OUTER_V):
             continue
+        if not table.flags & (TableFlags.BORDERS_OUTER_V | TableFlags.BORDERS_INNER_V):
+            break
         ctx.draw.add_line_v((table.box[0] + column.offset, top), height, colour, 1.0)
     if table.flags & TableFlags.BORDERS_OUTER_V and columns:
         right = table.box[0] + columns[-1].offset + columns[-1].width
         ctx.draw.add_line_v((right, top), height, colour, 1.0)
+    if columns and table.flags & (TableFlags.BORDERS_OUTER_H | TableFlags.BORDERS_INNER_H):
+        left = table.box[0] + columns[0].offset
+        width = columns[-1].offset + columns[-1].width - columns[0].offset
+        ys = []
+        if table.flags & TableFlags.BORDERS_OUTER_H:
+            ys.append(top)
+        if table.flags & TableFlags.BORDERS_INNER_H:
+            ys.extend(table.row_tops[1:])
+        if table.flags & TableFlags.BORDERS_OUTER_H:
+            ys.append(bottom)
+        for y in ys:
+            ctx.draw.add_line_h((left, y), width, colour, 1.0)
 
 
 def table_setup_column(label: str, flags: int = 0,
@@ -3212,6 +3229,7 @@ def table_next_row(row_flags: int = 0, min_height: float = 0.0) -> None:
         table.row_top += table.row_height + table.cell_padding[1] * 2.0
     table.row_height = max(float(min_height), 0.0)
     table.row = table.row + 1
+    table.row_tops.append(table.row_top)
     table.started = False
     table.current = -1
 
@@ -3225,6 +3243,7 @@ def table_next_column() -> bool:
         table.started = True
         if table.row < 0:
             table.row = 0
+            table.row_tops.append(table.row_top)
         _place(table, 0)
         return _column_visible(table, 0)
     _close_cell(table)

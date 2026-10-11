@@ -1052,8 +1052,16 @@ def _draw_control(section: dict, model: Any, state: FormState, width: float) -> 
             value = getattr(model, source, None)
             value = value() if callable(value) else value
             text = text if value is None else value
+        text = str(text)
+        if section.get("is_markdown") and not section.get("is_html"):
+            # Drawn as a document -- headings, lists, grid tables, emphasis --
+            # at the type scale's roles, not flattened to one wrapped string.
+            from .widgets.markdown import render_markdown
+
+            render_markdown(text)
+            return
         rich = bool(section.get("is_markdown") or section.get("is_html")) or _HAS_MARKUP(text)
-        _w.text_wrapped(_plain_text(str(text)) if rich else str(text))
+        _w.text_wrapped(_plain_text(text) if rich else text)
 
 
 #: Rich text an info section may carry, flattened for the canvas: block tags

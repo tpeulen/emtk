@@ -500,6 +500,14 @@ def draw_text(
             # One raster texel per device pixel: a box straddling pixels
             # would be resampled, which blurs every stem.
             gx, gy = round(gx * device) / device, round(gy * device) / device
+            # The raster is em rounded to whole texels, so the glyph's box is a
+            # few percent off texels / device. Left like that a full stop (3
+            # texels tall, 1 of them ink) lands in a 2-pixel box that nearest
+            # sampling reads at the two padding rows: the mark vanishes. When
+            # the raster was not clamped, draw it 1:1.
+            if 0.85 <= (gw * device / texture.width) <= 1.15 and \
+                    0.85 <= (gh * device / texture.height) <= 1.15:
+                gw, gh = texture.width / device, texture.height / device
         if not degrees:
             painter.image(gx, gy, gw, gh, texture, tint=colour)
         else:

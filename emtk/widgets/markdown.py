@@ -262,14 +262,23 @@ def parse_markdown(raw_text: str) -> list[MarkdownBlock]:
         if stripped.startswith("|") and stripped.endswith("|"):
             flush_p()
             table_rows: list[list[str]] = []
+            aligns: list[str] = []
             while i < n and lines[i].strip().startswith("|") and lines[i].strip().endswith("|"):
                 r_strip = lines[i].strip()
                 cells = [c.strip() for c in r_strip.strip("|").split("|")]
-                if not all(re.match(r"^:?-+:?$", c) for c in cells):
+                if all(re.match(r"^:?-+:?$", c) for c in cells):
+                    # The delimiter row carries the column alignment (:--, :-:, --:).
+                    aligns = [
+                        "c" if c.startswith(":") and c.endswith(":")
+                        else "r" if c.endswith(":") else "l"
+                        for c in cells
+                    ]
+                else:
                     table_rows.append(cells)
                 i += 1
             if table_rows:
-                blocks.append(MarkdownBlock(kind="table", items=["\t".join(r) for r in table_rows]))
+                blocks.append(MarkdownBlock(kind="table", arg="".join(aligns),
+                                            items=["\t".join(r) for r in table_rows]))
             continue
 
         # Headings (# H1, ## H2, ### H3, #### H4)
@@ -395,6 +404,23 @@ def _link_row(links: list[tuple[str, str]], tag: str, on_link: Callable[[str], N
             if on_link:
                 on_link(target)
         used += width
+
+
+def _aligned_cell(text: str, align: str, colour) -> None:
+    """Draw one table cell, shifted right or to the centre when it fits on a line.
+
+    ``align`` is ``"l"``, ``"c"`` or ``"r"`` from the delimiter row. A cell wider
+    than its column wraps, left aligned, as it always did.
+    """
+    avail = im.get_content_region_avail()[0]
+    width = im.calc_text_size(text)[0]
+    if align in ("c", "r") and width < avail:
+        shift = (avail - width) * (0.5 if align == "c" else 1.0)
+        im.set_cursor_pos_x(im.get_cursor_pos_x() + shift)
+    if colour is not None:
+        im.text_colored(colour, text)
+    else:
+        im.text_wrapped(text)
 
 
 def render_markdown(
@@ -548,20 +574,23 @@ def render_markdown(
             rows = [item.split("\t") for item in block.items]
             cols = max(len(r) for r in rows) if rows else 1
             im.dummy(0.0, 4.0)
-            if im.begin_table(f"tbl_{idx}", cols):
+            flags = (im.TableFlags.BORDERS | im.TableFlags.ROW_BG
+                     | im.TableFlags.SIZING_STRETCH_PROP)
+            if im.begin_table(f"tbl_{idx}", cols, flags):
                 for r_idx, row in enumerate(rows):
                     im.table_next_row()
                     for c_idx in range(cols):
                         cell_text = row[c_idx] if c_idx < len(row) else ""
                         im.table_next_column()
                         clean_cell, _ = _format_inline_text(cell_text)
+                        align = block.arg[c_idx] if c_idx < len(block.arg) else "l"
                         if r_idx == 0:
                             push_text_style("body", bold=True)
-                            im.text_colored((140, 205, 255, 255), clean_cell)
+                            _aligned_cell(clean_cell, align, (140, 205, 255, 255))
                             pop_text_style()
                         else:
                             push_text_style("body")
-                            im.text_wrapped(clean_cell)
+                            _aligned_cell(clean_cell, align, None)
                             pop_text_style()
                 im.end_table()
             im.dummy(0.0, 4.0)

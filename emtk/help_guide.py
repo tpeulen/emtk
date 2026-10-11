@@ -116,7 +116,7 @@ class EmTkHelpWindow:
         self.size = size
         self.open = False
         self.active_category = "All"
-        self.dlg = DialogWindow(title, size=size, key=f"help_{title}")
+        self.dlg = DialogWindow(title, size=size, key=f"help_{title}", close_button=False)
 
         # Parsed help content: list of (heading, content_lines)
         self.sections: list[tuple[str, list[str]]] = []
@@ -208,7 +208,7 @@ class EmTkHelpWindow:
             im.pop_style_color()
 
         im.same_line()
-        # The one labelled Close of the window (besides Escape and the header ×):
+        # The one close control of the window (besides Escape; the title bar has no ×):
         # the close mark, then the word -- no second "Close Help" in a footer.
         if im.button(CLOSE_CAPTION_ICON + "  " + tr("Close", domain="emtk") + "###help_top"):
             pressed = "close"

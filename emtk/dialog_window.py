@@ -67,8 +67,13 @@ class DialogWindow:
 
     def __init__(self, title: str, size: Sequence[float] = (420.0, 300.0),
                  pos: Optional[Sequence[float]] = None, key: str = "",
-                 escape_closes: bool = True, fit_height: bool = False) -> None:
+                 escape_closes: bool = True, fit_height: bool = False,
+                 close_button: bool = True) -> None:
         self.title = str(title)
+        #: Draw the title bar's ``×``. A window whose content already carries a
+        #: labelled Close (the help window) turns it off: one close control, and
+        #: Escape still closes.
+        self.close_button = bool(close_button)
         self.size = (float(size[0]), float(size[1]))
         self.pos = None if pos is None else (float(pos[0]), float(pos[1]))
         self.key = key or self.title
@@ -139,7 +144,7 @@ class DialogWindow:
                       style.color(_core.Col.TEXT), title)
 
         pressed = None
-        labels = list(buttons) + ["×"]
+        labels = list(buttons) + (["×"] if self.close_button else [])
         shown = [tr(label) for label in labels]
         widths = [_w.calc_text_size(text)[0] + 14.0 for text in shown]
         bh = _core.get_frame_height()
