@@ -494,6 +494,14 @@ def host_class():
                 self._notify()
             super().focusOutEvent(event)
 
+        def focusInEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """Tell the control focus came back (``focus_gained``), e.g. to unmute audio."""
+            super().focusInEvent(event)
+            gained = getattr(self.control, "focus_gained", None)
+            if callable(gained):
+                gained()
+                self._notify()
+
         # -- file drops ---------------------------------------------------- #
         def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Accept file URL drags when the control takes drops."""

@@ -352,6 +352,9 @@ class _Keys:
     def focus_lost(self):
         self.events.append(("focus_lost",))
 
+    def focus_gained(self):
+        self.events.append(("focus_gained",))
+
 
 def test_key_releases_reach_the_control_and_auto_repeat_releases_do_not(qt_app):
     from qtpy import QtCore, QtGui
@@ -377,6 +380,8 @@ def test_losing_focus_is_reported(qt_app):
     host = ControlHost(control)
     qt_app.sendEvent(host, QtGui.QFocusEvent(QtCore.QEvent.FocusOut))
     assert control.events == [("focus_lost",)]
+    qt_app.sendEvent(host, QtGui.QFocusEvent(QtCore.QEvent.FocusIn))
+    assert control.events == [("focus_lost",), ("focus_gained",)]
 
 
 def test_a_drop_the_rich_hook_declines_is_ignored(qt_app, tmp_path):
