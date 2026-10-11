@@ -220,3 +220,31 @@ def test_hidden_glfw_window_press_after_the_window_moved_under_a_still_hand():
         assert app.pressed == 1
     finally:
         driver.close()
+
+
+@pytest.mark.skipif(not _glfw_usable(), reason="needs a macOS display session and glfw")
+def test_hidden_glfw_window_wheel_after_the_window_moved_under_a_still_hand():
+    """rendercanvas stamps a wheel event with the last *move*, as it does a press.
+
+    Found with this driver (2026-10-11): at emtk 84ce461 the press was corrected by the live
+    cursor query (emtk.native.CanvasEvents.pointer_position) but the wheel was not, so after
+    the window moved under a still hand the wheel scrolled the region under the old spot.
+    """
+    app = _Panel()
+    driver = HostedDriver(app, (400, 300), backend="glfw")
+    seen = []
+    original = app.wheel
+
+    def wheel(x, y, steps, modifiers=0):
+        seen.append((round(x), round(y)))
+        return original(x, y, steps, modifiers)
+
+    app.wheel = wheel
+    try:
+        driver.frame(2)
+        driver.hover((200.0, 150.0))
+        driver.move_window(50, 30)
+        driver.wheel(-1)
+        assert seen == [(150, 120)], seen
+    finally:
+        driver.close()
