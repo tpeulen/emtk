@@ -112,7 +112,7 @@ _VALUE_KEYS = frozenset({
 TABLE_KEYS = frozenset({
     "source", "target", "columns_source", "columns", "selected_call", "selected_attr",
     "activated_call", "activated_cell_call", "edited_call", "delete_call", "context_call", "context_menu",
-    "colour_source", "editable", "editable_call", "height", "expand",
+    "colour_source", "editable", "editable_call", "height", "expand", "stretch", "min_height",
     "expanded_attr", "muted_key", "status", "column_picker", "tree_key", "filter",
     "tooltip_key", "row_key", "min_column_width", "fit_columns", "fit_rows", "drag_call", "selection_attr", "sort",
 })
@@ -126,7 +126,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     "button_row": frozenset({"buttons"}),
     "progress": frozenset({"text_source"}),
     "info": frozenset({"source", "text", "is_markdown", "is_html"}),
-    "custom": frozenset({"source", "options", "height", "read_only"}),
+    "custom": frozenset({"source", "options", "height", "read_only", "stretch", "min_height"}),
     "table": TABLE_KEYS,
 }
 VIEW_KEYS = frozenset({"sections", "title", "model", "n_col", "hidden_when", "visible"})
@@ -186,6 +186,8 @@ class FormState:
         self.editor_focus: str | None = None
         #: Sliders without a field (``"field": false``) being typed into, by name.
         self.typing: set[str] = set()
+        #: What each stretching non-table section measured of the rows after it.
+        self.fills: dict[str, Any] = {}
 
     def used(self, name: str) -> None:
         """Report that the user used *name*."""
@@ -1332,13 +1334,15 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
                     _w.dummy(column_x[c], 0.0)
                     _w.same_line(column_x[c])
                 first = False
-                if stacked:
+                if stacked and _label_of(section):
+                    # (a section of this column without a label of its own, a button row
+                    # under a stacked field, draws no empty label line above itself)
                     text = _label_of(section)
                     shown = _fit_text(text, max(avail - column_x[c], 30.0))
                     _label(shown)
                     if shown != text and _w.is_item_hovered():
                         _w.set_tooltip(text)
-                elif label_w[c] > 0:
+                elif label_w[c] > 0 and not stacked:
                     _label(_label_of(section), label_w[c])
                     _w.same_line(column_x[c] + label_w[c])
                 _draw_control(section, model, state, max(widths[c], 30.0))
@@ -1554,9 +1558,19 @@ def _draw_code_editor(section: dict, model: Any, state: FormState) -> None:
     ctx = _core.get_current_context()
     avail_w, avail_h = _w.get_content_region_avail()[:2]
     height = float(options.get("height", section.get("height", 240)))
-    if options.get("expand"):
-        height = max(height, float(avail_h))
-    box = ctx.layout.row(height=height, width=float(avail_w))
+    stretch = float(options.get("stretch", section.get("stretch", 0)) or
+                    (1.0 if options.get("expand", section.get("expand")) else 0.0))
+    if stretch > 0.0:
+        # Fills the room the rows after it leave, measured (emtk.layout.Fill),
+        # rather than all of it -- which pushed those rows out of the region.
+        from .layout import Fill
+
+        fill = state.fills.setdefault(name, Fill(stretch))
+        fill.weight = stretch
+        minimum = float(options.get("min_height", section.get("min_height", 60)) or 60)
+        box = ctx.layout.fill_box(fill, min(height, float(avail_h)), minimum, float(avail_w))
+    else:
+        box = ctx.layout.row(height=height, width=float(avail_w))
     hovered = ctx.item_add(box, ctx.get_id(f"##code-editor-{name}"))
     _tooltip(section)
     state.rects[name] = tuple(box)

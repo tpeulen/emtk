@@ -768,13 +768,25 @@ class Layout:
         region._fills = [r for r in region._fills if r[0] is not fill]
         region._fills.append((fill, bottom, float(box[3])))
 
+    def fill_box(self, fill: Fill, first: float, minimum: float = 0.0,
+                 width: float | None = None) -> Rect:
+        """Lay out *fill* as the next row, as tall as :meth:`Fill.height` says.
+
+        The one call a hand-drawn stretchable item needs: it takes the next
+        row at the fill's height and records it for :meth:`settle_fills`.
+        """
+        height = fill.height(self.avail()[1], first, minimum)
+        box = self.row(height=height, width=width)
+        self.add_fill(fill, box)
+        return box
+
     def settle_fills(self) -> bool:
         """Measure what was laid out after each fill; tell it for the next frame.
 
         Called when the region is done -- :meth:`emtk.im_core.Context.end_child`,
         ``end`` and ``end_frame`` -- so :attr:`content_height` is the region's
         last row. Each fill learns the height of everything after it, the fills
-        after it excluded (they share the room, see :meth:`Fill.height`).
+        after it excluded (they share the room by weight, see :meth:`Fill.height`).
 
         Returns
         -------
@@ -787,8 +799,9 @@ class Layout:
         for index, (fill, bottom, _) in enumerate(records):
             later = records[index + 1:]
             tail = float(ceil(max(self._max_y - bottom - sum(r[2] for r in later), 0.0)))
-            if fill.tail != tail or fill.later != len(later):
-                fill.tail, fill.later = tail, len(later)
+            weight = float(sum(r[0].weight for r in later))
+            if fill.tail != tail or fill.later != weight:
+                fill.tail, fill.later = tail, weight
                 changed = True
         return changed
 
@@ -874,16 +887,20 @@ class Fill:
     tail : float or None
         Height of what was laid out after the fill last frame (the other fills
         after it excluded); ``None`` before its first frame.
-    later : int
-        How many fills came after it in the same region. They share the room
-        evenly with it.
+    later : float
+        The summed :attr:`weight` of the fills after it in the same region.
+        They share the room with it in proportion to their weights.
+    weight : float
+        This fill's share of the room: two fills of weights 1 and 2 in one
+        region get a third and two thirds of what the fixed rows leave.
     """
 
-    __slots__ = ("tail", "later")
+    __slots__ = ("tail", "later", "weight")
 
-    def __init__(self) -> None:
+    def __init__(self, weight: float = 1.0) -> None:
         self.tail: float | None = None
-        self.later = 0
+        self.later = 0.0
+        self.weight = max(float(weight), 1e-6)
 
     def height(self, avail: float, first: float, minimum: float = 0.0) -> float:
         """The fill's height this frame.
@@ -908,5 +925,5 @@ class Fill:
         if self.tail is None:
             height = min(float(first), float(avail))
         else:
-            height = (float(avail) - self.tail) / (1 + self.later)
+            height = (float(avail) - self.tail) * self.weight / (self.weight + self.later)
         return float(max(floor(height), float(minimum)))

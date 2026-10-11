@@ -299,7 +299,10 @@ the host): they are measured at the end of the region -- the window, child or
 the frame -- and the table is laid out to fit from the next frame on
 (``emtk.layout.Fill``). There is no height to declare for them; a translation,
 a label that stacks under its field or a re-flowed button row settles in one
-frame. Pointer and keyboard events are applied on the next ``draw``, following
+frame. Several such items share the room by their ``stretch`` weight
+(``expand: true`` is weight 1; ``min_height`` is the least each gets);
+hand-drawn code asks ``im.stretch_height(id, weight, minimum)`` for the
+height of a plot or child region it then places at the cursor. Pointer and keyboard events are applied on the next ``draw``, following
 the usual ``ImApp`` contract. Table cell editors and filters preserve the
 host-normalized keyboard modifiers: Ctrl+A (Command+A on macOS) selects all,
 and typing replaces the selection. Enter commits a cell; Escape cancels it.

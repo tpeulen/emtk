@@ -191,3 +191,98 @@ def test_settle_measures_from_the_fill_to_the_end_of_the_region():
     assert layout.settle_fills() is True
     assert fill.tail == 3 + 16                      # the gap and the row
     assert layout.settle_fills() is False           # nothing left to settle
+
+
+# ---- stretch weights: the room shared among the items that matter ------------------------------
+
+
+def _stretch_spec(w1, w2, status=True):
+    first, second = _table("sheet"), _table("other")
+    first["options"].update(stretch=w1, expand=False)
+    second["options"].update(stretch=w2, expand=False)
+    sections = [first, second, {"type": "choice", "attr": "model", "label": "Model",
+                                 "options": ["a", "b"]}, _AFTER[2]]
+    if status:
+        sections.append({"type": "label", "text": "Ready"})
+    return {"sections": sections}
+
+
+class _Two(_Model):
+    model = "a"
+
+    def other(self):
+        return self.rows
+
+
+@pytest.mark.parametrize("weights", [(1, 1), (1, 2), (3, 1)])
+@pytest.mark.parametrize("size", [(320, 500), (800, 600), (1100, 720)])
+def test_stretch_weights_share_the_room(weights, size):
+    model, state = _Two(), FormState()
+    rects = _settled(_stretch_spec(*weights), model, state, *size)
+    a, b = rects["sheet"][3], rects["other"][3]
+    assert abs(a / b - weights[0] / weights[1]) < 0.05, (a, b)
+    assert _bottom(rects["remove"]) <= size[1]
+    # The tables take the room; what is left is the fixed rows (choice, buttons, a status line).
+    assert a + b >= 0.6 * size[1]
+
+
+def test_a_stretching_table_keeps_its_minimum():
+    spec = _stretch_spec(1, 1)
+    spec["sections"][0]["options"]["min_height"] = 150
+    rects = _settled(spec, _Two(), FormState(), 320, 300)
+    assert rects["sheet"][3] >= 150
+
+
+def test_stretch_survives_a_resize_and_twice_the_text_size():
+    model, state = _Two(), FormState()
+    _settled(_stretch_spec(1, 1), model, state, 800, 600)
+    rects = _settled(_stretch_spec(1, 1), model, state, 400, 500, font_scale=2.0)
+    assert _bottom(rects["remove"]) <= 500
+    assert abs(rects["sheet"][3] - rects["other"][3]) <= 1
+    again, more = _frame(_stretch_spec(1, 1), model, state, 400, 500, 2.0)
+    assert again == rects and not more
+
+
+def test_a_hand_drawn_item_stretches_by_weight():
+    storage = {}
+    boxes = []
+    for _ in range(3):
+        with im.frame(MetricPainter(), (0, 0, 300, 400), storage=storage) as ctx:
+            im.begin("w", (0, 0, 300, 400))
+            h1 = im.stretch_height("plot", weight=2, minimum=40)
+            im.dummy((300, h1))
+            h2 = im.stretch_height("list", weight=1, minimum=40)
+            im.dummy((300, h2))
+            im.button("OK")
+            im.text("Ready")
+            last = im.get_item_rect()
+            im.end()
+        boxes.append((h1, h2, last))
+    h1, h2, last = boxes[-1]
+    assert abs(h1 - 2 * h2) <= 2 and last[1] + last[3] <= 400 and last[1] + last[3] >= 390
+    assert boxes[-1] == boxes[-2]
+
+
+def test_a_button_row_under_a_stacked_field_leaves_no_blank_line():
+    """A column whose label stacks above its field: the unlabelled row after it is not pushed down a line."""
+
+    class M:
+        model = "a"
+
+        def model_names(self):
+            return ["a", "b"]
+
+        def add(self):
+            pass
+
+        def remove(self):
+            pass
+
+    spec = {"sections": [
+        {"type": "choice", "attr": "model", "label": "Model", "options_source": "model_names"},
+        _AFTER[2]]}
+    rects = _settled(spec, M(), FormState(), 200, 300)
+    field, add, remove = rects["model"], rects["add"], rects["remove"]
+    gap = 3.0  # emtk ITEM_SPACING y
+    assert add[1] - _bottom(field) <= gap + 1                # the next line, not one further
+    assert add[0] == 0.0 and _bottom(remove) <= 300 and remove[0] + remove[2] <= 200

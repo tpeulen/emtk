@@ -2195,6 +2195,50 @@ def get_content_region_avail() -> tuple:
     return _ctx().layout.avail()
 
 
+def stretch_height(str_id: str, weight: float = 1.0, minimum: float = 0.0,
+                   first: float | None = None) -> float:
+    """The height for the next item to stretch into, sharing the room by *weight*.
+
+    A hand-drawn item that should take the vertical room left (a plot, a list,
+    a child region) asks for its height here and then places itself, at that
+    height, at the cursor on a line of its own::
+
+        h = im.stretch_height("curves", weight=2, minimum=80)
+        implot.begin_plot("##curves", (-1, h))
+
+    What is drawn after it in the region (a button row, a status line) is
+    measured when the region ends and left room for from the next frame on;
+    several stretching items in one region share the room by weight, after the
+    fixed rows have their measured height (:class:`emtk.layout.Fill`). A view
+    spec says the same with ``"stretch": <weight>``.
+
+    Parameters
+    ----------
+    str_id : str
+        Names the item; its measurement is kept under it between frames.
+    weight : float
+        Its share of the room relative to the other stretching items.
+    minimum : float
+        Never shorter than this; what follows then scrolls with the region.
+    first : float, optional
+        The height before the first measurement (default: the room left).
+    """
+    from .layout import Fill
+
+    ctx = _ctx()
+    store = ctx.state(("stretch", ctx.get_id(str_id)))
+    fill = store.get("fill")
+    if fill is None:
+        fill = store["fill"] = Fill(weight)
+    fill.weight = max(float(weight), 1e-6)
+    layout = ctx.layout
+    avail_w, avail_h = layout.avail()
+    height = fill.height(avail_h, avail_h if first is None else first, minimum)
+    x, y = layout.cursor
+    layout.add_fill(fill, (x, y, avail_w, height))
+    return height
+
+
 def get_line_avail() -> float:
     """Room left on the *current line*, beside the last item — or 0.0 on an
     empty line.
@@ -3561,7 +3605,7 @@ def table_get_column_index() -> int:
 
 
 __all__ += [
-    "get_content_region_avail", "get_line_avail", "get_cursor_pos", "get_cursor_pos_x",
+    "get_content_region_avail", "get_line_avail", "stretch_height", "get_cursor_pos", "get_cursor_pos_x",
     "get_cursor_pos_y", "set_cursor_pos", "get_item_rect_min",
     "get_item_rect_max", "get_item_rect_size", "get_window_pos",
     "get_window_size", "get_window_width", "get_window_height",
