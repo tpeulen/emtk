@@ -5216,6 +5216,9 @@ def host_control(label: str, control: Any, size: tuple[float, float] | None = No
             took = True
 
         key = getattr(control, "key", None)
+        if focus.get("id") == item_id and getattr(control, "wants_tab", False):
+            # Tab is the control's (a console completes with it): navigation must not take it.
+            ctx.storage["__tab_owned__"] = True
         if focus.get("id") == item_id and callable(key):
             events = list(io.key_events)
             if not events and (io.key or io.text):

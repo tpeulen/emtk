@@ -342,3 +342,70 @@ def test_qt_host_routes_the_input_method_to_the_control(monkeypatch):
 def _centre(state):
     x, y, w, h = state["rect"]
     return x + w / 2, y + h / 2
+
+
+# --------------------------------------------------------------- hosted controls
+class _Hosted:
+    """A retained control that edits text: records keys and compositions."""
+
+    def __init__(self, wants_tab=False):
+        self.wants_tab = wants_tab
+        self.keys, self.preedits = [], []
+        self.ime_caret = (12.0, 34.0, 16.0)
+
+    def draw(self, p, x, y, w, h):
+        self.box = (x, y, w, h)
+
+    def press(self, *args, **kwargs):
+        return None
+
+    def key(self, key, text="", modifiers=0):
+        self.keys.append((key, text))
+        return True
+
+    def compose(self, text, cursor):
+        self.preedits.append((text, cursor))
+
+
+def _hosting(control):
+    state = {}
+
+    def gui():
+        im.set_next_window_pos((0.0, 0.0))
+        im.set_next_window_size((400.0, 300.0))
+        if im.begin("h"):
+            im.input_text("##before", "")
+            im.host_control("##ctl", control, (300.0, 200.0))
+            state["rect"] = im.get_item_rect()
+        im.end()
+
+    return ImApp(gui), state
+
+
+def test_host_control_forwards_the_composition_and_reports_the_caret():
+    control = _Hosted()
+    app, state = _hosting(control)
+    driver = Driver(app, size=(420, 320))
+    driver.frame(2)
+    driver.compose("x")
+    assert control.preedits == [], "not focused: no composition"
+    driver.click(state["rect"])
+    driver.compose("にほ", 1)
+    assert control.preedits[-1] == ("にほ", 1)
+    assert app.io.ime_caret == (12.0, 34.0, 16.0)
+    driver.commit("日本")
+    assert control.preedits[-1] == ("", 0) and (0, "日本") in control.keys
+
+
+def test_a_control_that_wants_tab_gets_it():
+    from emtk.keys import KEY_TAB
+
+    for wants, expected in ((True, True), (False, False)):
+        control = _Hosted(wants_tab=wants)
+        app, state = _hosting(control)
+        driver = Driver(app, size=(420, 320))
+        driver.frame(2)
+        driver.click(state["rect"])
+        driver.frame(1)
+        driver.press(KEY_TAB)
+        assert any(key == KEY_TAB for key, _text in control.keys) is expected

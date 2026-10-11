@@ -166,6 +166,10 @@ class Control:
         """
         return False
 
+    #: Whether Tab is this control's key while it has the keys (an editor indents, a console
+    #: completes); otherwise keyboard navigation takes Tab to move to the next item.
+    wants_tab: bool = False
+
     def compose(self, text: str, cursor: int) -> None:
         """Show the input method's provisional *text* at the caret; ``""`` ends it.
 
