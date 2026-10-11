@@ -332,6 +332,9 @@ class CanvasEvents:
         self.position_supported = False
         self.position_callback = None
         self._previous_position_callback = None
+        #: glfw callbacks chained by :meth:`_connect_pointer_presence`, as
+        #: ``{setter name: (ours, the backend's)}``.
+        self._presence_callbacks: dict = {}
         self.connect()
 
     # -- wiring ---------------------------------------------------------- #
@@ -362,6 +365,7 @@ class CanvasEvents:
         self._connect_focus_loss()
         self._connect_close_request()
         self._connect_window_position()
+        self._connect_pointer_presence()
 
     def _on_close(self, event) -> None:
         if self._closed:
@@ -371,6 +375,7 @@ class CanvasEvents:
         self._restore_focus_callback()
         self._restore_position_callback()
         self._restore_close_request_callback()
+        self._restore_pointer_presence()
         close = getattr(self.sink, "close", None)
         if callable(close):
             close()
@@ -498,6 +503,90 @@ class CanvasEvents:
         except Exception:  # noqa: BLE001 - the backend may already have closed
             pass
         self.position_callback = None
+
+    #: glfw's setters for the callbacks whose events rendercanvas gates on
+    #: its idea of whether the pointer is inside the window.
+    _PRESENCE_SETTERS = ("set_mouse_button_callback", "set_cursor_pos_callback")
+
+    def _connect_pointer_presence(self) -> None:
+        """Keep rendercanvas' "pointer inside" flag true to the OS.
+
+        rendercanvas' glfw backend drops every pointer move while it believes
+        the pointer is outside the window, and swallows a press there as the
+        click that focuses the window. That belief comes only from glfw's
+        cursor enter/leave callbacks, and on macOS those come from a tracking
+        area glfw rebuilds on every resize with ``NSTrackingAssumeInside``: a
+        pointer outside the content view at that moment -- on the edge being
+        dragged, or anywhere while a tiling tool resizes the window --
+        produces no enter event when it then moves in. After a resize every
+        click was swallowed and every hover dropped until the pointer left
+        the window and came back.
+
+        Chained ahead of the backend's button and cursor callbacks: when the
+        flag says outside but glfw's live ``HOVERED`` query says the pointer
+        is over the window, the missing enter is delivered first.
+        """
+        window = getattr(self.canvas, "_window", None)
+        if window is None or not hasattr(self.canvas, "_pointer_inside"):
+            return
+        try:
+            import glfw  # noqa: PLC0415
+
+            if not hasattr(glfw, "HOVERED"):
+                return
+            for name in self._PRESENCE_SETTERS:
+                setter = getattr(glfw, name, None)
+                if not callable(setter):
+                    continue
+                previous = setter(window, None)
+                if previous is None:
+                    continue
+
+                def chained(native_window, *args, _previous=previous) -> None:
+                    self.sync_pointer_inside(native_window)
+                    _previous(native_window, *args)
+
+                # Held here: glfw keeps the callback alive only while installed.
+                self._presence_callbacks[name] = (chained, previous)
+                setter(window, chained)
+        except Exception:  # noqa: BLE001 - not a glfw window after all
+            self._presence_callbacks = {}
+
+    def sync_pointer_inside(self, window=None) -> bool:
+        """Deliver an enter glfw missed; return whether one was delivered."""
+        canvas = self.canvas
+        if getattr(canvas, "_pointer_inside", None) or getattr(canvas, "_pointer_lock", False):
+            return False
+        window = window if window is not None else getattr(canvas, "_window", None)
+        if window is None:
+            return False
+        try:
+            import glfw  # noqa: PLC0415
+
+            if not glfw.get_window_attrib(window, glfw.HOVERED):
+                return False
+        except Exception:  # noqa: BLE001 - nothing to ask: leave the backend be
+            return False
+        enter = getattr(canvas, "_on_cursor_enter", None)
+        if callable(enter):
+            enter(window, True)
+        else:
+            canvas._pointer_inside = True
+        return True
+
+    def _restore_pointer_presence(self) -> None:
+        """Put the backend's own callbacks back before the window goes."""
+        callbacks, self._presence_callbacks = self._presence_callbacks, {}
+        window = getattr(self.canvas, "_window", None)
+        if window is None or not callbacks:
+            return
+        try:
+            import glfw  # noqa: PLC0415
+
+            for name, (_ours, previous) in callbacks.items():
+                getattr(glfw, name)(window, previous)
+        except Exception:  # noqa: BLE001 - the window may already be gone
+            pass
 
     def _connect_file_drop(self) -> None:
         """Deliver dropped files where the backend has a glfw window."""
@@ -663,8 +752,9 @@ class CanvasEvents:
     def _on_wheel(self, event: dict) -> None:
         steps = wheel_steps(event)
         if steps:
-            self._deliver("on_wheel", float(event.get("x", 0.0)),
-                          float(event.get("y", 0.0)), steps,
+            x, y = self.pointer_position({"x": event.get("x", 0.0),
+                                          "y": event.get("y", 0.0)})
+            self._deliver("on_wheel", x, y, steps,
                           modifiers_from_canvas(event.get("modifiers")))
 
     # -- keys ------------------------------------------------------------ #
