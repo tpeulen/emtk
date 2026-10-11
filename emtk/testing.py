@@ -64,6 +64,20 @@ class RecordingPainter:
         #: many of this kind" and this list makes that a `len(x for ... if
         #: kind == ...)` instead of a plain `len`.
         self.calls: list[tuple] = []
+        #: ``image`` operations, as ``(x, y, w, h, handle, tint)``.
+        self.images: list[tuple] = []
+        #: Pictograms drawn as images (:mod:`emtk.icons`), as ``(icon, x, y, w, h)``:
+        #: an icon is no longer a string, so this is where a test finds it.
+        self.icons: list[tuple] = []
+
+    def image(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
+              tint=(255, 255, 255, 255)) -> None:
+        """Record an image, and the pictogram it shows when it is an icon."""
+        self.images.append((x, y, w, h, handle, tint))
+        self.calls.append(("image", x, y, w, h, handle, tint))
+        icon = getattr(handle, "icon", None)
+        if icon:
+            self.icons.append((icon, x, y, w, h))
 
     def fill_rect(self, x, y, w, h, colour) -> None:
         """Record a filled rectangle."""
@@ -972,6 +986,14 @@ class _ScreenshotPainter(PixelPainter):
         super().__init__(width, height)
         self.texts = []
         self.strings = []
+        self.icons = []
+
+    def image(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
+              tint=(255, 255, 255, 255)):
+        icon = getattr(handle, "icon", None)
+        if icon:
+            self.icons.append((icon, x, y, w, h))
+        super().image(x, y, w, h, handle, uv0, uv1, tint)
 
     def text(self, x, y, w, h, align, string, colour, bold=False):
         self.texts.append((x, y, w, h, align, string, colour, bold))

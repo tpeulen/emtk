@@ -56,14 +56,13 @@ from typing import Any
 
 from . import im_widgets as _w
 from .i18n import mark, tr
+from .icons import draw_icon, icon_box
 from .im_core import Col, get_current_context
 
 __all__ = ["Ribbon", "RibbonButton", "RibbonGroup", "RibbonTab", "SMALL_ROWS"]
 
 #: Small buttons stacked in one column of a group.
 SMALL_ROWS = 3
-#: How much larger a large button's icon is drawn than the text.
-LARGE_ICON_SCALE = 1.8
 #: Padding inside a group, left and right of its buttons.
 GROUP_PAD = 6.0
 #: Gap between two columns of a group.
@@ -262,7 +261,20 @@ class Ribbon:
     def _large_width(self, button: RibbonButton) -> float:
         ctx = get_current_context()
         pad = ctx.style.frame_padding[0]
-        return max(self._frame_height() * 1.8, self._text_w(tr(button.label)) + pad * 2.0)
+        return max(self._large_icon() + pad * 2.0, self._text_w(tr(button.label)) + pad * 2.0)
+
+    def _large_icon(self) -> float:
+        """A large button's icon box (the one size rule of :mod:`emtk.icons`)."""
+        return icon_box(get_current_context().p.line_height(), large=True)
+
+    def _draw_icon(self, icon: str, x: float, y: float, size: float, colour, enabled: bool) -> None:
+        """*icon* in colour, fitted into the square at ``(x, y)``; as text where it cannot be rasterised."""
+        ctx = get_current_context()
+        if draw_icon(ctx.draw.p, icon, x, y, size, colour, enabled):
+            return
+        glyph = _w.icon_text(icon)
+        gw, gh = ctx.draw.calc_text_size(glyph)
+        ctx.draw.add_text((x + (size - gw) * 0.5, y + (size - gh) * 0.5), colour, glyph)
 
     def _columns(self, group: RibbonGroup) -> list[tuple[bool, list[RibbonButton], float]]:
         """``(large, buttons, width)`` per column: a large button alone, else up to three small ones."""
@@ -555,10 +567,10 @@ class Ribbon:
         pad_x, pad_y = ctx.style.frame_padding
         tx = box[0] + pad_x
         if button.icon:
-            glyph = _w.icon_text(button.icon)
-            gw = self._text_w(glyph)
+            size = icon_box(ctx.p.line_height())
             slot = self._frame_height()
-            ctx.draw.add_text((tx + max(slot - gw, 0.0) * 0.5 - 1.0, box[1] + pad_y), colour, glyph)
+            self._draw_icon(button.icon, tx + (slot - size) * 0.5, box[1] + (box[3] - size) * 0.5,
+                            size, colour, button.is_enabled())
             tx += self._icon_slot()
         ctx.draw.add_text((tx, box[1] + pad_y), colour, tr(button.label))
         self.item_rects[f"{self.name}.button.{button.key}"] = tuple(box)
@@ -571,13 +583,9 @@ class Ribbon:
         label = tr(button.label)
         lw, lh = ctx.draw.calc_text_size(label)
         if button.icon:
-            glyph = _w.icon_text(button.icon)
-            _w.push_font_scale(LARGE_ICON_SCALE)
-            try:
-                gw, gh = ctx.draw.calc_text_size(glyph)
-                ctx.draw.add_text((box[0] + (box[2] - gw) * 0.5, box[1] + 4.0), colour, glyph)
-            finally:
-                _w.pop_font_scale()
+            size = min(self._large_icon(), max(box[3] - lh - 12.0, 1.0))
+            self._draw_icon(button.icon, box[0] + (box[2] - size) * 0.5, box[1] + 4.0, size,
+                            colour, button.is_enabled())
         ctx.draw.add_text((box[0] + (box[2] - lw) * 0.5, box[1] + box[3] - lh - 4.0), colour, label)
         self.item_rects[f"{self.name}.button.{button.key}"] = tuple(box)
         return self._fire(button) if clicked else None
@@ -609,15 +617,11 @@ class Ribbon:
             ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                                      _col(Col.BUTTON_ACTIVE if held else Col.BUTTON_HOVERED),
                                      ctx.style.frame_rounding)
-        if icon:
-            glyph = _w.icon_text(icon)
-            _w.push_font_scale(LARGE_ICON_SCALE)
-            try:
-                gw, _gh = ctx.draw.calc_text_size(glyph)
-                ctx.draw.add_text((box[0] + (box[2] - gw) * 0.5, box[1] + 4.0), _col(Col.TEXT), glyph)
-            finally:
-                _w.pop_font_scale()
         cw, ch = ctx.draw.calc_text_size(caption)
+        if icon:
+            size = min(self._large_icon(), max(box[3] - ch - 12.0, 1.0))
+            self._draw_icon(icon, box[0] + (box[2] - size) * 0.5, box[1] + 4.0, size,
+                            _col(Col.TEXT), True)
         ctx.draw.add_text((box[0] + (box[2] - cw) * 0.5, box[1] + box[3] - ch - 4.0), _col(Col.TEXT), caption)
         self.item_rects[item_key] = tuple(box)
         if clicked:

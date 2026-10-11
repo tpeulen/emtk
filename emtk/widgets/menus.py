@@ -379,10 +379,13 @@ def _draw_icon(p: Painter, icon: str, column: float, x: float, y: float, h: floa
     if column <= 0.0:
         return 0.0
     if icon:
+        from ..icons import draw_icon, icon_box
         from ..im_widgets import icon_text
 
         slot = p.line_height() * ICON_SCALE
-        p.text(x, y, slot, h, ALIGN_VCENTER | ALIGN_HCENTER, icon_text(icon), colour)
+        size = icon_box(p.line_height())
+        if not draw_icon(p, icon, x + (slot - size) * 0.5, y + (h - size) * 0.5, size, colour):
+            p.text(x, y, slot, h, ALIGN_VCENTER | ALIGN_HCENTER, icon_text(icon), colour)
     return column
 
 

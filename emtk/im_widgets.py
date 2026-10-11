@@ -1441,6 +1441,25 @@ def icon_text(icon: str) -> str:
     return (icon or "").translate(_ICON_MODIFIERS)
 
 
+def _draw_icon_slot(ctx, icon: str, x: float, y: float, slot_w: float, slot_h: float, colour,
+                    enabled: bool = True) -> None:
+    """*icon* in colour, one small icon box (:func:`emtk.icons.icon_box`) centred in the slot.
+
+    Drawn as an image, not a glyph: see :mod:`emtk.icons` for why a pictogram
+    through the text path came out grey and of a different size per emoji.
+    Where it cannot be rasterised (no PIL) it falls back to the glyph.
+    """
+    from .icons import draw_icon, icon_box  # noqa: PLC0415
+
+    size = icon_box(ctx.p.line_height())
+    if draw_icon(ctx.draw.p, icon, x + (slot_w - size) * 0.5, y + (slot_h - size) * 0.5, size,
+                 colour, enabled):
+        return
+    glyph = icon_text(icon)
+    gw, gh = ctx.draw.calc_text_size(glyph)
+    ctx.draw.add_text((x + (slot_w - gw) * 0.5, y + (slot_h - gh) * 0.5), colour, glyph)
+
+
 def selectable_icon_width() -> float:
     """How much wider an icon makes a :func:`selectable`'s content: the slot and its gap.
 
@@ -1476,8 +1495,7 @@ def selectable(label: str, selected: bool = False, size=None, icon: str | None =
     if glyph:
         line = _frame_height(ctx)
         top = box[1] + (box[3] - line) * 0.5
-        gw = ctx.draw.calc_text_size(glyph)[0]
-        ctx.draw.add_text((x + max(line - gw, 0.0) * 0.5 - 1.0, top + pad_y), _col(Col.TEXT), glyph)
+        _draw_icon_slot(ctx, icon, x, box[1], line, box[3], _col(Col.TEXT))
         x += selectable_icon_width()
         text_y = top + pad_y
     else:
@@ -2669,7 +2687,7 @@ def menu_item(label: str, shortcut: str = "", selected: bool = False,
     mark = "* " if selected else "  "
     x = box[0] + ctx.style.frame_padding[0]
     if icon:
-        ctx.draw.add_text((x, box[1] + ctx.style.frame_padding[1]), colour, icon_text(icon))
+        _draw_icon_slot(ctx, icon, x, box[1], _frame_height(ctx), box[3], colour, enabled)
         x += selectable_icon_width()
     ctx.draw.add_text((x, box[1] + ctx.style.frame_padding[1]), colour,
                       mark + _visible_label(label))

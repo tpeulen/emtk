@@ -63,8 +63,11 @@ def test_tabs_groups_and_buttons_are_drawn_with_icons_and_captions():
     painter = driver.frame()
     strings = painter.strings
     for text in ("Spectroscopy", "Tools", "Decay", "Correlation", "Single-Molecule", "FCS", "PCH",
-                 "ALEX Suite", "Trace Browser", "📉", "📊", "🚦"):
+                 "ALEX Suite", "Trace Browser"):
         assert text in strings, text
+    # Icons are colour images (emtk.icons), not strings.
+    icons = {icon for icon, *_box in painter.icons}
+    assert {"📉", "📊", "🚦"} <= icons
     assert "Games" not in strings  # another tab's button
     # A large button is as tall as the band; a small one is one row.
     large = driver.rect("ribbon.button.decay")
@@ -172,8 +175,9 @@ def test_menu_rows_with_icons_share_one_label_column():
     popup.open = True
     popup.draw(painter, 0.0, 0.0, 400.0, 300.0)
     xs = {t[5]: t[0] for t in painter.texts}
-    assert "🔬" in xs
-    assert xs["With icon"] == xs["Plain"] > xs["🔬"]
+    icon_x = {icon: x for icon, x, *_rest in painter.icons}
+    assert "🔬" in icon_x
+    assert xs["With icon"] == xs["Plain"] > icon_x["🔬"]
 
 
 def test_an_unpinned_ribbon_folds_after_a_pick_and_a_pinned_one_keeps_its_state():

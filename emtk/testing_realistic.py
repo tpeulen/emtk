@@ -139,7 +139,7 @@ class HostPainter(RecordingPainter):
     and layout assertions, then forwarded to *real* -- a ``QuadPainter`` at the device scale,
     as :class:`emtk.app.ControlSurface` builds it. Measurements (``text_width``,
     ``line_height``) are the real painter's, so a label that the GPU draws clipped is
-    recorded clipped. Anything the recorder does not define (``image``, ``polyline``,
+    recorded clipped. Anything the recorder does not define (``polyline``,
     ``text_rotated``...) is the real painter's, so an app takes the path it takes on screen.
     """
 
@@ -182,6 +182,11 @@ class HostPainter(RecordingPainter):
                        uv2=(1.0, 1.0), tint=(255, 255, 255, 255)) -> None:
         super().image_triangle(p0, p1, p2, handle, uv0, uv1, uv2, tint)
         self._real.image_triangle(p0, p1, p2, handle, uv0, uv1, uv2, tint)
+
+    def image(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0),
+              tint=(255, 255, 255, 255)) -> None:
+        super().image(x, y, w, h, handle, uv0, uv1, tint)
+        self._real.image(x, y, w, h, handle, uv0, uv1, tint)
 
     def push_clip(self, x, y, w, h) -> None:
         super().push_clip(x, y, w, h)

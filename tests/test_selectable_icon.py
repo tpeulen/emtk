@@ -16,6 +16,10 @@ def x_of(painter, string):
     return next(t[0] for t in painter.texts if t[5] == string)
 
 
+def icon_x(painter, icon):
+    return next(entry[1] for entry in painter.icons if entry[0] == icon)
+
+
 def test_icon_gets_a_slot_and_labels_align():
     def gui():
         im.selectable("ALEX Creator", icon="🔀")
@@ -23,11 +27,12 @@ def test_icon_gets_a_slot_and_labels_align():
         im.selectable("Plain row")
 
     painter = draw(gui, {})
-    assert "🔀" in painter.strings
-    # The variation selector draws nothing of its own; left in, it is a missing-glyph box.
-    assert "⏱" in painter.strings and "⏱️" not in painter.strings
+    # Icons are colour images (emtk.icons), never strings: no glyph, no missing-glyph box
+    # for the variation selector of "⏱️".
+    assert {entry[0] for entry in painter.icons} == {"🔀", "⏱️"}
+    assert "⏱" not in painter.strings and "⏱️" not in painter.strings
     assert x_of(painter, "ALEX Creator") == x_of(painter, "Micro-time Shifter")
-    assert x_of(painter, "ALEX Creator") > x_of(painter, "🔀")
+    assert x_of(painter, "ALEX Creator") > icon_x(painter, "🔀")
     assert x_of(painter, "Plain row") < x_of(painter, "ALEX Creator")
 
 
