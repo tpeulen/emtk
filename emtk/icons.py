@@ -44,6 +44,7 @@ from __future__ import annotations
 import logging
 import math
 from collections import OrderedDict
+from contextlib import contextmanager
 from functools import lru_cache
 
 from .texture import Texture
@@ -57,6 +58,8 @@ __all__ = [
     "icon_texture",
     "draw_icon",
     "pictogram_runs",
+    "plain_text",
+    "icon_spans",
     "caption_width",
     "draw_caption",
 ]
@@ -412,15 +415,55 @@ def _runs(string: str):
     return tuple(runs)
 
 
+_plain_text = 0
+
+
+@contextmanager
+def plain_text():
+    """Within the block a painter draws every caption as text, with no icon runs.
+
+    For a widget that lays characters out on a grid of its own -- the code editor
+    -- and draws the colour clusters itself, in the cells it gave them. Whatever
+    it passes to the painter's ``text`` is then one run of plain glyphs, measured
+    and drawn at the font's own advance.
+    """
+    global _plain_text
+    _plain_text += 1
+    try:
+        yield
+    finally:
+        _plain_text -= 1
+
+
 def pictogram_runs(string: str):
     """*string* split into ``(text, is_icon)`` runs, or ``None`` when it has no colour pictogram.
 
     A colour run is one emoji cluster (selectors, skin tones, ZWJ sequences and
     flags included) that the colour font draws; everything else is text.
+    ``None`` as well inside :func:`plain_text`.
     """
-    if not string or string.isascii():
+    if not string or string.isascii() or _plain_text:
         return None
     return _runs(string)
+
+
+@lru_cache(maxsize=4096)
+def icon_spans(string: str) -> tuple[tuple[int, int], ...]:
+    """The ``(start, end)`` index ranges of *string* that are colour pictograms.
+
+    The same clusters :func:`pictogram_runs` finds, as character ranges, and
+    unaffected by :func:`plain_text` -- for a widget that must know where the
+    clusters are to give each one its cells.
+    """
+    if not string or string.isascii():
+        return ()
+    spans = []
+    at = 0
+    for text, icon in _runs(string) or ():
+        if icon:
+            spans.append((at, at + len(text)))
+        at += len(text)
+    return tuple(spans)
 
 
 def caption_width(runs, measure, line_height: float) -> float:

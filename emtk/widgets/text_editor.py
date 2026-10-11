@@ -65,6 +65,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import NamedTuple
 
+from .. import icons
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Colour, Painter
 from ..style import BORDER, FRAME_BG, TEXT, clamp, hit
 from .basic import ScrollBar
@@ -830,7 +831,9 @@ class Document:
         if word_mode:
             return self.find_word_start(self.left(pos))
         if pos.index > 0:
-            return Pos(pos.line, pos.index - 1)
+            index = pos.index - 1
+            inside = _icon_span_at(self.lines[pos.line].text, index)
+            return Pos(pos.line, inside[0] if inside else index)
         if pos.line > 0:
             return self.end_of_line(Pos(pos.line - 1, 0))
         return pos
@@ -841,7 +844,9 @@ class Document:
         if word_mode:
             return self.find_word_end(self.right(pos))
         if pos.index < len(self.lines[pos.line].text):
-            return Pos(pos.line, pos.index + 1)
+            text = self.lines[pos.line].text
+            inside = _icon_span_at(text, pos.index + 1)
+            return Pos(pos.line, inside[1] if inside else pos.index + 1)
         if pos.line < len(self.lines) - 1:
             return Pos(pos.line + 1, 0)
         return pos
@@ -1218,6 +1223,46 @@ class Colorizer:
             return index + len(closer), LineState.IN_TEXT
         line.paint(index, index + 1, Token.STRING)
         return index + 1, state
+
+
+#: Columns a colour pictogram occupies: the East-Asian-wide two, in layout, caret,
+#: selection and hit-testing alike. The editor draws the cluster itself as one
+#: colour image fitted into those two cells, so the character after it starts
+#: exactly where the layout says it does.
+ICON_CELLS = 2
+
+
+def _icon_span_at(text: str, index: int) -> tuple[int, int] | None:
+    """The pictogram cluster of *text* that strictly contains the gap before *index*."""
+    for start, end in icons.icon_spans(text):
+        if start < index < end:
+            return start, end
+    return None
+
+
+def _cell_units(text: str, tab_size: int):
+    """``(start, end, column, cells, is_icon)`` for each unit of *text*, tabs expanded.
+
+    A unit is one character, one tab or one pictogram cluster: the one cell
+    rule every position the editor computes goes through.
+    """
+    ends = dict(icons.icon_spans(text))
+    column = 0
+    index = 0
+    while index < len(text):
+        if index in ends:
+            end = ends[index]
+            yield index, end, column, ICON_CELLS, True
+            column += ICON_CELLS
+            index = end
+            continue
+        if text[index] == "\t":
+            cells = tab_size - (column % tab_size)
+        else:
+            cells = 1
+        yield index, index + 1, column, cells, False
+        column += cells
+        index += 1
 
 
 def _has_code_before(text: str, index: int) -> bool:
@@ -2432,27 +2477,38 @@ class TextEditor:
             self.first_visible_column = column - self.visible_columns + 1
 
     def _column_of(self, pos: Pos) -> int:
-        """The screen column of a position, with tabs expanded."""
-        text = self.document.lines[pos.line].text[: pos.index]
+        """The screen column of a position: tabs expanded, a pictogram two cells wide.
+
+        A position inside a pictogram cluster (it has no caret stop of its own)
+        is the column the cluster starts at.
+        """
         column = 0
-        for char in text:
-            if char == "\t":
-                column += self.config.tab_size - (column % self.config.tab_size)
-            else:
-                column += 1
+        text = self.document.lines[pos.line].text
+        for _start, end, at, cells, _icon in _cell_units(text, self.config.tab_size):
+            if end > pos.index:
+                return at
+            column = at + cells
         return column
 
     def _index_at_column(self, line: int, column: int) -> int:
         """Inverse of :meth:`_column_of`: which character a screen column is in."""
         text = self.document.lines[line].text
-        at = 0
-        for index, char in enumerate(text):
-            width = (
-                self.config.tab_size - (at % self.config.tab_size) if char == "\t" else 1
-            )
-            if at + width > column:
-                return index
-            at += width
+        for start, _end, at, cells, _icon in _cell_units(text, self.config.tab_size):
+            if at + cells > column:
+                return start
+        return len(text)
+
+    def _index_at_x(self, line: int, cells_from_left: float) -> int:
+        """The caret stop nearest to a point, given in (fractional) cells from column 0.
+
+        A character or a pictogram splits at its middle: right of it puts the
+        caret after it. A tab keeps its old rule -- the whole stop is "before".
+        """
+        text = self.document.lines[line].text
+        for start, _end, at, cells, _icon in _cell_units(text, self.config.tab_size):
+            middle = at + (cells - 0.5 if text[start] == "\t" else cells * 0.5)
+            if cells_from_left < middle:
+                return start
         return len(text)
 
     # -- keys ----------------------------------------------------------- #
@@ -2645,10 +2701,10 @@ class TextEditor:
         """Which document position a point on screen is over."""
         row = int((py - self._body_y) // max(self._line_h, 1e-6))
         line = int(clamp(self.first_visible_line + row, 0, len(self.document) - 1))
-        column = self.first_visible_column + int(
-            max(0.0, px - self._text_x) / max(self._glyph_w, 1e-6) + 0.5
+        cells = self.first_visible_column + max(0.0, px - self._text_x) / max(
+            self._glyph_w, 1e-6
         )
-        return Pos(line, self._index_at_column(line, max(column, 0)))
+        return Pos(line, self._index_at_x(line, cells))
 
     def press(
         self,
@@ -2861,14 +2917,24 @@ class TextEditor:
         if not text:
             return
         marker_colour = line.marker[1] if line.marker is not None else None
+        pictograms = dict(icons.icon_spans(text))
         column = 0
         index = 0
         while index < len(text):
             token = line.colours[index] if index < len(line.colours) else 0
+            if index in pictograms:
+                end = pictograms[index]
+                column = self._draw_pictogram(
+                    p, text[index:end], column, row_y, x, w, gutter,
+                    marker_colour or self.palette[min(token, len(self.palette) - 1)],
+                )
+                index = end
+                continue
             blank = text[index] in " \t"
             run = index
             while (
                 run < len(text)
+                and run not in pictograms
                 and (line.colours[run] if run < len(line.colours) else 0) == token
                 and (text[run] in " \t") == blank
             ):
@@ -2880,17 +2946,18 @@ class TextEditor:
                 colour = marker_colour or self.palette[min(token, len(self.palette) - 1)]
                 left = self._text_x + (column - self.first_visible_column) * self._glyph_w
                 if left + len(piece) * self._glyph_w > x + gutter and left < x + w:
-                    p.text(
-                        max(left, x + gutter),
-                        row_y,
-                        x + w - max(left, x + gutter),
-                        self._line_h,
-                        ALIGN_LEFT | ALIGN_VCENTER,
-                        piece if left >= x + gutter else piece[
-                            int((x + gutter - left) / self._glyph_w):
-                        ],
-                        colour,
-                    )
+                    with icons.plain_text():     # the cells are ours, not the painter's
+                        p.text(
+                            max(left, x + gutter),
+                            row_y,
+                            x + w - max(left, x + gutter),
+                            self._line_h,
+                            ALIGN_LEFT | ALIGN_VCENTER,
+                            piece if left >= x + gutter else piece[
+                                int((x + gutter - left) / self._glyph_w):
+                            ],
+                            colour,
+                        )
                 column += len(piece)
             index = run
 
@@ -2904,6 +2971,27 @@ class TextEditor:
                 )
                 if left >= x + gutter:
                     p.stroke_rect(left, row_y, self._glyph_w, self._line_h, (140, 140, 140))
+
+    def _draw_pictogram(
+        self, p: Painter, cluster: str, column: int, row_y: float, x: float, w: float,
+        gutter: float, colour: Colour,
+    ) -> int:
+        """Draw one colour pictogram fitted into its :data:`ICON_CELLS` cells; the column after.
+
+        The image is a square no wider than its cells and no taller than the row,
+        centred in them, so what follows starts where the layout puts it. One
+        that would straddle the gutter is left out, as a clipped glyph is.
+        """
+        left = self._text_x + (column - self.first_visible_column) * self._glyph_w
+        box = ICON_CELLS * self._glyph_w
+        if left >= x + gutter and left < x + w:
+            size = min(box, self._line_h)
+            top = row_y + (self._line_h - size) * 0.5
+            if not icons.draw_icon(p, cluster, left + (box - size) * 0.5, top, size, colour):
+                with icons.plain_text():
+                    p.text(left, row_y, box, self._line_h, ALIGN_LEFT | ALIGN_VCENTER,
+                           cluster, colour)
+        return column + ICON_CELLS
 
     def _draw_whitespace(
         self, p: Painter, piece: str, column: int, row_y: float, x: float, w: float
