@@ -192,7 +192,7 @@ def test_a_pick_survives_the_menus_items_changing():
                 im.end_menu()
             im.end_main_menu_bar()
 
-    original = _App.gui
+    original, original_draw = _App.gui, _App.draw
 
     def draw(self, box=(0, 0, 500, 300)):
         painter = RecordingPainter()
@@ -217,4 +217,44 @@ def test_a_pick_survives_the_menus_items_changing():
         app.settle()
         assert running == [], "the pick did not stop the script"
     finally:
-        _App.gui = original
+        # Both patches go back: a leaked ``draw`` kept drawing this test's
+        # menu for every later ``_App`` subclass in the module.
+        _App.gui, _App.draw = original, original_draw
+
+
+class _SectionedApp(_App):
+    """A menu with captioned sections and a plain rule between its items."""
+
+    def gui(self) -> None:
+        if im.begin_main_menu_bar():
+            if im.begin_menu("Tools"):
+                im.separator_text("Correlation")
+                if im.menu_item("FCS"):
+                    self.actions.append("fcs")
+                im.separator()
+                im.separator_text("Decay")
+                if im.menu_item("Lifetime"):
+                    self.actions.append("lifetime")
+                im.end_menu()
+            im.end_main_menu_bar()
+
+
+def test_menu_sections_are_rows_of_the_popup_not_of_the_window():
+    """``separator`` / ``separator_text`` inside a menu go into its panel; drawn into the
+    window instead, the captions landed on the menu bar row under the titles."""
+    app = _SectionedApp()
+    closed = app.draw()
+    assert "Correlation" not in closed.strings
+    tools_at = app.title("Tools")
+    app.press(*tools_at)
+    assert app.visible("Correlation")
+    entries = app.popup("Tools").entries
+    labels = [None if entry is None else entry.label for entry in entries]
+    assert labels == ["Correlation", "FCS", None, None, "Decay", "Lifetime"]
+    caption = entries[0]
+    assert not caption.enabled, "a section caption is not pickable"
+    bar_y = app.title("Tools")[1]
+    caption_y = app.title("Correlation")[1]
+    assert caption_y > bar_y + 4.0, "the caption sits in the dropped panel, below the bar"
+    app.press(*app.title("Lifetime"))
+    assert app.actions == ["lifetime"]

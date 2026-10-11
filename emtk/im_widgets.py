@@ -223,6 +223,11 @@ def next_column() -> None:
 
 def separator() -> None:
     ctx = get_current_context()
+    if ctx._context_popup_stack:
+        # Inside a menu (a menu-bar menu, a context popup) the rule is a row of
+        # the popup panel, not of the window that opened it.
+        ctx._context_popup_builds[ctx._context_popup_stack[-1]].append(None)
+        return
     box = ctx.layout.separator()
     x, y, w, h = box
     ctx.draw.add_line((x, y + h * 0.5), (x + w, y + h * 0.5), _col(Col.TEXT_DISABLED), 1.0)
@@ -1543,8 +1548,20 @@ def pop_item_flag() -> None:
 
 
 def separator_text(label: str) -> None:
-    """``ImGui::SeparatorText``: a rule with a caption in it."""
+    """``ImGui::SeparatorText``: a rule with a caption in it.
+
+    Inside a menu it is a section: a rule (unless it opens the menu) and the
+    caption as a disabled row, as a native menu's section header reads.
+    """
     ctx = get_current_context()
+    if ctx._context_popup_stack:
+        from .widgets.menus import MenuItem
+
+        entries = ctx._context_popup_builds[ctx._context_popup_stack[-1]]
+        if entries:
+            entries.append(None)
+        entries.append(MenuItem(label, enabled=False))
+        return
     box = ctx.layout.row()
     ctx.item_add(box)
     tw, th = ctx.draw.calc_text_size(label)
