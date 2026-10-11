@@ -27,7 +27,7 @@ from collections.abc import Callable
 
 __all__ = ["copy", "paste", "receive", "holding", "set_hook", "commands", "paste_commands",
            "use_tk", "use_glfw",
-           "last_copied"]
+           "last_copied", "copy_image", "set_image_hook", "image_commands", "last_copied_image"]
 
 _hook: Callable[[str], None] | None = None
 _paste_hook: Callable[[], str] | None = None
@@ -36,6 +36,10 @@ _received: str | None = None
 #: What :func:`copy` was last handed, with a count so a caller can tell a
 #: fresh copy from an old one (the page's ``copy`` event does).
 _last: tuple[int, str] = (0, "")
+#: A host's own way to put a PNG on the clipboard (:func:`set_image_hook`).
+_image_hook: Callable[[bytes], None] | None = None
+#: What :func:`copy_image` was last handed, with a count.
+_last_image: tuple[int, bytes] = (0, b"")
 
 
 def set_hook(hook: Callable[[str], None] | None,
@@ -202,3 +206,88 @@ def copy(text: str) -> bool:
         except (OSError, subprocess.SubprocessError):
             continue
     return False
+
+
+# --------------------------------------------------------------------------- #
+# Images
+# --------------------------------------------------------------------------- #
+def set_image_hook(hook: Callable[[bytes], None] | None) -> None:
+    """Route :func:`copy_image` to *hook* (a host's clipboard), which takes PNG bytes;
+    ``None`` removes it."""
+    global _image_hook
+    _image_hook = hook
+
+
+def last_copied_image() -> tuple[int, bytes]:
+    """``(count, png)`` of the most recent :func:`copy_image`."""
+    return _last_image
+
+
+def image_commands(path: str) -> list[tuple[list[str], bytes | None]]:
+    """The desktop commands that put the PNG file *path* on the clipboard, in order.
+
+    Each entry is ``(argv, stdin)``: macOS reads the file through AppleScript as
+    ``PNGf`` (what a paste into Keynote or Preview takes), Windows through
+    ``System.Windows.Forms.Clipboard``, X11 and Wayland through ``xclip`` /
+    ``wl-copy`` with the ``image/png`` target.
+    """
+    if sys.platform == "darwin":
+        quoted = path.replace("\\", "\\\\").replace('"', '\\"')
+        script = f'set the clipboard to (read (POSIX file "{quoted}") as «class PNGf»)'
+        return [(["osascript", "-e", script], None)]
+    if sys.platform.startswith("win"):
+        quoted = path.replace("'", "''")
+        script = ("Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName "
+                  "System.Drawing; [System.Windows.Forms.Clipboard]::SetImage("
+                  f"[System.Drawing.Image]::FromFile('{quoted}'))")
+        return [(["powershell", "-NoProfile", "-STA", "-Command", script], None)]
+    with open(path, "rb") as handle:
+        data = handle.read()
+    return [(["wl-copy", "--type", "image/png"], data),
+            (["xclip", "-selection", "clipboard", "-t", "image/png", "-i", path], None)]
+
+
+def copy_image(png: bytes) -> bool:
+    """Put the PNG *png* on the system clipboard as an image; returns whether it got there.
+
+    Tried in order: the host's image hook (:func:`set_image_hook`; the Qt host
+    registers ``QClipboard.setImage``), then the platform's command
+    (:func:`image_commands`). A page has no synchronous way to write an image
+    (``navigator.clipboard.write`` is a promise behind a permission), so under
+    Pyodide only a hook can.
+    """
+    global _last_image
+    png = bytes(png)
+    if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("copy_image takes PNG bytes")
+    _last_image = (_last_image[0] + 1, png)
+    if _image_hook is not None:
+        try:
+            _image_hook(png)
+            return True
+        except Exception:  # noqa: BLE001
+            pass
+    if sys.platform == "emscripten":
+        return False
+    import os  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    handle, path = tempfile.mkstemp(suffix=".png", prefix="emtk-clipboard-")
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(png)
+        for command, stdin in image_commands(path):
+            if shutil.which(command[0]) is None:
+                continue
+            try:
+                subprocess.run(command, input=stdin, check=True, timeout=10,
+                               capture_output=True)
+                return True
+            except (OSError, subprocess.SubprocessError):
+                continue
+        return False
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass

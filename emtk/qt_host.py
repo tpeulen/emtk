@@ -97,8 +97,9 @@ def host_class():
             ``drag``, ``release``, ``hover``, ``key`` and ``scroll`` are used
             when present, so a control that has none of them still hosts fine.
         font_pt : float, optional
-            Point size of the monospaced font the control is drawn with. The
-            two editors assume a monospaced face, as their references do.
+            Point size of the monospaced font the control is drawn with; by
+            default the user's setting (:func:`emtk.type_scale.ui_font_pt`).
+            The two editors assume a monospaced face, as their references do.
         background : tuple, optional
             Filled before the control draws. The chrome is normally drawn over
             a lit 3-D scene and most controls do not paint their own backdrop;
@@ -120,7 +121,7 @@ def host_class():
         def __init__(
             self,
             control,
-            font_pt: float = DEFAULT_FONT_PT,
+            font_pt: float | None = None,
             background: tuple = (30, 32, 38),
             on_change: Callable[[object], None] | None = None,
             parent=None,
@@ -164,7 +165,8 @@ def host_class():
                 self._detach_control_callback = detach
                 self._control_callback_finalizer = weakref.finalize(self, detach)
                 set_callback(request_frame)
-            self.font_pt = float(font_pt)
+            #: ``None`` follows the user's setting (:mod:`emtk.type_scale`).
+            self.font_pt = None if font_pt is None else float(font_pt)
             bg_vals = tuple(background[:3])
             if any(isinstance(c, float) and c <= 1.0 for c in bg_vals):
                 self.background = tuple(int(round(c * 255)) for c in bg_vals)
@@ -261,7 +263,10 @@ def host_class():
             painter = QtGui.QPainter(self)
             try:
                 painter.fillRect(self.rect(), QtGui.QColor(*self.background))
-                surface = QtPainter(painter, self.font_pt)
+                from .type_scale import ui_font_pt
+
+                font_pt = ui_font_pt() if self.font_pt is None else self.font_pt
+                surface = QtPainter(painter, font_pt)
                 self.control.draw(
                     surface, 0.0, 0.0, float(self.width()), float(self.height())
                 )
@@ -607,6 +612,16 @@ def use_qt_clipboard() -> bool:
         return QtWidgets.QApplication.clipboard()
 
     clipboard.set_hook(lambda text: board().setText(text), lambda: board().text())
+
+    def put_image(png: bytes) -> None:
+        from qtpy import QtGui  # noqa: PLC0415
+
+        image = QtGui.QImage.fromData(png, "PNG")
+        if image.isNull():
+            raise ValueError("not a PNG Qt can read")
+        board().setImage(image)
+
+    clipboard.set_image_hook(put_image)
     return True
 
 

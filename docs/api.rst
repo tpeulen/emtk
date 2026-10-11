@@ -60,6 +60,12 @@ Images: ``emtk.texture``
 .. automodule:: emtk.texture
    :noindex:
 
+SVG to pixels: ``emtk.svg``
+---------------------------
+
+.. automodule:: emtk.svg
+   :noindex:
+
 Layout: ``emtk.layout``
 ---------------------------
 

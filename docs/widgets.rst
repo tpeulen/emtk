@@ -176,6 +176,10 @@ native windows ``pbcopy``/``pbpaste``, ``wl-copy``/``xclip`` or ``clip``/
 ``copy``/``cut``/``paste`` events for Cmd/Ctrl+C/X/V and forwards them with
 their text (``WebPage.copy`` / ``WebPage.paste``), preventing the browser's
 default only when the app took the shortcut.
+``copy_image(png)`` puts a picture on the clipboard (a plot to paste into a
+slide): Qt hosts through ``QClipboard.setImage``, otherwise AppleScript's
+``PNGf`` on macOS, ``System.Windows.Forms.Clipboard`` on Windows and
+``wl-copy``/``xclip`` with ``image/png`` on Linux.
 
 Colour
 ------
