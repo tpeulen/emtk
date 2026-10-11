@@ -987,13 +987,61 @@ def invisible_button(label: str, size) -> bool:
     return pressed
 
 
+def _labelled_row(ctx, height, shown):
+    """The row of a checkbox or radio button, and the lines its label is drawn in.
+
+    A label that does not fit in what is left of the line wraps at the words (so a long German caption
+    stays whole and legible in a narrow panel); with no room for even a few characters beside the box
+    it is cut to one line ending in an ellipsis. The row is as tall as its lines.
+    """
+    inner = ctx.style.item_inner_spacing[0]
+    one_line = height + inner + ctx.draw.calc_text_size(shown)[0]
+    avail = ctx.layout.avail()[0]
+    lines = [shown] if shown else []
+    if shown and one_line > avail + 0.5:
+        room = avail - height - inner
+        if room >= 6.0 * ctx.p.text_width("m"):
+            lines = _wrapped_lines(ctx, shown, room)
+        else:
+            lines = [_elide(ctx, shown, max(room, 0.0))]
+    width = height + (inner + max(ctx.p.text_width(line) for line in lines) if lines else 0.0)
+    line_h = ctx.p.line_height()
+    row_h = max(height, len(lines) * line_h + 2.0 * ctx.style.frame_padding[1])
+    return ctx.layout.row(height=row_h, width=min(width, max(avail, height))), lines, line_h
+
+
+def _elide(ctx, text, room):
+    """*text*, or its longest prefix plus an ellipsis that fits in *room* logical px."""
+    if ctx.p.text_width(text) <= room:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if ctx.p.text_width(text[:mid].rstrip() + "\u2026") <= room:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "\u2026"
+
+
+def _draw_label_lines(ctx, box, height, lines, line_h):
+    """Draw a checkbox's label lines beside its box, the first level with the box's centre line."""
+    for index, line in enumerate(lines):
+        ctx.draw.add_text((box[0] + height + ctx.style.item_inner_spacing[0],
+                           box[1] + ctx.style.frame_padding[1] + index * line_h),
+                          _col(Col.TEXT), line)
+
+
 def checkbox(label: str, value: bool) -> tuple[bool, bool]:
-    """``ImGui::Checkbox``. Returns ``(changed, value)``."""
+    """``ImGui::Checkbox``. Returns ``(changed, value)``.
+
+    A label wider than the line wraps (or, with no room at all, is elided), so it is never cut by the
+    window edge; the tooltip of the control stays the caller's.
+    """
     ctx = get_current_context()
     height = _frame_height(ctx)
     shown = _visible_label(label)
-    width = height + ctx.style.item_inner_spacing[0] + ctx.draw.calc_text_size(shown)[0]
-    box = ctx.layout.row(height=height, width=width)
+    box, lines, line_h = _labelled_row(ctx, height, shown)
     hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
     mark = (box[0], box[1], height, height)
     ctx.draw.add_rect_filled((mark[0], mark[1]), (mark[0] + height, mark[1] + height),
@@ -1007,9 +1055,7 @@ def checkbox(label: str, value: bool) -> tuple[bool, bool]:
                           (mark[0] + height * 0.45, mark[1] + height - pad), _col(Col.CHECK_MARK), 2.0)
         ctx.draw.add_line((mark[0] + height * 0.45, mark[1] + height - pad),
                           (mark[0] + height - pad, mark[1] + pad), _col(Col.CHECK_MARK), 2.0)
-    if shown:
-        ctx.draw.add_text((mark[0] + height + ctx.style.item_inner_spacing[0], box[1] + ctx.style.frame_padding[1]),
-                          _col(Col.TEXT), shown)
+    _draw_label_lines(ctx, box, height, lines, line_h)
     return (pressed, (not value) if pressed else value)
 
 
@@ -1030,8 +1076,7 @@ def radio_button(label: str, active, value=None):
     ctx = get_current_context()
     height = _frame_height(ctx)
     shown = _visible_label(label)
-    width = height + ctx.style.item_inner_spacing[0] + ctx.draw.calc_text_size(shown)[0]
-    box = ctx.layout.row(height=height, width=width)
+    box, lines, line_h = _labelled_row(ctx, height, shown)
     hovered, _held, pressed = ctx.button_behavior(box, ctx.get_id(label))
     centre = (box[0] + height * 0.5, box[1] + height * 0.5)
     ctx.draw.add_circle_filled(centre, height * 0.42,
@@ -1039,9 +1084,7 @@ def radio_button(label: str, active, value=None):
     if active:
         ctx.draw.add_circle_filled(centre, height * 0.22, _col(Col.CHECK_MARK))
     _nav_ring(ctx, box, ctx.get_id(label))
-    if shown:
-        ctx.draw.add_text((box[0] + height + ctx.style.item_inner_spacing[0], box[1]),
-                          _col(Col.TEXT), shown)
+    _draw_label_lines(ctx, box, height, lines, line_h)
     return pressed
 
 

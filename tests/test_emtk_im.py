@@ -318,3 +318,29 @@ def test_nested_child_scroll_routes_to_innermost_child():
     assert storage[outer_key]["scroll_y"] == 0.0
     assert storage[inner_key]["scroll_y"] == 80.0
 
+
+
+def _label_lines(widget, label, width):
+    painter = RecordingPainter()
+    with emtk.frame(painter, (0, 0, width, 160)):
+        emtk.begin("w", (0, 0, width, 160))
+        widget(label)
+        emtk.end()
+    return [t for t in painter.texts if t[5].strip()], painter
+
+
+@pytest.mark.parametrize("widget", [lambda t: emtk.checkbox(t, True), lambda t: emtk.radio_button(t, True)])
+def test_a_label_wider_than_the_line_wraps_inside_the_window(widget):
+    """A caption longer than the panel (German "Costes-Schwellenwerte") was cut by the window edge."""
+    label = "Costes-Schwellenwerte verwenden und anzeigen"
+    lines, _ = _label_lines(widget, label, 150)
+    assert len(lines) > 1
+    assert all(t[0] + t[2] <= 150 for t in lines)
+    assert "".join(t[5] for t in lines).replace(" ", "") == label.replace(" ", "")
+    one, _ = _label_lines(widget, label, 600)
+    assert len(one) == 1 and one[0][5] == label
+
+
+def test_a_label_with_no_room_beside_its_box_is_elided():
+    lines, _ = _label_lines(lambda t: emtk.checkbox(t, False), "Coarse-grained structure", 50)
+    assert len(lines) == 1 and lines[0][5].endswith("…") and lines[0][0] + lines[0][2] <= 50

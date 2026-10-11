@@ -93,6 +93,21 @@ def _safe_request_frame() -> None:
         pass
 
 
+
+def _tr(text: str, domain: str | None) -> str:
+    """*text* in *domain*, else wherever else a catalogue has it.
+
+    A named domain falls back to the toolkit's, not to the other catalogues the application registered, so a
+    step title that only the application's shared catalogue translates stayed English on a card whose owner
+    named another domain. An untranslated *text* is therefore looked up once more without a domain (the
+    default domain, then every registered one).
+    """
+    shown = tr(text, domain=domain)
+    if domain is not None and shown == text:
+        shown = tr(text)
+    return shown
+
+
 class EmTkHelpWindow:
     """A floating, movable Help Window rendered 100% inside EMTK."""
 
@@ -195,7 +210,7 @@ class EmTkHelpWindow:
 
         # Header controls
         im.align_text_to_frame_padding()
-        im.text_colored(tr(self.title, domain=self.domain), ACCENT_BLUE)
+        im.text_colored(_tr(self.title, self.domain), ACCENT_BLUE)
 
         if callable(self.on_start_guide):
             im.same_line()
@@ -223,7 +238,7 @@ class EmTkHelpWindow:
                 is_sel = c == self.active_category
                 if is_sel:
                     im.push_style_color(Col.BUTTON, (40, 90, 180, 255))
-                shown = tr("All", domain="emtk") if c == "All" else tr(c, domain=self.domain)
+                shown = tr("All", domain="emtk") if c == "All" else _tr(c, self.domain)
                 if im.button(f" {shown} ##filter_{c}"):
                     self.active_category = c
                 im.set_item_tooltip(tr("Show all help sections.", domain="emtk") if c == "All"
@@ -247,7 +262,7 @@ class EmTkHelpWindow:
 
             im.spacing()
             with text_style("h2"):
-                im.text_colored(tr(heading, domain=self.domain), (0.4, 0.8, 1.0, 1.0))
+                im.text_colored(_tr(heading, self.domain), (0.4, 0.8, 1.0, 1.0))
             im.separator()
 
             for line in lines:
@@ -460,14 +475,14 @@ class EmTkGuidedTour:
         card_w = min(480.0, width - 40.0)
         # Height follows the text, so the card covers as little of the tool as it can.
         per_line = max(20.0, (card_w - 28.0) / 7.4)
-        body = _clean_html_text(tr(str(step.get("text", "")), domain=self.domain))
+        body = _clean_html_text(_tr(str(step.get("text", "")), self.domain))
         lines = sum(max(1, int(len(part) / per_line) + 1) for part in body.split("\n"))
         hint = step.get("hint") or (step.get("await", {}).get("hint") if isinstance(step.get("await"), dict) else None)
-        hint = tr(str(hint), domain=self.domain) if hint else hint
+        hint = _tr(str(hint), self.domain) if hint else hint
         lines += (int(len(str(hint)) / per_line) + 2) if hint else 0
         title_text = tr("Step {index} of {count}: {title}", domain="emtk").format(
             index=self.step_idx + 1, count=len(self.steps),
-            title=tr(str(step.get("title", "")), domain=self.domain))
+            title=_tr(str(step.get("title", "")), self.domain))
         title_lines = max(1, int(len(title_text) / per_line) + 1)
         header_height = 26.0
         card_h = header_height + 16.0 * (title_lines - 1) + max(
@@ -530,14 +545,14 @@ class EmTkGuidedTour:
         im.text_wrapped(title_text)
         im.pop_style_color()
         im.spacing()
-        raw_text = tr(str(step.get("text", "")), domain=self.domain)
+        raw_text = _tr(str(step.get("text", "")), self.domain)
         clean_text = _clean_html_text(raw_text)
         im.text_wrapped(clean_text)
 
         hint = step.get("hint") or (
             step.get("await", {}).get("hint") if isinstance(step.get("await"), dict) else None
         )
-        hint = tr(str(hint), domain=self.domain) if hint else hint
+        hint = _tr(str(hint), self.domain) if hint else hint
         if hint:
             im.spacing()
             clean_hint = _clean_html_text(str(hint))
