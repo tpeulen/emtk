@@ -1694,6 +1694,9 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         width=_labelled_item_width(ctx, ctx.take_next_item_width(None), label_width))
     box = (total[0], total[1], max(1.0, total[2] - label_width), total[3])
     item_id = ctx.get_id(label)
+    # ``set_keyboard_focus_here`` asked for this field in this very frame (a field that appears on a click
+    # elsewhere): that request must not be undone by the same click.
+    focus_requested = bool(getattr(ctx, "nav_focus_next", False))
     hovered, _held, pressed = ctx.button_behavior(box, item_id, ButtonFlags.NO_NAV_ACTIVATE)
     focus = ctx.state(("focus",))
     # Focused on the *down* edge, so the same press places the caret (or
@@ -1706,7 +1709,7 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
         # keyboard focus the press took, or typed keys keep landing here.
         if focus.get("id") == item_id:
             focus.pop("id", None)
-        if ctx.is_nav_focused(item_id):
+        if ctx.is_nav_focused(item_id) and not focus_requested:
             set_nav_id(None)
     # ...or the keyboard put the focus here, which is what Tab is for.
     focused = not bool(ctx.item_flags & ItemFlags.DISABLED) and (

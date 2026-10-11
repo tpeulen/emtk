@@ -24,7 +24,7 @@ class RecordingPainter:
     def fill_rect(self, x, y, w, h, colour) -> None:
         self.fills.append((x, y, w, h, colour))
 
-    def stroke_rect(self, x, y, w, h, edge, fill=None) -> None:
+    def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0) -> None:
         self.strokes.append((x, y, w, h, edge, fill))
 
     def gradient_rect(self, x, y, w, h, stops, edge=None) -> None:

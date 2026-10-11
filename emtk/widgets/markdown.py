@@ -368,6 +368,33 @@ def _format_inline_text(text: str) -> tuple[str, list[tuple[str, str]]]:
     return s, links
 
 
+def _link_row(links: list[tuple[str, str]], tag: str, on_link: Callable[[str], None] | None) -> None:
+    """Draw ``links`` as a ``•``-separated row that wraps onto the next line instead of leaving the window.
+
+    A row longer than the available width used to run on past the clip edge, where its last links could be
+    neither seen nor clicked.
+    """
+    avail_w = im.get_content_region_avail()[0]
+    gap = im.get_style().item_spacing[0]
+    bullet_w = im.calc_text_size("•")[0] + 2.0 * gap
+    used = 0.0
+    for l_idx, (label, target) in enumerate(links):
+        caption = f"↗ {label}"
+        width = im.calc_text_size(caption)[0]
+        if l_idx > 0:
+            if used + bullet_w + width <= avail_w:
+                im.same_line()
+                im.text_disabled("•")
+                im.same_line()
+                used += bullet_w
+            else:
+                used = 0.0
+        if im.text_link(f"{caption}##{tag}_{l_idx}"):
+            if on_link:
+                on_link(target)
+        used += width
+
+
 def render_markdown(
     content: str | list[MarkdownBlock],
     on_link: Callable[[str], None] | None = None,
@@ -438,14 +465,7 @@ def render_markdown(
             im.pop_font()
             if links:
                 im.dummy(0.0, 1.0)
-                for l_idx, (label, target) in enumerate(links):
-                    if l_idx > 0:
-                        im.same_line()
-                        im.text_disabled("•")
-                        im.same_line()
-                    if im.text_link(f"↗ {label}##plnk_{idx}_{l_idx}"):
-                        if on_link:
-                            on_link(target)
+                _link_row(links, f"plnk_{idx}", on_link)
             im.dummy(0.0, 4.0)
 
         elif block.kind == "math":
@@ -528,14 +548,7 @@ def render_markdown(
             im.pop_font()
             if adm_links:
                 im.dummy(0.0, 1.0)
-                for l_idx, (label, target) in enumerate(adm_links):
-                    if l_idx > 0:
-                        im.same_line()
-                        im.text_disabled("•")
-                        im.same_line()
-                    if im.text_link(f"↗ {label}##admlnk_{idx}_{l_idx}"):
-                        if on_link:
-                            on_link(target)
+                _link_row(adm_links, f"admlnk_{idx}", on_link)
             im.dummy(0.0, 4.0)
 
         elif block.kind == "table" and block.items:
@@ -568,14 +581,7 @@ def render_markdown(
             im.pop_font()
             if item_links:
                 im.dummy(0.0, 1.0)
-                for l_idx, (label, target) in enumerate(item_links):
-                    if l_idx > 0:
-                        im.same_line()
-                        im.text_disabled("•")
-                        im.same_line()
-                    if im.text_link(f"↗ {label}##llnk_{idx}_{l_idx}"):
-                        if on_link:
-                            on_link(target)
+                _link_row(item_links, f"llnk_{idx}", on_link)
             im.dummy(0.0, 2.0)
 
         elif block.kind == "hr":

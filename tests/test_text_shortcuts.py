@@ -471,3 +471,34 @@ def test_input_text_click_elsewhere_releases_the_keyboard():
     d.key(0, "2")
     d.key(0, "4")
     assert d.value == "path"
+
+
+def test_a_field_focused_by_request_in_a_click_frame_keeps_the_keyboard():
+    """A field that appears on a click elsewhere and asks for focus is not unfocused by that same click."""
+    from emtk.app import ImApp
+    from emtk.events import LEFT_BUTTON
+    state = {"show": False, "value": "2500", "asked": False}
+
+    def gui():
+        emtk.begin("w", (0, 0, 400, 80))
+        if emtk.get_io().mouse_clicked[0]:  # the field appears in the frame of a click elsewhere
+            state["show"] = True
+        if state["show"]:
+            if not state["asked"]:
+                emtk.set_keyboard_focus_here(0)
+                state["asked"] = True
+            _changed, state["value"] = emtk.input_text("##f", state["value"])
+        emtk.end()
+
+    app = ImApp(gui)
+    app.io.wall_clock = False
+    painter = RecordingPainter()
+    app.draw(painter, 0, 0, 400, 80)
+    # the click that opens the field is still "clicked" in the frame that draws it
+    app.pointer_press(300, 70, LEFT_BUTTON, 0, 1)
+    app.draw(RecordingPainter(), 0, 0, 400, 80)
+    app.pointer_release(300, 70, LEFT_BUTTON, 0)
+    app.draw(RecordingPainter(), 0, 0, 400, 80)
+    app.key(0, "7", 0)
+    app.draw(RecordingPainter(), 0, 0, 400, 80)
+    assert "7" in state["value"]
