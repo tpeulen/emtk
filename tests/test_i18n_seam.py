@@ -402,3 +402,29 @@ def test_use_domain_puts_the_drawing_apps_catalogue_first():
         assert i18n.tr("Run", domain="app") == "Starten"       # an explicit domain wins
         assert i18n.tr("Cancel") == "Abbrechen"
     assert i18n.tr("Run") == "Starten"
+
+
+def test_language_provider_is_the_default_after_the_environment(monkeypatch):
+    monkeypatch.delenv("EMTK_LANG", raising=False)
+    monkeypatch.setattr(i18n, "_explicit", False)
+    monkeypatch.setattr(i18n, "_language", None)
+    monkeypatch.setattr(i18n, "_provider", None)
+    try:
+        i18n.language()
+        before = i18n.generation()
+        i18n.set_language_provider(lambda: "fr")
+        assert i18n.language() == "fr"
+        assert i18n.generation() > before
+        monkeypatch.setenv("EMTK_LANG", "de")
+        assert i18n._detect_language() == "de"           # the environment overrides
+        i18n.set_language("en")
+        i18n.set_language_provider(lambda: "fr")
+        assert i18n.language() == "en"                   # an explicit choice is kept
+    finally:
+        i18n._provider = None
+
+
+def test_extractor_reads_every_key_the_form_renders_as_text():
+    from emtk.view_form import TEXT_KEYS
+
+    assert extract.TEXT_KEYS >= TEXT_KEYS

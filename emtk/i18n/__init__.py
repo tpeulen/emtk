@@ -50,6 +50,7 @@ __all__ = [
     "mark",
     "remove_catalogue",
     "set_default_domain",
+    "set_language_provider",
     "set_language",
     "set_locale",
     "tr",
@@ -64,6 +65,8 @@ DEFAULT_CONTEXT = "default"
 
 _lock = threading.RLock()
 _language: str | None = None          # None: not chosen yet, resolved on first use
+_explicit = False                      # set_language() was called
+_provider = None                       # the application's language setting
 _generation = 0
 _default_domain: str | None = None
 # Per-domain catalogue sources, in registration order (a dict keeps it).
@@ -101,10 +104,21 @@ def _bump() -> None:
 
 
 def _detect_language() -> str:
-    """The language before anything chose one: ``EMTK_LANG``, else the OS, else en."""
+    """The language before anything chose one.
+
+    ``EMTK_LANG``, else the application's setting (:func:`set_language_provider`),
+    else the operating-system locale, else ``en``.
+    """
     env = os.environ.get("EMTK_LANG", "").strip()
     if env:
         return _normalize(env)
+    if _provider is not None:
+        try:
+            chosen = _provider()
+        except Exception:  # noqa: BLE001 - a broken setting must not break text
+            chosen = None
+        if chosen:
+            return _normalize(chosen)
     for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
         value = os.environ.get(name, "").strip()
         if value:
@@ -120,7 +134,9 @@ def language() -> str:
     """The active language code (lower case, ``-`` separated, e.g. ``de`` or ``pt-br``).
 
     Until :func:`set_language` is called it is read from the ``EMTK_LANG``
-    environment variable, else the operating-system locale, else ``"en"``.
+    environment variable, else the application's language setting
+    (:func:`set_language_provider`), else the operating-system locale, else
+    ``"en"``.
     """
     global _language
     if _language is None:
@@ -136,12 +152,34 @@ def set_language(code: str) -> None:
     An unavailable regional variant falls back to its base language at lookup
     (``de-CH`` reads the ``de`` catalogue).
     """
-    global _language
+    global _language, _explicit
     code = _normalize(code)
     with _lock:
+        _explicit = True
         if code != _language:
             _language = code
             _bump()
+
+
+def set_language_provider(provider) -> None:
+    """Name where the application keeps its language setting.
+
+    ``provider()`` returns a language code (or ``None``). It is consulted
+    while no :func:`set_language` has been made, after ``EMTK_LANG`` and
+    before the operating-system locale -- so a headless run of an application
+    follows the application's setting rather than the machine's locale. A
+    language already resolved from the defaults is re-resolved (and
+    :func:`generation` bumped when that changes it); an explicit choice is
+    kept.
+    """
+    global _provider, _language
+    with _lock:
+        _provider = provider
+        if not _explicit and _language is not None:
+            code = _detect_language()
+            if code != _language:
+                _language = code
+                _bump()
 
 
 def generation() -> int:

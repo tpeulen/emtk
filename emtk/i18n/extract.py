@@ -45,6 +45,8 @@ TEXT_KEYS = frozenset({
     "component_title", "subtitle", "text", "x_label", "y_label", "hint", "tooltip", "units",
     "caption", "special_text", "descriptions", "labels", "menu", "body", "help",
     "summary", "experimental_message", "deprecation_message",
+    # Visible only as a choice's labels; see collect_json.
+    "options", "choices",
 })
 
 _SKIP_PARTS = frozenset({"test", "tests", "__pycache__", ".git", "node_modules"})
