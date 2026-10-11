@@ -168,6 +168,9 @@ class Ribbon:
         self.item_rects: dict[str, tuple[float, float, float, float]] = {}
         #: How each group of the current tab was drawn last frame: ``"full"``, ``"collapsed"`` or ``"overflow"``.
         self.group_modes: dict[str, str] = {}
+        #: Whether one of the ribbon's menus (a collapsed group, the overflow) is open: a host
+        #: keeps the pointer from the content under it while it is.
+        self.menu_open = False
         #: Line and frame height of the last frame drawn, for :meth:`height` between frames.
         self._last_metrics = (16.0, 22.0)
 
@@ -212,7 +215,8 @@ class Ribbon:
         return get_current_context().draw.calc_text_size(text)[0]
 
     def _icon_slot(self) -> float:
-        return self._frame_height()
+        """A small button's icon slot and the gap after it (a colour pictogram draws wider than a line)."""
+        return self._frame_height() + 4.0
 
     def _small_width(self, button: RibbonButton) -> float:
         ctx = get_current_context()
@@ -302,6 +306,7 @@ class Ribbon:
             The key of the button pressed this frame.
         """
         self.item_rects.clear()
+        self.menu_open = False
         x, y, width, _height = (float(v) for v in box)
         ctx = get_current_context()
         pressed = None
@@ -484,9 +489,9 @@ class Ribbon:
         if button.icon:
             glyph = _w.icon_text(button.icon)
             gw = self._text_w(glyph)
-            slot = self._icon_slot()
+            slot = self._frame_height()
             ctx.draw.add_text((tx + max(slot - gw, 0.0) * 0.5 - 1.0, box[1] + pad_y), colour, glyph)
-            tx += slot
+            tx += self._icon_slot()
         ctx.draw.add_text((tx, box[1] + pad_y), colour, tr(button.label))
         self.item_rects[f"{self.name}.button.{button.key}"] = tuple(box)
         return self._fire(button) if clicked else None
@@ -516,6 +521,7 @@ class Ribbon:
         """A collapsed group's (or the overflow's) buttons as a menu; returns the key picked."""
         if not _w.begin_popup(popup):
             return None
+        self.menu_open = True
         pressed = None
         for group in groups:
             if captions:
