@@ -1933,6 +1933,10 @@ class Plot:
 
     def set_title(self, title: Optional[str]) -> None:
         shown = split_label(title) if title else ""
+        if shown:
+            from .i18n import tr  # noqa: PLC0415 - shown text is translated, like a widget label
+
+            shown = tr(shown)
         self.title = shown if shown else None
 
     def has_title(self) -> bool:

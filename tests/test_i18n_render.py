@@ -137,3 +137,30 @@ def test_language_switch_relays_the_form_on_the_next_frame():
     english = driver.frame(2)
     assert "Durchsuchen nach Dateien" in german.strings
     assert any(s.startswith("Browse") for s in english.strings)
+
+
+def test_plot_title_and_axis_labels_are_translated_where_they_are_shown():
+    """A plot's title and axis labels are display text, like a button's caption.
+
+    Found by chisurf's real-use language matrix: a German session drew every
+    widget German and every plot title/axis English ("Counts", "Micro-time (ns)").
+    """
+    from emtk import im, implot
+
+    i18n.add_translations("de", {"Synthetic decay": "Synthetischer Zerfall",
+                                 "Counts": "Zählungen", "Micro-time (ns)": "Mikrozeit (ns)"})
+    painter = RecordingPainter()
+    if True:
+        for _ in range(2):
+            with im.frame(painter, (0, 0, 600, 400)):
+                im.set_next_window_pos((0, 0), im.Cond.ALWAYS)
+                im.set_next_window_size((600, 400), im.Cond.ALWAYS)
+                im.begin("w")
+                if implot.begin_plot("Synthetic decay##p", (-1, -1)):
+                    implot.setup_axes("Micro-time (ns)", "Counts")
+                    implot.plot_line("VV", [0.0, 1.0, 2.0], [3.0, 2.0, 1.0])
+                    implot.end_plot()
+                im.end()
+    drawn = set(painter.strings)
+    assert {"Synthetischer Zerfall", "Zählungen", "Mikrozeit (ns)"} <= drawn, drawn
+    assert not {"Synthetic decay", "Counts", "Micro-time (ns)"} & drawn

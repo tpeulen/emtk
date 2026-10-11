@@ -71,7 +71,7 @@ from .implot_internal import gp, has_flag
 from .implot_internal import rgba as _rgba
 from .implot_items import *  # noqa: F401,F403  (the items)
 from .painter import line as _line
-from .i18n import mark
+from .i18n import mark, tr
 
 #: The spelling this module used before the port. ``_cur.plot`` is the plot
 #: between ``begin_plot`` and ``end_plot``.
@@ -274,7 +274,8 @@ def setup_axis(axis: int, label=None, flags: int = 0) -> None:
     ax.previous_flags = int(flags)
     ax.enabled = True
     shown = I.split_label(label) if label else ""
-    ax.label = shown or None
+    # Translated where it is shown, as every im widget's label is (im_widgets).
+    ax.label = tr(shown) if shown else None
     I.update_axis_colors(ax)
 
 
