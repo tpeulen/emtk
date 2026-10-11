@@ -833,6 +833,10 @@ def _button_label(item: dict, model: Any) -> str:
     return icon_caption(str(item.get("icon") or ""), _tr_label(label))
 
 
+#: The narrowest a button-row button is drawn, however short its label.
+BUTTON_MIN_WIDTH = 30.0
+
+
 def _button_natural(label: str) -> float:
     """What a button needs to show *label* whole: its text and the frame padding."""
     pad = _core.get_style().frame_padding[0]
@@ -890,7 +894,7 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
         for k, i in enumerate(line):
             item = buttons[i]
             # Extra room is shared evenly, so equal labels make equal buttons.
-            button_w = max(natural[i] + (room - need) / len(line), 30.0) \
+            button_w = max(natural[i] + (room - need) / len(line), BUTTON_MIN_WIDTH) \
                 if need <= room else room
             if k:
                 _w.same_line(0.0, spacing)
@@ -986,7 +990,10 @@ def _min_width(section: dict, model: Any = None) -> float:
                    if model is None or not _hidden(item, model)]
         if not buttons:
             return 0.0
-        return sum(_button_natural(_button_label(item, model)) for item in buttons) \
+        # A button is never drawn narrower than BUTTON_MIN_WIDTH (_draw_buttons);
+        # measuring less lets a ``+`` run into the control beside it.
+        return sum(max(_button_natural(_button_label(item, model)), BUTTON_MIN_WIDTH)
+                   for item in buttons) \
             + style.item_inner_spacing[0] * (len(buttons) - 1)
     chars = section.get("min_chars", MIN_CHARS.get(kind))
     if chars is None:
