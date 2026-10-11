@@ -428,3 +428,12 @@ def test_extractor_reads_every_key_the_form_renders_as_text():
     from emtk.view_form import TEXT_KEYS
 
     assert extract.TEXT_KEYS >= TEXT_KEYS
+
+
+def test_default_domain_catalogue_wins_over_hand_added_strings():
+    i18n.add_catalogue("app", {"es": {"Colormap": "Mapa de color"}})
+    i18n.add_translations("es", {"Colormap": "Mapa de colores", "Only here": "Solo aquí"})
+    i18n.set_default_domain("app")
+    i18n.set_language("es")
+    assert i18n.tr("Colormap") == "Mapa de color"
+    assert i18n.tr("Only here") == "Solo aquí"

@@ -321,9 +321,9 @@ def add_translations(locale: str, mapping: Mapping[str, str], context: str = DEF
                      *, domain: str | None = None) -> None:
     """Merge source → translation strings for one language by hand.
 
-    Without ``domain`` they go to the application's in-memory catalogue, which
-    a ``tr()`` naming no domain searches first; with one they are layered over
-    that domain's catalogue files.
+    Without ``domain`` they go to the application's in-memory catalogue,
+    searched after the default domain's catalogue (and after a named
+    domain's); with one they are layered over that domain's catalogue files.
     """
     values = {source: translated for source, translated in mapping.items()
               if isinstance(source, str) and isinstance(translated, str) and translated}
@@ -462,9 +462,9 @@ def tr(source: str, context: str | None = None, *, domain: str | None = None) ->
         still matches. May be passed positionally.
     domain
         The catalogue domain (``"myapp"``, ``"emtk"`` …). The chain is
-        ``domain → "emtk" → source``. Without one, the hand-added catalogue,
-        the :func:`default_domain` and every other registered domain are
-        searched, then ``"emtk"``.
+        ``domain → "emtk" → source``. Without one, the :class:`use_domain`
+        scope and the :func:`default_domain`, then the hand-added strings,
+        then every other registered domain, then ``"emtk"``.
 
     Returns
     -------
@@ -496,30 +496,34 @@ _memo_generation = [-1]
 
 def _resolve(source: str, context: str | None, domain: str | None,
              scope: str | None = None) -> str:
+    """The lookup order of :func:`tr`.
+
+    A named domain: that domain, the hand-added strings, ``"emtk"``. No
+    domain: the :class:`use_domain` scope and the :func:`default_domain`, the
+    hand-added strings, every other registered domain, ``"emtk"``. A
+    domain's catalogue therefore wins over a hand-added string of the same
+    source -- the catalogue is what translators maintain.
+    """
     _ensure_builtin()
+    if domain is not None:
+        first, rest = [domain], []
+    else:
+        first = [n for n in dict.fromkeys((scope, _default_domain)) if n]
+        rest = [n for n in _sources if n not in first]
     for code in _chain(language()):
-        if domain is not None:
-            names = [domain]
-            memory_first = False
-        else:
-            names = [n for n in dict.fromkeys((scope, _default_domain, *_sources)) if n]
-            memory_first = True
-        if memory_first:
-            found = _lookup_memory(code, source, context)
-            if found:
-                return found
-        for name in names:
-            if name == EMTK_DOMAIN:
-                continue
-            found = _lookup(name, code, source, context)
-            if found:
-                return found
-        if not memory_first:
-            # A named domain still sees the hand-added application strings
-            # before the toolkit's own vocabulary.
-            found = _lookup_memory(code, source, context)
-            if found:
-                return found
+        for name in first:
+            if name != EMTK_DOMAIN:
+                found = _lookup(name, code, source, context)
+                if found:
+                    return found
+        found = _lookup_memory(code, source, context)
+        if found:
+            return found
+        for name in rest:
+            if name != EMTK_DOMAIN:
+                found = _lookup(name, code, source, context)
+                if found:
+                    return found
         found = _lookup(EMTK_DOMAIN, code, source, context)
         if found:
             return found
