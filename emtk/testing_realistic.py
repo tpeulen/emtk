@@ -57,7 +57,7 @@ from .events import (ALT_MODIFIER, CONTROL_MODIFIER, LEFT_BUTTON, META_MODIFIER,
 from .testing import Driver, RecordingPainter
 
 __all__ = ["VirtualLoop", "HostPainter", "SyntheticCanvas", "RealisticDriver",
-           "HostedDriver", "clipped_texts"]
+           "HostedDriver", "clipped_texts", "frame_signature", "assert_settles"]
 
 #: emtk button -> rendercanvas button number.
 _CANVAS_BUTTON = {LEFT_BUTTON: 1, RIGHT_BUTTON: 2, MIDDLE_BUTTON: 3}
@@ -575,6 +575,26 @@ class RealisticDriver(Driver):
             self.frame()
         return self.painter
 
+    def swipe(self, dy, at=None, *, events: int = 30, momentum: int = 20):
+        """A trackpad swipe: *dy* notches' worth of small deltas, one event per frame.
+
+        A trackpad does not send notches: it sends a stream of small deltas while the
+        fingers move, then a *momentum* tail of decaying deltas after they lift. The
+        total is *dy* notches (positive scrolls up); a host that turned every small
+        delta into a whole notch made a swipe dozens of notches.
+        """
+        if at is not None:
+            self._travel(self._point(at))
+        weights = [1.0] * int(events) + [0.8 ** (i + 1) for i in range(int(momentum))]
+        total = sum(weights)
+        for weight in weights:
+            self._submit({"event_type": "wheel", "dx": 0.0,
+                          "dy": -100.0 * float(dy) * weight / total,
+                          "x": self._pointer[0], "y": self._pointer[1],
+                          "buttons": self._buttons, "modifiers": self._modifiers})
+            self.frame()
+        return self.painter
+
     # -- keys ------------------------------------------------------------- #
     def key(self, code, text="", modifiers=0):
         """Key down (and the ``char`` the OS types for it); the key stays held."""
@@ -832,3 +852,88 @@ class HostedDriver(RealisticDriver):
         if self.host is not None:
             self.host.close()
             self.host = None
+
+
+# --------------------------------------------------------------------------- #
+# Real-use invariants: what must hold after any input, for any app
+# --------------------------------------------------------------------------- #
+def _rounded(value):
+    """A draw-call argument as a stable, comparable value (floats to 0.01 px)."""
+    if isinstance(value, float):
+        return round(value, 2)
+    if isinstance(value, (int, str, bool)) or value is None:
+        return value
+    if isinstance(value, (tuple, list)):
+        return tuple(_rounded(v) for v in value)
+    # A texture handle, a font object: identity is not what the user sees.
+    return type(value).__name__
+
+
+def frame_signature(driver) -> tuple:
+    """What the last frame drew, as a comparable tuple (every painter call, in order).
+
+    Two frames with equal signatures look the same: nothing the user can see moved.
+    """
+    calls = getattr(getattr(driver, "painter", None), "calls", None) or ()
+    return tuple(_rounded(call) for call in calls)
+
+
+def assert_settles(driver, action, observe=None, *, frames: int = 30, grace: int = 2,
+                   allow_animation: bool = False, label: str = "") -> None:
+    """After *action*, idle frames with the hand held still change nothing.
+
+    The real-use check a one-shot input needs: a wheel notch, a click, a key, a drop is
+    *one* event, so once it has been handled the next frames -- the host keeps drawing,
+    the pointer rests where it was -- must not keep applying it. A plot that zoomed on
+    every frame after one notch (until the pointer left it) passed every test that
+    looked only at the frame after the notch.
+
+    Parameters
+    ----------
+    driver : RealisticDriver
+        The driver, already showing the app.
+    action : callable
+        ``action(driver)`` -- the gesture (``lambda d: d.wheel(1, at=box)``).
+    observe : callable, optional
+        ``observe()`` -> a comparable snapshot of the state that must hold still (view
+        ranges, a scroll offset, a value). Defaults to :func:`frame_signature`: the
+        frame the user sees.
+    frames : int
+        Idle frames to watch.
+    grace : int
+        Frames allowed to settle after the action (a layout pass, a one-frame redraw).
+    allow_animation : bool
+        Skip the "stops asking for frames" check, for an app that animates on purpose.
+    label : str
+        Prefix for the failure message (which widget, which gesture).
+
+    Raises
+    ------
+    AssertionError
+        Naming the first idle frame that differed, or that the app kept asking the host
+        for frames.
+    """
+    snapshot = observe if observe is not None else (lambda: frame_signature(driver))
+    action(driver)
+    driver.frame(max(int(grace), 1))
+    before = snapshot()
+    prefix = f"{label}: " if label else ""
+    for i in range(int(frames)):
+        driver.frame()
+        now = snapshot()
+        if now != before:
+            raise AssertionError(
+                f"{prefix}state kept changing on idle frame {i + 1} of {frames} after the "
+                f"input, with the pointer held still (a one-shot input applied again?)\n"
+                f"  settled: {_short(before)}\n  now:     {_short(now)}")
+    if not allow_animation:
+        animating = getattr(driver.app, "animating", None)
+        if callable(animating) and animating():
+            raise AssertionError(
+                f"{prefix}still asking the host for frames after {frames} idle frames: an "
+                f"idle app must let the host sleep")
+
+
+def _short(value, limit: int = 300) -> str:
+    text = repr(value)
+    return text if len(text) <= limit else text[:limit] + f"... ({len(text)} chars)"

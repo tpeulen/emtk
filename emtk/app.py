@@ -660,10 +660,9 @@ class ImApp:
 
     def wheel(self, x, y, steps, modifiers=0) -> None:
         self.io.mouse_pos = (float(x), float(y))
-        # Replace, not accumulate: the wheel persists across the nested frames
-        # of a draw pass until a window consumes it, so a new delivery
-        # supersedes whatever an unconsumed earlier notch left behind.
-        self.io.mouse_wheel = float(steps)
+        # Accumulate: notches delivered between two frames all belong to the next
+        # one, and the frame loop spends them when that frame ends (IO.end_event).
+        self.io.mouse_wheel += float(steps)
         self._modifiers(int(modifiers))
 
     # -- the classic control contract (qt_host, tk_host, wgpu_host) ------ #

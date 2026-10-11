@@ -280,8 +280,18 @@ class WebPage:
     def wheel(self, delta_y: float, x: float = 0.0, y: float = 0.0,
               ctrl: bool = False, shift: bool = False, alt: bool = False,
               meta: bool = False) -> bool:
-        """``wheel``: the raw ``deltaY`` and where the pointer is."""
-        steps = wheel_steps_from_dom(delta_y)
+        """``wheel``: the raw ``deltaY`` and where the pointer is.
+
+        Whole notches in proportion to the deltas (:class:`emtk.events.WheelAccumulator`,
+        a notch is 100 px): a trackpad's stream of small deltas was a notch *each*.
+        """
+        accumulator = getattr(self, "_wheel_accumulator", None)
+        if accumulator is None:
+            from ..events import WheelAccumulator  # noqa: PLC0415
+
+            accumulator = self._wheel_accumulator = WheelAccumulator(100.0)
+        # deltaY is positive toward the user; steps are positive away (wheel_steps_from_dom).
+        steps = accumulator.feed(-float(delta_y or 0.0))
         if not steps:
             return False
         return bool(self.surface.on_wheel(

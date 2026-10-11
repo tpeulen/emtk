@@ -448,6 +448,10 @@ class CanvasEvents:
         #: glfw callbacks chained by :meth:`_connect_pointer_presence`, as
         #: ``{setter name: (ours, the backend's)}``.
         self._presence_callbacks: dict = {}
+        #: Raw wheel deltas -> whole notches in proportion (a trackpad sends many small ones).
+        from .events import WheelAccumulator  # noqa: PLC0415
+
+        self._wheel = WheelAccumulator(WHEEL_NOTCH)
         self.connect()
 
     # -- wiring ---------------------------------------------------------- #
@@ -884,7 +888,8 @@ class CanvasEvents:
                       modifiers_from_canvas(event.get("modifiers")))
 
     def _on_wheel(self, event: dict) -> None:
-        steps = wheel_steps(event)
+        raw = float(event.get("dy") or 0.0) or float(event.get("dx") or 0.0)
+        steps = self._wheel.feed(-raw, event.get("time_stamp"))
         if steps:
             x, y = self.pointer_position({"x": event.get("x", 0.0),
                                           "y": event.get("y", 0.0)})

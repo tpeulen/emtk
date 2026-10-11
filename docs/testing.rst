@@ -133,3 +133,45 @@ A named target recorded as ``None`` has not been submitted in that frame (for
 example, an image canvas before data loads). Driver omits it from ``ids()``
 and raises ``LookupError`` if it is clicked. It does not invent geometry for
 an unavailable control; normal named rectangles and caption lookup still work.
+
+One-shot input and settling
+---------------------------
+
+A wheel notch, a click, a key, typed text and a drop are *one-shot* inputs:
+each is delivered once and seen by exactly one frame. The frame loop spends
+them (``IO.end_event``, called when the outermost frame on an ``IO`` ends) --
+never the widget that reads them. A widget may still zero ``io.mouse_wheel``
+to keep a notch from a widget drawn *later in the same frame* (a scroll area
+taking the wheel from the page around it); that is routing, not clearing.
+``IO.ONE_SHOT`` names the fields and ``IO.one_shot_state()`` snapshots them.
+
+The rule exists because the opposite once shipped: the wheel was kept "until
+a widget consumed it", a plot read it without zeroing it, and one notch zoomed
+the plot on every frame until the pointer left it. Every test passed, because
+every test looked at the frame *after* the notch and its hand-rolled driver
+zeroed the wheel itself -- doing the frame loop's job.
+
+Hosts turn raw platform deltas into whole notches with
+``emtk.events.WheelAccumulator``: a trackpad sends dozens of small deltas a
+second (and a momentum tail), and rounding each up to a notch made one swipe
+dozens of notches. A plot zooms in proportion to the notches of a frame, at
+most ``emtk.implot.WHEEL_NOTCHES_PER_FRAME``.
+
+Test the settling, not only the response.
+``emtk.testing_realistic.assert_settles`` performs a gesture, then draws idle
+frames with the hand held still and fails if the observed state (by default
+the whole drawn frame) changes again, or if the app keeps asking the host for
+frames::
+
+    from emtk.testing_realistic import RealisticDriver, assert_settles
+
+    driver = RealisticDriver(app, (800, 600))
+    driver.frame(2)
+    assert_settles(driver, lambda d: d.wheel(1, at=plot_centre),
+                   lambda: plot_limits(), frames=30)
+    assert_settles(driver, lambda d: d.swipe(2, at=plot_centre), frames=30)
+
+``swipe(dy)`` is a trackpad gesture: *dy* notches' worth of small deltas, one
+per frame, followed by a decaying momentum tail. Replay input as the real
+sequence -- the notch, then the hover that follows it -- rather than as a
+single synthetic call.

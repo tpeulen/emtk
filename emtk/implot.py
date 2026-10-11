@@ -133,6 +133,10 @@ InputMap = I.InputMap
 PlotTime = I.PlotTime
 
 
+#: The most wheel notches one frame applies: a burst (merged events, a trackpad swipe)
+#: zooms in proportion up to this, never further.
+WHEEL_NOTCHES_PER_FRAME = 4.0
+
 def _ctx():
     return _core.get_current_context()
 
@@ -905,11 +909,14 @@ def _update_input(plot) -> bool:
                     _interacted(y_axis)
                     changed = True
     if any_hov and has_flag(mods, imap.zoom_mod):
-        zoom_rate = imap.zoom_rate
-        if io.mouse_wheel == 0.0:
-            zoom_rate = 0.0
-        elif io.mouse_wheel > 0:
-            zoom_rate = (-zoom_rate) / (1.0 + (2.0 * zoom_rate))
+        # One notch zooms by ImPlot's ZoomRate; n notches in one frame by n of them
+        # (compounded), bounded so a burst cannot throw the view off the scale.
+        zoom_rate = 0.0
+        notches = min(abs(float(io.mouse_wheel)), WHEEL_NOTCHES_PER_FRAME)
+        if notches:
+            step = imap.zoom_rate
+            factor = (1.0 + step) if io.mouse_wheel < 0 else (1.0 + step) / (1.0 + 2.0 * step)
+            zoom_rate = factor ** notches - 1.0
         rw, rh = pr[2] - pr[0], pr[3] - pr[1]
         tx = I.remap(io.mouse_pos[0], pr[0], pr[2], 0.0, 1.0)
         ty = I.remap(io.mouse_pos[1], pr[1], pr[3], 0.0, 1.0)

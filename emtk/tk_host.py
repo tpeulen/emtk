@@ -450,8 +450,19 @@ class TkHost:
         self._soon()
 
     def _on_wheel(self, event) -> None:
-        if event.delta:
-            self._scroll(-3 if event.delta > 0 else 3)
+        # Whole notches in proportion (a trackpad sends many small deltas); Tk's notch is
+        # 120 units except on macOS, where it reports lines.
+        accumulator = getattr(self, "_wheel_accumulator", None)
+        if accumulator is None:
+            import sys  # noqa: PLC0415
+
+            from .events import WheelAccumulator  # noqa: PLC0415
+
+            accumulator = self._wheel_accumulator = WheelAccumulator(
+                1.0 if sys.platform == "darwin" else 120.0)
+        steps = accumulator.feed(event.delta)
+        if steps:
+            self._scroll(-3 * steps)
 
     def _scroll(self, rows: int) -> None:
         scroll = getattr(self.control, "scroll", None)

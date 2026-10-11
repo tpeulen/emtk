@@ -1072,7 +1072,16 @@ def wgpu_host_class():
                 if hasattr(event, "angleDelta")
                 else event.delta()
             )
-            scroll(-3 if delta > 0 else 3)
+            # Whole notches in proportion (a trackpad sends many small angle deltas).
+            accumulator = getattr(self, "_wheel_accumulator", None)
+            if accumulator is None:
+                from .events import WheelAccumulator  # noqa: PLC0415
+
+                accumulator = self._wheel_accumulator = WheelAccumulator(120.0)
+            steps = accumulator.feed(delta)
+            if not steps:
+                return
+            scroll(-3 * steps)
             self.request_draw()
 
         def keyPressEvent(self, event) -> None:  # noqa: N802

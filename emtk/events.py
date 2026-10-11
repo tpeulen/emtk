@@ -514,3 +514,54 @@ class KeyEvent:
     def isAccepted(self) -> bool:  # noqa: N802 - the toolkit spelling
         """Whether the event was marked handled."""
         return self._accepted
+
+
+class WheelAccumulator:
+    """Turn a platform's raw wheel deltas into whole notches, in proportion.
+
+    A mouse wheel sends one delta a notch (120 for Qt's ``angleDelta``, 100 for
+    rendercanvas). A trackpad sends *many small* deltas -- a few units each, dozens of
+    them a second, and a momentum tail after the fingers lift. Rounding each one up to
+    a notch (what every host did, so that a small flick was not lost) made a trackpad
+    swipe dozens of notches: a plot zoomed off the scale, a list jumped to its end.
+
+    The accumulator carries the remainder between events, so a swipe gives as many
+    notches as its total delta holds. The first event of a gesture (after *gap* seconds
+    of quiet, or a reversal) still answers at least one notch, booked as a debt the rest
+    of the gesture pays back -- a small flick is never lost, and never counts twice.
+
+    Parameters
+    ----------
+    unit : float
+        Raw delta of one notch.
+    gap : float
+        Seconds of quiet after which the next event starts a new gesture.
+    """
+
+    def __init__(self, unit: float, gap: float = 0.25) -> None:
+        self.unit = float(unit)
+        self.gap = float(gap)
+        self._rest = 0.0
+        self._last: float | None = None
+        self._sign = 0
+
+    def feed(self, raw: float, now: float | None = None) -> int:
+        """Whole notches for a raw delta (sign kept); the rest is carried."""
+        import time  # noqa: PLC0415
+
+        raw = float(raw or 0.0)
+        if not raw:
+            return 0
+        now = time.perf_counter() if now is None else float(now)
+        value = raw / self.unit
+        sign = 1 if value > 0 else -1
+        fresh = self._last is None or now - self._last > self.gap or sign != self._sign
+        self._last, self._sign = now, sign
+        if fresh:
+            self._rest = 0.0
+        self._rest += value
+        steps = int(self._rest)            # toward zero
+        if steps == 0 and fresh:
+            steps = 1 if value > 0 else -1  # a flick shorter than a notch still counts once
+        self._rest -= steps
+        return steps

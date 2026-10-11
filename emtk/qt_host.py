@@ -447,18 +447,26 @@ def host_class():
                 if hasattr(event, "angleDelta")
                 else event.delta()
             )
+            # Whole notches in proportion (a trackpad sends many small angle deltas).
+            accumulator = getattr(self, "_wheel_accumulator", None)
+            if accumulator is None:
+                from .events import WheelAccumulator  # noqa: PLC0415
+
+                accumulator = self._wheel_accumulator = WheelAccumulator(120.0)
+            steps = accumulator.feed(delta)
+            if not steps:
+                return
             rich = self._rich("wheel")
             if rich is not None:
                 # Notches, up positive -- Dear ImGui's sign, and Qt's.
                 point = event.position() if hasattr(event, "position") else event.pos()
-                rich(float(point.x()), float(point.y()), delta / 120.0,
-                     _mods(event))
+                rich(float(point.x()), float(point.y()), float(steps), _mods(event))
                 self.update()
                 return
             scroll = getattr(self.control, "scroll", None)
             if not callable(scroll):
                 return
-            scroll(-3 if delta > 0 else 3)
+            scroll(-3 * steps)
             self.update()
 
         def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt's spelling

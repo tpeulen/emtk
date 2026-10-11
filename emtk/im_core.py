@@ -174,6 +174,17 @@ class IO:
     #: :meth:`Context.end_frame` from :meth:`Context.request_frame_at`; a host
     #: reads it (:func:`emtk.app.next_frame_in`) and schedules one wake-up.
     next_frame_in: Optional[float] = None
+    #: Frames currently open on this IO. A frame drawn *inside* another one on the same IO
+    #: (a child app sharing its parent's input) is part of the outer frame; the one-shot
+    #: edges are spent when the outermost frame ends (:meth:`Context.end_frame`).
+    frames_open: int = field(default=0, repr=False, compare=False)
+
+    #: The one-shot inputs: delivered once, seen by exactly one frame, then spent by the
+    #: frame loop -- never by the widget that reads them. A widget may still zero one to
+    #: keep it from a widget drawn *later in the same frame* (a scroll area taking the
+    #: wheel from the page around it); that is routing, not clearing.
+    ONE_SHOT = ("mouse_clicked", "mouse_released", "mouse_double_clicked",
+                "mouse_wheel", "mouse_wheel_h", "key", "text", "key_events")
 
     def begin_frame(self, now: Optional[float] = None) -> None:
         # ``NewFrame``: ``MouseDelta = MousePos - MousePosPrev``, then
@@ -210,17 +221,27 @@ class IO:
                 self.mouse_pos[1] - self.mouse_pos_prev[1])
 
     def end_event(self) -> None:
-        """Clear the per-delivery edges once the widget has seen them."""
+        """Spend every one-shot input (:attr:`ONE_SHOT`): the frame that saw them is over.
+
+        The wheel included. It used to be kept "until a widget consumed it", and a widget
+        that reads the wheel without zeroing it (a plot zooming, a spin field stepping)
+        then applied the same notch again on every later frame -- while the app, seeing a
+        wheel still set, asked the host for yet another frame. One notch zoomed until the
+        pointer left the plot.
+        """
         self.mouse_clicked = [False, False, False]
         self.mouse_released = [False, False, False]
         self.mouse_double_clicked = [False, False, False]
-        # The mouse wheel is NOT cleared here: nested frames of one draw pass
-        # (hub-embedded apps) share this IO, and the outer frame ends before
-        # the inner one can consume the wheel. The next wheel delivery replaces
-        # the value instead of accumulating into it.
+        self.mouse_wheel = 0.0
+        self.mouse_wheel_h = 0.0
         self.key = 0
         self.text = ""
         self.key_events = []
+
+    def one_shot_state(self) -> tuple:
+        """The one-shot inputs as a comparable tuple (all spent equals ``IO().one_shot_state()``)."""
+        return tuple(tuple(v) if isinstance(v, list) else v
+                     for v in (getattr(self, name) for name in self.ONE_SHOT))
 
     def mouse_drag_delta(self, button: int = 0) -> tuple[float, float]:
         ox, oy = self.mouse_clicked_pos[button]
@@ -586,7 +607,9 @@ class Context:
     # -- the frame ------------------------------------------------------------ #
     def new_frame(self, now: Optional[float] = None) -> None:
         """``ImGui::NewFrame``: age the ids and find the hovered window."""
-        self.io.begin_frame(now)
+        self.io.frames_open += 1
+        if self.io.frames_open == 1:
+            self.io.begin_frame(now)
         self.io.backend_flags = painter_capabilities(self.p)
         self.hovered_id_previous_frame = self.hovered_id
         self.active_id_previous_frame = self.active_id
@@ -624,6 +647,9 @@ class Context:
         The overlays (:meth:`add_overlay`) are drawn first: over everything
         the frame drew.
         """
+        # Counted down first, so a frame whose overlays raise still closes.
+        self.io.frames_open = max(self.io.frames_open - 1, 0)
+        outermost = self.io.frames_open == 0
         # The root region is done: a fill (an expanding table) that learned what
         # follows it lays itself out again in the next frame.
         if self.layout.settle_fills():
@@ -664,9 +690,11 @@ class Context:
         self.io.want_text_input = bool(getattr(self, "_want_text_input", False))
         self._want_text_input = False
         self.io.want_capture_mouse = self.hovered_window is not None or overlay_open
-        # A nested frame (draw_child) hands unconsumed wheel to the child
-        # frame that follows it in the same draw pass.
-        self.io.end_event()
+        # The frame loop -- not the widgets -- spends the one-shot inputs, once the
+        # outermost frame on this IO is over: a frame nested on the same IO (a child
+        # app sharing its parent's input) is part of the outer frame.
+        if outermost:
+            self.io.end_event()
 
     # -- keyboard navigation --------------------------------------------- #
     def nav_add(self, item_id: Any) -> None:

@@ -3215,7 +3215,7 @@ def handle_input(plot: Plot) -> None:
 
     # ZOOM
     if plot.hovered and allow_zoom and (io.mouse_down[2] or io.mouse_wheel != 0.0):
-        zoom_rate = (-0.01 * io.mouse_delta[1]) if io.mouse_down[2] else (-0.1 * io.mouse_wheel)
+        zoom_rate = (-0.01 * io.mouse_delta[1]) if io.mouse_down[2] else (-0.1 * max(-4.0, min(4.0, io.mouse_wheel)))
         zoom_around_mouse = hovered_axis != -1 or hovered_plane != -1
         ref_axis = AXIS_X
         for i in range(3):
