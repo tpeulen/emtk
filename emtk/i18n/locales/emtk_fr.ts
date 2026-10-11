@@ -68,6 +68,7 @@
         <message>
             <location filename="emtk/file_dialog.py" line="304" />
             <location filename="emtk/file_dialog.py" line="390" />
+            <location filename="emtk/message_dialog.py" line="244" />
             <source>Cancel</source>
             <translation>Annuler</translation>
         </message>
@@ -170,7 +171,7 @@
             <translation>Couleur</translation>
         </message>
         <message>
-            <location filename="emtk/widgets/data_table.py" line="1843" />
+            <location filename="emtk/widgets/data_table.py" line="1920" />
             <source>Columns</source>
             <translation>Colonnes</translation>
         </message>
@@ -702,6 +703,22 @@
             <location filename="emtk/widgets/command_line.py" line="67" />
             <source>press Return to type a command</source>
             <translation>appuyer sur Entrée pour saisir une commande</translation>
+        </message>
+        <message>
+            <location filename="emtk/message_dialog.py" line="204" />
+            <source>No</source>
+            <translation>Non</translation>
+        </message>
+        <message>
+            <location filename="emtk/message_dialog.py" line="198" />
+            <location filename="emtk/message_dialog.py" line="243" />
+            <source>OK</source>
+            <translation>OK</translation>
+        </message>
+        <message>
+            <location filename="emtk/message_dialog.py" line="203" />
+            <source>Yes</source>
+            <translation>Oui</translation>
         </message>
     </context>
 </TS>

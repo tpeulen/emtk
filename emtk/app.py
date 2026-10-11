@@ -186,6 +186,14 @@ class Surface:
     def close(self) -> None:
         """Release application resources when the host's window closes."""
 
+    def on_close_request(self) -> bool:
+        """The window's close button was pressed: whether the window may close now.
+
+        ``False`` keeps it open; the surface then asks the user (unsaved work, a
+        running job) and closes itself later through the host. Default: yes.
+        """
+        return True
+
     def set_frame_request_callback(self, callback) -> None:
         self._frame_request_callback = callback
 
@@ -292,6 +300,16 @@ class ControlSurface(Surface):
         hook = self._hook("close")
         if hook is not None:
             hook()
+
+    def on_close_request(self) -> bool:
+        """Ask the control's ``close_request()`` hook; a control without one may close.
+
+        A control that answers ``False`` keeps its window and is expected to
+        call ``request_close()`` (:meth:`emtk.app.ImApp.request_close`) once the
+        user has decided.
+        """
+        hook = self._hook("close_request")
+        return True if hook is None else hook() is not False
 
     def attach(self, device, format, width, height, ratio) -> None:
         from .wgpu_host import WgpuRenderer  # noqa: PLC0415

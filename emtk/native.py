@@ -350,6 +350,7 @@ class CanvasEvents:
         add(self._on_close, "close")
         self._connect_file_drop()
         self._connect_focus_loss()
+        self._connect_close_request()
         self._connect_window_position()
 
     def _on_close(self, event) -> None:
@@ -359,9 +360,72 @@ class CanvasEvents:
         self.release_keys()
         self._restore_focus_callback()
         self._restore_position_callback()
+        self._restore_close_request_callback()
         close = getattr(self.sink, "close", None)
         if callable(close):
             close()
+
+    def close_request(self) -> bool:
+        """The window's close button was pressed: whether it may close now.
+
+        Asks the sink's ``on_close_request`` (:meth:`emtk.app.Surface.on_close_request`);
+        a sink without one, or one that raises, lets the window close. ``False``
+        keeps the window open -- the app is then asking the user (unsaved work)
+        and closes itself with ``request_close`` once answered.
+        """
+        ask = getattr(self.sink, "on_close_request", None)
+        if not callable(ask):
+            return True
+        try:
+            allowed = ask() is not False
+        except Exception:  # noqa: BLE001 - a broken guard must not trap the user in the window
+            return True
+        if not allowed and self.on_frame is not None:
+            self.on_frame()
+        return allowed
+
+    def _connect_close_request(self) -> None:
+        """Let the app keep a glfw window open when its close button is pressed.
+
+        rendercanvas's glfw backend closes on the window-should-close flag and
+        leaves its close callback empty ("we could prevent closing here. But we
+        don't"). This chains that callback and clears the flag when
+        :meth:`close_request` says no, so an app with unsaved work can ask first.
+        """
+        window = getattr(self.canvas, "_window", None)
+        self.close_request_callback = None
+        if window is None:
+            return
+        try:
+            import glfw  # noqa: PLC0415
+            setter = getattr(glfw, "set_window_close_callback", None)
+            keep_open = getattr(glfw, "set_window_should_close", None)
+            if not callable(setter) or not callable(keep_open):
+                return
+            previous = setter(window, None)
+
+            def closing(_window) -> None:
+                if previous is not None:
+                    previous(_window)
+                if not self.close_request():
+                    keep_open(_window, False)
+
+            self.close_request_callback = closing
+            self._previous_close_request_callback = previous
+            setter(window, closing)
+        except Exception:  # noqa: BLE001 - the guard is optional off GLFW
+            self.close_request_callback = None
+
+    def _restore_close_request_callback(self) -> None:
+        window = getattr(self.canvas, "_window", None)
+        if window is None or getattr(self, "close_request_callback", None) is None:
+            return
+        try:
+            import glfw  # noqa: PLC0415
+            glfw.set_window_close_callback(window, self._previous_close_request_callback)
+        except Exception:  # noqa: BLE001 - the window may already be gone
+            pass
+        self.close_request_callback = None
 
     def _connect_window_position(self) -> None:
         """Persist geometry where a GLFW backend exposes a movable window.

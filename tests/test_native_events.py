@@ -272,6 +272,70 @@ def test_glfw_focus_callback_chains_rendercanvas_and_releases(monkeypatch):
     assert [name for name, _args, _kw in sink.calls][-1] == "on_key_release"
 
 
+def test_glfw_close_button_asks_the_surface_and_can_keep_the_window(monkeypatch):
+    """An app with unsaved work answers ``close_request() -> False``: the window stays open."""
+    import sys
+    import types
+
+    from emtk.app import ControlSurface
+
+    callbacks, should_close, prior_calls = {}, {"window": True}, []
+    callbacks["window"] = lambda _window: prior_calls.append("prior")
+
+    def set_close_callback(window, callback):
+        old = callbacks.get(window)
+        callbacks[window] = callback
+        return old
+
+    def set_should_close(window, value):
+        should_close[window] = bool(value)
+
+    fake_glfw = types.SimpleNamespace(
+        set_window_close_callback=set_close_callback,
+        set_window_should_close=set_should_close,
+        set_drop_callback=lambda *_args: None,
+    )
+    monkeypatch.setitem(sys.modules, "glfw", fake_glfw)
+
+    class App:
+        def __init__(self):
+            self.answer, self.asked = False, 0
+
+        def close_request(self):
+            self.asked += 1
+            return self.answer
+
+    app = App()
+    canvas = _canvas("rendercanvas.glfw")
+    canvas._window = "window"
+    events = CanvasEvents(canvas, ControlSurface(app))
+    callbacks["window"]("window")
+    assert prior_calls == ["prior"], "the rendercanvas close callback stays chained"
+    assert app.asked == 1 and should_close["window"] is False, "the guard kept the window open"
+    should_close["window"] = True
+    app.answer = True
+    callbacks["window"]("window")
+    assert should_close["window"] is True, "a yes lets the window close"
+    events._on_close({"event_type": "close"})
+    assert callbacks["window"] is not None and callbacks["window"]("window") is None
+    assert prior_calls[-1] == "prior", "closing restores the backend's own callback"
+
+
+def test_a_surface_without_a_guard_or_with_a_broken_one_closes():
+    from emtk.app import ControlSurface, Surface
+
+    assert Surface().on_close_request() is True
+    assert ControlSurface(object()).on_close_request() is True
+    events, _canvas_, _sink, _loop = _events()
+
+    class Broken:
+        def on_close_request(self):
+            raise RuntimeError("guard failed")
+
+    events.sink = Broken()
+    assert events.close_request() is True, "a failing guard never traps the user"
+
+
 def test_return_does_not_repeat():
     _ev, canvas, sink, loop = _events("rendercanvas.glfw")
     canvas.emit("key_down", {"key": "Enter", "modifiers": ()})
