@@ -129,6 +129,12 @@ ICON_SCALE = 1.4
 #: A separator row's height, as a multiple of a normal row's.
 SEPARATOR_SCALE = 0.5
 
+#: The widest a row's label makes its panel, in line heights. A longer label --
+#: a disabled row that says why in a whole sentence -- ends in "…" and shows its
+#: whole text in a tooltip while it is highlighted, so one long row never makes
+#: a menu as wide as the window, or wider.
+MAX_LABEL_LINES = 26.0
+
 #: A :class:`Popup`'s fill: the style's popup colour, opaque.
 _OPAQUE_POPUP_BG = (*tuple(style.POPUP_BG)[:3], 255)
 
@@ -443,7 +449,8 @@ def _panel_metrics(
     for entry in entries:
         if entry is None:
             continue
-        label_w = max(label_w, p.text_width(entry.display_label))
+        label_w = max(label_w, min(p.text_width(entry.display_label),
+                                   p.line_height() * MAX_LABEL_LINES))
         if entry.shortcut:
             shortcut_w = max(shortcut_w, p.text_width(entry.shortcut))
     content = _columns_width(label_w + _icon_column(p, entries), shortcut_w, mark_w)
@@ -816,6 +823,8 @@ class Menu:
         nothing else to say what it is a menu *of*.
     enabled : bool, optional
         A disabled menu draws dimmed and refuses to open.
+    tooltip : str, optional
+        Shown while the row is highlighted -- for a disabled menu, why it is.
 
     Attributes
     ----------
@@ -838,8 +847,10 @@ class Menu:
         title: str = "",
         enabled: bool = True,
         icon: str | None = None,
+        tooltip: str | None = None,
     ) -> None:
         self.label = str(label)
+        self.tooltip = str(tooltip) if tooltip else None
         self.shortcut = ""
         self.icon = str(icon) if icon else ""
         self.column_icon_width = 0.0
@@ -1212,6 +1223,8 @@ class MenuBar:
                         ctx.set_tooltip(entry.tooltip, owner=("menu-item", id(entry)))
                 elif isinstance(entry, Menu):
                     entry.hovered = hovered
+                    if hovered and entry.tooltip:
+                        ctx.set_tooltip(entry.tooltip, owner=("menu-item", id(entry)))
                     if entry.open:
                         update(entry)
 
@@ -1722,7 +1735,8 @@ class Popup:
         rect = self.row_rect(self.highlight)
         if entry is None or rect is None:
             return
-        text = tr(entry.tooltip) if entry.tooltip else None
+        tooltip = getattr(entry, "tooltip", None)
+        text = tr(tooltip) if tooltip else None
         if not text and entry.cut(p, rect[2]):
             text = entry.display_label
         if not text:

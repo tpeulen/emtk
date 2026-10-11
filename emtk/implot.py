@@ -1743,9 +1743,14 @@ def _flush_popups() -> None:
 
 
 def _menu_closed_by_click(menu) -> bool:
+    """A press outside the menu, or Escape, closes it -- as every other emtk popup."""
+    from .keys import KEY_ESCAPE  # noqa: PLC0415
+
     io = _io()
     if menu.get("just_opened"):
         return False
+    if io.key == KEY_ESCAPE or any(event[0] == KEY_ESCAPE for event in io.key_events or ()):
+        return True
     x, y = menu["pos"]
     w, h = menu["size"]
     mx, my = io.mouse_pos
@@ -1753,10 +1758,25 @@ def _menu_closed_by_click(menu) -> bool:
     return any(io.mouse_clicked) and not inside
 
 
+def _keep_menu_inside(menu) -> None:
+    """Move the menu, as a context menu is moved, so all of it is inside the frame.
+
+    It opens at the pointer; near the frame's right or bottom edge it would run out
+    of the window. Its size is known after its first frame, so it is placed again
+    each frame, and the press that closes it is tested against where it is drawn.
+    """
+    bx, by, bw, bh = _ctx().box
+    (x, y), (w, h) = menu["pos"], menu["size"]
+    x = max(bx, min(x, bx + bw - w))
+    y = max(by, min(y, by + bh - h))
+    menu["pos"] = (x, y)
+
+
 def _show_menu_window(plot, subplot) -> None:
     menu = plot.context_menu
     if menu is None:
         return
+    _keep_menu_inside(menu)
     if _menu_closed_by_click(menu):
         plot.context_menu = None
         return
@@ -1802,6 +1822,7 @@ def _show_menu_window(plot, subplot) -> None:
         ctx.end()
     box = window.box if window is not None else (x, y, w, h)
     menu["size"] = (max(_MENU_WIDTH, box[2] + 8), box[3] + 8)
+    _keep_menu_inside(menu)
     menu["just_opened"] = False
     if close:
         plot.context_menu = None

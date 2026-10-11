@@ -248,6 +248,82 @@ def clipped_texts(painter, *, tolerance: float = 0.5, min_chars: int = 2) -> lis
 # --------------------------------------------------------------------------- #
 # A canvas that is only an event source
 # --------------------------------------------------------------------------- #
+def held_overlays(*apps) -> list[str]:
+    """What still holds the input in the frames of *apps*: one line per open popup.
+
+    *apps* are anything drawn with an emtk frame ``storage`` (an :class:`~emtk.app.ImApp`,
+    a hosted child app, a bare ``storage`` dict). A frame holds its next frame's input
+    while a popup -- a context menu, a combo's list, an ``open_context_popup`` menu -- is
+    up (:mod:`emtk.overlays`), so every line here is a frame in which a click lands on
+    nothing but the popup.
+    """
+    from .overlays import open_panels  # noqa: PLC0415
+
+    held = []
+    for app in apps:
+        storage = app if isinstance(app, dict) else getattr(app, "storage", None)
+        if not storage:
+            continue
+        name = type(app).__name__
+        for key in storage.get("__overlays_open__") or ():
+            held.append(f"{name}: overlay {key!r} holds the input")
+        for panel in open_panels(storage):
+            held.append(f"{name}: popup {getattr(panel, 'title', '') or panel!r} is still open")
+        for key, value in storage.items():
+            if (isinstance(key, tuple) and len(key) == 2 and key[0] == "__state__"
+                    and isinstance(key[1], tuple) and key[1][:1] == ("context_popup",)
+                    and isinstance(value, dict) and value.get("open")):
+                held.append(f"{name}: context menu {key[1][1]!r} is still open")
+    return held
+
+
+def assert_input_released(driver, target, landed, *, apps=(), label: str = "",
+                          frames: int = 2) -> None:
+    """After a popup closed -- by any path -- nothing holds the input and the next click lands.
+
+    The real-use check for every popup, context menu, list, modal and tooltip: open it,
+    close it by a pick, Escape, a click outside, a second right-click, or the wheel, then
+    click a control *elsewhere*. The close is only half the contract; a popup that
+    closed in its own drawing but left its frame holding the input (an overlay that
+    raised while it drew, a hosted child that never saw the press that should close its
+    menu) takes the next click, and the one after, and the user sees a window that no
+    longer answers.
+
+    Parameters
+    ----------
+    driver : RealisticDriver
+        The driver, with the popup just closed.
+    target : str or (x, y) or (x, y, w, h)
+        A control to click, away from where the popup was: a key of the driver's
+        rectangles or a point (as :meth:`RealisticDriver.click`).
+    landed : callable
+        ``landed()`` -> whether the click registered (a tab changed, a toggle flipped,
+        the control reported use).
+    apps : sequence, optional
+        Every frame whose input must be free: the driven app and the children it hosts
+        (anything with an emtk ``storage``). Defaults to the driven app.
+    label : str
+        Prefix for the failure message (which popup, which close path).
+    frames : int
+        Frames to draw before checking and after the click.
+    """
+    prefix = f"{label}: " if label else ""
+    driver.frame(max(int(frames), 1))
+    held = held_overlays(*(apps or (driver.app,)))
+    if held:
+        raise AssertionError(f"{prefix}the popup closed but the input is still held:\n  "
+                             + "\n  ".join(held))
+    driver.click(target)
+    driver.frame(max(int(frames), 1))
+    if not landed():
+        held = held_overlays(*(apps or (driver.app,)))
+        raise AssertionError(f"{prefix}the click on {target!r} after the popup closed did not "
+                             f"land" + (":\n  " + "\n  ".join(held) if held else ""))
+
+
+__all__ += ["held_overlays", "assert_input_released"]
+
+
 class SyntheticCanvas:
     """The event half of a ``rendercanvas`` canvas, with rendercanvas' own emitter.
 

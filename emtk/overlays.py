@@ -33,12 +33,15 @@ Everything is in the frame's logical coordinates.
 """
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from typing import Any, Optional
 
 from . import im_core as _core
 
-__all__ = ["popup", "combo_list", "take_choice", "is_open", "holding", "open_panels"]
+__all__ = ["popup", "combo_list", "take_choice", "is_open", "holding", "open_panels", "dismiss"]
+
+_log = logging.getLogger(__name__)
 
 
 def _state(key: Any) -> dict:
@@ -90,7 +93,26 @@ def popup(key: Any, panel, on_close=None, on_pick=None):
 
 
 def _run(ctx, state: dict) -> bool:
-    """One frame of an open popup: its input, then its drawing."""
+    """One frame of an open popup: its input, then its drawing.
+
+    A popup that raises is closed, not kept: an overlay holds the next frame's
+    input, so one that fails every frame would take every click in the window
+    with it and give none back.
+    """
+    try:
+        return _run_panel(ctx, state)
+    except Exception:  # noqa: BLE001 - logged; the window must keep its input
+        _log.exception("emtk.overlays: a popup failed to draw and was closed")
+        panel = state.get("panel")
+        if panel is not None:
+            panel.close()
+        state.pop("panel", None)
+        state.pop("picked", None)
+        ctx.request_frame()
+        return False
+
+
+def _run_panel(ctx, state: dict) -> bool:
     panel = state["panel"]
     io = ctx.io
     x, y, w, h = ctx.box
@@ -217,6 +239,48 @@ def holding(storage: dict) -> bool:
     to the frame, where it picks from the list or closes it.
     """
     return bool(storage.get("__overlays_open__"))
+
+
+def dismiss(storage: Optional[dict]) -> int:
+    """Close every popup up in the frames drawn with *storage*; how many there were.
+
+    For a host that draws several frames side by side (an app hosting others
+    with :meth:`emtk.app.ImApp.draw_child`): a press outside a hosted frame
+    never reaches it, so it cannot see the press that should close its context
+    menu or list. The host calls this for every frame the press did *not* go
+    to -- as a press anywhere outside a popup closes it -- and the frame's next
+    pass draws it closed and holds no input back for it.
+    """
+    if not storage:
+        return 0
+    closed = 0
+    for key, value in list(storage.items()):
+        if not (isinstance(key, tuple) and len(key) == 2 and key[0] == "__state__"
+                and isinstance(key[1], tuple) and isinstance(value, dict)):
+            continue
+        kind = key[1][:1]
+        if kind == ("overlay",) and value.get("panel") is not None:
+            panel = value["panel"]
+            if panel.open:
+                panel.close()
+                closed += 1
+                on_close = value.get("on_close")
+                if on_close is not None and "picked" not in value:
+                    try:
+                        on_close()
+                    except Exception:  # noqa: BLE001 - the popup is closed either way
+                        _log.exception("emtk.overlays: on_close failed")
+            value.pop("panel", None)
+        elif kind == ("context_popup",) and value.get("open"):
+            # As Context.close_current_popup: the state and its panel both.
+            value["open"] = False
+            value.pop("position", None)
+            if value.get("popup") is not None:
+                value["popup"].close()
+            closed += 1
+    storage["__overlays_open__"] = []
+    storage.pop("__replay_click__", None)
+    return closed
 
 
 def open_panels(storage: dict) -> list:

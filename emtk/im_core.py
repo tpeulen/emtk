@@ -28,6 +28,7 @@ scaffolder ``tools/port_imgui_widget.py`` emits both shapes.
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass, field
@@ -1630,8 +1631,15 @@ class Context:
             self.in_overlay = True
             try:
                 for key, draw in queued:
-                    if draw(self):
-                        still_open.append(key)
+                    # One that raises is gone: an overlay that stayed "open"
+                    # because it failed would hold every later frame's input.
+                    try:
+                        if draw(self):
+                            still_open.append(key)
+                    except Exception:  # noqa: BLE001 - logged; the input is released
+                        logging.getLogger(__name__).exception(
+                            "emtk: overlay %r failed to draw and was dropped", key)
+                        self.request_frame()
             finally:
                 self.in_overlay = False
                 self.p.pop_clip()
@@ -1923,8 +1931,13 @@ def frame(painter: Painter, box: Rect, io: Optional[IO] = None,
         try:
             yield ctx
         finally:
-            ctx.end_frame()
-            set_current_context(previous)
+            # The outer context comes back even when the frame's end raises: a hosted
+            # frame that failed there left itself current, and everything its host drew
+            # after it (the next docks) went into the dead child's frame and showed nothing.
+            try:
+                ctx.end_frame()
+            finally:
+                set_current_context(previous)
 
 
 def get_io() -> IO:
