@@ -1050,14 +1050,18 @@ class Driver:
         return list(self._rects)
 
     def rect(self, target):
-        """Resolve a named control or caption to its drawn rectangle."""
+        """Resolve a named control or caption to its drawn rectangle.
+
+        A caption drawn more than once resolves to the one drawn last -- the one on top,
+        which is where a click lands: an open menu's row over a list row of the same name.
+        """
         if self.painter is None:
             self.frame(2)
         if target in self._rects:
             return self._rects[target]
         hits = [entry[:4] for entry in self.painter.texts if entry[5] == target]
         if hits:
-            return hits[0]
+            return hits[-1]
         raise LookupError(f"{target!r} was not drawn; ids: {self.ids()!r}")
 
     def _point(self, target):

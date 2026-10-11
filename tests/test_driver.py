@@ -163,3 +163,39 @@ def test_undrawn_named_targets_are_not_clickable():
         driver.click('unavailable')
     driver.screenshot()
     assert 'unavailable' not in driver.ids()
+
+
+def test_a_caption_drawn_twice_resolves_to_the_one_on_top():
+    """An open menu's row over a list row of the same name: the click goes to the menu's."""
+    from emtk import im
+    from emtk.app import ImApp
+    from emtk.testing import Driver
+
+    picked: list[str] = []
+
+    class _App(ImApp):
+        def __init__(self) -> None:
+            super().__init__(self.gui)
+
+        def gui(self) -> None:
+            im.set_next_window_pos((0.0, 0.0), im.Cond.ALWAYS)
+            im.set_next_window_size(im.get_main_viewport().size, im.Cond.ALWAYS)
+            if im.begin("host", flags=im.WindowFlags.NO_TITLE_BAR | im.WindowFlags.NO_RESIZE):
+                if im.begin_menu_bar():
+                    if im.begin_menu("File"):
+                        if im.menu_item("Same"):
+                            picked.append("menu")
+                        im.end_menu()
+                    im.end_menu_bar()
+                for _ in range(3):
+                    im.text("filler")
+                if im.selectable("Same"):
+                    picked.append("list")
+            im.end()
+
+    driver = Driver(_App(), (400, 300))
+    driver.frame(2)
+    driver.click("File")
+    driver.frame(2)
+    driver.click("Same")
+    assert picked == ["menu"]
