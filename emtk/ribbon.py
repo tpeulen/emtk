@@ -55,6 +55,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import im_widgets as _w
+from .accents import AnyAccent, resolve
 from .i18n import mark, tr
 from .icons import draw_icon, icon_box
 from .im_core import Col, get_current_context
@@ -69,6 +70,8 @@ GROUP_PAD = 6.0
 COLUMN_GAP = 4.0
 #: Width of the search field in the tab row.
 SEARCH_WIDTH = 160.0
+#: Thickness of the accent line under a group (and along an accented button).
+ACCENT_LINE = 2.0
 #: The overflow button's glyph and the collapsed group's drop marker.
 OVERFLOW = "»"
 DROP = "▾"
@@ -102,6 +105,8 @@ class RibbonButton:
         A disabled button is drawn dimmed and does not fire; a callable is asked every frame.
     on_press : callable, optional
         Called when the button is pressed.
+    accent : emtk.style.Accent or ThemedAccent, optional
+        A button whose kind differs from its group's: a bar of this colour along its edge.
     """
 
     key: str
@@ -111,6 +116,7 @@ class RibbonButton:
     large: bool = False
     enabled: bool | Callable[[], bool] = True
     on_press: Callable[[], Any] | None = None
+    accent: AnyAccent | None = None
 
     def is_enabled(self) -> bool:
         """Whether the button fires now."""
@@ -119,10 +125,15 @@ class RibbonButton:
 
 @dataclass
 class RibbonGroup:
-    """A captioned run of buttons inside a tab."""
+    """A captioned run of buttons inside a tab.
+
+    ``accent`` (an :class:`emtk.style.Accent` or :class:`~emtk.style.ThemedAccent`) colours the caption and draws a line under the
+    group: the kind of task its tools are for, as the matching dock tabs show it.
+    """
 
     title: str
     buttons: list[RibbonButton] = field(default_factory=list)
+    accent: AnyAccent | None = None
 
     @property
     def icon(self) -> str:
@@ -518,11 +529,16 @@ class Ribbon:
                 hit = self._draw_collapsed(group, tab_title, cx + GROUP_PAD, y + 3.0, gw - GROUP_PAD * 2.0,
                                            height - 6.0)
             pressed = pressed or hit
+            accent = resolve(group.accent)
             if mode == "full":  # a collapsed group's button already carries its caption
                 caption = tr(group.title)
                 tw = self._text_w(caption)
-                ctx.draw.add_text((cx + (gw - tw) * 0.5, y + height - caption_h - 3.0),
-                                  _col(Col.TEXT_DISABLED), caption)
+                ink = accent.foreground if accent else _col(Col.TEXT_DISABLED)
+                ctx.draw.add_text((cx + (gw - tw) * 0.5, y + height - caption_h - 3.0), ink, caption)
+            if accent is not None:
+                ctx.draw.add_rect_filled((cx + GROUP_PAD, y + height - ACCENT_LINE - 1.0),
+                                         (cx + gw - GROUP_PAD, y + height - 1.0),
+                                         accent.foreground)
             sep_x = cx + gw
             ctx.draw.add_line((sep_x, y + 4.0), (sep_x, y + height - 4.0), _col(Col.SEPARATOR))
             cx = sep_x + 1.0
@@ -573,6 +589,11 @@ class Ribbon:
                             size, colour, button.is_enabled())
             tx += self._icon_slot()
         ctx.draw.add_text((tx, box[1] + pad_y), colour, tr(button.label))
+        accent = resolve(button.accent)
+        if accent is not None:
+            ctx.draw.add_rect_filled((box[0], box[1] + 3.0),
+                                     (box[0] + ACCENT_LINE + 1.0, box[1] + box[3] - 3.0),
+                                     accent.foreground)
         self.item_rects[f"{self.name}.button.{button.key}"] = tuple(box)
         return self._fire(button) if clicked else None
 
@@ -587,6 +608,10 @@ class Ribbon:
             self._draw_icon(button.icon, box[0] + (box[2] - size) * 0.5, box[1] + 4.0, size,
                             colour, button.is_enabled())
         ctx.draw.add_text((box[0] + (box[2] - lw) * 0.5, box[1] + box[3] - lh - 4.0), colour, label)
+        accent = resolve(button.accent)
+        if accent is not None:
+            ctx.draw.add_rect_filled((box[0] + 4.0, box[1] + box[3] - ACCENT_LINE),
+                                     (box[0] + box[2] - 4.0, box[1] + box[3]), accent.foreground)
         self.item_rects[f"{self.name}.button.{button.key}"] = tuple(box)
         return self._fire(button) if clicked else None
 

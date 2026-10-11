@@ -544,9 +544,29 @@ class ImApp:
                              or self.io.key_events or self.io.key or self.io.text
                              or self.io.mouse_wheel or self.io.mouse_wheel_h)
         self.io.ime_caret = None        # set again by the text widget that has the caret
-        with frame(painter, (x, y, w, h), io=self.io, style=self.style,
-                   storage=self.storage) as ctx:
-            self.gui()
+        from .style import current_ambient  # noqa: PLC0415
+
+        ambient = current_ambient()
+        style, saved = self.style, {}
+        if ambient:
+            # A host drawing this app inside a tinted region (emtk.style.ambient_colours):
+            # these colours for this frame, whatever the app's own style says.
+            if style is None:
+                from .im_core import Style  # noqa: PLC0415
+
+                style = Style()
+            saved = {role: style.colors.get(role) for role in ambient}
+            style.colors.update(ambient)
+        try:
+            with frame(painter, (x, y, w, h), io=self.io, style=style,
+                       storage=self.storage) as ctx:
+                self.gui()
+        finally:
+            for role, colour in saved.items():
+                if colour is None:
+                    style.colors.pop(role, None)
+                else:
+                    style.colors[role] = colour
         # Changes made late in an input frame (closing a panel, changing a
         # tab) need one clean redraw even when the host otherwise sleeps.
         self.wants_frame = input_changed or bool(getattr(ctx, "frame_requested", False))

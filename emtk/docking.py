@@ -84,6 +84,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 
 from . import im_core as _core
 from . import style as _style
+from .accents import header_colours, neutral_tab, resolve
 from .flags import WindowFlags
 from .i18n import tr
 
@@ -105,6 +106,7 @@ __all__ = [
     "Split",
     "DockWindow",
     "DockManager",
+    "ACCENT_STRIPE",
 ]
 
 logger = logging.getLogger(__name__)
@@ -599,6 +601,13 @@ class DockWindow:
         Space between the frame and the content box.
     tooltip : str
         What the window shows, on hovering its tab or title (before the move hint).
+    accent : emtk.style.Accent, emtk.style.ThemedAccent or None
+        The colour of the kind of task the window is for: its tab is drawn in it (strongly
+        when on top, muted behind), with a stripe under the tab strip, and a floating
+        window's title bar takes it. ``None`` draws the theme's tab colours.
+    header_tint : bool
+        Tint the section headers drawn inside the window with a muted share of its
+        :attr:`accent`.
     frame, content : (x, y, w, h) or None
         Where it was drawn last frame (``None`` when not drawn).
     """
@@ -618,6 +627,8 @@ class DockWindow:
     padding: float = 6.0
     scrollable: bool = True
     tooltip: str = ""
+    accent: Optional[Any] = None
+    header_tint: bool = False
     frame: Optional[Rect] = None
     content: Optional[Rect] = None
 
@@ -634,8 +645,8 @@ UNDOCK_DISTANCE = 14.0
 GRIP = 14.0
 #: The band drawn along an edge a dragged window is glued to.
 HINT_BAND = 3.0
-
-
+#: The accent stripe under a tab strip and along an inactive accented tab, logical pixels.
+ACCENT_STRIPE = 2.0
 _MISSING = object()
 
 
@@ -1978,13 +1989,15 @@ class DockManager:
                               "grab_x": io.mouse_pos[0] - tab[0] + 4.0}
                 ctx.set_active_id(item)
             active = key == top
-            colour = (_core.Col.TAB_SELECTED if active
-                      else (_core.Col.HEADER_HOVERED if hovered else _core.Col.TAB))
-            draw.add_rect_filled((tab[0], tab[1]), (tab[0] + tab[2], tab[1] + tab[3]),
-                                 style.color(colour))
+            accent = resolve(win.accent, style)
+            fill, ink = self._tab_colours(style, accent, active, hovered)
+            draw.add_rect_filled((tab[0], tab[1]), (tab[0] + tab[2], tab[1] + tab[3]), fill)
+            if accent is not None and not active:
+                # A muted tab keeps a line of its full colour, so the kind still reads at a glance.
+                draw.add_rect_filled((tab[0], tab[1]), (tab[0] + tab[2], tab[1] + ACCENT_STRIPE),
+                                     accent.fill)
             text_h = ctx.p.line_height()
-            draw.add_text((tab[0] + pad_x + 3.0, tab[1] + (tab[3] - text_h) / 2.0),
-                          style.color(_core.Col.TEXT), title)
+            draw.add_text((tab[0] + pad_x + 3.0, tab[1] + (tab[3] - text_h) / 2.0), ink, title)
             cursor += tw + 2.0
         ctx.p.pop_clip()
         self._tab_rects[region] = rects
@@ -1999,7 +2012,12 @@ class DockManager:
                 self._drag = {"kind": "tab", "region": region, "key": top, "id": item,
                               "start": tuple(io.mouse_pos), "grab_x": 40.0}
                 ctx.set_active_id(item)
-        draw.add_line((x, y + th), (x + w, y + th), style.color(_core.Col.TAB_SELECTED))
+        top_accent = resolve(top_win.accent, style) if top_win is not None else None
+        if top_accent is not None:
+            draw.add_rect_filled((x, y + th - ACCENT_STRIPE / 2.0),
+                                 (x + w, y + th + ACCENT_STRIPE / 2.0), top_accent.fill)
+        else:
+            draw.add_line((x, y + th), (x + w, y + th), style.color(_core.Col.TAB_SELECTED))
 
         for key in self.tabs[region]:
             if key != top:
@@ -2016,15 +2034,23 @@ class DockManager:
         x, y, w, fh = frame
         th = self._title_h
         win.frame = frame
-        draw.add_rect_filled((x, y), (x + w, y + th),
-                             style.color(_core.Col.TITLE_BG_ACTIVE if front
-                                         else _core.Col.TITLE_BG))
+        title_text = style.color(_core.Col.TEXT)
+        accent = resolve(win.accent, style)
+        if accent is None:
+            draw.add_rect_filled((x, y), (x + w, y + th),
+                                 style.color(_core.Col.TITLE_BG_ACTIVE if front
+                                             else _core.Col.TITLE_BG))
+        else:
+            title_bg, title_text = self._tab_colours(style, accent, front, False)
+            draw.add_rect_filled((x, y), (x + w, y + th), title_bg)
+            if not front:
+                draw.add_rect_filled((x, y), (x + w, y + ACCENT_STRIPE), accent.fill)
         # The buttons first: the first item to claim the pointer keeps it.
         fold = (x, y, th, th)
         if self._button(ctx, fold, self._id("fold", win.key), None):
             win.collapsed = not win.collapsed
             self._changed()
-        self._fold_arrow(draw, fold, win.collapsed, style.color(_core.Col.TEXT))
+        self._fold_arrow(draw, fold, win.collapsed, title_text)
         right = x + w
         if win.closable:
             close_rect = (x + w - th, y, th, th)
@@ -2054,7 +2080,7 @@ class DockManager:
         from .i18n import tr
 
         draw.add_text((title_rect[0] + 2.0, y + (th - text_h) / 2.0),
-                      style.color(_core.Col.TEXT), tr(win.title))
+                      title_text, tr(win.title))
         ctx.p.pop_clip()
         if win.collapsed:
             win.content = None
@@ -2138,14 +2164,41 @@ class DockManager:
         # status line above the dock, other font metrics) must not reset the window's scroll.
         ctx.begin_child(content, scrollable=win.scrollable, child_id=("dockwin", id(self), win.key))
         ctx.push_id(("dockwin", win.key))
+        tinted = 0
+        if win.header_tint and win.accent is not None:
+            for role, colour in header_colours(ctx.style, win.accent).items():
+                ctx.push_style_color(role, colour)
+                tinted += 1
         try:
             if win.draw is not None:
                 win.draw(content)
         except Exception:  # noqa: BLE001 - one window must not take the frame down
             logger.exception("emtk.docking: window %r failed to draw", win.key)
         finally:
+            ctx.pop_style_color(tinted)
             ctx.pop_id()
             ctx.end_child()
+
+    @staticmethod
+    def _tab_colours(style, accent: Optional[_style.Accent], active: bool,
+                     hovered: bool) -> Tuple[tuple, tuple]:
+        """``(background, text)`` of a tab (or a floating title bar) with *accent*.
+
+        Without one: the theme's tab colours. With one: :attr:`~emtk.style.Accent.fill` and its
+        text when *active*; otherwise the theme's tab colour with a muted share of the accent
+        (more of it under the pointer) and whichever text reads better on that.
+        """
+        text = style.color(_core.Col.TEXT)
+        if accent is None:
+            role = (_core.Col.TAB_SELECTED if active
+                    else (_core.Col.HEADER_HOVERED if hovered else _core.Col.TAB))
+            return style.color(role), text
+        if active:
+            return accent.fill, accent.text
+        base = neutral_tab(style)
+        share = min(accent.muted * (1.5 if hovered else 1.0), 1.0)
+        background = accent.mute(base, share)
+        return background, accent.muted_text(background, text)
 
     def _button(self, ctx, rect: Rect, item, label: Optional[str]) -> bool:
         """A title-bar button: highlighted under the pointer, pressed on release."""

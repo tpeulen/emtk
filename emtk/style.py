@@ -34,6 +34,8 @@ from __future__ import annotations
 
 import math
 import re
+from contextlib import contextmanager
+from dataclasses import dataclass
 
 #: Most horizontal bands a :func:`disc` is scan-converted into. A dot in this
 #: chrome is a handful of pixels across, so the cap costs nothing visible and
@@ -103,6 +105,15 @@ __all__ = [
     "fit_text",
     "format_value",
     "disc",
+    "Accent",
+    "ThemedAccent",
+    "parse_colour",
+    "relative_luminance",
+    "contrast_ratio",
+    "is_dark",
+    "most_readable",
+    "ambient_colours",
+    "current_ambient",
 ]
 
 #: A colour: ``(r, g, b)`` or ``(r, g, b, a)``, 0-255. Re-exported from
@@ -496,3 +507,174 @@ def use_palette(colours: dict) -> dict:
         previous[name] = module[name]
     module.update({name: tuple(colour) for name, colour in colours.items()})
     return previous
+
+
+# --------------------------------------------------------------------------
+# Accents: a colour that marks what a panel is for
+# --------------------------------------------------------------------------
+def parse_colour(value) -> tuple[int, int, int, int]:
+    """``"#rrggbb"``, ``"#rrggbbaa"`` or an ``(r, g, b[, a])`` tuple -> ``(r, g, b, a)``.
+
+    Raises
+    ------
+    ValueError
+        For anything else -- a palette file with a typo must fail where it is read.
+    """
+    if isinstance(value, str):
+        text = value.strip().lstrip("#")
+        if len(text) not in (6, 8) or not re.fullmatch(r"[0-9a-fA-F]+", text):
+            raise ValueError(f"{value!r} is not a #rrggbb colour")
+        channels = [int(text[i:i + 2], 16) for i in range(0, len(text), 2)]
+    else:
+        channels = [int(v) for v in value]
+        if len(channels) not in (3, 4) or not all(0 <= v <= 255 for v in channels):
+            raise ValueError(f"{value!r} is not an (r, g, b[, a]) colour")
+    return tuple(channels + [255] * (4 - len(channels)))
+
+
+def relative_luminance(colour: Colour) -> float:
+    """WCAG 2 relative luminance of *colour* (its alpha ignored), 0 (black) .. 1 (white)."""
+
+    def channel(v: float) -> float:
+        v = v / 255.0
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (channel(float(v)) for v in tuple(colour)[:3])
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contrast_ratio(a: Colour, b: Colour) -> float:
+    """WCAG 2 contrast ratio of two opaque colours, 1 .. 21 (text needs 4.5)."""
+    la, lb = relative_luminance(a), relative_luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def is_dark(colour: Colour) -> bool:
+    """Whether *colour* is a dark background (light text reads better on it than dark text)."""
+    return contrast_ratio(colour, (255, 255, 255)) >= contrast_ratio(colour, (0, 0, 0))
+
+
+def most_readable(background: Colour, *candidates: Colour) -> tuple[int, int, int, int]:
+    """The candidate text colour with the highest contrast on *background*."""
+    best = max(candidates, key=lambda c: contrast_ratio(background, c))
+    return parse_colour(best)
+
+
+@dataclass(frozen=True)
+class Accent:
+    """A colour that tells which kind of task a panel belongs to.
+
+    An application gives a dock window (:class:`emtk.docking.DockWindow`) or a ribbon group
+    (:class:`emtk.ribbon.RibbonGroup`) an accent; the toolkit draws the active tab in
+    :attr:`fill` with :attr:`text`, an inactive tab in a muted share of it, a stripe under
+    the tab strip and the group caption in :attr:`ink`. Which colours mean what is the
+    application's business (a palette file), so the class holds colours only.
+
+    Attributes
+    ----------
+    fill : Colour
+        The strong colour: an active tab's background.
+    text : Colour
+        Text on :attr:`fill` (white by default).
+    ink : Colour or None
+        The colour as a foreground on the window background (a caption, a stripe);
+        :attr:`fill` when not given.
+    muted : float
+        Share of :attr:`fill` mixed into the neutral background of an inactive tab or a
+        section header.
+    """
+
+    fill: Colour
+    text: Colour = (255, 255, 255, 255)
+    ink: Colour | None = None
+    muted: float = 0.35
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fill", parse_colour(self.fill))
+        object.__setattr__(self, "text", parse_colour(self.text))
+        if self.ink is not None:
+            object.__setattr__(self, "ink", parse_colour(self.ink))
+
+    @property
+    def foreground(self) -> tuple[int, int, int, int]:
+        """:attr:`ink`, else :attr:`fill`: the accent drawn as a line or a caption."""
+        return self.ink if self.ink is not None else self.fill
+
+    def mute(self, base: Colour, share: float | None = None) -> tuple[int, int, int, int]:
+        """*base* (a neutral background) with :attr:`muted` (or *share*) of :attr:`fill`, *base*'s alpha kept."""
+        mixed = lerp_colour(base, self.fill, self.muted if share is None else share)
+        alpha = tuple(base)[3] if len(tuple(base)) > 3 else 255
+        return (mixed[0], mixed[1], mixed[2], alpha)
+
+    def mute_readable(self, base: Colour, text: Colour, share: float = 0.55,
+                      behind: Colour | None = None, minimum: float = 4.5) -> tuple[int, int, int, int]:
+        """:meth:`mute` *base* with the largest share up to *share* that keeps *text* readable.
+
+        For a background whose text colour is not the accent's to choose (a section header, a
+        child window's title bar): the tint backs off until *text* has *minimum* contrast on
+        it. A translucent result is judged over *behind* (the window background). When no
+        share reaches *minimum*, the one with the best contrast.
+        """
+        best, best_ratio = None, -1.0
+        steps = max(int(round(share / 0.05)), 0)
+        for i in range(steps, -1, -1):
+            colour = self.mute(base, share * i / steps if steps else 0.0)
+            seen = colour
+            if behind is not None and colour[3] < 255:
+                seen = lerp_colour(behind, colour, colour[3] / 255.0)
+            ratio = contrast_ratio(seen, text)
+            if ratio >= minimum:
+                return colour
+            if ratio > best_ratio:
+                best, best_ratio = colour, ratio
+        return best
+
+    def muted_text(self, background: Colour, text: Colour) -> tuple[int, int, int, int]:
+        """The better of the theme's *text* and :attr:`text` on a muted *background*."""
+        return most_readable(background, text, self.text)
+
+
+
+@dataclass(frozen=True)
+class ThemedAccent:
+    """An :class:`Accent` for each theme; the one for the window background drawn on is used.
+
+    An application declares a kind's colour once per theme; the toolkit picks by the
+    background's lightness (:func:`is_dark`) at draw time, so a theme switch needs no
+    re-assignment.
+    """
+
+    dark: Accent
+    light: Accent
+
+    def resolve(self, background: Colour) -> Accent:
+        """:attr:`dark` on a dark *background*, else :attr:`light`."""
+        return self.dark if is_dark(background) else self.light
+
+
+#: The colours apps drawn now take over their own (innermost last); see :func:`ambient_colours`.
+_AMBIENT: list[dict] = []
+
+
+@contextmanager
+def ambient_colours(colours: dict):
+    """While inside, every :class:`emtk.app.ImApp` drawn takes *colours* (``Col`` role -> colour).
+
+    A host that draws other apps inside a region (``ImApp.draw_child``) uses it to give the
+    region's look to whatever is drawn there -- also to the apps those apps host in turn,
+    which a change of the child's own style would not reach. Nested blocks merge, the inner
+    one winning.
+    """
+    merged = dict(_AMBIENT[-1]) if _AMBIENT else {}
+    merged.update(colours)
+    _AMBIENT.append(merged)
+    try:
+        yield merged
+    finally:
+        _AMBIENT.pop()
+
+
+def current_ambient() -> dict:
+    """The colours of the innermost :func:`ambient_colours` block (empty outside any)."""
+    return _AMBIENT[-1] if _AMBIENT else {}
