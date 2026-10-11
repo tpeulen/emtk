@@ -898,7 +898,18 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
     spacing = _core.get_style().item_inner_spacing[0]
     labels = [_button_label(item, model) for item in buttons]
     natural = [_button_natural(label) for label in labels]
-    for line in _flow(natural, width, spacing):
+    lines = _flow(natural, width, spacing)
+    if len(lines) > 1:
+        # Balanced, not greedy: the same number of lines, as even as they go,
+        # so a wrap never leaves one button stretched alone across the row.
+        cap = (sum(natural) + spacing * (len(natural) - 1)) / len(lines)
+        while cap < width:
+            even = _flow(natural, cap, spacing)
+            if len(even) <= len(lines):
+                lines = even
+                break
+            cap += 4.0
+    for line in lines:
         room = width - spacing * (len(line) - 1)
         need = sum(natural[i] for i in line)
         for k, i in enumerate(line):
@@ -1289,6 +1300,11 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
         if indent + least > avail + 0.5:
             indent = 0.0
         widths = _share(run, label_w, fixed_w, min_w, weight, avail - indent, spacing)
+        if len(run) == 1 and avail > 0:
+            # A control alone on its line never runs past it: a weight-0 button row
+            # sized to its labels then wraps inside the line instead of leaving the window.
+            c = run[0]
+            widths[c] = min(widths[c], max(avail - indent - label_w[c], 30.0))
         # A lone control whose label leaves it less than its minimum would start past the right edge (or as a
         # sliver of it) and draw empty: the label goes on a line of its own above the control instead.
         stacked = (len(run) == 1 and label_w[run[0]] > 0
