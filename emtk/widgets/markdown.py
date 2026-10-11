@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .. import im
+from ..i18n import tr
 from ..im_core import Col
 
 __all__ = ["MarkdownBlock", "parse_markdown", "render_markdown"]
@@ -499,7 +500,7 @@ def render_markdown(
                 caption, _ = _format_inline_text(block.text)
                 im.push_font("sans-serif")
                 im.push_style_color(Col.TEXT, (175, 185, 200, 255))
-                im.text_wrapped(f"Figure: {caption}")
+                im.text_wrapped(tr("Figure: {caption}", domain="emtk").format(caption=caption))
                 im.pop_style_color()
                 im.pop_font()
             im.dummy(0.0, 6.0)
@@ -507,9 +508,9 @@ def render_markdown(
         elif block.kind == "code":
             im.dummy(0.0, 3.0)
             lang_label = f" [{block.arg}]" if block.arg else ""
-            im.text_disabled(f"Code{lang_label}")
+            im.text_disabled(tr("Code", domain="emtk") + lang_label)
             im.same_line()
-            if im.small_button(f"Copy##cp_{idx}"):
+            if im.small_button(tr("Copy", domain="emtk") + f"##cp_{idx}"):
                 try:
                     from ..clipboard import set_clipboard_text
 

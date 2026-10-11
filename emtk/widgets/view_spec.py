@@ -344,6 +344,11 @@ class ViewSpecPanel:
         What the settings edit and the tables read.
     on_change : callable, optional
         ``on_change(attr, value)`` after a setting is written.
+    domain : str, optional
+        The translation domain of the spec's labels, descriptions and help
+        (the application's, e.g. ``"myapp"``); defaults to the spec's own
+        ``"domain"`` key. While the panel draws, :func:`emtk.i18n.tr` searches
+        it first, so a spec translates without a ``tr()`` at any call site.
     visible_rows : int
         Accepted for existing callers. The form now scrolls with its window
         rather than limiting the number of setting rows.
@@ -358,12 +363,13 @@ class ViewSpecPanel:
 
     def __init__(self, spec: dict, model: Any,
                  on_change: Callable[[str, Any], None] | None = None,
-                 visible_rows: int = 6) -> None:
+                 visible_rows: int = 6, domain: str | None = None) -> None:
         from ..app import ImApp
         from ..view_form import FormState
 
         self.spec = spec
         self.model = model
+        self.domain = domain or (spec.get("domain") if isinstance(spec, dict) else None)
         self.settings = model_from_view_spec(spec, model, on_change)
         self.form_state = FormState(on_used=self._used)
         self.tables = table_bindings(spec, model)
@@ -429,21 +435,22 @@ class ViewSpecPanel:
         width = max(float(im.get_content_region_avail()[0]), 60.0)
         spacing = im.get_style().item_spacing[0]
         field_w = max((width - spacing) / 2.0, 30.0)
-        groups = [tr("< all >"), *self.settings.groups()]
+        groups = [tr("< all >", domain="emtk"), *self.settings.groups()]
         self._group = min(self._group, len(groups) - 1)
         im.set_next_item_width(field_w)
         _, self._group = im.combo("##view-spec-group", self._group, groups)
         self.form_state.rects["view_spec.group"] = tuple(im.get_item_rect())
-        im.set_item_tooltip(tr("Show settings from one group or all groups."))
+        im.set_item_tooltip(tr("Show settings from one group or all groups.", domain="emtk"))
         im.same_line()
         im.set_next_item_width(field_w)
-        _, self._filter = im.input_text("##view-spec-filter", self._filter, hint=tr("filter"))
+        _, self._filter = im.input_text("##view-spec-filter", self._filter, hint=tr("filter", domain="emtk"))
         self.form_state.rects["view_spec.filter"] = tuple(im.get_item_rect())
-        im.set_item_tooltip(tr("Filter settings by their name or description."))
+        im.set_item_tooltip(tr("Filter settings by their name or description.", domain="emtk"))
 
     def _gui(self) -> None:
         """Draw form sections using their grid, followed by retained tables."""
         from .. import im
+        from ..i18n import use_domain
         from ..view_form import draw_sections
         from .data_table import draw_table
 
@@ -453,6 +460,8 @@ class ViewSpecPanel:
                  | im.WindowFlags.NO_RESIZE | im.WindowFlags.NO_SAVED_SETTINGS)
         self.form_state.rects.clear()
         im.begin("##view-spec-panel", box, flags=flags)
+        scope = use_domain(self.domain)
+        scope.__enter__()
         try:
             self._toolbar()
             draw_sections(self._sections(self.spec.get("sections")), self.model,
@@ -469,6 +478,7 @@ class ViewSpecPanel:
                 draw_table(binding, name, height=height)
                 self.form_state.rects[name] = tuple(im.get_item_rect())
         finally:
+            scope.__exit__()
             im.end()
 
     def draw(self, painter, x: float, y: float, w: float, h: float) -> None:

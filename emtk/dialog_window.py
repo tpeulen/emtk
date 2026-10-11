@@ -145,7 +145,9 @@ class DialogWindow:
             if _w.button(f"{label}##{self.key}.header.{label}", (bw, bh)):
                 pressed = "close" if label == "×" else label
             if label == "×":
-                _w.set_item_tooltip("Close this window (Escape).")
+                from .i18n import tr
+
+                _w.set_item_tooltip(tr("Close this window (Escape).", domain="emtk"))
             on_button = on_button or _w.is_item_hovered()
             bx += bw + 4.0
 

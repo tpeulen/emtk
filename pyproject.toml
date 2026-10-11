@@ -44,7 +44,7 @@ include = ["emtk*"]
 # a checkout and fails on an install. `web/*` is the browser host's page and
 # loader, copied into every site `python -m emtk.web.serve` builds.
 emtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png", "wgsl/*.wgsl",
-        "web/*.js", "web/*.html"]
+        "web/*.js", "web/*.html", "i18n/locales/*.ts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1814,13 +1814,14 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
 def _column_picker(control: DataTable, name: str) -> None:
     """Keep the header's column list up while it is open; apply what is picked."""
     from .. import overlays
+    from ..i18n import mark
     from .menus import MenuItem, Popup
 
     if control.picker_at is not None:
         keys = [c.key for c in control.columns if c.visible]
         items = [MenuItem(c.title or c.key, checked=c.key not in control.hidden, checkable=True)
                  for c in control.columns if c.visible]
-        panel = Popup(items, title="Columns")
+        panel = Popup(items, title=mark("Columns", domain="emtk"))
         panel.open_at(*control.picker_at)
         control.picker_panel, control._picker_keys = panel, keys
         control.picker_at = None

@@ -85,6 +85,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 from . import im_core as _core
 from . import style as _style
 from .flags import WindowFlags
+from .i18n import tr
 
 __all__ = [
     "SNAP_DISTANCE",
@@ -1965,7 +1966,8 @@ class DockManager:
             hovered = ctx.item_add(tab, item)
             if hovered:
                 ctx.set_tooltip(f"{tr(win.tooltip) if win.tooltip else title}\n"
-                                "Drag to move this panel; right-click for panel actions.")
+                                + tr("Drag to move this panel; right-click for panel actions.",
+                                     domain="emtk"))
             if hovered and io.mouse_clicked[1]:
                 self._open_context(ctx, region, key)
             if hovered and io.mouse_clicked[0] and self._drag is None:
@@ -2101,26 +2103,27 @@ class DockManager:
         ctx.begin(f"##{self.name}.context-window.{scope}", menu_box)
         if win is not None:
             if self.region_of(win.key) is not None:
-                if im.menu_item("Undock", enabled=win.movable):
+                if im.menu_item(tr("Undock", domain="emtk"), enabled=win.movable):
                     self.undock(win.key)
                     im.close_current_popup()
             elif win.dockable:
                 for region in self.regions:
-                    if im.menu_item(f"Dock in {region}"):
+                    if im.menu_item(tr("Dock in {region}", domain="emtk").format(region=region)):
                         self.dock(win.key, region)
                         im.close_current_popup()
-            if im.menu_item("Close panel", enabled=win.closable):
+            if im.menu_item(tr("Close panel", domain="emtk"), enabled=win.closable):
                 self.hide(win.key)
                 im.close_current_popup()
             im.separator()
         for key, panel in self.windows.items():
-            if not panel.visible and im.menu_item(f"Show {panel.title}##{key}"):
+            if not panel.visible and im.menu_item(
+                    tr("Show {title}", domain="emtk").format(title=tr(panel.title)) + f"##{key}"):
                 self.show(key)
                 region = self.region_of(key)
                 if region is not None:
                     self.selected[region] = key
                 im.close_current_popup()
-        if im.menu_item("Restore default layout"):
+        if im.menu_item(tr("Restore default layout", domain="emtk")):
             self.reset()
             im.close_current_popup()
         ctx.end()
@@ -2150,8 +2153,9 @@ class DockManager:
         if hovered:
             from .i18n import tr
 
-            ctx.set_tooltip(tr("Close this panel; reopen it from a dock header context menu.")
-                            if label == "×" else tr("Collapse or expand this panel."))
+            ctx.set_tooltip(tr("Close this panel; reopen it from a dock header context menu.",
+                               domain="emtk")
+                            if label == "×" else tr("Collapse or expand this panel.", domain="emtk"))
         if hovered or held:
             x, y, w, h = rect
             ctx.draw.add_rect_filled((x + 2.0, y + 2.0), (x + w - 2.0, y + h - 2.0),

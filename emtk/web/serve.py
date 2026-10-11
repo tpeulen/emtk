@@ -96,8 +96,9 @@ DEFAULT_PYODIDE_PACKAGES = ("numpy", "Pillow")
 
 #: File types packed into the archive: code and the data an app reads at run
 #: time. Anything else in a package directory (build output, notebooks,
-#: compiled extensions for *this* platform) stays behind.
-INCLUDE_SUFFIXES = (".py", ".wgsl", ".json", ".png", ".txt", ".csv", ".toml",
+#: compiled extensions for *this* platform) stays behind. ``.ts`` is a translation
+#: catalogue (:mod:`emtk.i18n`), read at run time like the JSON.
+INCLUDE_SUFFIXES = (".py", ".wgsl", ".json", ".png", ".txt", ".csv", ".toml", ".ts",
                     ".yaml", ".yml", ".js", ".html", ".css", ".md")
 
 #: Directory names never packed.

@@ -20,6 +20,12 @@ from __future__ import annotations
 
 import pytest
 
+# The suite asserts English text: the language a test run starts in must not
+# depend on the machine's locale or an EMTK_LANG left in the shell.
+from emtk import i18n as _i18n
+
+_i18n.set_language("en")
+
 
 @pytest.fixture(autouse=True)
 def _no_system_clipboard(monkeypatch):

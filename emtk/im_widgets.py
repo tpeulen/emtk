@@ -1645,11 +1645,13 @@ def input_float(label: str, v: float, step: float = 0.0,
         ctx.push_id(label)
         if arrow_button("##-", Dir.LEFT):
             v, changed = v - by, True
-        set_item_tooltip(f"Decrease the value by {by:g}; hold the primary modifier for the larger step.")
+        set_item_tooltip(tr("Decrease the value by {step}; hold the primary modifier for the larger "
+                            "step.", domain="emtk").format(step=f"{by:g}"))
         same_line(0.0, ctx.style.item_inner_spacing[0])
         if arrow_button("##+", Dir.RIGHT):
             v, changed = v + by, True
-        set_item_tooltip(f"Increase the value by {by:g}; hold the primary modifier for the larger step.")
+        set_item_tooltip(tr("Increase the value by {step}; hold the primary modifier for the larger "
+                            "step.", domain="emtk").format(step=f"{by:g}"))
         same_line(0.0, ctx.style.item_inner_spacing[0])
         ctx.pop_id()
     edited, v = drag_float(label, v, max(step, 0.01) or 0.01, fmt=fmt)
@@ -1994,11 +1996,13 @@ def color_edit3(label: str, col) -> tuple[bool, tuple]:
         set_next_item_width(channel_width)
         edited, values[index] = drag_float(f"##{channel}", float(values[index]),
                                            1.0, 0.0, 255.0, "%.0f")
-        set_item_tooltip(f"{visible or 'Color'}: {channel} channel (0–255)")
+        set_item_tooltip(tr("{name}: {channel} channel (0–255)", domain="emtk").format(
+            name=visible or tr("Color", domain="emtk"), channel=channel))
         changed = changed or edited
     same_line(0.0, spacing)
     color_button("##swatch", tuple(int(v) for v in values), size=(side, _frame_height(ctx)))
-    set_item_tooltip(f"{visible or 'Color'} preview")
+    set_item_tooltip(tr("{name} preview", domain="emtk").format(
+        name=visible or tr("Color", domain="emtk")))
     if visible and not label_above:
         same_line(0.0, spacing)
         box = ctx.layout.row(height=_frame_height(ctx), width=label_width)

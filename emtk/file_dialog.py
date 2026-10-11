@@ -41,6 +41,7 @@ from collections.abc import Sequence
 
 from . import im_core as _core
 from . import im_widgets as _w
+from .i18n import mark, tr
 
 __all__ = ["FileDialog", "parse_filters"]
 
@@ -71,7 +72,7 @@ def parse_filters(spec: str) -> list[tuple[str, list[str]]]:
         patterns = [part.strip() for part in body.split() if part.strip()]
         if label and patterns:
             sections.append((label, patterns))
-    return sections or [("All files", ["*"])]
+    return sections or [(mark("All files", domain="emtk"), ["*"])]
 
 
 class FileDialog:
@@ -117,7 +118,7 @@ class FileDialog:
     """
 
     def __init__(self, title: str = "Open", mode: str = "open",
-                 filters: Sequence | str = (("All files", ("*",)),),
+                 filters: Sequence | str = ((mark("All files", domain="emtk"), ("*",)),),
                  directory: str | None = None, filename: str = "",
                  multiselect: bool = False, action: str | None = None,
                  rows: int = 12) -> None:
@@ -127,13 +128,16 @@ class FileDialog:
         self.mode = mode
         self.filters = (parse_filters(filters) if isinstance(filters, str)
                         else [(str(label), [str(p) for p in patterns])
-                              for label, patterns in filters]) or [("All files", ["*"])]
+                              for label, patterns in filters]) or [
+                                  (mark("All files", domain="emtk"), ["*"])]
         self.filter_index = 0
         start = os.path.abspath(os.path.expanduser(directory or os.getcwd()))
         self.directory = start if os.path.isdir(start) else os.path.expanduser("~")
         self.filename = filename
         self.multiselect = bool(multiselect) and mode == "open"
-        self.action = action or {"save": "Save", "folder": "Choose"}.get(mode, "Open")
+        self.action = action or {"save": mark("Save", domain="emtk"),
+                                  "folder": mark("Choose", domain="emtk")}.get(
+            mode, mark("Open", domain="emtk"))
         self.rows = max(1, int(rows))
         self.selection: list[str] = []
         self.error = ""
@@ -262,14 +266,14 @@ class FileDialog:
         """
         paths = self.chosen()
         if not paths:
-            self.error = ("Enter a file name." if self.mode == "save"
-                          else "Select a file first.")
+            self.error = (mark("Enter a file name.", domain="emtk") if self.mode == "save"
+                          else mark("Select a file first.", domain="emtk"))
             return None
         if self.mode == "open" and not all(os.path.isfile(p) for p in paths):
-            self.error = "No such file."
+            self.error = mark("No such file.", domain="emtk")
             return None
         if self.mode == "folder" and not all(os.path.isdir(p) for p in paths):
-            self.error = "No such folder."
+            self.error = mark("No such folder.", domain="emtk")
             return None
         self.error = ""
         return paths
@@ -285,20 +289,22 @@ class FileDialog:
             the frame Cancel is pressed, ``None`` while the dialog stays open.
         """
         if self._pending_overwrite is not None:
-            _w.text_wrapped(f"Replace the existing file?\n{self._pending_overwrite[0]}")
-            if _w.button("Replace existing file"):
+            _w.text_wrapped(tr("Replace the existing file?", domain="emtk")
+                            + f"\n{self._pending_overwrite[0]}")
+            if _w.button(tr("Replace existing file", domain="emtk")):
                 paths = self._pending_overwrite
                 self._pending_overwrite = None
                 self.overwrite_confirmed = True
                 return paths
-            _w.set_item_tooltip("Replace this existing file with the new output.")
-            if _w.button("Choose another name"):
+            _w.set_item_tooltip(tr("Replace this existing file with the new output.", domain="emtk"))
+            if _w.button(tr("Choose another name", domain="emtk")):
                 self._pending_overwrite = None
-            _w.set_item_tooltip("Return to the file chooser without replacing the file.")
-            if _w.button("Cancel"):
+            _w.set_item_tooltip(tr("Return to the file chooser without replacing the file.",
+                                   domain="emtk"))
+            if _w.button(tr("Cancel", domain="emtk")):
                 self._pending_overwrite = None
                 return False
-            _w.set_item_tooltip("Cancel saving; leave the existing file unchanged.")
+            _w.set_item_tooltip(tr("Cancel saving; leave the existing file unchanged.", domain="emtk"))
             return None
         self.refresh()
         result: list[str] | bool | None = None
@@ -336,52 +342,56 @@ class FileDialog:
                     result = self.choose()
                 elif picked:
                     self.select(name)
-            _w.set_item_tooltip(("Open this folder." if is_folder else "Select this file.")
+            _w.set_item_tooltip((tr("Open this folder.", domain="emtk") if is_folder
+                                 else tr("Select this file.", domain="emtk"))
                                 + "\n" + os.path.join(self.directory, name))
         for _ in range(self.rows - len(entries[start:start + self.rows])):
             _w.dummy(1.0, _core.get_frame_height())
         if pages > 1:
-            if _w.small_button("< prev") and self.page > 0:
+            if _w.small_button(tr("< prev", domain="emtk")) and self.page > 0:
                 self.page -= 1
-            _w.set_item_tooltip("Show the previous page of files.")
+            _w.set_item_tooltip(tr("Show the previous page of files.", domain="emtk"))
             _w.same_line()
-            _w.text_disabled(f"page {self.page + 1} / {pages}")
+            _w.text_disabled(tr("page {page} / {pages}", domain="emtk").format(
+                page=self.page + 1, pages=pages))
             _w.same_line()
-            if _w.small_button("next >") and self.page < pages - 1:
+            if _w.small_button(tr("next >", domain="emtk")) and self.page < pages - 1:
                 self.page += 1
-            _w.set_item_tooltip("Show the next page of files.")
+            _w.set_item_tooltip(tr("Show the next page of files.", domain="emtk"))
         _w.separator()
 
         if self.mode == "save":
             _w.set_next_item_width(-1.0)
-            _changed, name = _w.input_text("##file-dialog-name", self.filename, "file name")
+            _changed, name = _w.input_text("##file-dialog-name", self.filename,
+                                          tr("file name", domain="emtk"))
             self.filename = name.replace("\r", "").replace("\n", "")
-            _w.set_item_tooltip("Enter the output file name; the selected format supplies its extension.")
+            _w.set_item_tooltip(tr("Enter the output file name; the selected format supplies its "
+                                   "extension.", domain="emtk"))
         elif self.mode == "folder":
             _w.text_disabled(self.chosen()[0])
         else:
-            shown = ", ".join(self.selection) if self.selection else "(nothing selected)"
+            shown = ", ".join(self.selection) if self.selection else tr("(nothing selected)", domain="emtk")
             _w.text_disabled(shown)
 
         if self.mode != "folder":
-            labels = [label for label, _patterns in self.filters]
+            labels = [tr(label) for label, _patterns in self.filters]
             changed, index = _w.combo("##file-dialog-filter", self.filter_index, labels)
-            _w.set_item_tooltip("Choose which file formats to list or save.")
+            _w.set_item_tooltip(tr("Choose which file formats to list or save.", domain="emtk"))
             if changed and index != self.filter_index:
                 self.filter_index = index
                 self.refresh()
 
-        if _w.button(self.action, (90.0, 0.0)):
+        if _w.button(tr(self.action, domain="emtk"), (90.0, 0.0)):
             result = self.choose()
-        _w.set_item_tooltip({"save": "Save to the chosen output file.",
-                            "folder": "Use the selected folder.",
-                            "open": "Open the selected files."}[self.mode])
+        _w.set_item_tooltip({"save": tr("Save to the chosen output file.", domain="emtk"),
+                            "folder": tr("Use the selected folder.", domain="emtk"),
+                            "open": tr("Open the selected files.", domain="emtk")}[self.mode])
         _w.same_line()
-        if _w.button("Cancel", (90.0, 0.0)):
+        if _w.button(tr("Cancel", domain="emtk"), (90.0, 0.0)):
             result = False
-        _w.set_item_tooltip("Close the file chooser without selecting a path.")
+        _w.set_item_tooltip(tr("Close the file chooser without selecting a path.", domain="emtk"))
         if self.error:
-            _w.text_colored(ERROR_COLOUR, self.error)
+            _w.text_colored(ERROR_COLOUR, tr(self.error, domain="emtk"))
         if isinstance(result, list) and self.mode == "save" and os.path.isfile(result[0]):
             self.overwrite_confirmed = False
             self._pending_overwrite = result

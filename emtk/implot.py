@@ -71,6 +71,7 @@ from .implot_internal import gp, has_flag
 from .implot_internal import rgba as _rgba
 from .implot_items import *  # noqa: F401,F403  (the items)
 from .painter import line as _line
+from .i18n import mark
 
 #: The spelling this module used before the port. ``_cur.plot`` is the plot
 #: between ``begin_plot`` and ``end_plot``.
@@ -1691,12 +1692,12 @@ def _show_menu_window(plot, subplot) -> None:
         if kind == "plot":
             close = show_plot_context_menu(plot, subplot)
         elif kind == "legend":
-            _w.text("Legend")
+            _w.text(mark("Legend", domain="emtk"))
             _w.separator()
             if show_legend_context_menu(plot.items.legend, not has_flag(plot.flags, I.FLAGS_NO_LEGEND)):
                 plot.flags ^= I.FLAGS_NO_LEGEND
         elif kind == "subplot_legend":
-            _w.text("Legend")
+            _w.text(mark("Legend", domain="emtk"))
             _w.separator()
             if show_legend_context_menu(subplot.items.legend,
                                         not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_LEGEND)):
@@ -1732,7 +1733,7 @@ def show_axis_context_menu(axis, equal_axis=None, time_allowed: bool = False) ->
     label, grid = axis.has_label(), axis.has_grid_lines()
     ticks, labels = axis.has_tick_marks(), axis.has_tick_labels()
     drag_speed = I.DBL_EPSILON * 1.0e13 if axis.range_size() <= I.DBL_EPSILON else 0.01 * axis.range_size()
-    for which in ("Min", "Max"):
+    for which in (mark("Min", domain="emtk"), mark("Max", domain="emtk")):
         flag = I.AXIS_FLAGS_LOCK_MIN if which == "Min" else I.AXIS_FLAGS_LOCK_MAX
         _w.begin_disabled(always_locked)
         _changed, axis.flags = _w.checkbox_flags("##Lock" + which, axis.flags, flag)
@@ -1752,20 +1753,20 @@ def show_axis_context_menu(axis, equal_axis=None, time_allowed: bool = False) ->
                 equal_axis.set_aspect(axis.get_aspect())
         _w.end_disabled()
     _w.separator()
-    _changed, axis.flags = _w.checkbox_flags("Auto-Fit", axis.flags, I.AXIS_FLAGS_AUTO_FIT)
+    _changed, axis.flags = _w.checkbox_flags(mark("Auto-Fit", domain="emtk"), axis.flags, I.AXIS_FLAGS_AUTO_FIT)
     _w.separator()
-    _changed, axis.flags = _w.checkbox_flags("Invert", axis.flags, I.AXIS_FLAGS_INVERT)
-    _changed, axis.flags = _w.checkbox_flags("Opposite", axis.flags, I.AXIS_FLAGS_OPPOSITE)
+    _changed, axis.flags = _w.checkbox_flags(mark("Invert", domain="emtk"), axis.flags, I.AXIS_FLAGS_INVERT)
+    _changed, axis.flags = _w.checkbox_flags(mark("Opposite", domain="emtk"), axis.flags, I.AXIS_FLAGS_OPPOSITE)
     _w.separator()
     _w.begin_disabled(not axis.label)
-    if _w.checkbox("Label", label)[0]:
+    if _w.checkbox(mark("Label", domain="emtk"), label)[0]:
         axis.flags ^= I.AXIS_FLAGS_NO_LABEL
     _w.end_disabled()
-    if _w.checkbox("Grid Lines", grid)[0]:
+    if _w.checkbox(mark("Grid Lines", domain="emtk"), grid)[0]:
         axis.flags ^= I.AXIS_FLAGS_NO_GRID_LINES
-    if _w.checkbox("Tick Marks", ticks)[0]:
+    if _w.checkbox(mark("Tick Marks", domain="emtk"), ticks)[0]:
         axis.flags ^= I.AXIS_FLAGS_NO_TICK_MARKS
-    if _w.checkbox("Tick Labels", labels)[0]:
+    if _w.checkbox(mark("Tick Labels", domain="emtk"), labels)[0]:
         axis.flags ^= I.AXIS_FLAGS_NO_TICK_LABELS
     _w.pop_item_width()
 
@@ -1774,14 +1775,14 @@ def show_legend_context_menu(legend, visible: bool) -> bool:
     """``ShowLegendContextMenu``: returns True when "Show" was toggled."""
     s = _core.get_frame_height()
     ret = False
-    if _w.checkbox("Show", visible)[0]:
+    if _w.checkbox(mark("Show", domain="emtk"), visible)[0]:
         ret = True
     if legend.can_go_inside:
-        _changed, legend.flags = _w.checkbox_flags("Outside", legend.flags, I.LEGEND_FLAGS_OUTSIDE)
-    if _w.radio_button("H", has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)):
+        _changed, legend.flags = _w.checkbox_flags(mark("Outside", domain="emtk"), legend.flags, I.LEGEND_FLAGS_OUTSIDE)
+    if _w.radio_button(mark("H", domain="emtk"), has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)):
         legend.flags |= I.LEGEND_FLAGS_HORIZONTAL
     _w.same_line()
-    if _w.radio_button("V", not has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)):
+    if _w.radio_button(mark("V", domain="emtk"), not has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)):
         legend.flags &= ~I.LEGEND_FLAGS_HORIZONTAL
     grid = (("NW", I.LOCATION_NORTH_WEST), ("N", I.LOCATION_NORTH), ("NE", I.LOCATION_NORTH_EAST),
             ("W", I.LOCATION_WEST), ("C", None), ("E", I.LOCATION_EAST),
@@ -1798,21 +1799,21 @@ def show_legend_context_menu(legend, visible: bool) -> bool:
 
 def show_subplots_context_menu(subplot) -> None:
     """``ShowSubplotsContextMenu``."""
-    if _w.begin_menu("Linking"):
-        for name, flag in (("Link Rows", I.SUBPLOT_FLAGS_LINK_ROWS), ("Link Cols", I.SUBPLOT_FLAGS_LINK_COLS),
-                           ("Link All X", I.SUBPLOT_FLAGS_LINK_ALL_X), ("Link All Y", I.SUBPLOT_FLAGS_LINK_ALL_Y)):
+    if _w.begin_menu(mark("Linking", domain="emtk")):
+        for name, flag in ((mark("Link Rows", domain="emtk"), I.SUBPLOT_FLAGS_LINK_ROWS), (mark("Link Cols", domain="emtk"), I.SUBPLOT_FLAGS_LINK_COLS),
+                           (mark("Link All X", domain="emtk"), I.SUBPLOT_FLAGS_LINK_ALL_X), (mark("Link All Y", domain="emtk"), I.SUBPLOT_FLAGS_LINK_ALL_Y)):
             if _w.menu_item(name, "", has_flag(subplot.flags, flag)):
                 subplot.flags ^= flag
         _w.end_menu()
-    if _w.begin_menu("Settings"):
-        if _w.menu_item("Title", "", subplot.has_title and not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_TITLE),
+    if _w.begin_menu(mark("Settings", domain="emtk")):
+        if _w.menu_item(mark("Title", domain="emtk"), "", subplot.has_title and not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_TITLE),
                         subplot.has_title):
             subplot.flags ^= I.SUBPLOT_FLAGS_NO_TITLE
-        if _w.menu_item("Resizable", "", not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_RESIZE)):
+        if _w.menu_item(mark("Resizable", domain="emtk"), "", not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_RESIZE)):
             subplot.flags ^= I.SUBPLOT_FLAGS_NO_RESIZE
-        if _w.menu_item("Align", "", not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_ALIGN)):
+        if _w.menu_item(mark("Align", domain="emtk"), "", not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_ALIGN)):
             subplot.flags ^= I.SUBPLOT_FLAGS_NO_ALIGN
-        if _w.menu_item("Share Items", "", has_flag(subplot.flags, I.SUBPLOT_FLAGS_SHARE_ITEMS)):
+        if _w.menu_item(mark("Share Items", domain="emtk"), "", has_flag(subplot.flags, I.SUBPLOT_FLAGS_SHARE_ITEMS)):
             subplot.flags ^= I.SUBPLOT_FLAGS_SHARE_ITEMS
         _w.end_menu()
 
@@ -1826,7 +1827,7 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
         if not ax.enabled or not ax.has_menus():
             continue
         _w.push_id(("x", i))
-        if _w.begin_menu(ax.label if ax.has_label() else ("X-Axis" if i == 0 else f"X-Axis {i + 1}")):
+        if _w.begin_menu(ax.label if ax.has_label() else (mark("X-Axis", domain="emtk") if i == 0 else f"X-Axis {i + 1}")):
             show_axis_context_menu(ax, ax.ortho_axis if equal else None)
             _w.end_menu()
         _w.pop_id()
@@ -1835,13 +1836,13 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
         if not ax.enabled or not ax.has_menus():
             continue
         _w.push_id(("y", i))
-        if _w.begin_menu(ax.label if ax.has_label() else ("Y-Axis" if i == 0 else f"Y-Axis {i + 1}")):
+        if _w.begin_menu(ax.label if ax.has_label() else (mark("Y-Axis", domain="emtk") if i == 0 else f"Y-Axis {i + 1}")):
             show_axis_context_menu(ax, ax.ortho_axis if equal else None)
             _w.end_menu()
         _w.pop_id()
     _w.separator()
     if not has_flag(plot.items.legend.flags, I.LEGEND_FLAGS_NO_MENUS):
-        if _w.begin_menu("Legend"):
+        if _w.begin_menu(mark("Legend", domain="emtk")):
             if subplot is not None and has_flag(subplot.flags, I.SUBPLOT_FLAGS_SHARE_ITEMS):
                 if show_legend_context_menu(subplot.items.legend,
                                             not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_LEGEND)):
@@ -1849,11 +1850,11 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
             elif show_legend_context_menu(plot.items.legend, not has_flag(plot.flags, I.FLAGS_NO_LEGEND)):
                 plot.flags ^= I.FLAGS_NO_LEGEND
             _w.end_menu()
-    if _w.begin_menu("Settings"):
-        for name, flag, on in (("Equal", I.FLAGS_EQUAL, True), ("Box Select", I.FLAGS_NO_BOX_SELECT, False),
-                               ("Title", I.FLAGS_NO_TITLE, False),
-                               ("Mouse Position", I.FLAGS_NO_MOUSE_TEXT, False),
-                               ("Crosshairs", I.FLAGS_CROSSHAIRS, True)):
+    if _w.begin_menu(mark("Settings", domain="emtk")):
+        for name, flag, on in ((mark("Equal", domain="emtk"), I.FLAGS_EQUAL, True), (mark("Box Select", domain="emtk"), I.FLAGS_NO_BOX_SELECT, False),
+                               (mark("Title", domain="emtk"), I.FLAGS_NO_TITLE, False),
+                               (mark("Mouse Position", domain="emtk"), I.FLAGS_NO_MOUSE_TEXT, False),
+                               (mark("Crosshairs", domain="emtk"), I.FLAGS_CROSSHAIRS, True)):
             state = has_flag(plot.flags, flag) if on else not has_flag(plot.flags, flag)
             enabled = plot.title is not None if name == "Title" else True
             if _w.menu_item(name, "", state if name != "Title" else plot.has_title(), enabled):
@@ -1862,7 +1863,7 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
         _w.end_menu()
     if subplot is not None and not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_MENUS):
         _w.separator()
-        if _w.begin_menu("Subplots"):
+        if _w.begin_menu(mark("Subplots", domain="emtk")):
             show_subplots_context_menu(subplot)
             _w.end_menu()
     return close

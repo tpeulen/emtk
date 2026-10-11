@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .. import im
+from ..i18n import tr
 from ..im_core import Col
 from ..painter import Colour
 
@@ -177,12 +178,12 @@ def draw_chat_transcript(
 
     if not messages:
         im.dummy(0.0, 16.0)
-        im.text_colored((140, 170, 210, 255), "ChiSurf AI Assistant")
+        im.text_colored((140, 170, 210, 255), tr("ChiSurf AI Assistant", domain="emtk"))
         im.dummy(0.0, 4.0)
-        im.text_disabled("Ready to assist with scripting, burst analysis,")
-        im.text_disabled("and ChiSurf algorithms.")
+        im.text_disabled(tr("Ready to assist with scripting, burst analysis,", domain="emtk"))
+        im.text_disabled(tr("and ChiSurf algorithms.", domain="emtk"))
         im.dummy(0.0, 8.0)
-        im.text_disabled("Type a message below and click Send.")
+        im.text_disabled(tr("Type a message below and click Send.", domain="emtk"))
         im.end_child()
         return
 
@@ -192,13 +193,13 @@ def draw_chat_transcript(
         # Sender header badge
         role = msg.role.lower()
         if role == "user":
-            im.text_colored((110, 190, 255, 255), "> You")
+            im.text_colored((110, 190, 255, 255), tr("> You", domain="emtk"))
         elif role == "assistant":
-            im.text_colored((130, 220, 140, 255), "Assistant")
+            im.text_colored((130, 220, 140, 255), tr("Assistant", domain="emtk"))
         elif role == "tool":
-            im.text_colored((235, 185, 95, 255), "[Tool]")
+            im.text_colored((235, 185, 95, 255), tr("[Tool]", domain="emtk"))
         elif role == "error":
-            im.text_colored((245, 110, 110, 255), "[Error]")
+            im.text_colored((245, 110, 110, 255), tr("[Error]", domain="emtk"))
         else:
             im.text_colored((180, 180, 180, 255), f"[{msg.role.capitalize()}]")
 
@@ -211,25 +212,25 @@ def draw_chat_transcript(
                 elif b_type == "code":
                     im.dummy(0.0, 3.0)
                     lang_tag = f" [{b_lang}]" if b_lang else ""
-                    im.text_disabled(f"Code{lang_tag}")
+                    im.text_disabled(tr("Code", domain="emtk") + lang_tag)
                     im.same_line()
-                    if im.small_button(f"Copy##c_{b_idx}"):
+                    if im.small_button(tr("Copy", domain="emtk") + f"##c_{b_idx}"):
                         try:
                             from ..clipboard import set_clipboard_text
                             set_clipboard_text(b_content)
                         except Exception:
                             pass
-                    im.set_item_tooltip("Copy this code block to the clipboard.")
+                    im.set_item_tooltip(tr("Copy this code block to the clipboard.", domain="emtk"))
                     if on_insert_code:
                         im.same_line()
-                        if im.small_button(f"Insert##ins_{b_idx}"):
+                        if im.small_button(tr("Insert", domain="emtk") + f"##ins_{b_idx}"):
                             on_insert_code(b_content)
-                        im.set_item_tooltip("Insert this code at the active editor cursor.")
+                        im.set_item_tooltip(tr("Insert this code at the active editor cursor.", domain="emtk"))
                     if on_replace_code:
                         im.same_line()
-                        if im.small_button(f"Replace##rep_{b_idx}"):
+                        if im.small_button(tr("Replace", domain="emtk") + f"##rep_{b_idx}"):
                             on_replace_code(b_content)
-                        im.set_item_tooltip("Replace the selected editor text with this code.")
+                        im.set_item_tooltip(tr("Replace the selected editor text with this code.", domain="emtk"))
 
                     # Code box display
                     im.push_style_color(Col.FRAME_BG, (20, 22, 28, 255))
@@ -245,20 +246,20 @@ def draw_chat_transcript(
                 t_status = tc.get("status", "running")
                 status_icon = "..." if t_status == "running" else ("[ok]" if t_status == "success" else "[x]")
                 
-                header_title = f"{status_icon} Tool: {t_name}"
+                header_title = f"{status_icon} " + tr("Tool: {name}", domain="emtk").format(name=t_name)
                 if im.collapsing_header(header_title):
                     args_str = str(tc.get("arguments", ""))
                     if args_str:
-                        im.text_disabled("Arguments:")
+                        im.text_disabled(tr("Arguments:", domain="emtk"))
                         im.text_wrapped(args_str)
                     output_str = str(tc.get("output", ""))
                     if output_str:
-                        im.text_disabled("Output:")
+                        im.text_disabled(tr("Output:", domain="emtk"))
                         im.text_wrapped(output_str)
                 im.pop_id()
 
         if msg.status == "streaming":
-            im.text_colored((130, 215, 140, 255), "... Thinking...")
+            im.text_colored((130, 215, 140, 255), tr("... Thinking...", domain="emtk"))
 
         im.dummy(0.0, 4.0)
         im.separator()
@@ -286,7 +287,7 @@ def draw_chat_input_bar(
     """
     avail_w = im.get_content_region_avail()[0]
     changed, new_prompt = im.input_text_multiline("##chat_input", prompt_text, size=(avail_w, input_height))
-    im.set_item_tooltip("Write a message for the assistant.")
+    im.set_item_tooltip(tr("Write a message for the assistant.", domain="emtk"))
     
     send_requested = False
     
@@ -296,27 +297,27 @@ def draw_chat_input_bar(
     if is_generating:
         im.push_style_color(Col.BUTTON, (180, 50, 50, 255))
         im.push_style_color(Col.BUTTON_HOVERED, (210, 70, 70, 255))
-        if im.button("■ Stop", (80.0, 26.0)):
+        if im.button("■ " + tr("Stop", domain="emtk"), (80.0, 26.0)):
             if on_cancel:
                 on_cancel()
-        im.set_item_tooltip("Stop the current assistant response.")
+        im.set_item_tooltip(tr("Stop the current assistant response.", domain="emtk"))
         im.pop_style_color(2)
     else:
         can_send = bool(new_prompt.strip())
         im.push_style_color(Col.BUTTON, (46, 140, 67, 255) if can_send else (60, 65, 75, 255))
         im.push_style_color(Col.BUTTON_HOVERED, (56, 160, 77, 255) if can_send else (60, 65, 75, 255))
-        if im.button("▶ Send", (90.0, 26.0)) and can_send:
+        if im.button("▶ " + tr("Send", domain="emtk"), (90.0, 26.0)) and can_send:
             send_requested = True
             if on_send:
                 on_send(new_prompt)
             new_prompt = ""
-        im.set_item_tooltip("Send this message to the assistant." if can_send else "Write a message before sending.")
+        im.set_item_tooltip(tr("Send this message to the assistant.", domain="emtk") if can_send else tr("Write a message before sending.", domain="emtk"))
         im.pop_style_color(2)
 
     im.same_line()
-    if im.button("Clear", (70.0, 26.0)):
+    if im.button(tr("Clear", domain="emtk"), (70.0, 26.0)):
         if on_clear:
             on_clear()
-    im.set_item_tooltip("Clear the conversation history.")
+    im.set_item_tooltip(tr("Clear the conversation history.", domain="emtk"))
 
     return new_prompt, send_requested
