@@ -4,6 +4,11 @@
     <context>
         <name>emtk</name>
         <message>
+            <location filename="emtk/widgets/auto_range.py" line="45" />
+            <source>Auto-range: fit the view to the data</source>
+            <translation>Plage auto : ajuster la vue aux données</translation>
+        </message>
+        <message>
             <location filename="emtk/file_dialog.py" line="373" />
             <source>(nothing selected)</source>
             <translation>(aucune sélection)</translation>

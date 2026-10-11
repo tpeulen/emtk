@@ -701,7 +701,7 @@ def setup_finish() -> None:
             if ya.ortho_axis is None and not equal:
                 ya.ortho_axis = plot.axes[I.AXIS_X1]
     _layout(plot, first_pass=True)
-    if not has_flag(plot.flags, I.FLAGS_NO_INPUTS):
+    if not has_flag(plot.flags, I.FLAGS_NO_INPUTS) and not _auto_range_input(plot):
         _update_input(plot)
     for i, axis in enumerate(plot.axes):
         if gp.next_plot_data.fit[i] or axis.is_auto_fitting():
@@ -747,6 +747,63 @@ def _plot_button_behavior(rect, item_id, buttons=_BUTTONS):
         ctx.hovered_id_allow_overlap = True
         ctx.active_id_allow_overlap = True
     return pressed, hovered, held
+
+
+def _auto_range_shown(plot) -> bool:
+    """emtk: whether the plot shows its "A" button (:mod:`emtk.widgets.auto_range`).
+
+    While an axis the user can move no longer follows its data -- it was
+    panned, zoomed, wheeled or box-selected -- unless the plot opted out or
+    takes no input at all.
+    """
+    if has_flag(plot.flags, I.FLAGS_NO_INPUTS) or has_flag(plot.flags, I.FLAGS_NO_AUTO_RANGE_BUTTON):
+        return False
+    return any(ax.enabled and not ax.follow and not ax.is_range_locked() for ax in plot.axes)
+
+
+def _auto_range_rect(plot):
+    """The "A" button's ``(x, y, w, h)`` in the plot area."""
+    from .widgets import auto_range
+
+    pr = plot.plot_rect
+    return auto_range.button_rect(pr[0], pr[1], pr[2] - pr[0], pr[3] - pr[1])
+
+
+def _auto_range_input(plot) -> bool:
+    """emtk: hover and click on the "A" button; ``True`` when a click took it.
+
+    Tested before the plot's own input, so the button claims the pointer and a
+    press on it never starts a pan. The click does what a double-click does:
+    every axis fits its data and follows it again.
+    """
+    plot.auto_range_hovered = False
+    if not _auto_range_shown(plot):
+        return False
+    from .widgets import auto_range
+
+    ctx = _ctx()
+    item_id = (plot.id, "##auto-range")
+    if not ctx.item_hoverable(_auto_range_rect(plot), item_id):
+        return False
+    plot.auto_range_hovered = True
+    ctx.set_tooltip(auto_range.tooltip(), owner=item_id)
+    if not ctx.io.mouse_clicked[0]:
+        return False
+    ctx.set_active_id(item_id)
+    plot.fit_this_frame = True
+    for ax in plot.axes:
+        ax.fit_this_frame = True
+        ax.follow = True
+    return True
+
+
+def _render_auto_range(plot) -> None:
+    """Draw the "A" button over the plot area while the view is not auto-ranged."""
+    if not _auto_range_shown(plot):
+        return
+    from .widgets import auto_range
+
+    auto_range.draw(_dl().p, _auto_range_rect(plot), getattr(plot, "auto_range_hovered", False))
 
 
 def _interacted(axis) -> None:
@@ -1402,6 +1459,7 @@ def end_plot() -> None:
         _render_background(plot)
         _replay_queue(plot)
         _end_plot_render(plot, ctx, io, style, dl)
+        _render_auto_range(plot)
     finally:
         for axis in plot.axes:
             axis.push_links()

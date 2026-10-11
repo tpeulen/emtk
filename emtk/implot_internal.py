@@ -65,6 +65,9 @@ FLAGS_NO_BOX_SELECT = 1 << 5
 FLAGS_NO_FRAME = 1 << 6
 FLAGS_EQUAL = 1 << 7
 FLAGS_CROSSHAIRS = 1 << 8
+#: emtk: no "A" auto-range button for a plot whose view must stay where the
+#: caller put it (see :mod:`emtk.widgets.auto_range`). Not in ImPlot.
+FLAGS_NO_AUTO_RANGE_BUTTON = 1 << 9
 FLAGS_CANVAS_ONLY = (FLAGS_NO_TITLE | FLAGS_NO_LEGEND | FLAGS_NO_MENUS
                      | FLAGS_NO_BOX_SELECT | FLAGS_NO_MOUSE_TEXT)
 
