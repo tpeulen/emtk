@@ -80,8 +80,12 @@ table needs them and neither dialect had them:
     range) or ``"table"`` (one range for every column). A column that says
     ``"shade": false`` is never shaded (a row number, an identifier). The ramp is a hue sweep
     at fixed saturation, as the Qt table's, so the text stays legible;
-``reserve`` (with ``expand``)
-    the height left free under an expanding table, for the rows after it;
+``expand``
+    the table takes the height left in its region less what is drawn after
+    it -- measured, not declared: the rows under it (a button row, a status
+    line) are measured at the end of the region and left room for from the
+    next frame on (:class:`emtk.layout.Fill`). Two expanding tables in one
+    region share the room. ``height`` is the first frame's guess;
 ``min_column_width``
     columns never get narrower than this; when they do not fit, the table
     scrolls sideways (a bar under the rows, the horizontal wheel, or shift and
@@ -164,6 +168,7 @@ from ..keys import (
     KEY_RIGHT,
     KEY_UP,
 )
+from ..layout import Fill
 from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 from ..script_text import draw_script_text, script_width
 from ..style import fit_text
@@ -1597,7 +1602,9 @@ class TableBinding:
     height : float
         The section's ``height`` (default 240, as in the Qt renderer).
     expand : bool
-        Fill the spare height.
+        Fill the height left in the region, less what is drawn after the table.
+    fill : emtk.layout.Fill
+        What an expanding table measured of the rows after it, last frame.
     """
 
     def __init__(self, section: Mapping, model: Any) -> None:
@@ -1626,8 +1633,8 @@ class TableBinding:
         #: rather than to ``height``; ``height``, when given, then caps it.
         self.fit_rows = bool(merged.get("fit_rows", False))
         self.max_height = float(merged["height"]) if merged.get("height") else 0.0
-        #: Height an expanding table leaves free under it, for the rows that follow.
-        self.reserve = float(merged.get("reserve", 0) or 0)
+        #: What an expanding table learned about the rows drawn after it.
+        self.fill = Fill()
         self._declared_columns = list(merged.get("columns") or [])
         self.editable_call = str(merged.get("editable_call", "") or "")
         self.expanded_attr = str(merged.get("expanded_attr", "") or "")
@@ -1854,8 +1861,10 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         if binding.max_height:
             h = min(h, binding.max_height)
     else:
-        h = max(float(avail_h) - binding.reserve, 60.0) if binding.expand else binding.height
+        h = binding.fill.height(avail_h, binding.height, 60.0) if binding.expand else binding.height
     box = ctx.layout.row(height=h, width=w)
+    if height is None and not binding.fit_rows and binding.expand:
+        ctx.layout.add_fill(binding.fill, box)
     item_id = ctx.get_id(f"##table-{name}")
     hovered = ctx.item_add(box, item_id)
     control = binding.control

@@ -2733,6 +2733,9 @@ def begin_tab_bar(str_id: str) -> bool:
     header = Layout(ctx.p, x, y, width, header_height, style=parent.style)
     body = Layout(ctx.p, x, y + header_height + gap, width,
                   max(0.0, height - header_height - gap), style=parent.style)
+    # The body ends where the bar's parent does, and the parent goes on after
+    # the bar: what an expanding item in a page leaves room for is measured there.
+    body.enclosing = parent
     layouts.append({"parent": parent, "header": header, "body": body,
                     "width": width, "height": header_height, "gap": gap})
     ctx.layout = header

@@ -624,6 +624,10 @@ class Context:
         The overlays (:meth:`add_overlay`) are drawn first: over everything
         the frame drew.
         """
+        # The root region is done: a fill (an expanding table) that learned what
+        # follows it lays itself out again in the next frame.
+        if self.layout.settle_fills():
+            self.request_frame()
         self.draw_overlays()
         # Last, over everything -- the overlays included.
         from . import tooltip as _tooltip  # noqa: PLC0415
@@ -1311,6 +1315,8 @@ class Context:
         if not self._window_stack:
             return
         window = self._window_stack[-1]
+        if self.layout.settle_fills():
+            self.request_frame()
         reached = (max(self.layout.content_width(), 1.0),
                    max(self.layout.content_height(), 1.0))
         window.content_size = reached
@@ -1460,6 +1466,8 @@ class Context:
 
         actual_content_h = self.layout.content_height()
         state["content_height"] = actual_content_h
+        if self.layout.settle_fills():
+            self.request_frame()
 
         if pushed_clip:
             self.p.pop_clip()

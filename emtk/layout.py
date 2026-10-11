@@ -70,6 +70,7 @@ from .painter import Painter
 __all__ = [
     "FRAME_PADDING",
     "ITEM_SPACING",
+    "Fill",
     "LayoutStyle",
     "Layout",
 ]
@@ -231,6 +232,15 @@ class Layout:
         self._origin_y = float(y)
         self._groups: list[_GroupState] = []
         self._columns: _ColumnState | None = None
+        #: The layout this one is a part of, when its box ends where this one's
+        #: does and it goes on laying out after this one is done -- a tab bar's
+        #: body inside the window it sits in. What follows a :class:`Fill` is
+        #: measured there, so the rows after the tab bar count too.
+        self.enclosing: Layout | None = None
+        #: The fills laid out in this region this frame, for :meth:`settle_fills`:
+        #: ``(fill, bottom, height)`` in the order they were placed. A frame
+        #: :meth:`reset` keeps them -- they are settled by whoever ends the region.
+        self._fills: list[tuple[Fill, float, float]] = []
         self.reset()
 
     # ------------------------------------------------------------------ #
@@ -738,6 +748,51 @@ class Layout:
         return columns.off_min_x + span * (index / columns.count)
 
     # ------------------------------------------------------------------ #
+    # Filling the room left
+    # ------------------------------------------------------------------ #
+    def region(self) -> Layout:
+        """The outermost layout whose box ends where this one's does."""
+        layout = self
+        while layout.enclosing is not None:
+            layout = layout.enclosing
+        return layout
+
+    def add_fill(self, fill: Fill, box: Rect) -> None:
+        """Record that *fill* was just laid out as *box*, for :meth:`settle_fills`.
+
+        A fill placed twice in one region before it settles (a host that never
+        ends the region) keeps only its latest place.
+        """
+        region = self.region()
+        bottom = float(box[1]) + float(box[3])
+        region._fills = [r for r in region._fills if r[0] is not fill]
+        region._fills.append((fill, bottom, float(box[3])))
+
+    def settle_fills(self) -> bool:
+        """Measure what was laid out after each fill; tell it for the next frame.
+
+        Called when the region is done -- :meth:`emtk.im_core.Context.end_child`,
+        ``end`` and ``end_frame`` -- so :attr:`content_height` is the region's
+        last row. Each fill learns the height of everything after it, the fills
+        after it excluded (they share the room, see :meth:`Fill.height`).
+
+        Returns
+        -------
+        bool
+            Whether a fill learned something new -- the frame just drawn laid it
+            out wrong and the host should draw another.
+        """
+        records, self._fills = self._fills, []
+        changed = False
+        for index, (fill, bottom, _) in enumerate(records):
+            later = records[index + 1:]
+            tail = float(ceil(max(self._max_y - bottom - sum(r[2] for r in later), 0.0)))
+            if fill.tail != tail or fill.later != len(later):
+                fill.tail, fill.later = tail, len(later)
+                changed = True
+        return changed
+
+    # ------------------------------------------------------------------ #
     # Measurement
     # ------------------------------------------------------------------ #
     def _work_right(self) -> float:
@@ -798,3 +853,60 @@ class Layout:
         not report itself one gap too tall and grow a scrollbar for nothing.
         """
         return self._max_y - self._origin_y
+
+
+class Fill:
+    """An item that takes the height left in its region, less what follows it.
+
+    An expanding table is drawn before the rows under it (a button row, a
+    status line), so in the frame it is laid out it cannot know how tall they
+    are. A fill remembers: :meth:`Layout.settle_fills` measures, at the end of
+    the region, how far the content went past the fill, and the next frame's
+    :meth:`height` leaves exactly that much free. What follows never changes
+    height with the fill, so the measurement is final after one frame and the
+    fill does not move again until the rows after it do (a translation, a
+    label that wraps under its field, a resize that re-flows a button row) --
+    each of which is again one frame to settle. That replaces a hand-set
+    "reserve" number, which was wrong the moment anything below changed size.
+
+    Attributes
+    ----------
+    tail : float or None
+        Height of what was laid out after the fill last frame (the other fills
+        after it excluded); ``None`` before its first frame.
+    later : int
+        How many fills came after it in the same region. They share the room
+        evenly with it.
+    """
+
+    __slots__ = ("tail", "later")
+
+    def __init__(self) -> None:
+        self.tail: float | None = None
+        self.later = 0
+
+    def height(self, avail: float, first: float, minimum: float = 0.0) -> float:
+        """The fill's height this frame.
+
+        Parameters
+        ----------
+        avail : float
+            The room from the cursor to the bottom of the region.
+        first : float
+            The height to use before anything has been measured (the first
+            frame), capped by *avail*.
+        minimum : float
+            Never smaller than this; what follows then runs past the region and
+            scrolls with it, rather than the fill vanishing.
+
+        Returns
+        -------
+        float
+            A whole number of pixels, so the measurement cannot wobble by a
+            rounding pixel from frame to frame.
+        """
+        if self.tail is None:
+            height = min(float(first), float(avail))
+        else:
+            height = (float(avail) - self.tail) / (1 + self.later)
+        return float(max(floor(height), float(minimum)))

@@ -293,7 +293,13 @@ not change the spec or the defaults of ``view_form.draw_form``.
 The panel retains the group selector and setting search above the fields.
 Descriptions are hover tooltips. Tables retain filtering, sorting, selection
 callbacks and source refresh, with expanding tables sharing the remaining
-height. Pointer and keyboard events are applied on the next ``draw``, following
+height. In a form drawn by ``view_form``, an ``expand`` table leaves exactly
+the room the rows after it take (fields, a button row, a status line drawn by
+the host): they are measured at the end of the region -- the window, child or
+the frame -- and the table is laid out to fit from the next frame on
+(``emtk.layout.Fill``). There is no height to declare for them; a translation,
+a label that stacks under its field or a re-flowed button row settles in one
+frame. Pointer and keyboard events are applied on the next ``draw``, following
 the usual ``ImApp`` contract. Table cell editors and filters preserve the
 host-normalized keyboard modifiers: Ctrl+A (Command+A on macOS) selects all,
 and typing replaces the selection. Enter commits a cell; Escape cancels it.
