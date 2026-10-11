@@ -27,19 +27,27 @@ together. The CPU painters additionally retain their existing text device-scale
 convention, while QuadPainter reports logical dimensions.
 
 Generic ``sans-serif``/``sans`` and ``serif`` families resolve to available
-system faces. Unknown named families, unavailable bold/italic faces, invalid
-attributes and invalid sizes raise an explicit error rather than appearing to
-change settings while drawing the same font. The baked face includes regular
-and bold glyphs; italic requires an actual system family such as Menlo or
-DejaVu Sans Mono.
+system faces. ``prose`` -- the face :mod:`emtk.type_scale` sets running text
+and headings in -- resolves to Verdana, else DejaVu Sans / Bitstream Vera Sans:
+the proportional relatives of the Menlo (DejaVu Sans Mono) chrome, with the
+same x-height and screen spacing, so prose sits beside the interface without
+looking smaller or thinner. Unknown named families, unavailable bold/italic
+faces, invalid attributes and invalid sizes raise an explicit error rather than
+appearing to change settings while drawing the same font. The baked face
+includes regular and bold glyphs; italic requires an actual system family such
+as Menlo or DejaVu Sans Mono.
 
-Selected faces use a shared bounded glyph-texture cache (512 entries), loaded
-font cache (64 entries), and text-position cache (128 entries). Raster glyphs
-cap at 48 pixels and scale for larger point sizes, trading sharpness at large
-sizes for bounded atlas occupancy. Layout uses actual family advances, with
-prefix kerning positions; this is not a complete contextual-script shaping
-engine. Unsupported characters retain the selected font's visible missing-glyph
-shape rather than silently disappearing.
+Selected faces are laid out at 512 px, where hinting is lost in the noise, so
+widths and pen positions are linear in the size (kerning pairs included; this
+is not a complete contextual-script shaping engine). A glyph is rasterised at
+the **exact** device em (not rounded to a whole pixel) and at one of four
+sub-pixel pen phases, then drawn one texel per device pixel with nearest
+sampling on a baseline snapped once per line: every pen lands within 1/8 device
+pixel of the layout, and nothing is resampled. Rasters cap at 64 device pixels
+and scale beyond that. The glyph-texture cache holds 4096 entries. Characters
+the face lacks come from the shared fallback list (Menlo, Arial Unicode, Apple
+Symbols, SF for the late subscripts ``ₖ ₘ ₙ``, ...). ``tests/test_prose_glyph_placement.py``
+pins the placement.
 
 GPU hosts must install the existing image-atlas resolver; WgpuRenderer.painter
 does this automatically. A missing/full resolver produces an explicit font

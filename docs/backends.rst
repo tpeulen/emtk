@@ -115,7 +115,12 @@ is a texel coordinate ``>= 0``, so the fragment shader picks the texture
 from the sign alone. That keeps one draw call and keeps images in the
 interface's draw order -- text drawn after an image lands *on* it.
 ``emtk.gpu_atlas.ImageAtlas`` is where a :class:`~emtk.texture.Texture` is
-placed, and the host installs it as the painter's ``image_uv_resolver``.
+placed, and the host installs it as the painter's ``image_uv_resolver``. It
+starts at 1024 texels square; when the live images no longer fit it repacks,
+then grows (doubling, up to 4096 or the device's texture limit -- the host
+makes a new texture), then stores the newcomer scaled down. An image is never
+declined, so it never degrades to a flat tinted (often blank white)
+rectangle; an image longer than 2048 px is stored at 2048.
 
 What the host uploads lives in ``emtk.gpu_atlas``: the combined glyph atlas
 (baked rows on top, the runtime cache underneath -- a host that uploads only
