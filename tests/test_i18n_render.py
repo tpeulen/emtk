@@ -164,3 +164,16 @@ def test_plot_title_and_axis_labels_are_translated_where_they_are_shown():
     drawn = set(painter.strings)
     assert {"Synthetischer Zerfall", "Zählungen", "Mikrozeit (ns)"} <= drawn, drawn
     assert not {"Synthetic decay", "Counts", "Micro-time (ns)"} & drawn
+
+
+def test_a_caption_padded_to_a_column_is_still_translated():
+    """chisurf pads field captions with spaces so separate grids share one label column.
+
+    The padded source ("Rate      ") is in no catalogue, so every padded caption of 19 tools
+    drew English in a German session (found by chisurf's real-use language matrix).
+    """
+    from emtk.view_form import _tr_label
+
+    assert _tr_label("Rate      ##rate") == "Wiederholungsrate des Lasers      ##rate"
+    assert _tr_label("  Mode") == "  Betriebsart der Messung"
+    assert _tr_label("   ") == "   "

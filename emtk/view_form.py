@@ -856,7 +856,16 @@ def _tr_label(label: Any) -> str:
     clipped every German toolbar button.
     """
     text, sep, ident = str(label).partition("##")
-    return tr(text) + sep + ident if text else str(label)
+    if not text:
+        return str(label)
+    # Whitespace a layout added to align a caption column is not part of the source:
+    # translate the words and keep the padding, or a padded caption is never found.
+    core = text.strip()
+    if not core:
+        return str(label)
+    lead = text[: len(text) - len(text.lstrip())]
+    trail = text[len(text.rstrip()):]
+    return lead + tr(core) + trail + sep + ident
 
 
 def _flow(widths: Sequence[float], room: float, spacing: float) -> list[list[int]]:
