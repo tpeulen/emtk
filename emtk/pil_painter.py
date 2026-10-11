@@ -32,6 +32,7 @@ from __future__ import annotations
 import math
 
 from .font import load_atlas
+from .icons import caption_width, draw_caption, pictogram_runs
 from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER
 
 __all__ = ["PilPainter"]
@@ -238,6 +239,19 @@ class PilPainter:
         self._polygon([(float(px), float(py)) for px, py in points], colour)
 
     def text(self, x, y, w, h, align, string, colour, bold=False) -> None:
+        """Draw *string* aligned inside the box; a colour pictogram in it as an image.
+
+        The runs and their layout are :func:`emtk.icons.draw_caption`'s, measured
+        exactly as :meth:`text_width` measures them.
+        """
+        runs = pictogram_runs(string)
+        if runs is None:
+            self._text_run(x, y, w, h, align, string, colour, bold)
+            return
+        draw_caption(self, runs, x, y, w, h, align, colour, bold, self._text_run,
+                     self._text_run_width, self.line_height())
+
+    def _text_run(self, x, y, w, h, align, string, colour, bold=False) -> None:
         if self._font_spec is not None:
             from .font_render import draw_text
             draw_text(self, self._font_spec, self.scale * self._font_scale,
@@ -364,6 +378,13 @@ class PilPainter:
         return Image.frombytes("RGBA", (width, height), rgba).getchannel("A")
 
     def text_width(self, string) -> float:
+        """Advance width of *string*; a colour pictogram counts one small icon box."""
+        runs = pictogram_runs(string)
+        if runs is None:
+            return self._text_run_width(string)
+        return caption_width(runs, self._text_run_width, self.line_height())
+
+    def _text_run_width(self, string) -> float:
         if self._font_spec is not None:
             from .font_render import text_width
             return text_width(self._font_spec, string, self.scale * self._font_scale)

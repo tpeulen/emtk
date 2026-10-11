@@ -43,6 +43,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from .font import Atlas, load_atlas
+from .icons import caption_width, draw_caption, pictogram_runs
 from .painter import (
     ALIGN_HCENTER,
     ALIGN_RIGHT,
@@ -838,7 +839,20 @@ class QuadPainter:
             self._solid(x, y, 1.0, h, line)
             self._solid(x + w - 1.0, y, 1.0, h, line)
 
-    def text(
+    def text(self, x, y, w, h, align, string, colour, bold=False) -> None:
+        """Draw *string* aligned inside the box; a colour pictogram in it as an image.
+
+        The runs and their layout are :func:`emtk.icons.draw_caption`'s, measured
+        exactly as :meth:`text_width` measures them.
+        """
+        runs = pictogram_runs(string)
+        if runs is None:
+            self._text_run(x, y, w, h, align, string, colour, bold)
+            return
+        draw_caption(self, runs, x, y, w, h, align, colour, bold, self._text_run,
+                     self._text_run_width, self.line_height())
+
+    def _text_run(
         self,
         x: float,
         y: float,
@@ -942,7 +956,14 @@ class QuadPainter:
         self._clip = self._clips[-1] if self._clips else _NO_CLIP
         self._scaled_clip = self._scale_clip(self._clip)
 
-    def text_width(self, string: str) -> float:
+    def text_width(self, string) -> float:
+        """Advance width of *string*; a colour pictogram counts one small icon box."""
+        runs = pictogram_runs(string)
+        if runs is None:
+            return self._text_run_width(string)
+        return caption_width(runs, self._text_run_width, self.line_height())
+
+    def _text_run_width(self, string: str) -> float:
         """Advance width of *string*, in pixels."""
         if self._font_spec is not None:
             from .font_render import text_width

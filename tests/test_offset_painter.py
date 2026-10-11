@@ -24,7 +24,15 @@ def test_geometry_translation_preserves_metrics_and_optional_capabilities():
     local.fill_triangle((0, 0), (1, 0), (0, 1), (255, 0, 0))
     assert painter.triangles[0][:3] == ((10, 20), (11, 20), (10, 21))
     assert local.text_width("hello") == painter.text_width("hello")
-    assert not hasattr(local, "image")
+    # The recorder draws images (icons are images), so the capability passes through;
+    # a painter without the optional operation must not gain it through the wrapper.
+    assert hasattr(local, "image")
+
+    class NoImage:
+        def text_width(self, string):
+            return 7.0 * len(string)
+
+    assert not hasattr(OffsetPainter(NoImage(), 1, 2), "image")
 
 
 def test_rotated_text_capability_survives_an_offset_painter():

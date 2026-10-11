@@ -24,6 +24,19 @@ scale, so a Retina display gets device pixels rather than a blown-up bitmap.
 A pictogram the colour font does not have (◐, a plain geometric mark) is
 rasterised from the first font that covers it, as a white mask the caller's
 text colour tints -- the one case where monochrome is the picture.
+
+Pictograms inside a caption
+---------------------------
+A caption may *start* with a pictogram (``"❓  Help"``, ``"📖  Guide"``,
+``"🌍 EN"``) or carry one mid-text. Those go through the painter's ``text``,
+so the real painters (the GPU one, the Pillow and pixel screenshot ones) split
+the string with :func:`pictogram_runs` and draw each colour cluster as an image
+in a small icon box, the rest as text: :func:`caption_width` and
+:func:`draw_caption` share one measurement, so a button sized from
+``text_width`` fits what is drawn. A recording painter still records the whole
+string -- what a test clicks on is the caption, not its pieces. A glyph with no
+colour form (◐ ✕ ›) stays text. The icon's alpha follows the text colour's, so
+a disabled caption fades its icon with its words.
 """
 
 from __future__ import annotations
@@ -31,6 +44,7 @@ from __future__ import annotations
 import logging
 import math
 from collections import OrderedDict
+from functools import lru_cache
 
 from .texture import Texture
 
@@ -42,6 +56,9 @@ __all__ = [
     "icon_box",
     "icon_texture",
     "draw_icon",
+    "pictogram_runs",
+    "caption_width",
+    "draw_caption",
 ]
 
 logger = logging.getLogger(__name__)
@@ -283,3 +300,155 @@ def draw_icon(p, icon: str, x: float, y: float, size: float, colour=(255, 255, 2
 
     image(p, float(x), float(y), float(size), float(size), texture, (0.0, 0.0), (1.0, 1.0), tint)
     return True
+
+
+# -- pictograms inside a caption ------------------------------------------- #
+
+#: BMP codepoints whose default presentation is emoji (Unicode
+#: ``Emoji_Presentation=Yes``); a text-default pictograph is one only when a
+#: U+FE0F follows it or it leads a caption. Everything in the supplementary
+#: pictograph planes (U+1F000--U+1FAFF) is a candidate by itself.
+_BMP_EMOJI: tuple[tuple[int, int], ...] = (
+    (0x231A, 0x231B), (0x23E9, 0x23EC), (0x23F0, 0x23F0), (0x23F3, 0x23F3),
+    (0x25FD, 0x25FE), (0x2614, 0x2615), (0x2648, 0x2653), (0x267F, 0x267F),
+    (0x2693, 0x2693), (0x26A1, 0x26A1), (0x26AA, 0x26AB), (0x26BD, 0x26BE),
+    (0x26C4, 0x26C5), (0x26CE, 0x26CE), (0x26D4, 0x26D4), (0x26EA, 0x26EA),
+    (0x26F2, 0x26F3), (0x26F5, 0x26F5), (0x26FA, 0x26FA), (0x26FD, 0x26FD),
+    (0x2705, 0x2705), (0x270A, 0x270B), (0x2728, 0x2728), (0x274C, 0x274C),
+    (0x274E, 0x274E), (0x2753, 0x2755), (0x2757, 0x2757), (0x2795, 0x2797),
+    (0x27B0, 0x27B0), (0x27BF, 0x27BF), (0x2B1B, 0x2B1C), (0x2B50, 0x2B50),
+    (0x2B55, 0x2B55),
+)
+#: Plain geometric shapes (▶ ■ ◐): a caption's mark, drawn as text even where
+#: the colour font has a form for one -- ``view_form.icon_caption`` gives them
+#: a one-space gap for exactly that reason.
+_GEOMETRIC = (0x25A0, 0x25FF)
+#: Codepoints that continue a cluster: presentation selectors, skin tones,
+#: the keycap mark and tag characters.
+_CONTINUES = frozenset((0xFE0F, 0x20E3)) | frozenset(range(0x1F3FB, 0x1F400)) | \
+    frozenset(range(0xE0020, 0xE0080))
+_ZWJ = 0x200D
+_TEXT_SELECTOR = chr(0xFE0E)
+_EMOJI_SELECTOR = chr(0xFE0F)
+_REGIONAL = (0x1F1E6, 0x1F1FF)
+
+
+def _emoji_default(code: int) -> bool:
+    if 0x1F000 <= code <= 0x1FAFF:
+        return True
+    return any(lo <= code <= hi for lo, hi in _BMP_EMOJI)
+
+
+def _cluster_end(string: str, start: int) -> int:
+    """Index after the emoji cluster that starts at *start* (selectors, ZWJ joins, flags)."""
+    n = len(string)
+    i = start + 1
+    if _REGIONAL[0] <= ord(string[start]) <= _REGIONAL[1]:
+        if i < n and _REGIONAL[0] <= ord(string[i]) <= _REGIONAL[1]:
+            i += 1
+        return i
+    while i < n:
+        code = ord(string[i])
+        if code in _CONTINUES:
+            i += 1
+        elif code == _ZWJ and i + 1 < n:
+            i += 2
+        else:
+            break
+    return i
+
+
+def _is_candidate(string: str, start: int, end: int) -> bool:
+    """Whether the cluster ``string[start:end]`` asks for its emoji (colour) form."""
+    code = ord(string[start])
+    tail = string[start + 1:end]
+    if _TEXT_SELECTOR in string[start:end + 1]:
+        return False                       # text presentation, asked for explicitly
+    if chr(0x20E3) in tail:
+        return True                        # keycap
+    if code < 0x2190 or _GEOMETRIC[0] <= code <= _GEOMETRIC[1]:
+        return False
+    if _emoji_default(code) or _EMOJI_SELECTOR in tail:
+        return True
+    # A caption's leading pictogram, whose U+FE0F ``icon_text`` dropped: ⚙ Settings.
+    return start == 0 and (end == len(string) or string[end].isspace())
+
+
+@lru_cache(maxsize=4096)
+def _has_colour(cluster: str) -> bool:
+    """Whether *cluster* rasterises in colour (the font has it and PIL draws it)."""
+    try:
+        return bool(icon_texture(cluster, 32)[1])
+    except Exception:  # noqa: BLE001 - a missing font is "no colour form"
+        return False
+
+
+@lru_cache(maxsize=8192)
+def _runs(string: str):
+    runs: list[tuple[str, bool]] = []
+    text_start = 0
+    i = 0
+    n = len(string)
+    found = False
+    while i < n:
+        char = string[i]
+        code = ord(char)
+        if code < 0x2190 and not ("0" <= char <= "9" or char in "#*"):
+            i += 1
+            continue
+        end = _cluster_end(string, i)
+        cluster = string[i:end]
+        if _is_candidate(string, i, end) and _has_colour(cluster):
+            if text_start < i:
+                runs.append((string[text_start:i], False))
+            runs.append((cluster, True))
+            found = True
+            text_start = end
+        i = end
+    if not found:
+        return None
+    if text_start < n:
+        runs.append((string[text_start:], False))
+    return tuple(runs)
+
+
+def pictogram_runs(string: str):
+    """*string* split into ``(text, is_icon)`` runs, or ``None`` when it has no colour pictogram.
+
+    A colour run is one emoji cluster (selectors, skin tones, ZWJ sequences and
+    flags included) that the colour font draws; everything else is text.
+    """
+    if not string or string.isascii():
+        return None
+    return _runs(string)
+
+
+def caption_width(runs, measure, line_height: float) -> float:
+    """Width of *runs*: text by *measure*, each icon one small :func:`icon_box`."""
+    box = icon_box(line_height)
+    return float(sum(box if icon else measure(text) for text, icon in runs))
+
+
+def draw_caption(p, runs, x: float, y: float, w: float, h: float, align: int, colour,
+                 bold: bool, draw_text, measure, line_height: float) -> None:
+    """Draw *runs* aligned in the box: text through *draw_text*, icons as colour images.
+
+    *draw_text* and *measure* are the painter's own text primitives (its
+    ``text``/``text_width`` before captions were split), so a text run looks
+    exactly as it would alone; the layout is :func:`caption_width`'s.
+    """
+    from .painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER  # noqa: PLC0415
+
+    box = icon_box(line_height)
+    widths = [box if icon else measure(text) for text, icon in runs]
+    span = sum(widths)
+    pen = (x + w - span if align & ALIGN_RIGHT
+           else x + (w - span) * 0.5 if align & ALIGN_HCENTER else x)
+    top = y + (h - box) * 0.5 if align & ALIGN_VCENTER else y + (line_height - box) * 0.5
+    run_align = (align & ~(ALIGN_RIGHT | ALIGN_HCENTER)) | ALIGN_LEFT
+    for (text, icon), width in zip(runs, widths):
+        if not icon:
+            draw_text(pen, y, width, h, run_align, text, colour, bold)
+        elif not draw_icon(p, text, pen, top, box, colour):
+            draw_text(pen, y, width, h, run_align, text, colour, bold)
+        pen += width

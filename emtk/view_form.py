@@ -809,8 +809,9 @@ def _draw_toggle(section: dict, model: Any, state: FormState, label: str) -> Non
 def icon_caption(icon: str, text: str) -> str:
     """*text* with the pictogram *icon* set clear in front of it (``"❓  Help"``).
 
-    A colour pictogram is drawn wider than the font measures it, so it takes
-    two spaces; a plain geometric glyph (the ▶ of a run button, U+25A0–U+25FF)
+    A colour pictogram is drawn as an image one line high
+    (:func:`emtk.icons.draw_caption`), so it takes two spaces to stand clear of
+    the word; a plain geometric glyph (the ▶ of a run button, U+25A0–U+25FF)
     one. Presentation modifiers (``"▶️"`` is U+25B6 then U+FE0F) are dropped:
     the atlas has no cell for them and would draw a missing-glyph box. An empty
     *icon* leaves *text* as it is.

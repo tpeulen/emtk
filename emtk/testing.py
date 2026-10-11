@@ -12,6 +12,7 @@ head rather than a number that had to be measured.
 """
 from __future__ import annotations
 
+from .icons import caption_width, draw_caption, pictogram_runs  # noqa: E402
 from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER  # noqa: E402
 
 __all__ = [
@@ -647,6 +648,19 @@ class PixelPainter:
                 px[o + 3] = max(px[o + 3], al)
 
     def text(self, x, y, w, h, align, string, colour, bold=False) -> None:
+        """Draw *string* aligned inside the box; a colour pictogram in it as an image.
+
+        The runs and their layout are :func:`emtk.icons.draw_caption`'s, measured
+        exactly as :meth:`text_width` measures them.
+        """
+        runs = pictogram_runs(string)
+        if runs is None:
+            self._text_run(x, y, w, h, align, string, colour, bold)
+            return
+        draw_caption(self, runs, x, y, w, h, align, colour, bold, self._text_run,
+                     self._text_run_width, self.line_height())
+
+    def _text_run(self, x, y, w, h, align, string, colour, bold=False) -> None:
         """Blit *string* from the baked atlas, one glyph cell per character.
 
         Two things here are easy to get backwards, and getting either wrong
@@ -753,6 +767,13 @@ class PixelPainter:
                     self.px[o + 3] = max(self.px[o + 3], int(a * alpha / 255))
 
     def text_width(self, string) -> float:
+        """Advance width of *string*; a colour pictogram counts one small icon box."""
+        runs = pictogram_runs(string)
+        if runs is None:
+            return self._text_run_width(string)
+        return caption_width(runs, self._text_run_width, self.line_height())
+
+    def _text_run_width(self, string) -> float:
         if self._font_spec is not None:
             from .font_render import text_width
             return text_width(self._font_spec, string, self.scale * self._font_scale)

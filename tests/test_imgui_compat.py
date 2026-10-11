@@ -288,7 +288,15 @@ def test_an_image_reaches_a_painter_that_can_blit():
 
 
 def test_an_image_on_a_painter_without_one_still_occupies_its_box():
-    painter = RecordingPainter()
+    class Plain(RecordingPainter):
+        """The recorder draws images (icons are images); this one does not."""
+
+        def __getattribute__(self, name):
+            if name == "image":
+                raise AttributeError(name)
+            return super().__getattribute__(name)
+
+    painter = Plain()
     with emtk.frame(painter, (0.0, 0.0, 200.0, 200.0)):
         emtk.image("texture", (64.0, 48.0), tint=(10, 20, 30, 255))
     box = [c for c in painter.calls if c[0] == "fill_rect" and c[5] == (10, 20, 30, 255)]

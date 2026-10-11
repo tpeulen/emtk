@@ -469,7 +469,16 @@ def test_the_backend_flags_describe_the_painter_in_hand():
     def gui(into):
         into["flags"] = emtk.get_io().backend_flags
 
-    _run(lambda: gui(plain))
+    class Plain(RecordingPainter):
+        """The recorder draws images (icons are images); this one does not."""
+
+        def __getattribute__(self, name):
+            if name == "image":
+                raise AttributeError(name)
+            return super().__getattribute__(name)
+
+    with emtk.frame(Plain(), (0.0, 0.0, 600.0, 400.0), io=emtk.IO(), storage={}):
+        gui(plain)
     assert not plain["flags"] & emtk.BackendFlags.RENDERER_HAS_IMAGES
     assert plain["flags"] & emtk.BackendFlags.HAS_MOUSE_CURSORS
 
