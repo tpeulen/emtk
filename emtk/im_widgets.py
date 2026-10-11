@@ -1775,10 +1775,14 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     _frame_border(ctx, box)
     _nav_ring(ctx, box, item_id)
     display_value = "*" * len(value) if password else value
-    shown = display_value if (value or not hint) else hint
+    # The input method's provisional text, drawn at the caret and never typed (emtk.ime).
+    preedit = ctx.io.preedit if (focused and not read_only and not password) else ""
+    composed, pre_lo, pre_hi = _ime_splice(display_value, field.cursor, preedit)
+    caret_at = pre_lo + min(ctx.io.preedit_cursor, len(preedit)) if preedit else field.cursor
+    shown = composed if (value or preedit or not hint) else hint
     text_w = width(shown)
     if focused:             # scrolled so the caret stays in the field
-        caret_px = width(display_value[:field.cursor])
+        caret_px = width(composed[:caret_at])
         scroll = min(st["scroll"], max(text_w - room, 0.0))
         scroll = min(max(scroll, caret_px - room), caret_px)
         st["scroll"] = max(scroll, 0.0)
@@ -1795,18 +1799,23 @@ def input_text(label: str, value: str, hint: str = "", flags: int = 0,
     # Clipped to the field, as the reference's InputText is: a value longer
     # than its box used to run over whatever stood beside it.
     ctx.draw.push_clip_rect((box[0], box[1]), (box[0] + box[2], box[1] + box[3]))
-    if focused and field.has_selection():
+    if focused and field.has_selection() and not preedit:
         lo, hi = field.selection()
         from .style import TEXT_SELECTED_BG  # noqa: PLC0415
         ctx.draw.add_rect_filled((origin + width(display_value[:lo]), box[1] + 2.0),
                                  (origin + width(display_value[:hi]), box[1] + box[3] - 2.0),
                                  TEXT_SELECTED_BG)
     ctx.draw.add_text((origin, box[1] + ctx.style.frame_padding[1]),
-                      _col(Col.TEXT) if value else _col(Col.TEXT_DISABLED), shown)
+                      _col(Col.TEXT) if (value or preedit) else _col(Col.TEXT_DISABLED), shown)
+    if preedit:             # the composition is underlined, as every platform draws it
+        under = box[1] + box[3] - 3.0
+        ctx.draw.add_line((origin + width(composed[:pre_lo]), under),
+                          (origin + width(composed[:pre_hi]), under), _col(Col.TEXT), 1.0)
     if focused:
-        caret = origin + width(display_value[:field.cursor])
+        caret = origin + width(composed[:caret_at])
         ctx.draw.add_line((caret, box[1] + 2.0), (caret, box[1] + box[3] - 2.0),
                           _col(Col.TEXT), 1.0)
+        ctx.io.ime_caret = (caret, box[1], box[3])
     ctx.draw.pop_clip_rect()
     label_shown = _visible_label(label)
     if label_shown:
@@ -1913,6 +1922,12 @@ def _field_keys(ctx, field, flags: int, read_only: bool) -> bool:
             field.text = before[0]
             field.cursor = min(before[1], len(field.text))
     return entered
+
+
+def _ime_splice(text: str, caret: int, preedit: str) -> tuple[str, int, int]:
+    from .ime import splice  # noqa: PLC0415
+
+    return splice(text, caret, preedit)
 
 
 def _current_modifiers(io) -> int:
@@ -5050,6 +5065,8 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
             events = [(io.key, io.text, mods)]
         for key, text, mods in events:
             editor.key(int(key), text, mods)
+    _forward_preedit(editor, io, focused and not editor.config.read_only,
+                     ctx.get_storage(item_id))
 
     window_bg = ctx.style.color(Col.WINDOW_BG)
     from .widgets.text_editor import DARK_PALETTE, LIGHT_PALETTE
@@ -5059,9 +5076,28 @@ def text_editor(label: str, editor: Any, size: tuple[float, float] | None = None
         editor.palette = DARK_PALETTE
 
     editor.draw(ctx.p, *box)
+    if focused:
+        caret = getattr(editor, "ime_caret", None)
+        if caret is not None:
+            io.ime_caret = caret
     if revision is not None:
         return editor.revision != revision
     return bool(getattr(editor, "modified", False) and not was_modified)
+
+
+def _forward_preedit(control: Any, io, focused: bool, store: dict) -> None:
+    """Hand the input method's preedit to a control with ``compose`` while it has the keys.
+
+    Only on a change, and ``""`` once the control loses the keys, so a
+    composition never stays drawn in a field the user has left.
+    """
+    compose = getattr(control, "compose", None)
+    if not callable(compose):
+        return
+    wanted = (io.preedit, io.preedit_cursor) if focused else ("", 0)
+    if store.get("preedit_seen", ("", 0)) != wanted:
+        store["preedit_seen"] = wanted
+        compose(*wanted)
 
 
 _RICH_HOOKS = ("pointer_press", "pointer_move", "pointer_release", "wheel")
@@ -5187,8 +5223,14 @@ def host_control(label: str, control: Any, size: tuple[float, float] | None = No
             for code, text, modifiers in events:
                 key(int(code), text, modifiers)
                 took = True
+        _forward_preedit(control, io, focus.get("id") == item_id, store)
 
     control.draw(ctx.p, *box)
+    if focus.get("id") == item_id and not disabled:
+        caret = getattr(control, "ime_caret", None)
+        caret = caret() if callable(caret) else caret
+        if caret is not None:
+            io.ime_caret = caret
     tooltip_at = getattr(control, "tooltip_at", None)
     if hovered and callable(tooltip_at):
         tip = tooltip_at(px, py)

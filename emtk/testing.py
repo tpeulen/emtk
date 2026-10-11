@@ -1104,6 +1104,26 @@ class Driver:
             self.key(ord(char), char)
         return self.painter
 
+    def compose(self, text, cursor=None):
+        """Show *text* as the input method's provisional composition (``""`` ends it).
+
+        What a dead key or an IME does before it commits (:mod:`emtk.ime`):
+        the focused field draws *text* at its caret without typing it.
+        """
+        text = str(text or "")
+        self.surface.on_text_compose(text, len(text) if cursor is None else int(cursor))
+        return self.frame()
+
+    def commit(self, text):
+        """End a composition by committing *text*, as an input method does.
+
+        The preedit is cleared and *text* arrives as one typed text event --
+        the way glfw's char callback and Qt's commit string deliver it.
+        """
+        self.surface.on_text_compose("", 0)
+        self.surface.on_key_press(0, str(text), 0)
+        return self.frame()
+
     def wheel(self, dy, at=None, *, dx=0.0):
         """Deliver wheel notches at a target (positive *dy* scrolls up)."""
         self.hover(self._pointer if at is None else at)

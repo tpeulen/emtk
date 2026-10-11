@@ -85,6 +85,19 @@ class TextField:
         self._undo: list[tuple[str, int, int]] = []
         self._redo: list[tuple[str, int, int]] = []
         self._typing = False
+        #: The input method's provisional text at the caret, and its cursor
+        #: (:mod:`emtk.ime`). :func:`paint` draws it; it is never in :attr:`text`.
+        self.preedit = ""
+        self.preedit_cursor = 0
+
+    def compose(self, text: str, cursor: int | None = None) -> None:
+        """Show the input method's provisional *text* at the caret (``""`` ends it).
+
+        The committed text arrives separately, as the text of :meth:`key`.
+        """
+        self.preedit = str(text or "")
+        self.preedit_cursor = (len(self.preedit) if cursor is None
+                               else max(0, min(int(cursor), len(self.preedit))))
 
     # -- the caret and the selection ------------------------------------ #
     @property
@@ -366,7 +379,15 @@ def paint(p, field: TextField, x: float, y: float, w: float, h: float, colour,
     from ..painter import ALIGN_LEFT, ALIGN_VCENTER  # noqa: PLC0415
     from ..style import TEXT_SELECTED_BG  # noqa: PLC0415
 
+    from ..ime import splice  # noqa: PLC0415
+
     text, at = field.text, field.cursor
+    preedit = getattr(field, "preedit", "") if caret_colour is not None else ""
+    if preedit:
+        # Composed text is drawn in place, underlined, with the caret inside it;
+        # the positions returned stay those of the field's own text.
+        text, lo, hi = splice(text, at, preedit)
+        at = lo + min(getattr(field, "preedit_cursor", len(preedit)), len(preedit))
     room = max(w - 2.0 * pad, 1.0)
     start = 0
     while caret_colour is not None and start < at and p.text_width(text[start:at]) > room - 1.0:
@@ -374,14 +395,18 @@ def paint(p, field: TextField, x: float, y: float, w: float, h: float, colour,
     left = x + pad
     xs = [left - p.text_width(text[i:start]) if i < start
           else left + p.text_width(text[start:i]) for i in range(len(text) + 1)]
-    if caret_colour is not None and field.has_selection():
+    if caret_colour is not None and field.has_selection() and not preedit:
         lo, hi = field.selection()
         sx = max(xs[lo], x)
         p.fill_rect(sx, y + 2.0, max(min(xs[hi], x + w) - sx, 0.0), max(h - 4.0, 1.0),
                     TEXT_SELECTED_BG)
     p.text(left, y, room, h, ALIGN_VCENTER | ALIGN_LEFT, text[start:], colour)
+    if preedit:
+        p.fill_rect(xs[lo], y + h * 0.8, max(xs[hi] - xs[lo], 1.0), 1.0, colour)
     if caret_colour is not None:
         p.fill_rect(xs[at], y + h * 0.2, 1.0, h * 0.6, caret_colour)
+    if preedit:
+        return xs[:lo + 1] + xs[hi + 1:]
     return xs
 
 

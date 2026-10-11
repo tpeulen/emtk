@@ -176,6 +176,9 @@ def host_class():
             self.setMouseTracking(True)
             self.setMinimumHeight(80)
             self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent, True)
+            # Dead keys and input methods (emtk.ime): without this Qt hands the
+            # widget raw keys, and a composition never reaches the control.
+            self.setAttribute(QtCore.Qt.WA_InputMethodEnabled, True)
             # A file dragged over the control is the control's event, not the
             # embedding window's: Qt delivers drag events to the widget under
             # the pointer and drops them there when it ignores them -- they do
@@ -460,6 +463,40 @@ def host_class():
                 # Immediate-mode controls queue input before their first focus.
                 self.update()
             super().keyPressEvent(event)
+
+        def inputMethodEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
+            """A composition changed or committed (:mod:`emtk.ime`).
+
+            The preedit goes to the control's ``compose(text, cursor)``; the
+            committed text is typed through ``key(0, text, 0)``, the way a
+            character typed on the keyboard arrives.
+            """
+            preedit = str(event.preeditString() or "")
+            cursor = len(preedit)
+            for attribute in event.attributes():
+                if attribute.type == QtGui.QInputMethodEvent.Cursor:
+                    cursor = int(attribute.start)
+            compose = getattr(self.control, "compose", None)
+            if callable(compose):
+                compose(preedit, max(0, min(cursor, len(preedit))))
+            commit = str(event.commitString() or "")
+            key = getattr(self.control, "key", None)
+            if commit and callable(key):
+                key(0, commit, 0)
+            event.accept()
+            self._notify()
+
+        def inputMethodQuery(self, query):  # noqa: N802 - Qt's spelling
+            """Tell the input method it is welcome, and where the caret is."""
+            if query == QtCore.Qt.ImEnabled:
+                return True
+            if query == QtCore.Qt.ImCursorRectangle:
+                caret = getattr(self.control, "ime_caret", None)
+                caret = caret() if callable(caret) else caret
+                if caret is not None:
+                    x, y, height = (float(v) for v in caret)
+                    return QtCore.QRect(int(x), int(y), 1, max(1, int(height)))
+            return super().inputMethodQuery(query)
 
         def keyReleaseEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Forward a key release (``key_release``); unhandled ones go on to Qt.

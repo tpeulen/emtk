@@ -308,11 +308,17 @@ class CanvasEvents:
     KEY_REPEAT_INTERVAL = 0.035
 
     def __init__(self, canvas, sink, on_frame: Callable[[], None] | None = None,
-                 loop=None) -> None:
+                 loop=None, input_method=None) -> None:
         self.canvas = canvas
         self.sink = sink
         self.on_frame = on_frame
         self._loop = loop
+        #: Answers ``composing()``: whether the OS input method holds a
+        #: composition, during which keys are its and not the app's
+        #: (:mod:`emtk.ime`). Found from the canvas when not given.
+        self.input_method = input_method
+        #: Physical keys whose press went to the input method; their release does too.
+        self._composing_keys: set[str] = set()
         self.typed_via_char = False
         self.drop_callback = None
         self._repeat_key = None
@@ -345,6 +351,10 @@ class CanvasEvents:
         self.typed_via_char = "char" in event_types(self.canvas)
         if self.typed_via_char:
             add(self._on_char, "char")
+        if self.input_method is None:
+            from .ime import input_method_probe  # noqa: PLC0415
+
+            self.input_method = input_method_probe(self.canvas)
         add(self._on_key_up, "key_up")
         add(self._on_resize, "resize")
         add(self._on_close, "close")
@@ -675,8 +685,31 @@ class CanvasEvents:
             text = text.upper() if text.isalpha() else SHIFT_MAP.get(text, text)
         return text
 
+    def composing(self) -> bool:
+        """Whether the OS input method is composing (a dead key, an IME preedit).
+
+        Asked *before* a key is delivered: GLFW reports the key first and lets
+        the input method see it afterwards, so a composition under way when
+        the key arrives is one the key belongs to -- the Return that confirms
+        a conversion, the Backspace that edits it, the letter after a dead key.
+        """
+        probe = self.input_method
+        if probe is None:
+            return False
+        try:
+            return bool(probe.composing())
+        except Exception:  # noqa: BLE001 - a probe that fails holds nothing back
+            return False
+
     def _on_key_down(self, event: dict) -> None:
         name = str(event.get("key", "") or "")
+        if self.composing():
+            # The input method's key: what it produces arrives as a char event.
+            if name:
+                self._composing_keys.add(name)
+            self.stop_key_repeat()
+            return
+        self._composing_keys.discard(name)
         text = self.key_text(event)
         key = key_from_dom(name)
         modifiers = modifiers_from_canvas(event.get("modifiers"))
@@ -701,14 +734,21 @@ class CanvasEvents:
         Repeats are the OS's here (glfw calls this again while a key is held),
         so none is synthesised -- that would double every repeated character.
         """
-        text = str(event.get("data") or event.get("char_str") or "")
-        if not text or not text.isprintable():
+        from .ime import committed_text  # noqa: PLC0415
+
+        # Not ``isprintable``: that drops the zero-width joiner of an emoji
+        # sequence and the non-joiner of Persian (see emtk.ime.committed_text).
+        text = committed_text(event.get("data") or event.get("char_str") or "")
+        if not text:
             return
         self._deliver("on_key_press", 0, text,
                       modifiers_from_canvas(event.get("modifiers")))
 
     def _on_key_up(self, event: dict) -> None:
         name = str(event.get("key", "") or "")
+        if name in self._composing_keys:
+            self._composing_keys.discard(name)
+            return
         key, text, _original_modifiers = self._pressed_keys.pop(
             name,
             (key_from_dom(name), "", modifiers_from_canvas(event.get("modifiers"))),

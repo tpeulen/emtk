@@ -166,6 +166,16 @@ class Control:
         """
         return False
 
+    def compose(self, text: str, cursor: int) -> None:
+        """Show the input method's provisional *text* at the caret; ``""`` ends it.
+
+        Optional: a control that edits text draws the composition (a dead key's
+        accent, an IME's reading) without typing it, and reports its caret as
+        an ``ime_caret`` attribute ``(x, y, height)`` so a host can place the
+        candidate window. The committed text arrives through :meth:`key`.
+        See :mod:`emtk.ime`. Nothing by default.
+        """
+
     def scroll(self, amount: int) -> int:
         """Handle a wheel notch. Returns the new scroll position; zero by default."""
         return 0

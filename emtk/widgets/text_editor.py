@@ -1684,6 +1684,12 @@ class TextEditor:
         self._find_whole_word = False
         self._changed = False
         self._revision = 0
+        #: The input method's provisional text at the main caret, and its
+        #: cursor (:mod:`emtk.ime`): drawn over the text, never part of it.
+        self.preedit = ""
+        self.preedit_cursor = 0
+        #: ``(x, y, height)`` of the main caret as last drawn, else ``None``.
+        self.ime_caret: tuple[float, float, float] | None = None
 
     # -- text ----------------------------------------------------------- #
     @property
@@ -2594,6 +2600,16 @@ class TextEditor:
             self._type(typed)
         return True
 
+    def compose(self, text: str, cursor: int | None = None) -> None:
+        """Show the input method's provisional *text* at the main caret.
+
+        ``""`` ends the composition. The text is not inserted: the input
+        method commits it separately, as typed text through :meth:`key`.
+        """
+        text = "" if self.config.read_only else str(text or "")
+        self.preedit = text
+        self.preedit_cursor = len(text) if cursor is None else max(0, min(int(cursor), len(text)))
+
     def _type(self, typed: str) -> None:
         """Insert typed text, completing brackets and quotes when configured.
 
@@ -2770,6 +2786,7 @@ class TextEditor:
             self._draw_line(p, line, number, row_y, w, x, gutter, active)
 
         self._draw_carets(p, x, y, w, h)
+        self._draw_preedit(p, x, y, w, h)
         if bar_w:
             self.vbar.draw(p, x + w - bar_w, y, h)
         p.pop_clip()
@@ -2913,6 +2930,37 @@ class TextEditor:
                     )
             column += width
         return column
+
+    def _caret_point(self, pos: Pos, x: float, y: float, w: float) -> tuple[float, float] | None:
+        """Where the caret at *pos* is drawn, ``(left, top)``, or ``None`` when off screen."""
+        row = pos.line - self.first_visible_line
+        if not 0 <= row < self.visible_lines:
+            return None
+        left = self._text_x + (self._column_of(pos) - self.first_visible_column) * self._glyph_w
+        if not self._text_x - self._glyph_w <= left <= x + w:
+            return None
+        return left, y + row * self._line_h
+
+    def _draw_preedit(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
+        """The composition at the main caret: on a field background, underlined.
+
+        Drawn over the text after the caret rather than pushing it aside -- the
+        composition is short-lived and the document's columns stay put.
+        """
+        point = self._caret_point(self.cursors.main.end, x, y, w)
+        self.ime_caret = None if point is None else (point[0], point[1], self._line_h)
+        if not self.preedit or point is None:
+            return
+        left, top = point
+        width = max(p.text_width(self.preedit), 1.0)
+        p.fill_rect(left, top, width, self._line_h, self.config.background_color or FRAME_BG)
+        p.text(left, top, width + self._glyph_w, self._line_h, ALIGN_LEFT | ALIGN_VCENTER,
+               self.preedit, self.palette[Token.TEXT])
+        p.fill_rect(left, top + self._line_h - 2.0, width, 1.0, self.palette[Token.TEXT])
+        caret = left + p.text_width(self.preedit[: self.preedit_cursor])
+        p.fill_rect(caret, top + self._line_h * 0.1, max(1.0, self._glyph_w * 0.12),
+                    self._line_h * 0.8, self.config.caret_color or TEXT)
+        self.ime_caret = (caret, top, self._line_h)
 
     def _draw_carets(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Draw every caret that is on screen."""

@@ -90,6 +90,12 @@ Keys: ``emtk.keys``
 .. automodule:: emtk.keys
    :noindex:
 
+Composed text input: ``emtk.ime``
+------------------------------------
+
+.. automodule:: emtk.ime
+   :noindex:
+
 Router: ``emtk.router``
 --------------------------
 

@@ -232,6 +232,16 @@ class Surface:
         """A key came up. Hosts deliver this even when the surface ignored its press."""
         return False
 
+    def on_text_compose(self, text: str, cursor: int) -> bool:
+        """The OS input method's provisional text (*preedit*) changed.
+
+        *text* is what is being composed -- a dead key's accent, an IME's
+        unconverted reading -- with the input method's *cursor* in it; ``""``
+        ends the composition. It is never typed: the committed text arrives
+        separately as an ordinary :meth:`on_key_press` text (:mod:`emtk.ime`).
+        """
+        return False
+
     def on_files_dropped(self, paths: Sequence[str]) -> bool:
         """Files were dropped on the surface, as local paths.
 
@@ -414,6 +424,13 @@ class ControlSurface(Surface):
         handler(int(key), str(text or ""), int(modifiers))
         return True
 
+    def on_text_compose(self, text, cursor) -> bool:
+        handler = self._hook("compose")
+        if handler is None:
+            return False
+        handler(str(text or ""), int(cursor))
+        return True
+
     def on_files_dropped(self, paths) -> bool:
         handler = self._hook("files_dropped")
         if handler is None:
@@ -501,6 +518,7 @@ class ImApp:
         input_changed = bool(any(self.io.mouse_clicked) or any(self.io.mouse_released)
                              or self.io.key_events or self.io.key or self.io.text
                              or self.io.mouse_wheel or self.io.mouse_wheel_h)
+        self.io.ime_caret = None        # set again by the text widget that has the caret
         with frame(painter, (x, y, w, h), io=self.io, style=self.style,
                    storage=self.storage) as ctx:
             self.gui()
@@ -614,6 +632,22 @@ class ImApp:
         # Rows are sign-flipped notches (see WHEEL_ROWS); back to notches.
         self.io.mouse_wheel += -float(rows) / WHEEL_ROWS
         return 0
+
+    def compose(self, text: str, cursor: int | None = None) -> bool:
+        """The input method's preedit changed (:meth:`Surface.on_text_compose`).
+
+        Kept in ``io.preedit`` / ``io.preedit_cursor`` until the next
+        composition event, for the focused text widget to draw at its caret.
+        A *cursor* of ``None`` is the end of the text.
+        """
+        text = str(text or "")
+        self.io.preedit = text
+        self.io.preedit_cursor = len(text) if cursor is None else max(0, min(int(cursor), len(text)))
+        return bool(self.io.want_capture_keyboard)
+
+    def ime_caret(self) -> tuple | None:
+        """``(x, y, height)`` of the focused text caret last frame, else ``None`` (:mod:`emtk.ime`)."""
+        return self.io.ime_caret
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
         from .keys import typed_text  # noqa: PLC0415

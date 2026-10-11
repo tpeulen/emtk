@@ -142,6 +142,15 @@ class IO:
     #: ``io.WantTextInput``: a text field had the keyboard last frame. A page
     #: reads it to decide whether Cmd+C/X/V are a field's or the browser's.
     want_text_input: bool = False
+    #: The input method's provisional text and its cursor (:mod:`emtk.ime`).
+    #: Not a per-event edge: it stays until the next composition event, and
+    #: the focused text widget draws it at its caret without typing it.
+    preedit: str = ""
+    preedit_cursor: int = 0
+    #: Where the focused text widget's caret was drawn last frame, as
+    #: ``(x, y, height)`` in canvas coordinates, else ``None``: a host tells the
+    #: OS so the input method's candidate window opens beside the text.
+    ime_caret: Optional[tuple] = None
     delta_time: float = 1.0 / 60.0
     now: float = 0.0
     frame_count: int = 0
@@ -1986,6 +1995,18 @@ class ImWidget(Control):
         self.io.key_events = [(int(key), str(text or ""), int(modifiers))]
         self._modifiers(modifiers)
         return self._replay()
+
+    def compose(self, text: str, cursor: int | None = None):
+        """The input method's preedit (:mod:`emtk.ime`): kept in ``io`` for the focused field."""
+        text = str(text or "")
+        self.io.preedit = text
+        self.io.preedit_cursor = len(text) if cursor is None else max(0, min(int(cursor), len(text)))
+        return self._replay()
+
+    @property
+    def ime_caret(self):
+        """``(x, y, height)`` of the focused text caret last drawn, else ``None``."""
+        return self.io.ime_caret
 
     def scroll(self, px, py, dx: float, dy: float, modifiers: int = 0):
         self.io.mouse_pos = (float(px), float(py))
