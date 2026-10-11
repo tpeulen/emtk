@@ -474,3 +474,21 @@ def test_guard_reports_display_constants_and_defaults():
                      ("constant:title", "Box title"), ("default:title", "Open"),
                      ("default:tooltip", "Shows it")]
     assert literals_in_source(source, "x.py") == []
+
+
+def test_isolated_does_not_lose_the_builtin_catalogue_it_first_loaded():
+    """The built-in catalogue registered inside ``isolated`` came back for the next test.
+
+    It was dropped with the isolated sources while its "registered" flag stayed set, so
+    every later test in the process saw no emtk catalogue (test_i18n_render then
+    test_i18n_seam failed four tests, in that order only).
+    """
+    import emtk.i18n as state
+    from emtk.i18n.testing import isolated
+
+    with isolated(language=None):
+        state._builtin_registered = False
+        state._sources.pop("emtk", None)
+        with isolated(language="de"):
+            state.tr("Cancel")             # registers the built-in catalogue in here
+        assert "de" in state.available_languages("emtk")

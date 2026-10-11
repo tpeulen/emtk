@@ -177,3 +177,14 @@ def test_a_caption_padded_to_a_column_is_still_translated():
     assert _tr_label("Rate      ##rate") == "Wiederholungsrate des Lasers      ##rate"
     assert _tr_label("  Mode") == "  Betriebsart der Messung"
     assert _tr_label("   ") == "   "
+
+
+def test_a_text_inputs_placeholder_is_translated():
+    """The data table's and the settings editor's "filter" hint drew English in French."""
+    from emtk.widgets.basic import TextInput
+
+    i18n.add_translations("de", {"filter": "Filtern"})
+    field = TextInput("", "", placeholder="filter")
+    painter = RecordingPainter()
+    field.draw(painter, 0, 0, 200, 24)
+    assert "Filtern" in painter.strings and "filter" not in painter.strings

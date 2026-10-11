@@ -1241,10 +1241,19 @@ class TextInput:
             paint(p, self.field, left, y, box_w, h, _TEXT, _GOLD)
         else:
             p.text(left + 4.0, y, max(box_w - 8.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.field.placeholder, _DIM)
+                   ALIGN_VCENTER | ALIGN_LEFT, _tr_hint(self.field.placeholder), _DIM)
             p.fill_rect(left + 4.0, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _GOLD)
         p.pop_clip()
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Process mouse press. Returns whether the press landed in the field."""
         return box_x <= x <= box_x + box_w and box_y <= y <= box_y + box_h
+
+
+def _tr_hint(text: str) -> str:
+    """A text field's placeholder, translated where it is drawn ("filter" -> "filtre")."""
+    if not text:
+        return ""
+    from ..i18n import tr  # noqa: PLC0415
+
+    return tr(text)

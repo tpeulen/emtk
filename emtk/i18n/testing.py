@@ -265,7 +265,10 @@ def isolated(language: str | None = "en"):
     from .. import i18n as state
 
     saved = {name: getattr(state, name) for name in
-             ("_language", "_explicit", "_provider", "_default_domain")}
+             ("_language", "_explicit", "_provider", "_default_domain",
+              # Restored with the sources: the built-in catalogue first registered inside
+              # the block is dropped with them, and a flag left True never re-adds it.
+              "_builtin_registered")}
     memory = copy.deepcopy(state._memory)
     sources = {domain: [copy.deepcopy(s) if isinstance(s, dict) else s for s in found]
                for domain, found in state._sources.items()}

@@ -1111,8 +1111,11 @@ class DataTable:
             self._filter_xs = paint_field(p, field, x, y, w, h, _style.TEXT,
                                           _style.GOLD if self.filter_focused else None)
         else:
+            from ..i18n import tr
+
+            # A placeholder is display text, like a caption ("filter" -> "filtre").
             p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-                   field.placeholder, _style.DIM)
+                   tr(field.placeholder, domain="emtk") if field.placeholder else "", _style.DIM)
             self._filter_xs = [x + 4.0]
             if self.filter_focused:
                 p.fill_rect(x + 4.0, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
