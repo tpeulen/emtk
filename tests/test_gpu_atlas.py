@@ -97,15 +97,70 @@ def test_a_second_texture_is_packed_beside_the_first():
     assert image_texel(ru0, 64) > image_texel(lu0, 64)
 
 
-def test_the_shelf_wraps_and_then_declines():
-    """It never grows and never defragments: an image that does not fit is
-    declined, and the painter's own fallback draws a tinted rectangle. A
-    visible wrong thing beats an allocation storm."""
-    atlas = ImageAtlas(16, 16)
-    first, second = Texture(16, 8), Texture(16, 8)
+def test_a_full_atlas_grows_rather_than_declining():
+    """An image that does not fit used to be declined, and the painter's
+    fallback drew it as a tinted rectangle -- with a white tint, a blank white
+    box where a documentation figure should have been. The atlas now grows,
+    keeping every live image's pixels."""
+    atlas = ImageAtlas(16, 16, max_size=64)
+    first, second = _solid(16, 8, 10), _solid(16, 8, 20)
     assert atlas.region(first) is not None
     assert atlas.region(second) is not None      # the next shelf down
-    assert atlas.region(Texture(16, 8)) is None  # no third shelf
+    third = _solid(16, 8, 30)
+    assert atlas.region(third) is not None       # no third shelf: grown
+    assert (atlas.width, atlas.height) == (32, 32)
+    assert _texels(atlas, first) == (16, 8, 10)
+    assert _texels(atlas, second) == (16, 8, 20)
+    assert _texels(atlas, third) == (16, 8, 30)
+
+
+def test_growth_tells_a_consumer_to_upload_everything():
+    atlas = ImageAtlas(16, 16, max_size=64)
+    atlas.region(_keep := _solid(16, 16, 10))
+    _, seen = atlas.dirty_since(-1)
+    atlas.region(_more := _solid(16, 16, 20))      # grows
+    rects, _ = atlas.dirty_since(seen)
+    assert rects is None, "a consumer of the old size must re-upload the whole new texture"
+
+
+def test_an_image_larger_than_the_atlas_is_stored_scaled_down():
+    """A 3000 px screenshot in a 1024 atlas: stored at reduced size, drawn
+    softer -- never declined, never blank."""
+    atlas = ImageAtlas(16, 16, max_size=32, max_side=32)
+    big = Texture(100, 50)
+    big.fill((200, 100, 50, 255))
+    region = atlas.region(big)
+    assert region is not None
+    w, h, red = _texels(atlas, big)
+    assert (w, h) == (32, 16)
+    assert red == 200
+
+
+def test_a_full_grown_atlas_halves_the_newcomer():
+    atlas = ImageAtlas(16, 16, max_size=16)
+    keep = _solid(16, 12, 10)
+    atlas.region(keep)
+    newcomer = _solid(16, 16, 90)
+    assert atlas.region(newcomer) is not None
+    w, h, value = _texels(atlas, newcomer)
+    assert (w, h) == (8, 8) or (w <= 16 and h <= 4)
+    assert value == 90
+    assert _texels(atlas, keep) == (16, 12, 10)
+
+
+def test_a_stored_size_survives_a_repack():
+    import gc
+
+    atlas = ImageAtlas(16, 16, max_size=16)
+    dead = _solid(16, 8, 1)
+    atlas.region(dead)
+    small = _solid(32, 16, 70)                    # stored at 16x8
+    atlas.region(small)
+    del dead
+    gc.collect()
+    atlas.region(_solid(16, 12, 5))               # forces a repack
+    assert _texels(atlas, small)[:2] == (16, 8)
+    assert _texels(atlas, small)[2] == 70
 
 
 def _solid(width, height, value):

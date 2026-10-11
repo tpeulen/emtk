@@ -867,7 +867,13 @@ class QuadPainter:
         if not string:
             return
         if self._font_spec is not None:
-            from .font_render import draw_text
+            from .font_render import draw_text, line_height
+            # A line wholly above or below the clip draws nothing: skip laying out its
+            # glyphs (a long documentation page draws every line every frame).
+            _cx0, cy0, _cx1, cy1 = self._clip
+            reach = max(float(h), line_height(self._font_spec, self._font_scale))
+            if y > cy1 + reach or y + 2.0 * reach < cy0:
+                return
             draw_text(self, self._font_spec, self._font_scale, x, y, w, h, align,
                       string, colour, bold, require_resolver=True, device=self._scale)
             return

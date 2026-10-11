@@ -343,8 +343,13 @@ def latex_to_unicode(latex: str) -> str:
     text = re.sub(r"\\sqrt\{([^}]+)\}", r"√(\1)", text)
 
     # Standard math functions (\sin, \cos, \ln, etc.)
+    # ``(?![A-Za-z])``, not ``\b``: in ``\log_{10}`` the next character is ``_``, a word
+    # character, so ``\b`` never matched and the catch-all below deleted ``\log``
+    # whole ("A = ₁₀(I₀/I)"). A name followed by a symbol or letter gets
+    # its space ("sin θ", not "sinθ").
     for fn in _MATH_FUNCTIONS:
-        text = re.sub(r"\\" + fn + r"\b", fn, text)
+        text = re.sub(r"\\" + fn + r"(?![A-Za-z])\s*(?=[A-Za-z\\])", fn + " ", text)
+        text = re.sub(r"\\" + fn + r"(?![A-Za-z])", fn, text)
 
     # Accents: \hat{x} -> x̂, \bar{x} -> x̄, \vec{x} -> x⃗, \dot{x} -> ẋ, \ddot{x} -> ẍ, \tilde{x} -> x̃
     _ACCENTS = {
@@ -366,17 +371,32 @@ def latex_to_unicode(latex: str) -> str:
     for cmd, sym in _GREEK_AND_SYMBOLS.items():
         text = re.sub(re.escape(cmd) + r"(?![A-Za-z])", sym, text)
 
+    # Font wrappers keep their content: ``_{\mathrm{inner: fit ...}}`` must reach the
+    # script rule below as ``_{inner: fit ...}``, not with ``\mathrm{`` inside it.
+    for _ in range(4):
+        text, count = re.subn(
+            r"\\(?:mathrm|mathbf|mathit|mathcal|underbrace|overbrace|underline|overline)"
+            r"\s*\{([^{}]*)\}", r"\1", text)
+        if not count:
+            break
+
+    # A script group with a character Unicode has no sub/superscript for (most letters,
+    # spaces, punctuation) stays a readable ``_(...)``: half-converting it scattered
+    # subscript letters through an annotation ("VBEM\u2098\u2090\u209c\u2095...").
+    def _script(content: str, table: dict, mark: str) -> str:
+        if all(c in table for c in content):
+            return "".join(table[c] for c in content)
+        return f"{mark}({content})" if len(content) > 1 else f"{mark}{content}"
+
     # Subscripts: _{12} or _0
     def _sub(m: re.Match[str]) -> str:
-        content = m.group(1) or m.group(2)
-        return "".join(_SUBSCRIPTS.get(c, c) for c in content)
+        return _script(m.group(1) or m.group(2), _SUBSCRIPTS, "_")
 
     text = re.sub(r"_\{([^}]+)\}|_([0-9a-zA-Z+-])", _sub, text)
 
     # Superscripts: ^{2} or ^2
     def _sup(m: re.Match[str]) -> str:
-        content = m.group(1) or m.group(2)
-        return "".join(_SUPERSCRIPTS.get(c, c) for c in content)
+        return _script(m.group(1) or m.group(2), _SUPERSCRIPTS, "^")
 
     text = re.sub(r"\^\{([^}]+)\}|\^([0-9a-zA-Z+-])", _sup, text)
 

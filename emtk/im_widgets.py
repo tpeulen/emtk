@@ -824,6 +824,16 @@ def math(
     # Fallback to Unicode formatted text
     u_text = latex_to_unicode(formula)
     w, h = ctx.draw.calc_text_size(u_text)
+    if w > limit_w:
+        # Wider than the column: wrap it like prose rather than run past the edge.
+        lines = _wrapped_lines(ctx, u_text, max(1.0, min(limit_w, avail_w or limit_w)))
+        line_h = ctx.p.line_height()
+        width = max((ctx.p.text_width(line) for line in lines), default=0.0)
+        box = ctx.layout.row(height=len(lines) * line_h, width=width)
+        ctx.item_add(box)
+        for index, line in enumerate(lines):
+            ctx.draw.add_text((box[0], box[1] + index * line_h), draw_colour, line)
+        return (width, len(lines) * line_h)
     pad = (avail_w - w) * 0.5 if (align_center and avail_w > w) else 0.0
     row_w = None if align_center else w
     box = ctx.layout.row(height=max(h, ctx.p.line_height()), width=row_w)

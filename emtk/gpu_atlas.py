@@ -29,6 +29,10 @@ there.
 """
 from __future__ import annotations
 
+import logging
+
+_log = logging.getLogger(__name__)
+
 __all__ = [
     "ImageAtlas",
     "atlas_pixels",
@@ -36,6 +40,8 @@ __all__ = [
     "image_texel",
     "png_decode",
     "BAKED_FONT_PT",
+    "MAX_IMAGE_ATLAS_SIZE",
+    "MAX_IMAGE_SIDE",
     "IMAGE_ATLAS_SIZE",
     "DIRTY_LOG",
     "FLOATS_PER_VERTEX",
@@ -49,11 +55,23 @@ __all__ = [
 #: atlas old enough not to record it.
 BAKED_FONT_PT = 8.0
 
-#: Side of the image atlas, in texels. 1024x1024 RGBA is 4 MB and holds a
-#: camera frame with room beside it. It is not grown: an image that does not
-#: fit is *declined*, and the painter's own fallback draws a tinted
-#: rectangle -- a visible wrong thing rather than a silent allocation storm.
+#: Side the image atlas starts at, in texels. 1024x1024 RGBA is 4 MB and
+#: holds a camera frame with room beside it.
 IMAGE_ATLAS_SIZE = 1024
+
+#: Side the image atlas may grow to (doubling from :data:`IMAGE_ATLAS_SIZE`
+#: when the live images no longer fit). 4096x4096 RGBA is 64 MB -- paid only
+#: by a host that shows that many pictures at once, such as a documentation
+#: page of screenshots beside an interface full of icons and glyphs.
+MAX_IMAGE_ATLAS_SIZE = 4096
+
+#: Longest side, in texels, one image is stored at. A larger picture (a
+#: 3000 px screenshot) is stored scaled down to it -- it is never drawn
+#: larger than a window, and a full-size copy would take a quarter of the
+#: largest atlas. The same rule shrinks an image further when even the grown
+#: atlas has no room: a picture drawn softer is a picture, where the old rule
+#: (decline it) drew a blank white rectangle in its place.
+MAX_IMAGE_SIDE = 2048
 
 #: How many writes :meth:`ImageAtlas.dirty_since` remembers. Long enough
 #: that a consumer redrawing every frame never falls off it, short enough
@@ -270,6 +288,30 @@ def atlas_pixels(atlas):
 # --------------------------------------------------------------------------- #
 # The image atlas
 # --------------------------------------------------------------------------- #
+def _fit(width: int, height: int, side: int) -> tuple[int, int]:
+    """*width* x *height* scaled down (aspect kept) so neither side exceeds *side*."""
+    longest = max(width, height)
+    if longest <= side:
+        return int(width), int(height)
+    k = side / longest
+    return max(1, round(width * k)), max(1, round(height * k))
+
+
+def _resample(pixels, width: int, height: int, nearest: bool = False):
+    """*pixels* (premultiplied RGBA, ``(h, w, 4)``) resized to *width* x *height*.
+
+    Area-averaged (Pillow's ``BOX``) when shrinking, so a screenshot stored
+    at half size keeps its thin lines and its text legible; premultiplied
+    input, so a soft edge is not darkened by averaging in transparent black.
+    """
+    from PIL import Image  # noqa: PLC0415
+
+    image = Image.fromarray(pixels, "RGBA")
+    method = Image.Resampling.NEAREST if nearest else Image.Resampling.BOX
+    _np = _numpy()
+    return _np.asarray(image.resize((int(width), int(height)), method), dtype=_np.uint8)
+
+
 class ImageAtlas:
     """Where a host's images live: one texture, shelf-packed, premultiplied.
 
@@ -304,9 +346,12 @@ class ImageAtlas:
     image placed in it and later images fill along it. The space of an
     image that has died (or been :meth:`forget`-ten) is reused by the next
     one that fits, and when the shelves run out the live images are packed
-    again. It never grows. An image that does not fit even then is
-    declined, and the painter's own fallback draws it as a tinted
-    rectangle -- see :meth:`~.quad_painter.QuadPainter.image`.
+    again. Then the atlas **grows** (each side doubled, up to *max_size*),
+    and last the newcomer is stored at a reduced size (halved until it
+    fits). A real image is therefore never declined: declining drew it as
+    a tinted -- for a white tint, blank white -- rectangle, which is what a
+    documentation page of screenshots wider than 1024 px showed. Only a
+    handle that is not an image at all is declined.
 
     Examples
     --------
@@ -325,9 +370,18 @@ class ImageAtlas:
     """
 
     def __init__(self, width: int = IMAGE_ATLAS_SIZE,
-                 height: int = IMAGE_ATLAS_SIZE) -> None:
+                 height: int = IMAGE_ATLAS_SIZE, *,
+                 max_size: int | None = None,
+                 max_side: int = MAX_IMAGE_SIDE) -> None:
         np = _numpy()
         self.width, self.height = int(width), int(height)
+        #: Largest side the atlas grows to. A host lowers it to its device's
+        #: texture limit; the default never grows a small (test) atlas past
+        #: the larger of its own size and :data:`MAX_IMAGE_ATLAS_SIZE`.
+        self.max_size = int(max_size) if max_size is not None else max(
+            MAX_IMAGE_ATLAS_SIZE, self.width, self.height)
+        #: Longest side one image is stored at (see :data:`MAX_IMAGE_SIDE`).
+        self.max_side = int(max_side)
         self.pixels = np.zeros((self.height, self.width, 4), dtype=np.uint8)
         self.version = 0
         #: ``id(handle) -> (ref, revision, x, y, w, h)``. Keyed on identity
@@ -388,8 +442,11 @@ class ImageAtlas:
             if spot is None:
                 return None
             placed = (_ref(handle), revision - 1, *spot)
+            if (spot[2], spot[3]) != (int(width), int(height)):
+                _log.debug("image %dx%d stored at %dx%d (atlas %dx%d)", width, height,
+                           spot[2], spot[3], self.width, self.height)
         if placed[1] != revision:
-            self._write(placed[2], placed[3], handle)
+            self._write(placed[2], placed[3], handle, placed[4], placed[5])
             placed = (placed[0], revision, *placed[2:])
         self._placed[key] = placed
 
@@ -478,11 +535,14 @@ class ImageAtlas:
 
     # -- internals ------------------------------------------------------- #
     def _place(self, width: int, height: int):
-        """Reserve ``(x, y, width, height)``, or ``None`` if it will not fit.
+        """Reserve ``(x, y, w, h)`` for a *width* x *height* image; ``None`` only for no size.
 
-        In order: the spot of a dead image it fits in (the smallest such),
-        then the shelf, then -- the atlas being full -- a repack of the
-        images still alive (:meth:`_repack`), then no.
+        ``(w, h)`` is the size the image is **stored** at: its own, or less
+        when it is longer than :attr:`max_side` or when nothing else made
+        room. In order: the spot of a dead image it fits in (the smallest
+        such), then the shelf, then -- the atlas being full -- a repack of
+        the images still alive (:meth:`_repack`), then a larger atlas
+        (:meth:`_grow`), then the same again at half the size.
 
         Reuse comes first because the common churn is one picture replaced
         by another of the same size -- a map redrawn with a new colour
@@ -490,15 +550,56 @@ class ImageAtlas:
         of those took fresh space until the atlas was full and every image
         after that drew as a flat tinted box.
         """
-        if width <= 0 or height <= 0 or width > self.width or height > self.height:
+        if width <= 0 or height <= 0:
             return None
         self._reap()
-        spot = self._reuse(width, height)
-        if spot is None:
-            spot = self._shelf(width, height)
-        if spot is None and self._repack():
-            spot = self._shelf(width, height)
+        w, h = _fit(width, height, min(self.max_side, self.max_size))
+        while True:
+            spot = self._fit_once(w, h)
+            if spot is not None:
+                return spot
+            if w <= 1 and h <= 1:
+                return None
+            w, h = max(1, w // 2), max(1, h // 2)
+
+    def _fit_once(self, width: int, height: int):
+        """Room for exactly *width* x *height*, making it if the atlas can; else ``None``."""
+        spot = None
+        if width <= self.width and height <= self.height:
+            spot = self._reuse(width, height)
+            if spot is None:
+                spot = self._shelf(width, height)
+            if spot is None and self._repack():
+                spot = self._shelf(width, height)
+        while spot is None and self._grow():
+            spot = self._shelf(width, height) if (
+                width <= self.width and height <= self.height) else None
         return spot
+
+    def _grow(self) -> bool:
+        """Double each side (up to :attr:`max_size`), keeping every texel; whether it grew.
+
+        The live images are packed again across the new width; their *u*
+        changes, which the painter picks up because it resolves every image
+        again when the frame is submitted. A host
+        sees a new :attr:`width`/:attr:`height` and makes a new texture, and
+        :meth:`dirty_since` answers "everything".
+        """
+        if self.width >= self.max_size and self.height >= self.max_size:
+            return False
+        np = _numpy()
+        width = min(self.max_size, self.width * 2)
+        height = min(self.max_size, self.height * 2)
+        self.pixels = np.zeros((height, width, 4), dtype=np.uint8)
+        self.width, self.height = width, height
+        self.version += 1
+        self._log.clear()  # a consumer of the old size uploads everything
+        # The live images packed again across the new width: left where they
+        # were, the old shelves' right halves would stay empty for good.
+        self._repack(force=True)
+        self._log.clear()
+        _log.info("image atlas grew to %dx%d", width, height)
+        return True
 
     def _reuse(self, width: int, height: int):
         """The smallest free spot *width* x *height* fits in, taken; or ``None``."""
@@ -522,7 +623,7 @@ class ImageAtlas:
         self._shelf_x, self._shelf_y, self._shelf_h = x + width, y, max(h, height)
         return (x, y, width, height)
 
-    def _repack(self) -> bool:
+    def _repack(self, force: bool = False) -> bool:
         """Pack the live images again from the top left; whether anything was freed.
 
         Only when the shelf is full and there is dead space to win back.
@@ -531,7 +632,7 @@ class ImageAtlas:
         their UVs at vertex submission, so earlier quads use their new region
         in this frame rather than briefly sampling unrelated pixels.
         """
-        if not self._free:
+        if not self._free and not force:
             return False
         live = sorted(self._placed.items(), key=lambda kv: -kv[1][5])
         self._placed.clear()
@@ -542,21 +643,27 @@ class ImageAtlas:
             spot = self._shelf(w, h)
             if handle is None or spot is None:
                 continue
-            self._write(spot[0], spot[1], handle)
+            self._write(spot[0], spot[1], handle, w, h)
             self._placed[key] = (ref, int(getattr(handle, "revision", 0)), *spot)
         return True
 
-    def _write(self, x: int, y: int, handle) -> None:
-        """Copy *handle*'s pixels in, premultiplying as they go."""
+    def _write(self, x: int, y: int, handle, w: int | None = None,
+               h: int | None = None) -> None:
+        """Copy *handle*'s pixels in at ``w`` x ``h`` (its own size by default), premultiplied."""
         np = _numpy()
-        w, h = int(handle.width), int(handle.height)
-        rgba = np.frombuffer(bytes(handle.px), dtype=np.uint8).reshape(h, w, 4)
+        width, height = int(handle.width), int(handle.height)
+        w = width if w is None else int(w)
+        h = height if h is None else int(h)
+        rgba = np.frombuffer(bytes(handle.px), dtype=np.uint8).reshape(height, width, 4)
         alpha = rgba[:, :, 3:4].astype(np.uint16)
-        out = self.pixels[y:y + h, x:x + w]
-        out[:, :, :3] = (rgba[:, :, :3].astype(np.uint16) * alpha // 255).astype(
-            np.uint8
-        )
-        out[:, :, 3] = rgba[:, :, 3]
+        premultiplied = np.empty_like(rgba)
+        premultiplied[:, :, :3] = (rgba[:, :, :3].astype(np.uint16) * alpha // 255).astype(
+            np.uint8)
+        premultiplied[:, :, 3] = rgba[:, :, 3]
+        if (w, h) != (width, height):
+            premultiplied = _resample(premultiplied, w, h,
+                                      getattr(handle, "filter", "linear") == "nearest")
+        self.pixels[y:y + h, x:x + w] = premultiplied
         self.version += 1
         self._log.append((self.version, int(x), int(y), w, h))
         del self._log[:-DIRTY_LOG]

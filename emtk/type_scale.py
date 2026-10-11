@@ -80,7 +80,16 @@ ROLES: dict[str, int] = {
 }
 
 #: The face prose and headings are set in; code and the chrome stay monospace.
-PROSE_FAMILY = "sans-serif"
+#:
+#: ``"prose"`` is its own generic family (see :func:`emtk.font_render.font_spec`):
+#: Verdana, else DejaVu Sans / Bitstream Vera Sans, before the plain sans-serif
+#: list. The chrome is baked from Menlo, a Bitstream Vera (= DejaVu Sans Mono)
+#: derivative, and these are its proportional relatives: the same x-height
+#: (~0.55 em, so prose and chrome capitals and lower case line up), open
+#: apertures and wide spacing, drawn for the screen at ten pixels. Arial at the
+#: body size (10.7 px) set words that read as glued together and thin beside
+#: the chrome -- what users compared the documentation against.
+PROSE_FAMILY = "prose"
 CODE_FAMILY = "monospace"
 
 #: Smallest and largest interface size a user may choose, in emtk points.

@@ -50,6 +50,9 @@ FONT_CANDIDATES: tuple[str, ...] = (
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
     "/System/Library/Fonts/Apple Symbols.ttf",
+    # The only macOS face with the late Unicode subscripts (ₖ ₘ ₙ ₚ ₛ ₜ):
+    # without it τ_k in a documentation formula drew as a .notdef box.
+    "/System/Library/Fonts/SFNS.ttf",
     "/System/Library/Fonts/Apple Color Emoji.ttc",
     "/System/Library/Fonts/Hiragino Sans GB.ttc",
     "/System/Library/Fonts/STHeiti Light.ttc",

@@ -217,6 +217,10 @@ class QtPainter:
             default_fam = QtGui.QFont().defaultFamily()
             main_fam = default_fam if default_fam else ("Helvetica Neue" if sys.platform == "darwin" else "Segoe UI")
             families = [main_fam, "Helvetica Neue", "Arial", *emoji_fallbacks]
+        elif family == "prose":
+            font.setStyleHint(QtGui.QFont.SansSerif)
+            families = ["Verdana", "DejaVu Sans", "Bitstream Vera Sans", "Tahoma",
+                        "Lucida Grande", "Arial", *emoji_fallbacks]
         elif family in ("serif", "times"):
             font.setStyleHint(QtGui.QFont.Serif)
             families = ["Times New Roman", "Times", *emoji_fallbacks]

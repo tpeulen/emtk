@@ -150,13 +150,31 @@ class Texture:
         return cls(rgba.width, rgba.height, rgba.tobytes(), filter=filter)
 
     @classmethod
-    def from_file(cls, path: str | os.PathLike[str], filter: str = "linear") -> Texture:
-        """Load an image file from disk and return a Texture."""
+    def from_file(cls, path: str | os.PathLike[str], filter: str = "linear", *,
+                  svg_scale: float = 1.0) -> Texture:
+        """Load an image file from disk and return a Texture.
+
+        Raster formats go through Pillow. An SVG (``.svg``/``.svgz``), which
+        Pillow cannot open, is drawn by :mod:`emtk.svg` at *svg_scale* device
+        pixels per CSS pixel -- pass 2 and draw it at half its texel size for
+        a vector figure that stays sharp on a 2x display.
+        """
         from PIL import Image
 
         p = pathlib.Path(path)
         if not p.is_file():
             raise FileNotFoundError(f"Image file not found: {p}")
+        suffix = p.suffix.lower()
+        if suffix in (".svg", ".svgz"):
+            from .svg import rasterize_svg  # noqa: PLC0415
+
+            data = p.read_bytes()
+            if suffix == ".svgz":
+                import gzip  # noqa: PLC0415
+
+                data = gzip.decompress(data)
+            pixels = rasterize_svg(data, float(svg_scale))
+            return cls(pixels.shape[1], pixels.shape[0], pixels.tobytes(), filter=filter)
         with Image.open(p) as img:
             return cls.from_pil(img, filter=filter)
 

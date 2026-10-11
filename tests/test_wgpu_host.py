@@ -366,6 +366,48 @@ def test_an_image_draws_its_own_pixels_and_not_the_fallback(renderer):
     assert (inside[:, :, 2] > 150).any(), "the blue squares are missing"
 
 
+def test_an_image_wider_than_the_atlas_draws_and_is_not_a_white_box(renderer):
+    """A documentation screenshot is often wider than the 1024-texel atlas.
+    It used to be declined, and the fallback -- a rectangle in the (white)
+    tint -- drew a blank white box. It is now stored scaled down."""
+    wide = Texture(1600, 40)
+    for x in range(1600):
+        wide.set_pixel(x, 0, (0, 0, 0, 255))
+    stripes = bytearray(wide.px)
+    for y in range(40):
+        for x in range(1600):
+            i = (y * 1600 + x) * 4
+            stripes[i:i + 4] = (220, 30, 30, 255) if (x // 100) % 2 else (30, 30, 220, 255)
+    wide.px[:] = stripes
+    wide.touch()
+    frame = _Frame(renderer)
+    frame.painter.image(0.0, 20.0, 320.0, 40.0, wide)
+    pixels = frame.grab()
+    band = pixels[30:50, 0:320, :3].astype(int)
+    assert not (band > 240).all(axis=2).any(), "a white (declined) box was drawn"
+    assert (band[:, :, 0] > 150).any() and (band[:, :, 2] > 150).any()
+
+
+def test_a_grown_atlas_reaches_the_gpu(renderer):
+    """Growth is a new texture size; the renderer must make a new texture and
+    upload every texel, or the moved images sample stale or empty texels."""
+    frame = _Frame(renderer)
+    frame.images = ImageAtlas(64, 64, max_size=256)
+    renderer.images = frame.images
+    frame.painter.image_uv_resolver = frame.images.region
+    keep = []
+    for i, colour in enumerate(((255, 0, 0, 255), (0, 255, 0, 255), (0, 0, 255, 255))):
+        tex = Texture(64, 48)
+        tex.fill(colour)
+        keep.append(tex)
+        frame.painter.image(10.0 + 70.0 * i, 10.0, 60.0, 40.0, tex)
+    pixels = frame.grab()
+    assert frame.images.width > 64
+    for i, channel in enumerate((0, 1, 2)):
+        centre = pixels[30, int(40 + 70 * i), :3]
+        assert centre[channel] > 200, f"image {i} drew {tuple(centre)}"
+
+
 def test_text_drawn_after_an_image_lands_on_it(renderer):
     """Draw order survives, which is the reason images share the one
     pipeline instead of taking a second pass."""

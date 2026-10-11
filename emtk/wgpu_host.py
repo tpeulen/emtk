@@ -549,8 +549,14 @@ class WgpuRenderer:
         np = _numpy()
         wgpu = _wgpu()
         images = self.images
-        identity = id(images)
+        # The atlas grows when its live images no longer fit (gpu_atlas.ImageAtlas._grow):
+        # a new size is a new texture, as a new atlas is.
+        identity = (id(images), images.width, images.height)
         if self._image_texture is None or self._image_version[0] != identity:
+            limits = getattr(self.device, "limits", None) or {}
+            limit = limits.get("max_texture_dimension_2d", limits.get("max-texture-dimension-2d"))
+            if limit:
+                images.max_size = min(images.max_size, int(limit))
             self._image_texture = self.device.create_texture(
                 label="emtk.ui.images",
                 size=(images.width, images.height, 1),

@@ -202,3 +202,17 @@ def test_texture_pil_and_numpy_factories(tmp_path):
         assert ch == 2.0
         emtk.end()
 
+
+
+def test_an_svg_file_loads_at_its_size_and_at_twice_it(tmp_path):
+    """Pillow cannot open SVG; a documentation figure in it drew as nothing."""
+    from emtk.texture import Texture
+
+    path = tmp_path / "figure.svg"
+    path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20">'
+                    '<rect width="40" height="20" fill="#ff0000"/></svg>')
+    one = Texture.from_file(path)
+    assert one.size == (40, 20)
+    assert one.get_pixel(20, 10)[:3] == (255, 0, 0)
+    two = Texture.from_file(path, svg_scale=2.0)
+    assert two.size == (80, 40)

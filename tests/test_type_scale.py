@@ -253,9 +253,12 @@ def test_prose_glyphs_are_rasterised_at_device_resolution():
     spec = font_render.font_spec(type_scale.text_font("body"))
     (tex1, x1, y1, w1, h1), = font_render.glyphs(spec, "H", 1.0, device=1.0)
     (tex2, x2, y2, w2, h2), = font_render.glyphs(spec, "H", 1.0, device=2.0)
-    # (a glyph texture carries one texel of padding on each side)
+    # (a glyph texture carries one texel of padding on each side, and one more
+    # on the right for the sub-pixel pen phase)
     assert tex2.height - 2 >= 1.8 * (tex1.height - 2)
-    assert (w2, h2) == pytest.approx((w1, h1), abs=1.5)  # one texel of padding apart
+    # the ink boxes (padding removed: 3 texels across, 2 down) agree within a 1x pixel
+    assert w2 - 3 / 2 == pytest.approx(w1 - 3, abs=1.0)
+    assert h2 - 2 / 2 == pytest.approx(h1 - 2, abs=1.0)
     # Pen position comes from the size-linear layout, not the raster: the same at both.
     assert x2 == pytest.approx(x1, abs=0.6)
     assert font_render.text_width(spec, "Hamburg", 2.0) == pytest.approx(

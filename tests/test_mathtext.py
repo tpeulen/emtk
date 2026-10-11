@@ -104,3 +104,36 @@ def test_advanced_math_transforms():
     assert "a b" in norm_mat
     assert "c d" in norm_mat
 
+
+
+@pytest.mark.parametrize("latex, expected", [
+    (r"A = \log_{10}(I_0/I)", "A = log₁₀(I₀/I)"),
+    (r"\max_i x", "maxᵢ x"),
+    (r"\sin\theta", "sin θ"),
+    (r"\sinh x", "sinh x"),
+    (r"\exp(-t/\tau)", "exp(-t/τ)"),
+])
+def test_an_operator_name_survives_its_subscript(latex, expected):
+    """``\\log_{10}`` lost its ``log``: ``\\b`` does not match before ``_``."""
+    from emtk import latex_to_unicode
+
+    assert latex_to_unicode(latex) == expected
+
+
+def test_a_formula_drawn_as_text_wraps_to_the_column(monkeypatch):
+    """When the typesetter declines, the Unicode fallback wraps rather than running past the edge."""
+    import emtk.mathtext as mathtext
+    from emtk import im
+    from emtk.testing import RecordingPainter
+
+    monkeypatch.setattr(mathtext, "render_math_to_texture", lambda *a, **k: None)
+    painter = RecordingPainter()
+    formula = r"\underbrace{\text{per-trace VBEM}}_{\text{inner: fit each trace to the current prior, then again}}"
+    for _ in range(2):
+        painter = RecordingPainter()
+        with im.frame(painter, (0.0, 0.0, 160.0, 300.0)):
+            im.math(formula)
+    lines = [t for t in painter.texts if t[5].strip()]
+    assert len(lines) > 1, "the fallback text was not wrapped"
+    for x, _y, _w, _h, _align, string, *_ in lines:
+        assert x + painter.text_width(string) <= 160.0 + 1.0, string

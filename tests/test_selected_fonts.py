@@ -126,7 +126,7 @@ def test_gpu_without_image_resolver_fails_instead_of_fake_text(family):
 
 
 def test_glyph_cache_is_bounded():
-    assert _glyph.cache_info().maxsize == 512
+    assert _glyph.cache_info().maxsize == 4096
 
 
 def test_generic_families_resolve_to_real_faces():
