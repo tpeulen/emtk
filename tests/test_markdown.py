@@ -73,15 +73,15 @@ def test_markdown_on_pixel_painter():
     assert lit > 0
 
 
-def test_a_link_row_wraps_instead_of_leaving_the_window():
-    """Every link of a long ``Further reading`` row stays inside the width it was given."""
+def test_inline_links_wrap_inside_the_window():
+    """Every word of a long run of links stays inside the width it was given."""
     links = ", ".join(f"[A fairly long page title number {i}](docs/page_{i}.md)" for i in range(6))
     p = RecordingPainter()
     with im.frame(p, (0, 0, 400, 300)):
         im.begin("Links")
         render_markdown(f"Further reading: {links}.")
         im.end()
-    shown = [t for t in p.texts if t[5].startswith("↗")]
-    assert len(shown) == 6
-    assert max(t[0] + t[2] for t in shown) <= 400
+    shown = [t for t in p.texts if t[5] in ("fairly", "long", "title", "number")]
+    assert shown
+    assert max(t[0] + t[2] for t in p.texts) <= 400
     assert len({round(t[1]) for t in shown}) > 1  # more than one row

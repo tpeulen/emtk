@@ -96,7 +96,8 @@ def test_chat_transcript_renders_markdown_not_raw_text():
     drawn = " ".join(t[5] for t in painter.texts)
     assert "**" not in drawn
     assert "](" not in drawn
-    assert "Accurate FRET" in drawn
+    assert "Accurate" in drawn and "FRET" in drawn
+    assert drawn.count("Accurate") == 1
 
 
 def test_chat_transcript_link_click_routes_to_on_link():
@@ -106,5 +107,5 @@ def test_chat_transcript_link_click_routes_to_on_link():
         "Answer.\n\n**Cited Documentation Pages:**\n- [Accurate FRET](docs/a.md#The four factors)",
     )
     clicked: list[str] = []
-    _transcript_frames(history, clicked.append, click_on="↗ Accurate FRET")
+    _transcript_frames(history, clicked.append, click_on="FRET")
     assert clicked == ["docs/a.md#The four factors"]

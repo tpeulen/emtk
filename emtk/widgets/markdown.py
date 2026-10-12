@@ -7,6 +7,7 @@ images, tables, and admonition boxes.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from dataclasses import dataclass, field
 from typing import Callable
@@ -16,7 +17,7 @@ from ..i18n import tr
 from ..im_core import Col
 from ..type_scale import math_args, pop_text_style, push_text_style
 
-__all__ = ["MarkdownBlock", "parse_markdown", "render_markdown"]
+__all__ = ["InlineRun", "MarkdownBlock", "draw_inline", "parse_inline", "parse_markdown", "render_markdown"]
 
 
 
@@ -379,6 +380,177 @@ def _format_inline_text(text: str) -> tuple[str, list[tuple[str, str]]]:
     return s, links
 
 
+_INLINE = re.compile(
+    r"\[([^\]]+)\]\(([^)]+)\)"            # 1,2 link
+    r"|`([^`]+)`"                            # 3 code
+    r"|\*\*(.+?)\*\*"                       # 4 bold
+    r"|__(.+?)__"                            # 5 bold
+    r"|(?<![*\w])\*([^*\s][^*]*?)\*(?!\*)"   # 6 italic
+    r"|(?<![_\w])_([^_\s][^_]*?)_(?!\w)"    # 7 italic
+    r"|(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)"  # 8 math
+)
+
+
+@dataclass(frozen=True)
+class InlineRun:
+    """One styled stretch of inline text: ``bold``/``italic``/``code`` and an optional link ``target``."""
+
+    text: str
+    bold: bool = False
+    italic: bool = False
+    code: bool = False
+    target: str = ""
+
+
+def parse_inline(text: str, _bold=False, _italic=False, _target="") -> list[InlineRun]:
+    """Split inline Markdown into styled runs (links, ``code``, bold, italic, ``$math$``)."""
+    runs: list[InlineRun] = []
+    pos = 0
+    for m in _INLINE.finditer(text):
+        if m.start() > pos:
+            runs.append(InlineRun(text[pos : m.start()], _bold, _italic, False, _target))
+        pos = m.end()
+        if m.group(1) is not None:
+            runs.extend(parse_inline(m.group(1), _bold, _italic, m.group(2).strip()))
+        elif m.group(3) is not None:
+            runs.append(InlineRun(m.group(3), _bold, _italic, True, _target))
+        elif m.group(4) is not None or m.group(5) is not None:
+            runs.extend(parse_inline(m.group(4) or m.group(5), True, _italic, _target))
+        elif m.group(6) is not None or m.group(7) is not None:
+            runs.extend(parse_inline(m.group(6) or m.group(7), _bold, True, _target))
+        else:
+            try:
+                from ..mathtext import latex_to_unicode
+
+                body = latex_to_unicode(m.group(8).strip())
+            except Exception:
+                body = m.group(8)
+            runs.append(InlineRun(body, _bold, _italic, False, _target))
+    if pos < len(text):
+        runs.append(InlineRun(text[pos:], _bold, _italic, False, _target))
+    return runs
+
+
+def _atoms(runs: list[InlineRun]) -> list[list[InlineRun]]:
+    """Words as lists of run pieces (a word keeps its pieces together); a space is ``[InlineRun(" ")]``."""
+    atoms: list[list[InlineRun]] = []
+    current: list[InlineRun] = []
+    for run in runs:
+        for tok in re.findall(r"[ \t\n]+|[^ \t\n]+", run.text):
+            piece = dataclasses.replace(run, text=" " if tok[0] in " \t\n" else tok)
+            if tok[0] in " \t\n":
+                if current:
+                    atoms.append(current)
+                    current = []
+                atoms.append([piece])
+            else:
+                current.append(piece)
+    if current:
+        atoms.append(current)
+    return atoms
+
+
+def draw_inline(
+    text: str,
+    on_link: Callable[[str], None] | None = None,
+    tag: str = "inl",
+    role: str = "body",
+    colour=None,
+    bold: bool = False,
+    prefix: str = "",
+) -> None:
+    """Draw one wrapped paragraph of inline Markdown as rich-text runs.
+
+    Links are drawn where they sit in the text (coloured, underlined, clickable);
+    bold uses the bold face, code the monospace face on a subtle background. A
+    word is never split, even when it spans several runs (``**a**,``).
+    """
+    from ..im_core import get_current_context
+    from ..im_widgets import _col
+
+    ctx = get_current_context()
+    runs = parse_inline(text)
+    if prefix:
+        runs.insert(0, InlineRun(prefix))
+    if not runs:
+        return
+    cache: dict = {}
+
+    def font_for(run: InlineRun):
+        if run.code:
+            return "code", False
+        return role, bool(bold or run.bold)
+
+    def measure(run: InlineRun) -> tuple[float, float]:
+        key = (run.text, run.bold, run.code)
+        if key not in cache:
+            r, b = font_for(run)
+            push_text_style(r, bold=b)
+            cache[key] = (ctx.p.text_width(run.text), ctx.p.line_height())
+            pop_text_style()
+        return cache[key]
+
+    avail = max(1.0, float(ctx.layout.avail()[0]))
+    pad = 2.0  # horizontal padding of a code span
+    lines: list[list[tuple[float, InlineRun, float]]] = [[]]
+    x = 0.0
+    line_h = 0.0
+    for atom in _atoms(runs):
+        widths = [measure(r)[0] + (2 * pad if r.code else 0.0) for r in atom]
+        for r in atom:
+            line_h = max(line_h, measure(r)[1])
+        w = sum(widths)
+        is_space = atom[0].text == " " and len(atom) == 1
+        if is_space:
+            if x == 0.0 and not lines[-1]:
+                continue
+            lines[-1].append((x, atom[0], widths[0]))
+            x += w
+            continue
+        if x > 0.0 and x + w > avail:
+            while lines[-1] and lines[-1][-1][1].text == " ":
+                lines[-1].pop()
+            lines.append([])
+            x = 0.0
+        for r, rw in zip(atom, widths):
+            lines[-1].append((x, r, rw))
+            x += rw
+    line_h = max(line_h, ctx.p.line_height())
+    max_w = max((seg[0] + seg[2] for ln in lines for seg in ln), default=0.0)
+    box = ctx.layout.row(height=len(lines) * line_h, width=min(avail, max(max_w, 1.0)))
+    ctx.item_add(box)
+    base = colour if colour is not None else _col(Col.TEXT)
+    link_col = _col(Col.CHECK_MARK)
+    for li, ln in enumerate(lines):
+        y = box[1] + li * line_h
+        for si, (sx, run, rw) in enumerate(ln):
+            if run.text == " " and not run.target:
+                continue
+            x0 = box[0] + sx
+            hovered = False
+            if run.target:
+                hit = (x0, y, rw, line_h)
+                hovered, _held, pressed = ctx.button_behavior(hit, ctx.get_id(f"{tag}_{li}_{si}"))
+                if hovered:
+                    ctx.set_tooltip(run.target)
+                if pressed and on_link:
+                    on_link(run.target)
+            if run.code:
+                ctx.draw.add_rect_filled((x0, y + 1), (x0 + rw, y + line_h - 1), (255, 255, 255, 28), 3.0)
+            fr, fb = font_for(run)
+            push_text_style(fr, bold=fb)
+            if run.target:
+                col = tuple(min(255, int(c) + 40) for c in link_col[:3]) + tuple(link_col[3:]) if hovered else link_col
+            elif run.italic:
+                col = tuple(int(c * 0.82) for c in base[:3]) + tuple(base[3:])
+            else:
+                col = base
+            ctx.draw.add_text((x0 + (pad if run.code else 0.0), y), col, run.text, bold=fb)
+            pop_text_style()
+            if run.target:
+                ctx.draw.add_line((x0, y + line_h - 1.0), (x0 + rw, y + line_h - 1.0), col, 1.0)
+
+
 def _link_row(links: list[tuple[str, str]], tag: str, on_link: Callable[[str], None] | None) -> None:
     """Draw ``links`` as a ``•``-separated row that wraps onto the next line instead of leaving the window.
 
@@ -479,13 +651,7 @@ def render_markdown(
             im.dummy(0.0, 2.0)
 
         elif block.kind == "p":
-            clean_text, links = _format_inline_text(block.text)
-            push_text_style("body")
-            im.text_wrapped(clean_text)
-            pop_text_style()
-            if links:
-                im.dummy(0.0, 1.0)
-                _link_row(links, f"plnk_{idx}", on_link)
+            draw_inline(block.text, on_link, f"p{idx}")
             im.dummy(0.0, 4.0)
 
         elif block.kind == "math":
@@ -561,13 +727,7 @@ def render_markdown(
             push_text_style("body", bold=True)
             im.text_colored(adm_color, f"[{adm_title}]")
             pop_text_style()
-            clean_body, adm_links = _format_inline_text(block.text)
-            push_text_style("body")
-            im.text_wrapped(clean_body)
-            pop_text_style()
-            if adm_links:
-                im.dummy(0.0, 1.0)
-                _link_row(adm_links, f"admlnk_{idx}", on_link)
+            draw_inline(block.text, on_link, f"adm{idx}")
             im.dummy(0.0, 4.0)
 
         elif block.kind == "table" and block.items:
@@ -582,8 +742,15 @@ def render_markdown(
                     for c_idx in range(cols):
                         cell_text = row[c_idx] if c_idx < len(row) else ""
                         im.table_next_column()
-                        clean_cell, _ = _format_inline_text(cell_text)
                         align = block.arg[c_idx] if c_idx < len(block.arg) else "l"
+                        if align == "l":
+                            draw_inline(
+                                cell_text, on_link, f"c{idx}_{r_idx}_{c_idx}",
+                                colour=(140, 205, 255, 255) if r_idx == 0 else None,
+                                bold=r_idx == 0,
+                            )
+                            continue
+                        clean_cell, _ = _format_inline_text(cell_text)
                         if r_idx == 0:
                             push_text_style("body", bold=True)
                             _aligned_cell(clean_cell, align, (140, 205, 255, 255))
@@ -596,14 +763,8 @@ def render_markdown(
             im.dummy(0.0, 4.0)
 
         elif block.kind == "list_item":
-            clean_item, item_links = _format_inline_text(block.text)
             bullet_sym = block.arg if block.arg and not block.arg.startswith(("-", "*", "+")) else "•"
-            push_text_style("body")
-            im.text_wrapped(f"  {bullet_sym}  {clean_item}")
-            pop_text_style()
-            if item_links:
-                im.dummy(0.0, 1.0)
-                _link_row(item_links, f"llnk_{idx}", on_link)
+            draw_inline(block.text, on_link, f"li{idx}", prefix=f"  {bullet_sym}  ")
             im.dummy(0.0, 2.0)
 
         elif block.kind == "hr":
