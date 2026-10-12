@@ -2231,11 +2231,13 @@ class DockManager:
             for role, colour in header_colours(ctx.style, win.accent).items():
                 ctx.push_style_color(role, colour)
                 tinted += 1
+        mark = ctx.stack_mark()
         try:
             if win.draw is not None:
                 win.draw(content)
         except Exception:  # noqa: BLE001 - one window must not take the frame down
             logger.exception("emtk.docking: window %r failed to draw", win.key)
+            ctx.unwind(mark)  # what the window opened before it raised, so the pops below match
         finally:
             ctx.pop_style_color(tinted)
             ctx.pop_id()

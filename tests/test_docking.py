@@ -748,3 +748,31 @@ def test_a_layout_from_other_regions_leaves_no_window_off_screen():
     assert set(dm.tabs) == set(dm.regions)
     assert all(dm.region_of(k) in dm.regions for k in ("a", "b"))
     assert dm.active_tab(dm.region_of("a")) in ("a", "b")
+
+
+from emtk.im_core import Col  # noqa: E402
+
+
+def test_a_window_that_raises_inside_its_own_child_does_not_unbalance_the_frame(caplog):
+    """A window's draw raised while its own scrolling child was open (the help reader,
+    when a glyph did not fit the atlas). The dock caught it, but its ``end_child`` then
+    closed the window's child and the host's ``end`` unpacked the dock's child record:
+    ``too many values to unpack``, and the frame went down after all."""
+    docks = DockManager(Split("h", 0.5, Region("left"), Region("right")))
+    log: list = []
+
+    def broken(box):
+        im.push_id("inner")
+        im.push_style_color(Col.TEXT, (255, 0, 0, 255))
+        im.begin_child((box[0], box[1], box[2], box[3] / 2.0), child_id="reader")
+        im.text("half drawn")
+        raise RuntimeError("a glyph that does not fit")
+
+    docks.add_window("doc", "Document", broken, dock="left")
+    docks.add_window("other", "Other", _content(log, "other"), dock="right")
+    host = Driver(docks)
+    for _ in range(3):
+        painter = host.frame()
+    assert "half drawn" in painter.strings, "the window got as far as its child"
+    assert "failed to draw" in caplog.text
+    assert any(key == "other" for key, _box in log), "the next window still draws"

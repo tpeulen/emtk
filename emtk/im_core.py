@@ -825,6 +825,41 @@ class Context:
         """
         self._align_text_to_frame = True
 
+    # -- exception safety ----------------------------------------------------- #
+    def stack_mark(self) -> tuple:
+        """The depth of every push/pop stack, for :meth:`unwind` after a draw that raised."""
+        return (
+            len(self._child),
+            len(self._window_stack),
+            len(self._ids),
+            len(self._style_stack),
+            len(self._item_flag_stack),
+        )
+
+    def unwind(self, mark: tuple) -> None:
+        """Close what a draw left open when it raised, back to *mark* (:meth:`stack_mark`).
+
+        A host that catches an app's exception so one window cannot take the frame
+        down must also close the children, windows, ids and style pushes that app
+        opened before it raised; otherwise the host's own ``end_child``/``end`` pop
+        the app's entries -- a window's ``end`` then unpacked a child's record.
+        """
+        children, windows, ids, styles, flags = mark
+        while len(self._child) > children:
+            if len(self._child[-1]) > 2:
+                self.end_child()
+            elif len(self._window_stack) > windows:
+                self.end()
+            else:
+                self.layout, self.clip_rect = self._child.pop()
+        while len(self._window_stack) > windows:
+            self._window_stack.pop()
+        self.current_window = self._window_stack[-1] if self._window_stack else None
+        del self._ids[ids:]
+        self.pop_style_color(len(self._style_stack) - styles)
+        while len(self._item_flag_stack) > flags:
+            self.item_flags = self._item_flag_stack.pop()
+
     # -- IDs and storage ----------------------------------------------------- #
     def push_id(self, key: Any) -> None:
         self._ids.append(key)
