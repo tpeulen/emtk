@@ -122,6 +122,12 @@ dotted names
     on the row, or Right/Left) expands or collapses it. Children stay under
     their parent whatever the sort, are indented a step per level, and are
     shown while a filter matches them or their parent;
+``link_key``
+    the record field naming the row's master (a parameter whose value is
+    borrowed from another): the row's text is drawn in the *linked* ink
+    (:data:`emtk.style.LINKED`, distinct from the dimmed ink of ``muted_key``)
+    and its tooltip says "linked to <master>". Painters have no italic face,
+    so the ink is what tells a follower from a fixed or computed row;
 ``expanded_attr``
     a model attribute holding the ``set`` of expanded row keys. The table
     reads and writes that set, so the model can open a row itself and the
@@ -484,8 +490,12 @@ class DataTable:
         status: bool = False,
         column_picker: bool = False,
         tree_key: str = "",
+        linked: Optional[Callable[[int], str]] = None,
     ) -> None:
         self.columns: list[TableColumn] = list(columns)
+        #: ``linked(index)``: the master a row borrows its value from (``""``: none); the row is
+        #: drawn in the linked ink and its tooltip names the master.
+        self.linked = linked
         #: Record field naming a row's parent (its ``row_key``); ``""``: a flat table.
         self.tree_key = str(tree_key or "")
         #: Keys of the expanded rows of a tree.
@@ -854,6 +864,11 @@ class DataTable:
             if full:
                 assert column is not None
                 return (full, ("cell", index, column.key))
+            master = self.linked(index) if self.linked is not None else ""
+            if master:
+                from ..i18n import tr
+
+                return (tr("linked to {name}", domain="emtk").format(name=master), ("link", index))
             if self.tooltip_key:
                 note = str(self.value(index, self.tooltip_key) or "")
                 if note:
@@ -1143,6 +1158,8 @@ class DataTable:
             p.fill_rect(x, y, sum(self._widths), h, background)
         text_h = min(h, p.line_height() * 1.15)
         colour = _style.DIM if self.muted is not None and self.muted(index) else _style.TEXT
+        if self.linked is not None and self.linked(index):
+            colour = _style.LINKED
         col_x = x
         tree_column = columns[0] if self.tree_key and self.first_column == 0 and columns else None
         for column, width in zip(columns, self._widths):
@@ -1646,9 +1663,11 @@ class TableBinding:
         self.editable_call = str(merged.get("editable_call", "") or "")
         self.expanded_attr = str(merged.get("expanded_attr", "") or "")
         self.muted_key = str(merged.get("muted_key", "") or "")
+        self.link_key = str(merged.get("link_key", "") or "")
         self.control = DataTable(
             cell_editable=self._cell_editable if self.editable_call else None,
             muted=self._muted if self.muted_key else None,
+            linked=self._linked if self.link_key else None,
             status=bool(merged.get("status", False)),
             column_picker=bool(merged.get("column_picker", False)),
             tree_key=str(merged.get("tree_key", "") or ""),
@@ -1820,25 +1839,8 @@ class TableBinding:
     def _muted(self, index: int) -> bool:
         return bool(self.control.value(index, self.muted_key))
 
-    def record(self, index: Optional[int]) -> Any:
-        """What a callback receives for source *index*: the record, else the index."""
-        if index is None:
-            return None
-        if self.control.arrays is None and 0 <= index < len(self.control.records):
-            return self.control.records[index]
-        return index
-
-    def _cell_editable(self, index: int, key: str) -> bool:
-        fn = self._lookup(self.editable_call)
-        if not callable(fn):
-            return True
-        try:
-            return bool(fn(self.record(index), key))
-        except Exception:  # noqa: BLE001 - a failing rule refuses the edit
-            return False
-
-    def _muted(self, index: int) -> bool:
-        return bool(self.control.value(index, self.muted_key))
+    def _linked(self, index: int) -> str:
+        return str(self.control.value(index, self.link_key) or "")
 
     def _on_row_drag(self, index: int, x: float, y: float, dropped: bool) -> None:
         fn = self._lookup(self.drag_call)

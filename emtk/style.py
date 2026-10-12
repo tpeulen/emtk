@@ -62,6 +62,7 @@ __all__ = [
     "SCROLLBAR_GRAB",
     "SCROLLBAR_GRAB_HOVERED",
     "SCROLLBAR_GRAB_ACTIVE",
+    "LINKED",
     "CHECK_MARK",
     "SLIDER_GRAB",
     "SLIDER_GRAB_ACTIVE",
@@ -128,6 +129,8 @@ Colour = tuple[int, int, int] | tuple[int, int, int, int]
 # reference's).
 TEXT = (235, 235, 240)
 DIM = (150, 150, 160)
+#: A row whose value is borrowed from another (a linked parameter): dimmer than TEXT, bluer than DIM.
+LINKED = (140, 150, 235)
 GOLD = (245, 225, 128)
 
 # ImGuiCol_TextDisabled

@@ -974,3 +974,20 @@ def test_following_selected_attr_keeps_a_multi_selection():
     model.picked = dict(model.picked)
     binding.refresh()
     assert control.selected_indices() == [0, 1]
+
+
+def test_a_linked_row_is_drawn_in_the_linked_ink_and_names_its_master():
+    """A follower's value is its master's: not the dimmed ink of a fixed row, and the tooltip says whose."""
+    from emtk import style
+
+    model = Parameters()
+    model.rows[1]["master"] = "tau"
+    section = {**PARAMETER_TABLE, "options": {**PARAMETER_TABLE["options"], "link_key": "master"}}
+    control = TableBinding(section, model).control
+    painter = draw(control)
+    colour = {text[5]: text[6] for text in painter.texts}
+    assert colour["b"] == style.LINKED != style.DIM and colour["a"] == style.TEXT
+    x, y = cell(control, 1, 1)
+    assert control.tooltip_at(x, y)[0] == "linked to tau"
+    x, y = cell(control, 0, 1)
+    assert control.tooltip_at(x, y)[0] == ""
