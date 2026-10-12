@@ -1510,8 +1510,30 @@ def selectable(label: str, selected: bool = False, size=None, icon: str | None =
         text_y = top + pad_y
     else:
         text_y = box[1] + pad_y
-    ctx.draw.add_text((x, text_y), _col(Col.TEXT), _visible_label(label))
+    room = box[0] + box[2] - pad_x - x
+    ctx.draw.add_text((x, text_y), _col(Col.TEXT), _elided(ctx, _visible_label(label), room))
     return pressed
+
+
+def _elided(ctx, text: str, room: float) -> str:
+    """*text*, or its longest prefix plus "…" that fits *room* (a row narrower than its label).
+
+    A tree row or a header in a narrow column (a docked navigation pane, the
+    window magnified) used to run its label past the column's edge, where the
+    clip cut it mid-letter with no hint that there was more; the tooltip keeps
+    the whole name.
+    """
+    measure = ctx.draw.calc_text_size
+    if not text or measure(text)[0] <= room + 0.5:
+        return text
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        if measure(text[:mid].rstrip() + "\u2026")[0] <= room + 0.5:
+            lo = mid
+        else:
+            hi = mid - 1
+    return text[:lo].rstrip() + "\u2026" if lo else ""
 
 
 def combo(label: str, current: int, items: Sequence[str],
@@ -1626,8 +1648,9 @@ def collapsing_header(label: str, open_: "Optional[bool | int]" = None) -> bool:
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON),
                              ctx.style.frame_rounding)
     arrow = "v" if is_open else ">"
-    ctx.draw.add_text((box[0] + ctx.style.frame_padding[0], box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
-                      f"{arrow} {_visible_label(label)}")
+    pad_x = ctx.style.frame_padding[0]
+    ctx.draw.add_text((box[0] + pad_x, box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT),
+                      _elided(ctx, f"{arrow} {_visible_label(label)}", box[2] - 2.0 * pad_x))
     return is_open
 
 
