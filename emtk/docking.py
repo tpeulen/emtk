@@ -594,6 +594,9 @@ class DockWindow:
     visible, collapsed : bool
     closable, resizable, movable, dockable : bool
         What the user may do to it. ``movable`` covers undocking.
+    core : bool
+        The application's own panel: "Close all panels" and "Close other panels" leave it
+        open (its own close button still works when :attr:`closable`).
     anchor : str or None
         The edge or corner of the dock box a floating window is glued to.
     min_size : (float, float)
@@ -622,6 +625,7 @@ class DockWindow:
     resizable: bool = True
     movable: bool = True
     dockable: bool = True
+    core: bool = False
     anchor: Optional[str] = None
     min_size: Tuple[float, float] = (120.0, 60.0)
     padding: float = 6.0
@@ -711,6 +715,7 @@ class DockManager:
         self._drag: Optional[dict] = None
         self._context_targets: Dict[str, Optional[str]] = {}
         self._context_positions: Dict[str, Tuple[float, float]] = {}
+        self._context_heights: Dict[str, float] = {}
         #: While a window is dragged: the region under the pointer.
         self.drop_target: Optional[str] = None
         self._hint_edges: Tuple[str, ...] = ()
@@ -1165,6 +1170,28 @@ class DockManager:
     def hide(self, key: str) -> None:
         self.windows[key].visible = False
         self._dirty = True
+
+    def closable_panels(self, keep: Iterable[str] = ()) -> List[str]:
+        """Keys of the shown windows "Close all/other panels" would close.
+
+        Those that are visible, :attr:`~DockWindow.closable` and not
+        :attr:`~DockWindow.core`, except the keys in *keep*.
+        """
+        kept = set(keep)
+        return [key for key, win in self.windows.items()
+                if win.visible and win.closable and not win.core and key not in kept]
+
+    def close_panels(self, keep: Iterable[str] = ()) -> List[str]:
+        """Close every panel :meth:`closable_panels` names; returns their keys.
+
+        Closing is :meth:`hide`, so a host that treats a hidden window as a closed
+        one (as an app hosting tools does) sees each close exactly as if its own
+        close button had been pressed. :meth:`reset` brings the layout back.
+        """
+        keys = self.closable_panels(keep)
+        for key in keys:
+            self.hide(key)
+        return keys
 
     def toggle(self, key: str) -> bool:
         """Show a hidden window (on top) or hide a shown one; returns visibility.
@@ -2105,6 +2132,7 @@ class DockManager:
 
     def _open_context(self, ctx, scope: str, key: Optional[str]) -> None:
         self._context_targets[scope] = key
+        self._context_heights.pop(scope, None)
         self._context_positions[scope] = tuple(ctx.io.mouse_pos)
         ctx.open_popup(f"##{self.name}.context.{scope}")
 
@@ -2114,11 +2142,17 @@ class DockManager:
         if not ctx.begin_popup(f"##{self.name}.context.{scope}"):
             return
         win = self.windows.get(self._context_targets.get(scope))
-        rows = 1 + sum(not panel.visible for panel in self.windows.values())
-        if win is not None:
-            rows += 3 if self.region_of(win.key) is not None else 2 + len(self.regions)
         width = min(260.0, self.box[2])
-        height = min(rows * self._title_h + 16.0, self.box[3])
+        # The rows are laid out by the window itself, so its height is the one the last frame
+        # measured; the first frame has only an estimate (every row a title high).
+        height = self._context_heights.get(scope)
+        if height is None:
+            hidden = sum(not panel.visible for panel in self.windows.values())
+            rows = 3 + hidden
+            if win is not None:
+                rows += 2 if self.region_of(win.key) is not None else 1 + len(self.regions)
+            height = rows * self._title_h + 16.0
+        height = min(height, self.box[3])
         px, py = self._context_positions[scope]
         px = max(self.box[0], min(px, self.box[0] + self.box[2] - width))
         py = max(self.box[1], min(py, self.box[1] + self.box[3] - height))
@@ -2140,7 +2174,17 @@ class DockManager:
             if im.menu_item(tr("Close panel", domain="emtk"), enabled=win.closable):
                 self.hide(win.key)
                 im.close_current_popup()
-            im.separator()
+        keep = (win.key,) if win is not None else ()
+        if win is not None and im.menu_item(
+                tr("Close other panels", domain="emtk"),
+                enabled=bool(self.closable_panels(keep))):
+            self.close_panels(keep)
+            im.close_current_popup()
+        if im.menu_item(tr("Close all panels", domain="emtk"),
+                        enabled=bool(self.closable_panels())):
+            self.close_panels()
+            im.close_current_popup()
+        im.separator()
         for key, panel in self.windows.items():
             if not panel.visible and im.menu_item(
                     tr("Show {title}", domain="emtk").format(title=tr(panel.title)) + f"##{key}"):
@@ -2152,6 +2196,9 @@ class DockManager:
         if im.menu_item(tr("Restore default layout", domain="emtk")):
             self.reset()
             im.close_current_popup()
+        last = im.get_item_rect()
+        if last is not None:
+            self._context_heights[scope] = last[1] + last[3] + 8.0 - menu_box[1]
         ctx.end()
         ctx.end_popup()
 
