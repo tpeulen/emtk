@@ -371,8 +371,7 @@ class PixelPainter:
         if tuple(background[:3]) != (0, 0, 0):
             self._fill(0, 0, self.width, self.height, background)
         else:
-            for i in range(3, len(self.px), 4):
-                self.px[i] = background[3]
+            self.px[3::4] = bytes((int(background[3]),)) * (self.width * self.height)
         self._atlas = _load_atlas()
         #: Text size, as a multiple of the baked one. See :meth:`set_font_scale`.
         self._font_scale = 1.0
@@ -421,6 +420,16 @@ class PixelPainter:
             return
         r, g, b, a = self._rgba(colour)
         stride = self.width * 4
+        if a <= 0:
+            return  # blends to the pixel it covers, alpha included: max(alpha, 0)
+        if a >= 255:
+            # Opaque: the blend below is the colour itself, so a whole row is one slice write.
+            # A window background on a tall canvas was ~0.1 s per fill pixel by pixel.
+            row = bytes((int(r), int(g), int(b), 255)) * (x1 - x0)
+            for yy in range(y0, y1):
+                base = yy * stride + x0 * 4
+                self.px[base : base + len(row)] = row
+            return
         for yy in range(y0, y1):
             base = yy * stride + x0 * 4
             for i in range(x0, x1):
