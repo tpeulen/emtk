@@ -450,6 +450,29 @@ def _atoms(runs: list[InlineRun]) -> list[list[InlineRun]]:
     return atoms
 
 
+_CODE_FACE: dict[str, bool] = {}
+
+
+def _code_face_available() -> bool:
+    """Whether the configured monospace face can be rendered here (else code spans use the prose face)."""
+    from ..type_scale import text_font
+
+    try:
+        font = text_font("code")
+        key = str(font.get("family"))
+        if key not in _CODE_FACE:
+            from ..font_render import FontSpec, text_width
+
+            try:
+                text_width(FontSpec(key, font["size"], False, False), "ab", 1.0)
+                _CODE_FACE[key] = True
+            except (ValueError, TypeError):
+                _CODE_FACE[key] = False
+        return _CODE_FACE[key]
+    except Exception:
+        return False
+
+
 def draw_inline(
     text: str,
     on_link: Callable[[str], None] | None = None,
@@ -477,8 +500,10 @@ def draw_inline(
         return
     cache: dict = {}
 
+    code_face = _code_face_available()
+
     def font_for(run: InlineRun):
-        if run.code:
+        if run.code and code_face:
             return "code", False
         return role, bool(bold or run.bold)
 
