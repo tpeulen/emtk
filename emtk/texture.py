@@ -257,10 +257,19 @@ class Texture:
 class ImageTextureCache:
     """Cache for loaded textures to prevent redundant file I/O and decodes."""
 
-    def __init__(self, maxsize: int = 256) -> None:
+    def __init__(self, maxsize: int = 256, max_texels: int = 16_000_000) -> None:
         self.maxsize = maxsize
+        #: Pixel budget over all cached images (64 MB of RGBA by default): 256
+        #: screenshots of 1 Mpx each would otherwise be a gigabyte.
+        self.max_texels = max_texels
+        self._texels = 0
         self._cache: dict[tuple[str, str, int], Texture] = {}
         self._keys: list[tuple[str, str, int]] = []
+
+    @property
+    def texels(self) -> int:
+        """Pixels held by the cached images."""
+        return self._texels
 
     def get(self, path: pathlib.Path, filter: str) -> Texture | None:
         try:
@@ -282,15 +291,22 @@ class ImageTextureCache:
         key = (str(path.resolve()), filter, mtime_ns)
         if key in self._cache:
             self._keys.remove(key)
-        elif len(self._keys) >= self.maxsize:
-            oldest = self._keys.pop(0)
-            self._cache.pop(oldest, None)
+            old = self._cache.pop(key)
+            self._texels -= old.width * old.height
+        # Least recently used out until both bounds hold; the newcomer always stays.
+        size = texture.width * texture.height
+        while self._keys and (len(self._keys) >= self.maxsize
+                              or self._texels + size > self.max_texels):
+            old = self._cache.pop(self._keys.pop(0))
+            self._texels -= old.width * old.height
         self._cache[key] = texture
+        self._texels += size
         self._keys.append(key)
 
     def clear(self) -> None:
         self._cache.clear()
         self._keys.clear()
+        self._texels = 0
 
 
 _GLOBAL_IMAGE_CACHE = ImageTextureCache()

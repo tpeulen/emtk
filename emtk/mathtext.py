@@ -408,13 +408,31 @@ def latex_to_unicode(latex: str) -> str:
 
 
 
+#: Default pixel budget of a texture cache: 4 million texels, 16 MB of RGBA.
+DEFAULT_MAX_TEXELS = 4_000_000
+
+
+def _texels(texture: Texture) -> int:
+    return texture.width * texture.height
+
+
 class MathTextureCache:
     """LRU Texture cache for rasterized LaTeX mathematics."""
 
-    def __init__(self, maxsize: int = 256) -> None:
+    def __init__(self, maxsize: int = 256, max_texels: int = DEFAULT_MAX_TEXELS) -> None:
         self.maxsize = maxsize
+        #: Pixel budget over all cached formulas. A count bound alone is no bound
+        #: on memory: a documentation sweep fills 256 entries with display
+        #: equations ~900 px wide, ~10 million texels (40 MB) that nothing frees.
+        self.max_texels = max_texels
+        self._texels = 0
         self._cache: dict[tuple[str, tuple[int, int, int, int], float, int], Texture] = {}
         self._keys: list[tuple[str, tuple[int, int, int, int], float, int]] = []
+
+    @property
+    def texels(self) -> int:
+        """Pixels held by the cached formulas."""
+        return self._texels
 
     def get(
         self,
@@ -442,15 +460,21 @@ class MathTextureCache:
         key = (formula, colour, font_size, dpi)
         if key in self._cache:
             self._keys.remove(key)
-        elif len(self._keys) >= self.maxsize:
+            self._texels -= _texels(self._cache.pop(key))
+        # Least recently used out until both bounds hold; the newcomer always stays,
+        # even alone over budget, because the caller is about to draw it.
+        while self._keys and (len(self._keys) >= self.maxsize
+                              or self._texels + _texels(texture) > self.max_texels):
             oldest = self._keys.pop(0)
-            self._cache.pop(oldest, None)
+            self._texels -= _texels(self._cache.pop(oldest))
         self._cache[key] = texture
+        self._texels += _texels(texture)
         self._keys.append(key)
 
     def clear(self) -> None:
         self._cache.clear()
         self._keys.clear()
+        self._texels = 0
 
 
 _GLOBAL_MATH_CACHE = MathTextureCache()
