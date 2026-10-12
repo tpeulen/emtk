@@ -1272,7 +1272,6 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
     n_col = max(1, int(n_col))
     rows = [leaves[i:i + n_col] for i in range(0, len(leaves), n_col)]
     spacing = _core.get_style().item_spacing[0]
-    inner = _core.get_style().item_inner_spacing[0]
     label_w = [0.0] * n_col
     fixed_w = [0.0] * n_col
     min_w = [0.0] * n_col
@@ -1284,8 +1283,9 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
                 breaks.add(c)
             text = _label_of(section)
             if text:
-                # a label sits an inner spacing from its own field
-                label_w[c] = max(label_w[c], _w.calc_text_size(text)[0] + inner)
+                # a label sits a full item spacing from its own field, so the longest
+                # label never touches the control beside it
+                label_w[c] = max(label_w[c], _w.calc_text_size(text)[0] + spacing)
             fixed_w[c] = max(fixed_w[c], _fixed_width(section, model))
             weight[c] = max(weight[c], _weight(section))
             if _weight(section) > 0:

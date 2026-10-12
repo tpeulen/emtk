@@ -239,7 +239,8 @@ def test_a_collapsible_panel_folds_and_remembers():
 def test_a_fold_header_is_compact_left_aligned_and_its_buttons_sit_close():
     """A fold is a text line plus a little padding -- shorter than a field --
     with its title at the left; the buttons of one row are an inner spacing
-    apart, and a label an inner spacing from its field."""
+    apart, and a label a full item spacing from its field (so the longest label
+    never touches the control beside it)."""
     spec = {"sections": [
         {"type": "panel", "title": "Axes", "collapsible": True, "sections": [
             {"type": "value", "attr": "restarts", "label": "Restarts", "kind": "int"},
@@ -261,7 +262,7 @@ def test_a_fold_header_is_compact_left_aligned_and_its_buttons_sit_close():
     ok, cancel = driver.state.rects["ok"], driver.state.rects["cancel"]
     assert abs(cancel[0] - (ok[0] + ok[2]) - inner) < 0.5
     label_w = len("Restarts") * RecordingPainter.GLYPH_W
-    assert abs(field[0] - fold[0] - label_w - inner) < 1.0
+    assert abs(field[0] - fold[0] - label_w - emtk.Style().item_spacing[0]) < 1.0
 
 
 def test_a_declared_width_fixes_the_control():
