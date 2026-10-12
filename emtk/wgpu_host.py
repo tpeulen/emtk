@@ -999,7 +999,9 @@ def wgpu_host_class():
             painter = self._painter
             painter.clear()
             logical_w, logical_h = width / scale, height / scale
-            self.control.draw(painter, 0.0, 0.0, logical_w, logical_h)
+            from .frame_errors import draw_control  # noqa: PLC0415
+
+            draw_control(self.control, painter, 0.0, 0.0, logical_w, logical_h)
             self.renderer.render(
                 painter, width, height,
                 context.get_current_texture().create_view(),

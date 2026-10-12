@@ -330,7 +330,9 @@ class TkHost:
         w, h = self._size
         painter = PilPainter(w, h, background=self.background, frame=self._frame,
                              scale=self._font_scale())
-        self.control.draw(painter, 0.0, 0.0, float(w), float(h))
+        from .frame_errors import draw_control  # noqa: PLC0415
+
+        draw_control(self.control, painter, 0.0, 0.0, float(w), float(h))
         frame = painter.frame
         if self._photo is None or frame is not self._frame:
             self._photo = ImageTk.PhotoImage(frame, master=self.root)

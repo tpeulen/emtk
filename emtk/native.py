@@ -1173,7 +1173,16 @@ class NativeHost:
                 # event. Ask again; the scheduler waits a moment after a cancel.
                 self.canvas.request_draw()
             raise
-        self.surface.render(texture.create_view())
+        view = texture.create_view()
+        try:
+            self.surface.render(view)
+        except Exception as error:  # noqa: BLE001 - reported and drawn, never left blank
+            # A ControlSurface already turns a failing control into an error panel; this is
+            # a Surface of the app's own (or the renderer) failing. Without a pass of our own
+            # the window presents a texture nothing was drawn into: solid magenta on Metal.
+            from .frame_errors import report_frame_error  # noqa: PLC0415
+
+            self._render_error_panel(view, report_frame_error(error))
         self._retitle()
         if getattr(self.app, "close_requested", False):
             if self._loop is not None and not getattr(self, "_close_scheduled", False):
@@ -1189,6 +1198,26 @@ class NativeHost:
         delay = next_frame_in(self.surface)
         if delay is not None:
             self._schedule_wake(delay)
+
+    def _render_error_panel(self, view, record) -> None:
+        """Draw *record* (:class:`~emtk.frame_errors.FrameError`) into *view* with a renderer of our own."""
+        from .frame_errors import draw_error_panel, logger as frame_logger  # noqa: PLC0415
+
+        try:
+            renderer = getattr(self, "_error_renderer", None)
+            if renderer is None:
+                from .wgpu_host import WgpuRenderer  # noqa: PLC0415
+
+                renderer = self._error_renderer = WgpuRenderer(device=self.device,
+                                                               format=self.format)
+            width, height = self.canvas.get_physical_size()
+            ratio = float(self.canvas.get_pixel_ratio() or 1.0)
+            painter = renderer.painter(scale=ratio)
+            draw_error_panel(painter, 0.0, 0.0, width / ratio, height / ratio, record)
+            renderer.render(painter, width, height, view, background=(40, 18, 22, 255),
+                            format=self.format)
+        except Exception:  # noqa: BLE001 - the error itself is already in the log
+            frame_logger.exception("could not draw the frame error panel")
 
     def _schedule_wake(self, delay: float) -> None:
         """One draw after *delay* seconds, unless a frame comes first."""

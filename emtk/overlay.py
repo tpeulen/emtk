@@ -67,7 +67,9 @@ class _Over(ControlSurface):
         due = self.due_at is not None and time.monotonic() >= self.due_at
         if self.dirty or due or (hook is not None and hook()):
             painter.clear()
-            self.control.draw(painter, *self._box())
+            from .frame_errors import draw_control  # noqa: PLC0415
+
+            draw_control(self.control, painter, *self._box())
             # An app that changed state late in its frame asks for one more.
             self.dirty = bool(getattr(self.control, "wants_frame", False))
             # And one that asked for a frame *later* gets it then, although no

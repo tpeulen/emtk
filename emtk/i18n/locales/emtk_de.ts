@@ -796,5 +796,17 @@
             <source>linked to {name}</source>
             <translation>verknüpft mit {name}</translation>
         </message>
+        <message>
+            <source>This window failed to draw.</source>
+            <translation>Dieses Fenster konnte nicht gezeichnet werden.</translation>
+        </message>
+        <message>
+            <source>Repeated in {count} frames.</source>
+            <translation>In {count} Bildern wiederholt.</translation>
+        </message>
+        <message>
+            <source>The full traceback is in the log.</source>
+            <translation>Der vollständige Traceback steht im Protokoll.</translation>
+        </message>
     </context>
 </TS>

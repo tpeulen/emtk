@@ -170,7 +170,43 @@ NAMESPACED_MODULES = (
 #: emtk's own version. It is a library with its own tests, examples and docs
 #: (see ``README.md``), so it says what it is rather than borrowing the
 #: application's number.
-__version__ = "0.1.7"
+__version__ = "0.1.8"
+
+
+def version_info() -> dict:
+    """What emtk this is: ``{"version": ..., "commit": ...}``.
+
+    An application that needs a newer emtk than the one installed names both
+    in its refusal (``chisurf`` does at startup), so this says which build it
+    is talking to. ``commit`` is the git commit of a source checkout, or the
+    one pip recorded for a VCS install (``direct_url.json``); ``None`` when
+    neither says.
+    """
+    import os  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    commit = None
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if os.path.exists(os.path.join(root, ".git")):
+        try:
+            commit = subprocess.run(
+                ["git", "-C", root, "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=5, check=True,
+            ).stdout.strip() or None
+        except Exception:  # noqa: BLE001 - no git on PATH: the version still answers
+            commit = None
+    if commit is None:
+        try:
+            import json  # noqa: PLC0415
+            from importlib import metadata  # noqa: PLC0415
+
+            text = metadata.distribution("emtk").read_text("direct_url.json")
+            if text:
+                vcs = json.loads(text).get("vcs_info") or {}
+                commit = (vcs.get("commit_id") or "")[:7] or None
+        except Exception:  # noqa: BLE001 - not installed as a distribution
+            commit = None
+    return {"version": __version__, "commit": commit}
 
 #: The Dear ImGui release whose published API ``im`` is checked against. The
 #: list of names lives in ``tests/emtk/imgui_api.txt``, taken from this

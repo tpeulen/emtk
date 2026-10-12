@@ -266,8 +266,11 @@ def host_class():
 
                 font_pt = ui_font_pt() if self.font_pt is None else self.font_pt
                 surface = QtPainter(painter, font_pt)
-                self.control.draw(
-                    surface, 0.0, 0.0, float(self.width()), float(self.height())
+                from .frame_errors import draw_control
+
+                draw_control(
+                    self.control, surface, 0.0, 0.0,
+                    float(self.width()), float(self.height()),
                 )
             finally:
                 painter.end()

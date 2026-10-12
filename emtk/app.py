@@ -409,7 +409,9 @@ class ControlSurface(Surface):
             self._painter_generation = generation()
         painter = self._painter
         painter.clear()
-        self.control.draw(painter, *self._box())
+        from .frame_errors import draw_control  # noqa: PLC0415
+
+        draw_control(self.control, painter, *self._box())
         width, height = self.size
         self.renderer.render(painter, width, height, view,
                              background=self.background, format=self.format)
