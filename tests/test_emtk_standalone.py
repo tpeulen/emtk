@@ -42,3 +42,22 @@ def test_every_mapped_name_resolves():
 
     for name, module in emtk._NAME_TO_MODULE.items():
         assert getattr(emtk, name) is not None, f"{name} from {module}"
+
+
+def test_importing_one_module_does_not_import_the_widget_set():
+    """``import emtk.i18n`` is what a headless host does for translated text; it must stay light.
+
+    ChiSurf's plugin-manifest loader calls it from core code with no GUI; the package
+    ``__init__`` used to import the painter, layout and every widget family behind it.
+    """
+    code = (
+        "import sys, emtk.i18n; "
+        "heavy = [m for m in ('emtk.painter', 'emtk.im', 'emtk.layout', 'emtk.widgets.basic') "
+        "if m in sys.modules]; "
+        "assert not heavy, heavy; "
+        "import emtk; assert emtk.Painter and emtk.Button and emtk.im and emtk.redraw "
+        "and emtk.Plot and emtk.DEEP_PALETTE and emtk.nice_ticks"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                          cwd=str(_ROOT))
+    assert proc.returncode == 0, proc.stdout + proc.stderr

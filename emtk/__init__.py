@@ -15,46 +15,11 @@ stood on their own.
 """
 from __future__ import annotations
 
-# Eager, and a submodule rather than a name: a host reaches for
-# `emtk.redraw.content_key` while deciding whether to keep last frame's
-# vertices, which is the wrong moment to discover a lazy import. It costs one
-# small module with no dependencies of its own.
-from . import redraw
-from . import im
-from .widgets.axis import Axis, nice_ticks
-from .widgets.markers import MARKERS, draw_marker
-from .painter import (
-    ALIGN_CENTER,
-    ALIGN_HCENTER,
-    ALIGN_LEFT,
-    ALIGN_RIGHT,
-    ALIGN_VCENTER,
-    Colour,
-    Painter,
-)
-from .widgets.plot import DEEP_PALETTE, Plot, begin_plot
-from .widgets.basic import (
-    Button,
-    Checkbox,
-    ColorEdit4,
-    Combo,
-    Histogram,
-    InputInt,
-    ListBox,
-    PlotLines,
-    ProgressBar,
-    RadioGroup,
-    ScrollBar,
-    Separator,
-    SliderFloat,
-    Table,
-    Tabs,
-    TextInput,
-    Toggle,
-    Tooltip,
-    TreeNode,
-    fit_text,
-)
+# Nothing is imported here. `import emtk.i18n` (or any one module) must not pull the whole
+# widget set in behind it: a host that only wants translated text -- ChiSurf's core, which
+# loads plugin manifests headless -- would otherwise import the painter, layout and every
+# widget family. Names resolve on first use through `__getattr__` below, and the submodules
+# `emtk.im` and `emtk.redraw` too, so `emtk.redraw.content_key(...)` still just works.
 
 __all__ = [
     "ALIGN_CENTER",
@@ -99,6 +64,7 @@ __all__ = [
 #: three places that would otherwise each keep their own list and each miss a
 #: different new module.
 CONTROL_MODULES = (
+    "painter",
     "widgets.basic",
     "widgets.text",
     "widgets.combo",
@@ -215,6 +181,12 @@ IMGUI_VERSION = "1.93.0"
 
 
 _NAME_TO_MODULE: dict[str, str] = {
+    "ACCELERATIONS": "painter",
+    "ALIGN_CENTER": "painter",
+    "ALIGN_HCENTER": "painter",
+    "ALIGN_LEFT": "painter",
+    "ALIGN_RIGHT": "painter",
+    "ALIGN_VCENTER": "painter",
     "ALT_MODIFIER": "events",
     "AcceptFlags": "widgets.dragdrop",
     "Action": "widgets.text_editor",
@@ -261,6 +233,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "ColorPicker4": "widgets.color",
     "ColorState": "widgets.color",
     "Colorizer": "widgets.text_editor",
+    "Colour": "painter",
     "Column": "widgets.tables",
     "Combo": "widgets.basic",
     "ComboBox": "widgets.combo",
@@ -274,6 +247,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "Cursor": "widgets.text_editor",
     "Cursors": "widgets.text_editor",
     "DARK_PALETTE": "widgets.text_editor",
+    "DEEP_PALETTE": "widgets.plot",
     "DELAY_NONE": "widgets.dragdrop",
     "DELAY_NORMAL": "widgets.dragdrop",
     "DELAY_SHORT": "widgets.dragdrop",
@@ -405,6 +379,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "NO_BUTTON": "events",
     "NO_MATCH": "widgets.menus",
     "NO_MODIFIER": "events",
+    "OPTIONAL_OPERATIONS": "painter",
     "OVERLAP": "widgets.menus",
     "OverlayStack": "router",
     "PAD": "widgets.combo",
@@ -412,6 +387,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "PLACE_CASCADE": "im",
     "PLACE_FRAME": "im",
     "PREVIEW_TYPES": "widgets.memory_editor",
+    "Painter": "painter",
     "PaneStack": "widgets.pane_stack",
     "Pass": "router",
     "Payload": "widgets.dragdrop",
@@ -427,6 +403,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "PopupPress": "widgets.menus",
     "Pos": "widgets.text_editor",
     "ProgressBar": "widgets.basic",
+    "REQUIRED_OPERATIONS": "painter",
     "RESIZE_HALF_THICKNESS": "widgets.tables",
     "RIGHT_BUTTON": "events",
     "ROW_SCALE": "widgets.combo",
@@ -638,6 +615,9 @@ _NAME_TO_MODULE: dict[str, str] = {
     "end_tab_item": "im",
     "end_table": "im",
     "end_tooltip": "im",
+    "fill_circle": "painter",
+    "fill_convex": "painter",
+    "fill_triangles": "painter",
     "filter_marks": "widgets.menus",
     "fit_text": "widgets.basic",
     "floats_to_rgba": "widgets.color",
@@ -711,6 +691,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "get_window_pos": "im",
     "get_window_size": "im",
     "get_window_width": "im",
+    "gradient_triangle": "painter",
     "heading": "im",
     "host_control": "im",
     "hsv_to_rgb": "widgets.color",
@@ -718,6 +699,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "im_col32": "im",
     "image": "im",
     "image_button": "im",
+    "image_triangle": "painter",
     "image_with_bg": "im",
     "indent": "im",
     "input_double": "im",
@@ -775,6 +757,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "label_text_v": "im",
     "latex_to_unicode": "mathtext",
     "letter_of": "keys",
+    "line": "painter",
     "list_box": "im",
     "load_ini_settings_from_disk": "im",
     "load_ini_settings_from_memory": "im",
@@ -814,6 +797,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "plot_lines": "im",
     "png_decode": "testing",
     "png_encode": "testing",
+    "polyline": "painter",
     "pop_clip_rect": "im",
     "pop_font": "im",
     "pop_font_scale": "im",
@@ -935,9 +919,12 @@ _NAME_TO_MODULE: dict[str, str] = {
     "splitter": "im",
     "splitter_behavior": "im",
     "stretch_height": "im",
+    "stroke_arc": "painter",
+    "stroke_circle": "painter",
     "style_colors_classic": "im",
     "style_colors_dark": "im",
     "style_colors_light": "im",
+    "subdivide_gradient": "painter",
     "tab_item_button": "im",
     "table_angled_headers_row": "im",
     "table_get_column_count": "im",
@@ -966,6 +953,7 @@ _NAME_TO_MODULE: dict[str, str] = {
     "text_ellipsis": "im",
     "text_link": "im",
     "text_link_open_url": "im",
+    "text_rotated": "painter",
     "text_unformatted": "im",
     "text_v": "im",
     "text_wrapped": "im",
@@ -988,6 +976,10 @@ _NAME_TO_MODULE: dict[str, str] = {
     "value_from_ratio": "widgets.sliders",
     "wrap_lines": "widgets.text",
 }
+
+
+#: Submodules a host reaches as attributes of the package without importing them first.
+_EAGER_SUBMODULES = frozenset({"im", "redraw"})
 
 
 def __getattr__(name: str):
@@ -1017,6 +1009,8 @@ def __getattr__(name: str):
     """
     import importlib
 
+    if name in _EAGER_SUBMODULES:
+        return importlib.import_module(f".{name}", __name__)
     module_name = _NAME_TO_MODULE.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

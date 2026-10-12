@@ -28,7 +28,7 @@ from ..painter import polyline as _painter_polyline
 from .axis import Axis
 from .markers import draw_marker
 
-__all__ = ["Plot", "begin_plot"]
+__all__ = ["DEEP_PALETTE", "Plot", "begin_plot"]
 
 #: ImPlot's default categorical palette ("Deep", `implot.cpp:509`) -- ten
 #: colours, distinguishable and not primary-saturated, so plotted series read
