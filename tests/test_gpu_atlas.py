@@ -442,3 +442,36 @@ def test_the_atlas_decodes_without_importing_a_toolkit():
             "('qtpy', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6')))\n")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == ""
+
+
+def test_a_full_but_fragmented_atlas_packs_again_instead_of_declining():
+    """Shelves open at the height of their first image, so a short image followed by
+    a tall one wastes the space under the short one. With nothing dead to win back
+    the atlas did not repack, could not grow, and halved the newcomer down to
+    nothing: a 4096 x 4096 atlas 60 % full declined a 1 x 1 glyph (the help
+    reader's documentation sweep). Packing by height makes the room."""
+    atlas = ImageAtlas(64, 64, max_size=64)
+    kept = [_solid(32, 8, 10), _solid(32, 32, 20), _solid(32, 8, 30), _solid(32, 32, 40)]
+    for image in kept:
+        assert atlas.region(image) is not None
+    newcomer = _solid(32, 16, 50)
+    assert atlas.region(newcomer) is not None
+    assert atlas._placed[id(newcomer)][4:] == (32, 16), "stored at its own size"
+    for image, value in zip(kept, (10, 20, 30, 40)):
+        assert _texels(atlas, image) == (image.width, image.height, value)
+    assert _texels(atlas, newcomer) == (32, 16, 50)
+
+
+def test_a_truly_full_atlas_repacks_once_not_per_halving():
+    """When packing cannot make room the newcomer is halved; each halving must not
+    rewrite every live image again."""
+    atlas = ImageAtlas(64, 64, max_size=64)
+    kept = [_solid(64, 32, 10), _solid(64, 31, 20)]
+    for image in kept:
+        atlas.region(image)
+    writes = []
+    original = atlas._write
+    atlas._write = lambda *a, **k: (writes.append(a[2]), original(*a, **k))
+    atlas.region(_late := _solid(64, 8, 30))
+    rewritten = [w for w in writes if w is not _late]
+    assert len(rewritten) <= len(kept)

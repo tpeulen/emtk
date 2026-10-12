@@ -398,6 +398,11 @@ class ImageAtlas:
         self._shelf_x = 0
         self._shelf_y = 0
         self._shelf_h = 0
+        #: Whether the live images are packed as tightly as a repack packs them: true
+        #: right after one, false after any placement or release. A full atlas is only
+        #: repacked when this is false, so a newcomer that cannot fit even after the
+        #: repack does not repack again on every halving of its size.
+        self._compact = True
         #: ``(version, x, y, w, h)`` per write, newest last, capped at
         #: :data:`DIRTY_LOG` entries. A consumer further behind than the log
         #: goes is told "everything" rather than being told wrong; see
@@ -477,6 +482,7 @@ class ImageAtlas:
         placed = self._placed.pop(key, None)
         if placed is not None:
             self._free.append(tuple(placed[2:]))
+            self._compact = False
 
     def _reap(self) -> None:
         """Release the spots of every image that has died since the last call."""
@@ -571,6 +577,17 @@ class ImageAtlas:
                 spot = self._shelf(width, height)
             if spot is None and self._repack():
                 spot = self._shelf(width, height)
+            if spot is None and not self._compact and (
+                self._live_area() + width * height <= self.width * self.height
+            ):
+                # No dead image to win back, but the shelves are fragmented: each opened
+                # at the height of its first image, so a tall figure followed by glyphs
+                # wastes most of its row. Packing by height wins that back. Without it
+                # a 4096 x 4096 atlas only 60 % full declined a 1 x 1 glyph.
+                self._repack(force=True)
+                spot = self._shelf(width, height)
+        if spot is not None:
+            self._compact = False
         while spot is None and self._grow():
             spot = self._shelf(width, height) if (
                 width <= self.width and height <= self.height) else None
@@ -645,7 +662,12 @@ class ImageAtlas:
                 continue
             self._write(spot[0], spot[1], handle, w, h)
             self._placed[key] = (ref, int(getattr(handle, "revision", 0)), *spot)
+        self._compact = True
         return True
+
+    def _live_area(self) -> int:
+        """Texels the live images occupy."""
+        return sum(p[4] * p[5] for p in self._placed.values() if p[0]() is not None)
 
     def _write(self, x: int, y: int, handle, w: int | None = None,
                h: int | None = None) -> None:
