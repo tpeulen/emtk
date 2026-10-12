@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from .font import DEFAULT_FONT_PT, PX_PER_PT
+from .grapheme import display
 
 
 @dataclass(frozen=True)
@@ -437,6 +438,7 @@ def _layout_width(spec: FontSpec, string: str) -> float:
 @lru_cache(maxsize=16384)
 def text_width(spec: FontSpec, string: str, scale: float) -> float:
     """Advance width of *string*, in the caller's pixels; linear in *scale*."""
+    string = display(string)
     return _layout_width(spec, string) * _px(spec, scale) / LAYOUT_PX
 
 
@@ -516,6 +518,7 @@ def glyphs(spec: FontSpec, string: str, scale: float, bold: bool = False,
     phase (:data:`SUBPIXEL_STEPS`) and boxed one texel per device pixel, so
     nothing is resampled and no glyph moves off its advance.
     """
+    string = display(string)
     actual = replace(spec, bold=spec.bold or bold)
     em = _px(actual, scale)
     device = float(device) if device and device > 0 else 1.0

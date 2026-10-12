@@ -135,7 +135,9 @@ class Atlas:
         proportional font would make every ``char_w``-based layout in the panel
         wrong in a way no single number could express.
         """
-        return self._advance * (len(string) if string else 1)
+        from .grapheme import count  # noqa: PLC0415
+
+        return self._advance * (count(string) if string else 1)
 
     def cell_of(self, char: str, bold: bool = False) -> tuple | None:
         """Return ``(x, y, w, h)`` of *char*'s cell, in texels.

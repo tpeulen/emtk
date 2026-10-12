@@ -32,6 +32,7 @@ from __future__ import annotations
 import math
 
 from .font import load_atlas
+from .grapheme import display
 from .icons import caption_width, draw_caption, pictogram_runs
 from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER
 
@@ -272,6 +273,7 @@ class PilPainter:
         rgba = _rgba(colour)
         if rgba[3] == 0:
             return
+        string = display(string)    # one glyph cell per grapheme cluster
         advance = atlas.advance() * scale
         span = advance * len(string)
         pen_x = (x + w - span if align & ALIGN_RIGHT

@@ -65,7 +65,7 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import NamedTuple
 
-from .. import icons
+from .. import grapheme, icons
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Colour, Painter
 from ..style import BORDER, FRAME_BG, TEXT, clamp, hit
 from .basic import ScrollBar
@@ -1237,6 +1237,12 @@ def _icon_span_at(text: str, index: int) -> tuple[int, int] | None:
     for start, end in icons.icon_spans(text):
         if start < index < end:
             return start, end
+    # Any other multi-code-point grapheme cluster (a combining mark, a ZWJ or
+    # flag sequence the colour font lacks) is one unit as well.
+    if not text.isascii():
+        edge = grapheme.snap(text, index)
+        if edge != index:
+            return grapheme.prev_boundary(text, index), edge
     return None
 
 
@@ -1247,6 +1253,7 @@ def _cell_units(text: str, tab_size: int):
     rule every position the editor computes goes through.
     """
     ends = dict(icons.icon_spans(text))
+    plain = text.isascii()
     column = 0
     index = 0
     while index < len(text):
@@ -1260,9 +1267,10 @@ def _cell_units(text: str, tab_size: int):
             cells = tab_size - (column % tab_size)
         else:
             cells = 1
-        yield index, index + 1, column, cells, False
+        end = index + 1 if plain else grapheme.next_boundary(text, index)
+        yield index, end, column, cells, False
         column += cells
-        index += 1
+        index = end
 
 
 def _has_code_before(text: str, index: int) -> bool:
@@ -2963,7 +2971,8 @@ class TextEditor:
             else:
                 colour = marker_colour or self.palette[min(token, len(self.palette) - 1)]
                 left = self._text_x + (column - self.first_visible_column) * self._glyph_w
-                if left + len(piece) * self._glyph_w > x + gutter and left < x + w:
+                cells = grapheme.count(piece)       # a cluster is one cell
+                if left + cells * self._glyph_w > x + gutter and left < x + w:
                     with icons.plain_text():     # the cells are ours, not the painter's
                         p.text(
                             max(left, x + gutter),
@@ -2971,12 +2980,13 @@ class TextEditor:
                             x + w - max(left, x + gutter),
                             self._line_h,
                             ALIGN_LEFT | ALIGN_VCENTER,
-                            piece if left >= x + gutter else piece[
-                                int((x + gutter - left) / self._glyph_w):
-                            ],
+                            piece if left >= x + gutter else "".join(
+                                grapheme.clusters(piece)[
+                                    int((x + gutter - left) / self._glyph_w):]
+                            ),
                             colour,
                         )
-                column += len(piece)
+                column += cells
             index = run
 
         if active is not None and self.config.show_matching_brackets:

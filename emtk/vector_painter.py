@@ -31,6 +31,7 @@ import math
 import zlib
 from typing import Any
 
+from .grapheme import display
 from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER, subdivide_gradient
 
 __all__ = ["PX_PER_INCH", "PdfPainter", "SvgPainter", "VectorPainter"]
@@ -206,7 +207,7 @@ class VectorPainter:
         scale = self._text_scale()
         shrink = atlas.render_scale * scale
         advance = atlas.advance() * scale
-        span = advance * len(string)
+        span = advance * len(display(string))
         pen_x = (x + w - span if align & ALIGN_RIGHT
                  else x + (w - span) * 0.5 if align & ALIGN_HCENTER else x)
         ascent, pad, cell_h = atlas.ascent, atlas.pad, atlas.cell[1]
@@ -218,7 +219,7 @@ class VectorPainter:
         if not string:
             return
         pen_x, baseline, advance, size = self._layout(x, y, w, h, align, string)
-        self._add("text", (pen_x, baseline, advance, size, str(string), _rgba(colour),
+        self._add("text", (pen_x, baseline, advance, size, display(str(string)), _rgba(colour),
                            bool(bold), 0.0, None))
 
     def text_rotated(self, x, y, w, h, align, string, colour, degrees: float = 0.0) -> None:
@@ -226,7 +227,7 @@ class VectorPainter:
             return
         pen_x, baseline, advance, size = self._layout(x, y, w, h, align, string)
         centre = (float(x) + float(w) * 0.5, float(y) + float(h) * 0.5)
-        self._add("text", (pen_x, baseline, advance, size, str(string), _rgba(colour),
+        self._add("text", (pen_x, baseline, advance, size, display(str(string)), _rgba(colour),
                            False, float(degrees), centre))
 
 

@@ -12,6 +12,8 @@ head rather than a number that had to be measured.
 """
 from __future__ import annotations
 
+from .grapheme import count as _cluster_count  # noqa: E402
+from .grapheme import display  # noqa: E402
 from .icons import caption_width, draw_caption, pictogram_runs  # noqa: E402
 from .painter import ALIGN_HCENTER, ALIGN_RIGHT, ALIGN_VCENTER  # noqa: E402
 
@@ -201,7 +203,7 @@ class RecordingPainter:
         if self._font_spec is not None:
             from .font_render import text_width
             return text_width(self._font_spec, string, self._font_scale)
-        return len(string) * self.GLYPH_W * self._font_size_ratio
+        return _cluster_count(string) * self.GLYPH_W * self._font_size_ratio
 
     def line_height(self) -> float:
         """Height of one line."""
@@ -701,6 +703,7 @@ class PixelPainter:
         shrink = atlas.render_scale * text_scale
         if shrink <= 0.0:
             return
+        string = display(string)    # one glyph cell per grapheme cluster
         advance = atlas.advance() * text_scale
         span = advance * len(string)
         pen_x = (x + w - span if align & ALIGN_RIGHT

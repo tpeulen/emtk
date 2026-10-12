@@ -43,6 +43,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from .font import Atlas, load_atlas
+from .grapheme import display
 from .icons import caption_width, draw_caption, pictogram_runs
 from .painter import (
     ALIGN_HCENTER,
@@ -688,6 +689,7 @@ class QuadPainter:
                       string, colour, degrees=degrees, require_resolver=True,
                       device=self._scale)
             return
+        string = display(string)
         shrink = self._shrink
         quad_w, quad_h = self._glyph_w, self._glyph_h
         if quad_w <= 0.0 or quad_h <= 0.0:
@@ -881,6 +883,7 @@ class QuadPainter:
                       string, colour, bold, require_resolver=True, device=self._scale)
             return
         bold = bold or self._font_bold
+        string = display(string)    # one glyph cell per grapheme cluster
         advance = self._advance
         shrink = self._shrink
         ascent = self._ascent

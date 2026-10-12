@@ -37,6 +37,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from ..events import CONTROL_MODIFIER, META_MODIFIER
+from ..grapheme import next_boundary, prev_boundary
 from ..i18n import mark
 from ..keys import (
     KEY_BACKSPACE,
@@ -368,18 +369,20 @@ class CommandLine:
             return True
         if key == KEY_BACKSPACE:
             if self.cursor > 0:
-                self.text = self.text[: self.cursor - 1] + self.text[self.cursor:]
-                self.cursor -= 1
+                cut = prev_boundary(self.text, self.cursor)   # a whole grapheme cluster
+                self.text = self.text[:cut] + self.text[self.cursor:]
+                self.cursor = cut
             return True
         if key == KEY_DELETE:
             if self.cursor < len(self.text):
-                self.text = self.text[: self.cursor] + self.text[self.cursor + 1:]
+                self.text = (self.text[: self.cursor]
+                             + self.text[next_boundary(self.text, self.cursor):])
             return True
         if key == KEY_LEFT:
-            self.cursor = self._clamp(self.cursor - 1)
+            self.cursor = prev_boundary(self.text, self.cursor)
             return True
         if key == KEY_RIGHT:
-            self.cursor = self._clamp(self.cursor + 1)
+            self.cursor = next_boundary(self.text, self.cursor)
             return True
         if key == KEY_HOME:
             self.cursor = 0

@@ -157,7 +157,7 @@ def _rasterise_colour(icon: str):
         if font is None:
             continue
         side = int(font.size * 2)
-        for text in dict.fromkeys((icon, icon.translate(_MODIFIERS))):
+        for text in _forms(icon):
             if not text:
                 continue
             canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
@@ -168,9 +168,40 @@ def _rasterise_colour(icon: str):
                 logger.debug("could not rasterise icon %r from %s", text, path, exc_info=True)
                 continue
             ink = _ink(canvas)
-            if ink is not None:
+            if ink is not None and (text != icon or len(icon) == 1
+                                    or ink.width <= 1.6 * ink.height):
                 return ink
     return None
+
+
+def _shaped() -> bool:
+    """Whether Pillow lays text out with a shaping engine (so a sequence can compose)."""
+    try:
+        from PIL import features  # noqa: PLC0415
+
+        return bool(features.check("raqm"))
+    except Exception:  # noqa: BLE001 - no PIL, no shaping
+        return False
+
+
+def _forms(icon: str) -> tuple[str, ...]:
+    """The strings to try drawing for the cluster *icon*, best first.
+
+    A multi-code-point cluster (skin tone, ZWJ, flag, tag, keycap) is one glyph
+    only where the layout engine shapes it; without one Pillow draws each code
+    point on its own -- the two glyphs of a skin-toned thumbs-up. Then the
+    composed form is skipped and the **base** emoji is drawn alone, so one
+    cluster is always one image.
+    """
+    from . import grapheme  # noqa: PLC0415
+
+    base = grapheme.glyph_of(icon)
+    if _EMOJI_SELECTOR in icon and base != icon:
+        base += _EMOJI_SELECTOR
+    forms = [icon] if (len(icon) == 1 or _shaped()) else []
+    stripped = icon.translate(_MODIFIERS)
+    forms += [base, stripped if len(stripped) == 1 else "", icon[0]]
+    return tuple(dict.fromkeys(forms))
 
 
 def _rasterise_mask(icon: str):
@@ -179,7 +210,11 @@ def _rasterise_mask(icon: str):
 
     from .dynamic_font import FONT_CANDIDATES  # noqa: PLC0415
 
+    from . import grapheme  # noqa: PLC0415
+
     text = icon.translate(_MODIFIERS)
+    if len(text) > 1:
+        text = grapheme.glyph_of(icon)      # one glyph for one cluster, never a row of them
     if not text:
         return None
     code = ord(text[0])

@@ -45,6 +45,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..grapheme import next_boundary, prev_boundary, snap
+
 __all__ = ["TextField", "index_at", "paint"]
 
 _UNDO_DEPTH = 100
@@ -106,12 +108,12 @@ class TextField:
 
     @cursor.setter
     def cursor(self, value: int) -> None:
-        self._cursor = self.anchor = max(0, min(int(value), len(self.text)))
+        self._cursor = self.anchor = snap(self.text, value)
 
     def move(self, index: int, extend: bool = False) -> None:
         """Put the caret at *index*; with *extend*, the selection follows it."""
         self._typing = False
-        index = max(0, min(int(index), len(self.text)))
+        index = snap(self.text, index)      # never inside a grapheme cluster
         if extend:
             self.anchor = min(self.anchor, len(self.text))
             self._cursor = index
@@ -228,7 +230,7 @@ class TextField:
     def _delete_to(self, index: int) -> None:
         if self.delete_selection():
             return
-        lo, hi = sorted((self.cursor, max(0, min(index, len(self.text)))))
+        lo, hi = sorted((self.cursor, snap(self.text, index)))
         if lo != hi:
             self._replace(lo, hi, "")
 
@@ -312,7 +314,8 @@ class TextField:
             elif self.has_selection() and not shift:
                 target = self.selection()[1 if forward else 0]
             else:
-                target = self.cursor + (1 if forward else -1)
+                target = (next_boundary(self.text, self.cursor) if forward
+                          else prev_boundary(self.text, self.cursor))
             self.move(target, extend=shift)
             return True
         if key in (KEY_HOME, KEY_END):
@@ -322,10 +325,12 @@ class TextField:
             if line:
                 self._delete_to(0)
             else:
-                self._delete_to(self.word_left(self.cursor) if word else self.cursor - 1)
+                self._delete_to(self.word_left(self.cursor) if word
+                                else prev_boundary(self.text, self.cursor))
             return True
         if key == KEY_DELETE:
-            self._delete_to(self.word_right(self.cursor, mac) if word else self.cursor + 1)
+            self._delete_to(self.word_right(self.cursor, mac) if word
+                            else next_boundary(self.text, self.cursor))
             return True
         if chord:
             return False              # Ctrl+- and the like: the app's, never typed
@@ -353,11 +358,13 @@ class TextField:
     def _emacs(self, letter: str) -> bool:
         """Control-<letter> on a Mac, as a Cocoa text field has them."""
         n, at = len(self.text), self.cursor
-        moves = {"a": 0, "e": n, "b": at - 1, "f": at + 1}
+        moves = {"a": 0, "e": n, "b": prev_boundary(self.text, at),
+                 "f": next_boundary(self.text, at)}
         if letter in moves:
             self.move(moves[letter])
         elif letter in ("d", "h", "k"):
-            self._delete_to({"d": at + 1, "h": at - 1, "k": n}[letter])
+            self._delete_to({"d": next_boundary(self.text, at),
+                             "h": prev_boundary(self.text, at), "k": n}[letter])
         else:
             return False
         return True
@@ -391,7 +398,7 @@ def paint(p, field: TextField, x: float, y: float, w: float, h: float, colour,
     room = max(w - 2.0 * pad, 1.0)
     start = 0
     while caret_colour is not None and start < at and p.text_width(text[start:at]) > room - 1.0:
-        start += 1
+        start = next_boundary(text, start)
     left = x + pad
     xs = [left - p.text_width(text[i:start]) if i < start
           else left + p.text_width(text[start:i]) for i in range(len(text) + 1)]
