@@ -725,6 +725,38 @@ class RealisticDriver(Driver):
         return self.release_key()
 
 
+def _write_png(png: bytes, path) -> bytes:
+    if path is not None:
+        from pathlib import Path  # noqa: PLC0415
+
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_bytes(png)
+    return png
+
+
+def _realistic_screenshot(driver, path=None):
+    """The real device painter's frame, rendered on the GPU and read back at device size.
+
+    What the person sees: the display scale and the interface zoom (:mod:`emtk.fonts`)
+    applied, real fonts rasterised as on screen. The screenshot painter's replay
+    (:meth:`emtk.testing.Driver.screenshot`) draws the app's box at scale 1 -- under a
+    zoom that is a 640 x 480 picture in the corner of an 800 x 600 one.
+    """
+    if not driver.real_painter:
+        return Driver.screenshot(driver, path)
+    from .testing import png_encode  # noqa: PLC0415
+
+    driver._flush()
+    driver._draw_frame(driver._painter_for_frame())
+    width = max(1, round(driver.size[0] * driver.scale))
+    height = max(1, round(driver.size[1] * driver.scale))
+    image = driver._renderer.grab(driver._quad, width, height)
+    return _write_png(png_encode(width, height, image.tobytes()), path)
+
+
+RealisticDriver.screenshot = _realistic_screenshot
+
+
 class _NoComposition:
     """No OS input method is composing in a synthetic session."""
 
@@ -931,7 +963,7 @@ class HostedDriver(RealisticDriver):
     def screenshot(self, path=None):
         """The GPU's own pixels at device resolution (offscreen canvas only)."""
         if self.backend != "offscreen":
-            return super().screenshot(path)
+            return Driver.screenshot(self, path)
         from .testing import png_encode  # noqa: PLC0415
 
         self._flush()

@@ -289,3 +289,29 @@ def test_a_click_lands_on_its_button_at_zoom_125():
     assert driver.surface._box()[2:] == pytest.approx((320.0, 240.0))
     driver.click("Press me")
     assert clicks == [1]
+
+
+def test_a_realistic_screenshot_is_what_the_person_sees_under_zoom():
+    """Device-size GPU pixels with the zoom applied, not the app's box drawn at scale 1."""
+    from emtk import im
+    from emtk.testing import png_decode
+    from emtk.testing_realistic import RealisticDriver
+
+    def gui():
+        im.begin("w")
+        im.dummy((560.0, 400.0))
+        im.button("Corner")
+        im.end()
+
+    fonts.update(zoom=1.25)
+    driver = RealisticDriver(gui, size=(800, 600), scale=2.0)
+    driver.frame(2)
+    width, height, pixels = png_decode(driver.screenshot())
+    assert (width, height) == (1600, 1200)
+    x, y, w, h = driver.rect("Corner")
+    # The button's bottom lies past 480 window pixels only because the zoom is applied.
+    assert y + h < 480 < (y + h) * 1.25
+    cx, cy = round((x + w / 2) * 1.25 * 2), round((y + h / 2) * 1.25 * 2)
+    background = pixels[0:4]
+    assert any(pixels[4 * (cy * width + cx + dx): 4 * (cy * width + cx + dx) + 4] != background
+               for dx in range(-20, 20))
