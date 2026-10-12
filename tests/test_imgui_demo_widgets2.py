@@ -172,6 +172,28 @@ def test_a_progress_bar_clamps_out_of_range_values():
         assert 0.0 <= call[3] <= 100.0, call
 
 
+#   ImGui::ProgressBar(-1.0f * (float)ImGui::GetTime(), ImVec2(0.0f, 0.0f), "Searching..");
+def test_a_negative_fraction_draws_a_sliding_indeterminate_segment():
+    segments: list = []
+
+    for phase in (0.3, 0.6, 1.3):
+
+        def gui(phase=phase):
+            emtk.progress_bar(-phase, (200.0, 20.0), "Searching..")
+
+        painter = _run(gui)
+        fills = [c for c in painter.calls if c[0] == "fill_rect"]
+        # The frame and one segment, a fifth of the bar wide while wholly inside it.
+        assert len(fills) == 2, fills
+        segments.append((fills[1][1], fills[1][3]))
+        assert "Searching.." in painter.strings
+    (x0, w0), (x1, w1), (x2, w2) = segments
+    assert w0 == pytest.approx(40.0) and w1 == pytest.approx(40.0), segments
+    assert x1 > x0, "the segment slides to the right as the phase grows"
+    # The phase wraps: -1.3 sits where -0.3 does.
+    assert (x2, w2) == pytest.approx((x0, w0)), segments
+
+
 # --------------------------------------------------------------------------- #
 # Widgets/Disable Block
 # --------------------------------------------------------------------------- #

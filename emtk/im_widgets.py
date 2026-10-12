@@ -27,6 +27,7 @@ is the box drawn, a widget cannot be clickable where it is not visible.
 """
 from __future__ import annotations
 
+import math as _math
 from typing import Any, Optional, Sequence
 
 from .flags import Axis, MouseCursor, SliderFlags
@@ -1428,17 +1429,34 @@ def drag_int(label: str, v: int, speed: float = 1.0, v_min=None, v_max=None,
     return _drag(label, int(v), speed, v_min, v_max, fmt, integral=True)
 
 
+#: Width of the sliding segment of an indeterminate :func:`progress_bar`, as a fraction of the bar.
+_INDETERMINATE_WIDTH = 0.2
+
+
 def progress_bar(fraction: float, size=None, overlay: str = "") -> None:
+    """A bar filled to *fraction* (0..1).
+
+    A **negative** *fraction* draws an indeterminate bar, as Dear ImGui's ``ProgressBar`` does: a
+    segment sliding across, its position the fractional part of ``-fraction``. Pass
+    ``-get_time()`` (times a speed) for a busy indicator of work whose size is not known; the
+    caller keeps frames coming while it shows.
+    """
     ctx = get_current_context()
     width, height = _calc_item_size(size, ctx.layout.avail()[0], _frame_height(ctx))
     box = ctx.layout.row(height=height, width=width)
     ctx.item_add(box)
-    fraction = max(0.0, min(1.0, float(fraction)))
+    fraction = float(fraction)
+    if fraction < 0.0:
+        t = _math.fmod(-fraction, 1.0) * (1.0 + _INDETERMINATE_WIDTH) - _INDETERMINATE_WIDTH
+        start = max(0.0, min(1.0, t))
+        end = max(0.0, min(1.0, t + _INDETERMINATE_WIDTH))
+    else:
+        start, end = 0.0, max(0.0, min(1.0, fraction))
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              _col(Col.FRAME_BG), ctx.style.frame_rounding)
-    if fraction > 0.0:
-        ctx.draw.add_rect_filled((box[0], box[1]),
-                                 (box[0] + box[2] * fraction, box[1] + box[3]),
+    if end > start:
+        ctx.draw.add_rect_filled((box[0] + box[2] * start, box[1]),
+                                 (box[0] + box[2] * end, box[1] + box[3]),
                                  _col(Col.SLIDER_GRAB), ctx.style.frame_rounding)
     overlay = tr(overlay) if overlay else ""
     if overlay:
