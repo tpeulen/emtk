@@ -162,13 +162,32 @@ def parse_code_blocks(text: str) -> list[tuple[str, str, str]]:
     return blocks
 
 
+def _open_web_link(target: str) -> None:
+    """Default link action: open http(s) and mailto targets in the system browser."""
+    if str(target).startswith(("http://", "https://", "mailto:")):
+        import webbrowser
+
+        try:
+            webbrowser.open_new(str(target))
+        except Exception:
+            pass
+
+
 def draw_chat_transcript(
     history: ChatHistory | list[ChatMessage],
     size: tuple[float, float] = (0.0, 0.0),
     on_insert_code: Callable[[str], None] | None = None,
     on_replace_code: Callable[[str], None] | None = None,
+    on_link: Callable[[str], None] | None = None,
 ) -> None:
-    """Draw the conversation transcript inside an immediate-mode child container."""
+    """Draw the conversation transcript inside an immediate-mode child container.
+
+    Message prose is rendered as Markdown (bold, lists, headings, ``[title](target)``
+    links); ``on_link(target)`` is called when a link is clicked. Without ``on_link``
+    web links open in the system browser and other targets are inert.
+    """
+    if on_link is None:
+        on_link = _open_web_link
     messages = history.messages if isinstance(history, ChatHistory) else history
     avail_w, avail_h = im.get_content_region_avail()[:2]
     w = float(size[0]) if size and size[0] > 0.0 else float(avail_w)
@@ -208,7 +227,9 @@ def draw_chat_transcript(
             blocks = parse_code_blocks(msg.content)
             for b_idx, (b_type, b_content, b_lang) in enumerate(blocks):
                 if b_type == "text":
-                    im.text_wrapped(b_content)
+                    from .markdown import render_markdown
+
+                    render_markdown(b_content, on_link=on_link)
                 elif b_type == "code":
                     im.dummy(0.0, 3.0)
                     lang_tag = f" [{b_lang}]" if b_lang else ""

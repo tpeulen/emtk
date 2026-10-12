@@ -64,3 +64,47 @@ def test_chat_transcript_and_input_rendering():
     assert prompt == "Test prompt"
     assert not send
     assert len(p.texts) > 0
+
+
+def _transcript_frames(history, on_link, click_on=None, size=(480.0, 300.0)):
+    """Draw a transcript twice; with ``click_on`` press and release on that drawn text."""
+    io, storage = emtk.IO(), {}
+    last = RecordingPainter()
+    for frame in range(5):
+        io.mouse_clicked[0] = io.mouse_released[0] = False
+        io.mouse_down[0] = False
+        if click_on is not None and frame >= 2:
+            hit = next(t for t in last.texts if click_on in t[5])
+            io.mouse_pos = (hit[0] + 12.0, hit[1] + 6.0)
+            if frame == 3:
+                io.mouse_clicked[0] = io.mouse_down[0] = True
+            elif frame == 4:
+                io.mouse_released[0] = True
+        last = RecordingPainter()
+        with emtk.frame(last, (0, 0, 500, 400), io=io, storage=storage):
+            im.begin("Chat Panel")
+            draw_chat_transcript(history, size=size, on_link=on_link)
+            im.end()
+    return last
+
+
+def test_chat_transcript_renders_markdown_not_raw_text():
+    """``**bold**`` and ``[title](target)`` must not reach the screen literally."""
+    history = ChatHistory()
+    history.add_message("assistant", "See **the page** and [Accurate FRET](docs/a.md).")
+    painter = _transcript_frames(history, lambda url: None)
+    drawn = " ".join(t[5] for t in painter.texts)
+    assert "**" not in drawn
+    assert "](" not in drawn
+    assert "Accurate FRET" in drawn
+
+
+def test_chat_transcript_link_click_routes_to_on_link():
+    history = ChatHistory()
+    history.add_message(
+        "assistant",
+        "Answer.\n\n**Cited Documentation Pages:**\n- [Accurate FRET](docs/a.md#The four factors)",
+    )
+    clicked: list[str] = []
+    _transcript_frames(history, clicked.append, click_on="↗ Accurate FRET")
+    assert clicked == ["docs/a.md#The four factors"]
