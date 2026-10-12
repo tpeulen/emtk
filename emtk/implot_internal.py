@@ -607,7 +607,7 @@ class PlotStyle:
         self.legend_spacing = (5.0, 0.0)
         self.mouse_pos_padding = (10.0, 10.0)
         self.annotation_padding = (2.0, 2.0)
-        self.fit_padding = (0.0, 0.0)
+        self.fit_padding = (0.05, 0.05)
         self.digital_padding = 20.0
         self.digital_spacing = 4.0
         self.colors: list = [None] * COL_COUNT
@@ -1647,6 +1647,8 @@ class Axis:
         return plt
 
     def extend_fit(self, v: float) -> None:
+        if self.scale == SCALE_LOG10 and v <= 0.0:
+            return  # not drawable on a log axis: must not drag the fit to zero
         if not nan_or_inf(v) and self.constraint_range[0] <= v <= self.constraint_range[1]:
             if v < self.fit_min:
                 self.fit_min = v
@@ -1659,10 +1661,18 @@ class Axis:
         self.extend_fit(v)
 
     def apply_fit(self, padding: float) -> None:
-        ext_size = (self.fit_max - self.fit_min) * 0.5
-        if math.isfinite(ext_size):
-            self.fit_min -= ext_size * padding
-            self.fit_max += ext_size * padding
+        if self.scale == SCALE_LOG10 and 0.0 < self.fit_min <= self.fit_max < math.inf:
+            # The margin is a fraction of what the eye sees: decades, not units.
+            # Padded linearly the top gains almost nothing against the bottom's
+            # clamp, and a peak sits on the frame with half its stroke clipped.
+            lo, hi = math.log10(self.fit_min), math.log10(self.fit_max)
+            ext = (hi - lo) * 0.5 * padding
+            self.fit_min, self.fit_max = 10.0 ** (lo - ext), 10.0 ** (hi + ext)
+        else:
+            ext_size = (self.fit_max - self.fit_min) * 0.5
+            if math.isfinite(ext_size):
+                self.fit_min -= ext_size * padding
+                self.fit_max += ext_size * padding
         if not self.is_locked_min() and not nan_or_inf(self.fit_min):
             self.range_min = self.fit_min
         if not self.is_locked_max() and not nan_or_inf(self.fit_max):
@@ -1808,6 +1818,15 @@ class Item:
         self.show = True
         self.legend_hovered = False
         self.seen_this_frame = False
+        #: What the legend swatch draws: ``"fill"`` (a filled square: bars,
+        #: shaded areas, images), ``"line"`` (a short stroke with the series'
+        #: width and dash) or ``"marker"`` (the series' marker). A swatch that
+        #: is a square for every kind cannot tell a dashed series from a solid.
+        self.icon = "fill"
+        self.icon_dash = None
+        self.icon_weight = 1.0
+        self.icon_marker = MARKER_NONE
+        self.icon_marker_size = 4.0
 
 
 class Legend:

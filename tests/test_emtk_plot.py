@@ -71,7 +71,7 @@ def test_nice_ticks_on_a_degenerate_range_is_empty():
 
 def test_a_line_series_draws_one_segment_per_gap():
     p = RecordingPainter()
-    plot = Plot(0.0, 0.0, 100.0, 50.0)
+    plot = Plot(0.0, 0.0, 100.0, 50.0, show_legend=False)
     plot.line("fps", [0.0, 1.0, 2.0, 3.0], [10.0, 20.0, 15.0, 30.0])
     plot.draw(p)
     # 3 segments * 2 triangles each = 6.
@@ -80,7 +80,7 @@ def test_a_line_series_draws_one_segment_per_gap():
 
 def test_a_single_point_line_draws_a_marker_not_a_segment():
     p = RecordingPainter()
-    plot = Plot(0.0, 0.0, 100.0, 50.0)
+    plot = Plot(0.0, 0.0, 100.0, 50.0, show_legend=False)
     plot.line("one point", [1.0], [1.0])
     plot.draw(p)
     # The default marker is a circle, scan-converted into fill_rect bands by
@@ -109,7 +109,7 @@ def test_hline_does_not_extend_the_auto_fit_range():
 
 def test_scatter_markers_are_drawn_per_point():
     p = RecordingPainter()
-    plot = Plot(0.0, 0.0, 100.0, 50.0)
+    plot = Plot(0.0, 0.0, 100.0, 50.0, show_legend=False)
     plot.scatter("pts", [0.0, 1.0, 2.0], [0.0, 1.0, 0.0], marker="diamond")
     plot.draw(p)
     # A diamond is 2 triangles; 3 points -> 6.

@@ -1150,6 +1150,52 @@ def _label_axis_value(axis, value: float, round_: bool = False) -> str:
                             axis.formatter_data if axis.formatter else I.IMPLOT_LABEL_FORMAT)
 
 
+def _legend_icon(item, bb, col) -> None:
+    """The swatch of a legend entry: what the series itself looks like.
+
+    A line series gets a short stroke in its width and dash pattern, a scatter
+    series its marker, anything else (bars, areas, images) the filled square.
+    The same square for every kind made a dashed series and a solid one of the
+    same colour indistinguishable in the key.
+    """
+    kind = getattr(item, "icon", "fill")
+    x0, y0, x1, y1 = bb
+    p = _dl().p
+    if kind == "marker" and item.icon_marker >= 0:
+        from .widgets.markers import draw_marker  # noqa: PLC0415
+
+        name = I.MARKER_NAMES[item.icon_marker].lower()
+        draw_marker(p, name, (x0 + x1) * 0.5, (y0 + y1) * 0.5,
+                    max(1.5, min(item.icon_marker_size, (x1 - x0) * 0.5)), col)
+        return
+    if kind == "line" and col is not None and col[3] > 0:
+        from .implot_items import _dashed_segment  # noqa: PLC0415
+        from .painter import line as _painter_line  # noqa: PLC0415
+
+        width = min(max(1.0, float(item.icon_weight)), 3.0)
+        cy = (y0 + y1) * 0.5
+        x0, x1 = x0 - 1.5, x1 + 1.0  # the whole cell: a sample of a line wants length
+        a, b = (x0, cy), (x1, cy)
+        dash = item.icon_dash
+        if dash:
+            # Scaled so a swatch only a dozen pixels wide still shows the
+            # gap: at least two periods fit.
+            on, off = max(float(dash[0]), 0.5), max(float(dash[1]), 0.5)
+            fit = (x1 - x0) / 2.0 / (on + off)
+            if fit < 1.0:
+                on, off = on * fit, off * fit
+            _dashed_segment(p, a, b, width, col, (on, off), 0.0)
+        else:
+            _painter_line(p, a[0], a[1], b[0], b[1], width, col)
+        if item.icon_marker >= 0:
+            from .widgets.markers import draw_marker  # noqa: PLC0415
+
+            draw_marker(p, I.MARKER_NAMES[item.icon_marker].lower(), (x0 + x1) * 0.5, cy,
+                        max(1.5, min(item.icon_marker_size, (x1 - x0) * 0.5)), col)
+        return
+    _fill(bb, col)
+
+
 def _show_legend_entries(items, legend_bb, hovered: bool, pad, spacing, vertical: bool) -> bool:
     """``ShowLegendEntries``: draw the entries; a click toggles an item."""
     ctx = _ctx()
@@ -1204,7 +1250,7 @@ def _show_legend_entries(items, legend_bb, hovered: bool, pad, spacing, vertical
             col_icon = I.alpha_u32(col_item, 0.75) if item.show else I.alpha_u32(disabled, 0.75)
         else:
             col_icon = col_item if item.show else col_txt_dis
-        _fill(icon_bb, col_icon)
+        _legend_icon(item, icon_bb, col_icon)
         if label:
             _dl().add_text((top_left[0] + icon_size, top_left[1]), col_txt_hl if item.show else col_txt_dis,
                            label)

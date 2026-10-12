@@ -194,7 +194,8 @@ def _next_marker() -> int:
     return idx
 
 
-def begin_item(label_id: str, spec=None, item_col=None, item_mkr: int = I.MARKER_INVALID) -> bool:
+def begin_item(label_id: str, spec=None, item_col=None, item_mkr: int = I.MARKER_INVALID,
+               icon: str = "fill") -> bool:
     """``BeginItem``. Returns False when the item is hidden."""
     api = _api()
     if gp.current_plot is None:
@@ -245,6 +246,11 @@ def begin_item(label_id: str, spec=None, item_col=None, item_mkr: int = I.MARKER
                 plot.axes[plot.current_x].color_hili = item.color
             if plot.enabled_axes_y() > 1:
                 plot.axes[plot.current_y].color_hili = item.color
+    item.icon = icon
+    item.icon_dash = out.dash
+    item.icon_weight = out.line_weight
+    item.icon_marker = out.marker if out.marker >= 0 and out.marker_size > 0 else I.MARKER_NONE
+    item.icon_marker_size = out.marker_size
     s.spec = out
     s.render_line = out.line_color[3] > 0 and out.line_weight > 0
     s.render_fill = out.fill_color[3] > 0
@@ -254,9 +260,10 @@ def begin_item(label_id: str, spec=None, item_col=None, item_mkr: int = I.MARKER
     return True
 
 
-def begin_item_ex(label_id: str, fitter, spec, item_col=None, item_mkr: int = I.MARKER_INVALID) -> bool:
+def begin_item_ex(label_id: str, fitter, spec, item_col=None, item_mkr: int = I.MARKER_INVALID,
+                  icon: str = "fill") -> bool:
     """``BeginItemEx``: ``BeginItem`` plus the fit, when this frame fits."""
-    if begin_item(label_id, spec, item_col, item_mkr):
+    if begin_item(label_id, spec, item_col, item_mkr, icon):
         plot = gp.current_plot
         if plot.fit_this_frame and not has_flag(spec.flags, I.ITEM_FLAGS_NO_FIT):
             fitter(plot.axes[plot.current_x], plot.axes[plot.current_y])
@@ -428,11 +435,11 @@ def _dashed_segment(p, a, b, width, colour, dash, phase) -> float:
     while s < length:
         pos = (phase + s) % period
         if pos < on:
-            run = min(on - pos, length - s)
+            run = min(max(on - pos, 1e-6), length - s)
             _line(p, a[0] + ux * s, a[1] + uy * s, a[0] + ux * (s + run), a[1] + uy * (s + run),
                   width, colour)
         else:
-            run = min(period - pos, length - s)
+            run = min(max(period - pos, 1e-6), length - s)
         s += run
     return (phase + length) % period
 
@@ -740,7 +747,7 @@ def _xy_or_values(label_id, xs, ys, args, kw, values_slots, xy_slots, values_def
 # [SECTION] PlotLine
 # --------------------------------------------------------------------------- #
 def _plot_line_ex(label_id, pts, spec) -> None:
-    if begin_item_ex(label_id, _fitter1(pts), spec, spec.line_color, spec.marker):
+    if begin_item_ex(label_id, _fitter1(pts), spec, spec.line_color, spec.marker, "line"):
         if len(pts) <= 0:
             end_item()
             return
@@ -818,7 +825,7 @@ def _plot_scatter_ex(label_id, pts, spec) -> None:
             colour = spec.line_color  # automatic series colour still supplies the fill
         elif fill[3] > 0:
             colour = spec.marker_fill_color
-    if begin_item_ex(label_id, _fitter1(pts), spec, colour, marker):
+    if begin_item_ex(label_id, _fitter1(pts), spec, colour, marker, "marker"):
         if len(pts) <= 0:
             end_item()
             return
@@ -1346,7 +1353,7 @@ def plot_stems(label_id: str, xs, ys=None, *args, **kw) -> None:
         ys_ = _values(ys, count, spec.offset, spec.stride)
         mark = list(zip(xs_, ys_))
         base = [(ref, y) for y in ys_] if horizontal else [(x, ref) for x in xs_]
-    if begin_item_ex(label_id, _fitter2(mark, base), spec, spec.line_color, spec.marker):
+    if begin_item_ex(label_id, _fitter2(mark, base), spec, spec.line_color, spec.marker, "line"):
         if len(mark) <= 0:
             end_item()
             return
@@ -1382,7 +1389,7 @@ def plot_inf_lines(label_id: str, values, count=None, spec=None, **kw) -> None:
         for v in vals:
             (ya if horizontal else xa).extend_fit(v)
 
-    if begin_item_ex(label_id, fitter, spec, spec.line_color):
+    if begin_item_ex(label_id, fitter, spec, spec.line_color, icon="line"):
         if len(vals) <= 0:
             end_item()
             return

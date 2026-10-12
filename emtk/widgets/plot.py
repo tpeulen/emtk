@@ -356,26 +356,42 @@ class Plot:
         """Draw the key, unless this plot was asked not to have one."""
         if not self.show_legend:
             return
-        entries = [(s["label"], s["colour"]) for s in self._lines if s["label"]]
-        entries += [(s["label"], s["colour"]) for s in self._scatters if s["label"]]
+        # (label, colour, pen): the pen is what the swatch draws -- a line
+        # sample with the series' width and dash, or the scatter's marker.
+        entries = [(s["label"], s["colour"], ("line", s.get("width", 1.5), s.get("dash")))
+                   for s in self._lines if s["label"]]
+        entries += [(s["label"], s["colour"], ("marker", s.get("marker", "circle"), s.get("radius", 2.5)))
+                    for s in self._scatters if s["label"]]
         # One row per name: a line drawn with markers is a line series and a
         # scatter series under the same label, and is one thing to the reader.
         seen: set[str] = set()
-        entries = [(label, colour) for label, colour in entries
-                   if not (label in seen or seen.add(label))]
+        entries = [e for e in entries if not (e[0] in seen or seen.add(e[0]))]
         if not entries:
             return
-        swatch = 8.0
+        swatch = 14.0
         row_h = p.line_height()
         pad = 3.0
-        width = max(p.text_width(label) for label, _c in entries) + swatch + pad * 3.0
+        width = max(p.text_width(label) for label, _c, _k in entries) + swatch + pad * 3.0
         height = row_h * len(entries) + pad * 2.0
         lx = self.x + self.w - width - pad
         ly = self.y + pad
         p.fill_rect(lx, ly, width, height, (20, 22, 26, 200))
-        for i, (label, colour) in enumerate(entries):
+        for i, (label, colour, pen) in enumerate(entries):
             row_y = ly + pad + i * row_h
-            p.fill_rect(lx + pad, row_y + (row_h - swatch) * 0.5, swatch, swatch, colour)
+            sx, sy = lx + pad, row_y + row_h * 0.5
+            if pen[0] == "marker":
+                draw_marker(p, pen[1], sx + swatch * 0.5, sy, min(max(pen[2], 1.5), swatch * 0.5), colour)
+            else:
+                line_w = min(max(float(pen[1]), 1.0), 3.0)
+                dash = pen[2]
+                if dash:
+                    on, off = max(float(dash[0]), 0.5), max(float(dash[1]), 0.5)
+                    fit = swatch / 2.0 / (on + off)  # at least two periods show
+                    if fit < 1.0:
+                        on, off = on * fit, off * fit
+                    _dashed_segment(p, (sx, sy), (sx + swatch, sy), line_w, colour, (on, off), 0.0)
+                else:
+                    _painter_line(p, sx, sy, sx + swatch, sy, line_w, colour)
             p.text(lx + pad * 2.0 + swatch, row_y, width - swatch - pad * 3.0, row_h,
                    ALIGN_LEFT | ALIGN_VCENTER, label, _TICK_TEXT)
 
@@ -423,11 +439,11 @@ def _dashed_segment(p, a, b, width, colour, dash, phase) -> float:
     while t < length:
         pos = (phase + t) % period
         if pos < on:
-            run = min(on - pos, length - t)
+            run = min(max(on - pos, 1e-6), length - t)
             _painter_line(p, a[0] + ux * t, a[1] + uy * t,
                           a[0] + ux * (t + run), a[1] + uy * (t + run), width, colour)
         else:
-            run = min(period - pos, length - t)
+            run = min(max(period - pos, 1e-6), length - t)
         t += run
     return (phase + length) % period
 

@@ -17,6 +17,15 @@ from emtk.testing import PixelPainter, RecordingPainter
 
 
 @pytest.fixture(autouse=True)
+def _exact_fit():
+    """These tests pin what is fitted, not the margin around it: fit padding off."""
+    saved = implot.gp.style.fit_padding
+    implot.gp.style.fit_padding = (0.0, 0.0)
+    yield
+    implot.gp.style.fit_padding = saved
+
+
+@pytest.fixture(autouse=True)
 def _no_plot_left_open():
     """A test that fails between begin_plot and end_plot leaves the module
     state set, and every later test then fails for the wrong reason."""

@@ -16,6 +16,15 @@ from emtk.testing import RecordingPainter
 
 
 @pytest.fixture(autouse=True)
+def _exact_fit():
+    """These tests pin what is fitted, not the margin around it: fit padding off."""
+    saved = implot.gp.style.fit_padding
+    implot.gp.style.fit_padding = (0.0, 0.0)
+    yield
+    implot.gp.style.fit_padding = saved
+
+
+@pytest.fixture(autouse=True)
 def _clean():
     yield
     implot._cur.plot = None
