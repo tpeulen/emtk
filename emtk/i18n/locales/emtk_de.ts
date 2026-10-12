@@ -792,5 +792,9 @@
             <source>Close other panels</source>
             <translation>Andere Bereiche schließen</translation>
         </message>
+        <message>
+            <source>linked to {name}</source>
+            <translation>verknüpft mit {name}</translation>
+        </message>
     </context>
 </TS>
