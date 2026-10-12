@@ -60,4 +60,9 @@ def qt_app():
         # never destroyed: Qt does not support a second QApplication in one
         # process, so the session shares this one
         app = qtwidgets.QApplication([])
+    # Launch AppKit under Qt before any test opens a glfw window: otherwise Qt's
+    # first event loop blocks for good on macOS (emtk.native.launch_qt_first).
+    from emtk.native import launch_qt_first
+
+    launch_qt_first()
     return app

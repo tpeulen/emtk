@@ -65,6 +65,7 @@ __all__ = [
     "open_canvas",
     "window_hints",
     "wheel_steps",
+    "launch_qt_first",
     "main",
 ]
 
@@ -143,6 +144,36 @@ def canvas_module(backend: str | None = None, env: str = "EMTK_CANVAS"):
     return importlib.import_module("rendercanvas.offscreen")
 
 
+_QT_LAUNCHED = False
+
+
+def launch_qt_first() -> bool:
+    """Let a ``QApplication`` that has not run yet launch AppKit before glfw does (macOS).
+
+    Qt's first ``processEvents`` on macOS calls ``[NSApp run]`` and waits for its own
+    application delegate's *did finish launching* to stop it again. glfw, initialised in
+    between, makes itself the delegate and finishes the launch on its own -- so Qt's
+    notification never comes and the Qt event loop blocks forever, at 0 % CPU: the
+    "test_qt_host hangs in the full suite" symptom (a test that made a ``QApplication``,
+    then one that opened a glfw window, then a Qt host). Spinning Qt once first lets it
+    launch AppKit under its own delegate; glfw then joins a running application.
+
+    Returns ``True`` when a Qt application was spun. A no-op off macOS, without Qt, and
+    after the first call.
+    """
+    global _QT_LAUNCHED
+    if _QT_LAUNCHED or sys.platform != "darwin":
+        return False
+    for name in ("PyQt5.QtWidgets", "PySide6.QtWidgets", "PyQt6.QtWidgets", "PySide2.QtWidgets"):
+        widgets = sys.modules.get(name)
+        app = widgets.QApplication.instance() if widgets is not None else None
+        if app is not None:
+            app.processEvents()
+            _QT_LAUNCHED = True
+            return True
+    return False
+
+
 def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
                 max_fps: float = DEFAULT_MAX_FPS, present_method: str = "auto",
                 decorated: bool = True, floating: bool = False,
@@ -178,6 +209,7 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
     rendercanvas.BaseRenderCanvas
     """
     options = {} if present_method in (None, "", "auto") else {"present_method": present_method}
+    launch_qt_first()
     workarea = screen_workarea(module)
     size = fit_to_screen(size, workarea)
     hints = window_hints(decorated=decorated, floating=floating, transparent=transparent,

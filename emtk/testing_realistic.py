@@ -768,6 +768,10 @@ class HostedDriver(RealisticDriver):
             import glfw  # noqa: PLC0415
             from rendercanvas.glfw import RenderCanvas  # noqa: PLC0415
 
+            from .native import launch_qt_first  # noqa: PLC0415
+
+            launch_qt_first()
+
             with mock.patch.object(glfw, "show_window", lambda *_a, **_k: None):
                 canvas = RenderCanvas(size=tuple(size), title="emtk-realistic")
             # The OS cursor is the simulated hand, in window (screen) coordinates.
