@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from contextlib import contextmanager
 
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER
 from ..painter import line as _painter_line
@@ -138,6 +137,11 @@ class Plot:
         #: caption-sized plot; an analysis panel scales it with its size.
         self.x_tick_target = 4
         self.y_tick_target = 4
+        #: Strength of the gridlines: a factor on their alpha, ``1.0`` the theme's
+        #: own grid, ``0.0`` none. A host that lets the user turn the grid up or
+        #: down (a plot-settings slider) sets this rather than recolouring the
+        #: lines, so the theme keeps deciding what colour a grid is.
+        self.grid_opacity = 1.0
         #: ``callable(painter, plot)`` drawn after the gridlines and before the
         #: series, inside the clip, with both axes already mapped onto the box:
         #: what shades a span of the data (a fit range) belongs *under* the
@@ -240,20 +244,35 @@ class Plot:
         p.stroke_rect(x, y, w, h, _AXIS_LINE)
         self._draw_legend(p)
 
+    def _grid_colours(self) -> tuple[tuple, tuple] | None:
+        """The major and minor gridline colours at :attr:`grid_opacity` (``None``: no grid)."""
+        factor = max(float(self.grid_opacity), 0.0)
+        if factor <= 0.0:
+            return None
+
+        def scaled(colour):
+            return (*colour[:3], min(255, int(round(colour[3] * factor))))
+
+        return scaled(_GRID_COLOUR), scaled(_MINOR_GRID_COLOUR)
+
     def _draw_gridlines(self, p) -> None:
+        colours = self._grid_colours()
+        if colours is None:
+            return
+        major, minor = colours
         x, y, w, h = self.x, self.y, self.w, self.h
         # A log axis also gets its 2..9 lines per decade, fainter: without
         # them a decade is an empty band and a value in it cannot be read.
         for v in self._y_axis.minor_ticks():
-            p.fill_rect(x, self._y_axis.to_pixels(v), w, 1.0, _MINOR_GRID_COLOUR)
+            p.fill_rect(x, self._y_axis.to_pixels(v), w, 1.0, minor)
         for v in self._x_axis.minor_ticks():
-            p.fill_rect(self._x_axis.to_pixels(v), y, 1.0, h, _MINOR_GRID_COLOUR)
+            p.fill_rect(self._x_axis.to_pixels(v), y, 1.0, h, minor)
         for v in self._y_axis.ticks(self.y_tick_target):
             py = self._y_axis.to_pixels(v)
-            p.fill_rect(x, py, w, 1.0, _GRID_COLOUR)
+            p.fill_rect(x, py, w, 1.0, major)
         for v in self._x_axis.ticks(self.x_tick_target):
             px = self._x_axis.to_pixels(v)
-            p.fill_rect(px, y, 1.0, h, _GRID_COLOUR)
+            p.fill_rect(px, y, 1.0, h, major)
 
     def _draw_tick_labels(self, p) -> None:
         """The y ticks' numbers, in the margin left of the box. Callers that

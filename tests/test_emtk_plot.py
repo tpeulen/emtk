@@ -210,3 +210,30 @@ def test_a_log_axis_under_two_decades_ticks_on_nice_values():
     values = [round(10.0 ** v, 6) for v in axis.ticks(4)]
     assert values and all(v == round(v) for v in values)
     assert all(150.0 <= v <= 900.0 for v in values)
+
+
+# -- grid strength ----------------------------------------------------------
+
+def _grid_alphas(opacity):
+    """The alphas of the full-width gridline rectangles a plot draws at *opacity*."""
+    plot = Plot(0, 0, 200, 100, x_range=(0.0, 10.0), y_range=(0.0, 10.0), show_ticks=True)
+    plot.grid_opacity = opacity
+    painter = RecordingPainter()
+    plot.draw(painter)
+    return sorted({
+        colour[3]
+        for name, _x, _y, w, h, colour in (c for c in painter.calls if c[0] == "fill_rect")
+        if (w == 200 or h == 100) and len(colour) == 4 and tuple(colour[:3]) == (255, 255, 255)
+    })
+
+
+def test_grid_opacity_scales_the_gridlines_and_zero_draws_none():
+    theme = _grid_alphas(1.0)
+    assert theme, "a plot with ticks draws gridlines"
+    stronger = _grid_alphas(3.0)
+    assert max(stronger) == pytest.approx(3 * max(theme), abs=1)
+    assert _grid_alphas(0.0) == []
+
+
+def test_grid_opacity_never_overflows_the_alpha_channel():
+    assert max(_grid_alphas(100.0)) == 255
