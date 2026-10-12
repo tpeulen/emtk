@@ -914,6 +914,16 @@ def button(label: str, size=None) -> bool:
         size,
         ctx.draw.calc_text_size(shown)[0] + ctx.style.frame_padding[0] * 2.0,
         _frame_height(ctx))
+    if size is None or not float(size[0]):
+        # A button sized by its label never reaches past the line (a docked panel, the window
+        # magnified): it takes the room that is left and its label ends in an ellipsis, so it
+        # stays whole, clickable and legible instead of being cut at the edge by the clip.
+        room = ctx.layout.avail()[0]
+        if 0.0 < room < width - 0.5:
+            width = room
+    if shown and ctx.draw.calc_text_size(shown)[0] > width - 2.0:
+        # also a button given a width (a button row sharing a narrow column): the label is shortened
+        shown = _elided(ctx, shown, width - ctx.style.frame_padding[0] * 2.0)
     box = ctx.layout.row(height=height, width=width)
     hovered, held, pressed = ctx.button_behavior(box, ctx.get_id(label))
     colour = _col(Col.BUTTON_ACTIVE) if held else (_col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON))
@@ -2794,6 +2804,13 @@ def begin_tab_bar(str_id: str) -> bool:
         stack = []
         ctx._tabbar_stack = stack
     store = ctx.state(("tabbar", str_id))
+    # Tabs wider together than the bar wrap onto further rows instead of running past its edge (where
+    # the clip hides them and no scroll can reach them). How many rows the header needs is known from
+    # the previous frame, so the first frame of a bar that overflows draws one row.
+    rows = max(int(store.get("rows", 1)), 1)
+    store["measured"] = 0
+    store["rows_now"] = 1
+    header_height = rows * header_height + (rows - 1) * ctx.style.item_spacing[1]
     if ctx.io.mouse_clicked[0] and ctx.hovered_window in (None, ctx.current_window):
         mx, my = ctx.io.mouse_pos
         for item_id, box in store.get("rects", {}).items():
@@ -2823,7 +2840,9 @@ def end_tab_bar() -> None:
     ctx = _ctx()
     stack = getattr(ctx, "_tabbar_stack", None)
     if stack:
-        stack.pop()
+        store = stack.pop()
+        store["rows"] = store.pop("rows_now", 1)
+        store.pop("measured", None)
     layouts = getattr(ctx, "_tabbar_layouts", None)
     if layouts:
         layout = layouts.pop()
@@ -2846,6 +2865,17 @@ def begin_tab_item(label: str, flags: int = 0, *, on_close=None) -> bool:
     width = ctx.draw.calc_text_size(shown)[0] + ctx.style.frame_padding[0] * 2.0
     close_width = _frame_height(ctx) if on_close is not None else 0.0
     width += close_width
+    if stack and "measured" in store and layouts:
+        bar_width = layouts[-1]["width"]
+        if width > bar_width:  # one tab wider than the whole bar: its title is shortened
+            width = bar_width
+            shown = _elided(ctx, shown, width - close_width - ctx.style.frame_padding[0] * 2.0)
+        if store["measured"]:
+            if ctx.layout.line_avail() >= width:
+                same_line()
+            else:
+                store["rows_now"] += 1
+        store["measured"] += 1
     box = ctx.layout.row(height=_frame_height(ctx), width=width)
     from .flags import TabItemFlags
 
@@ -2873,7 +2903,8 @@ def begin_tab_item(label: str, flags: int = 0, *, on_close=None) -> bool:
                           close_box[1] + ctx.style.frame_padding[1]), _col(Col.TEXT), "×")
         if close_pressed:
             on_close()
-    same_line()
+    if not (stack and "measured" in store):
+        same_line()
     if selected and layouts:
         ctx.layout = layouts[-1]["body"]
     return selected

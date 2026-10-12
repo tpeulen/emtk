@@ -137,7 +137,11 @@ def test_selected_font_and_bold_metrics_are_retained_after_font_changes():
 
 
 def test_a_long_clipped_dock_tab_does_not_overlap_its_overflow_arrows():
-    """The real dock renderer clips titles before the separately drawn arrow buttons."""
+    """The real dock renderer clips titles before the separately drawn arrow buttons.
+
+    The strip is narrower than the tabs at their narrowest (titles first end in an ellipsis, see
+    ``test_tab_overflow``), so it still has to scroll.
+    """
     from emtk.app import ImApp
     from emtk.docking import DockManager, Region
 
@@ -145,13 +149,18 @@ def test_a_long_clipped_dock_tab_does_not_overlap_its_overflow_arrows():
     titles = ["Coefficients", "Intensity scatter", "PCC vs intensity", "Object distances"]
     for title in titles:
         docks.add_window(title, title, lambda box: None, dock="main", closable=False)
-    app = ImApp(lambda: docks.draw((0, 0, 240, 100)))
+    app = ImApp(lambda: docks.draw((0, 0, 150, 100)))
     painter = RecordingPainter()
-    app.draw(painter, 0, 0, 240, 100)
+    app.draw(painter, 0, 0, 150, 100)
     arrows = [record for record in painter.visible_texts if record[5] in {"◀", "▶"}]
-    labels = [record for record in painter.visible_texts if record[5] in titles and record[2] > 0]
+
+    def is_title(record):
+        text = record[5].rstrip("\u2026")
+        return bool(text) and any(title.startswith(text) for title in titles)
+
+    labels = [record for record in painter.visible_texts if is_title(record) and record[2] > 0]
     assert len(arrows) == 2 and labels
-    assert any(record[2] == 0 for record in painter.visible_texts if record[5] in titles)
+    assert any(record[2] == 0 for record in painter.visible_texts if is_title(record))
     assert all(overlap(label, arrow) == 0 for label in labels for arrow in arrows)
 
 

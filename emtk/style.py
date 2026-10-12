@@ -397,6 +397,35 @@ def disc(p, cx: float, cy: float, radius: float, colour: Colour) -> None:
             p.fill_rect(cx - half, top, 2.0 * half, step, colour)
 
 
+def tab_cap(widths, room: float, floor: float) -> float:
+    """The width above which tabs are shortened so that *widths* fit *room*.
+
+    Water-filling: the widest tabs give way first and the narrow ones stay whole. The cap never goes
+    under *floor*; a strip that still does not fit then scrolls (or runs on) instead.
+
+    Parameters
+    ----------
+    widths : sequence of float
+        The natural width of every tab.
+    room : float
+        The width of the strip.
+    floor : float
+        The narrowest a tab is squeezed to.
+
+    Returns
+    -------
+    float
+        The cap; no tab is wider than it.
+    """
+    widths = list(widths)
+    if len(widths) < 2 or sum(widths) <= room:
+        return max(widths, default=0.0)
+    cap = max(widths)
+    while cap > floor and sum(min(w, cap) for w in widths) > room:
+        cap -= 1.0
+    return max(cap, floor)
+
+
 def fit_text(p, label: str, room: float) -> str:
     """``label`` shortened with a trailing dot until it fits ``room``.
 
