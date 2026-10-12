@@ -497,7 +497,7 @@ def draw_inline(
     x = 0.0
     line_h = 0.0
     for atom in _atoms(runs):
-        widths = [measure(r)[0] + (2 * pad if r.code else 0.0) for r in atom]
+        widths = [measure(r)[0] + (2 * pad if r.code and r.text != " " else 0.0) for r in atom]
         for r in atom:
             line_h = max(line_h, measure(r)[1])
         w = sum(widths)
@@ -522,10 +522,20 @@ def draw_inline(
     ctx.item_add(box)
     base = colour if colour is not None else _col(Col.TEXT)
     link_col = _col(Col.CHECK_MARK)
-    for li, ln in enumerate(lines):
+    for li, raw in enumerate(lines):
         y = box[1] + li * line_h
+        ln: list[tuple[float, InlineRun, float]] = []
+        for sx, run, rw in raw:  # one string per styled stretch, spaces inside it included
+            if ln and not run.code:
+                px, prun, pw = ln[-1]
+                if (prun.bold, prun.italic, prun.code, prun.target) == (
+                    run.bold, run.italic, run.code, run.target,
+                ) and abs(px + pw - sx) < 1e-6:
+                    ln[-1] = (px, dataclasses.replace(prun, text=prun.text + run.text), pw + rw)
+                    continue
+            ln.append((sx, run, rw))
         for si, (sx, run, rw) in enumerate(ln):
-            if run.text == " " and not run.target:
+            if run.text.strip() == "" and not run.target:
                 continue
             x0 = box[0] + sx
             hovered = False

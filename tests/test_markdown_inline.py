@@ -53,29 +53,34 @@ def test_no_markup_reaches_the_screen():
 
 def test_link_text_is_drawn_exactly_once():
     painter, _ = _draw(SOURCE)
-    words = [t[5] for t in painter.texts]
-    assert words.count("four") == 1 and words.count("factors") == 1
-    assert words.count("link") == 1
+    drawn = " ".join(t[5] for t in painter.texts)
+    assert drawn.count("The four factors") == 1
+    assert drawn.count("a link") == 1
+    assert "The four factors" in [t[5] for t in painter.texts]  # one string, not word by word
 
 
-def test_bold_uses_the_bold_face_and_links_are_underlined():
+def test_bold_uses_the_bold_face_and_links_are_not_bold():
     painter, _ = _draw(SOURCE)
     bold = {t[5] for t in painter.texts if t[7]}
-    assert {"bold", "words"} <= bold
-    assert "four" not in bold
+    assert "bold words" in bold
+    assert "The four factors" not in bold
 
 
 def test_click_on_an_inline_link_calls_on_link():
-    _painter, clicked = _draw(SOURCE, click="four")
+    _painter, clicked = _draw(SOURCE, click="The four factors")
     assert clicked == ["docs/a.md#The four factors"]
-    _painter, clicked = _draw(SOURCE, click="link")
+    _painter, clicked = _draw(SOURCE, click="a link")
     assert clicked == ["docs/b.md"]
 
 
 def test_link_words_stay_whole_when_a_line_breaks():
     source = "alpha " * 6 + "[Accurate FRET corrections](docs/x.md) omega"
-    painter, _ = _draw(source, width=150.0)
-    texts = [t for t in painter.texts if t[5] in ("Accurate", "FRET", "corrections")]
-    assert [t[5] for t in texts] == ["Accurate", "FRET", "corrections"]
+    painter, clicked = _draw(source, width=150.0)
+    link_pieces = [t[5] for t in painter.texts if t[5] in ("Accurate FRET corrections", "Accurate FRET", "corrections", "FRET corrections", "Accurate")]
+    assert "".join(p.replace(" ", "") for p in link_pieces) == "AccurateFRETcorrections"
     assert max(t[0] + t[2] for t in painter.texts) <= 150.0 + 1.0
     assert len({round(t[1]) for t in painter.texts}) > 1
+    # the click works on the second line's part of a wrapped link
+    last = [t for t in painter.texts if "corrections" in t[5]][-1][5]
+    _p, clicked = _draw(source, width=150.0, click=last)
+    assert clicked == ["docs/x.md"]

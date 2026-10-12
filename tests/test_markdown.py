@@ -81,7 +81,7 @@ def test_inline_links_wrap_inside_the_window():
         im.begin("Links")
         render_markdown(f"Further reading: {links}.")
         im.end()
-    shown = [t for t in p.texts if t[5] in ("fairly", "long", "title", "number")]
+    shown = [t for t in p.texts if "title" in t[5]]
     assert shown
     assert max(t[0] + t[2] for t in p.texts) <= 400
     assert len({round(t[1]) for t in shown}) > 1  # more than one row
