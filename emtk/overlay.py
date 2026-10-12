@@ -50,12 +50,17 @@ class _Over(ControlSurface):
     def render(self, view) -> None:
         if self.renderer is None:
             raise RuntimeError("OverlaySurface: render before attach()")
+        from .fonts import generation  # noqa: PLC0415
+
         font_pt = self.font_pt
-        if (self._painter is None or self._painter_ratio != self.ratio
-                or self._painter_font_pt != font_pt):
-            self._painter = self.renderer.painter(font_pt=font_pt, scale=self.ratio)
-            self._painter_ratio = self.ratio
+        scale = self.scale  # the display ratio times the interface zoom (emtk.fonts)
+        if (self._painter is None or self._painter_ratio != scale
+                or self._painter_font_pt != font_pt
+                or self._painter_generation != generation()):
+            self._painter = self.renderer.painter(font_pt=font_pt, scale=scale)
+            self._painter_ratio = scale
             self._painter_font_pt = font_pt
+            self._painter_generation = generation()
             self.dirty = True
         painter = self._painter
         hook = self._hook("animating")

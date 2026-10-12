@@ -47,6 +47,8 @@ because that is what the chrome's palette constants already are.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 from collections.abc import Sequence
 from numbers import Integral
 from typing import Protocol, Union
@@ -605,8 +607,49 @@ def set_font(p: "Painter", font, size: float = 0.0) -> bool:
             op(font, size)
         except TypeError:
             op(font)
+        try:
+            p._emtk_font = (font, size)
+        except AttributeError:  # a painter with __slots__ just cannot be restored
+            pass
         return True
     return False
+
+
+def current_font(p: "Painter"):
+    """``(font, size)`` last set through :func:`set_font` (``(None, 0.0)``: the default)."""
+    return getattr(p, "_emtk_font", (None, 0.0))
+
+
+@contextmanager
+def painter_font(p: "Painter", font, size: float = 0.0):
+    """``with painter_font(p, {...}):`` -- draw the block in *font*, then restore the previous one.
+
+    For a control that draws in a font of its own (an editor in the ``code``
+    role) inside whatever its host had pushed.
+    """
+    previous = current_font(p)
+    set_font(p, font, size)
+    try:
+        yield
+    finally:
+        set_font(p, *previous)
+
+
+def adopt_interface_font(p: "Painter") -> None:
+    """Point a new painter at the configured interface face (:mod:`emtk.fonts` ``ui`` role).
+
+    The default, ``monospace``, is the baked face every painter starts in, so
+    nothing happens; any other face is selected once here, and every font
+    without a family (``set_font(None)``, ``{"bold": True}``) resolves to it.
+    """
+    from .fonts import role_family  # noqa: PLC0415
+
+    if role_family("ui").strip().casefold() == "monospace":
+        return
+    try:
+        set_font(p, None)
+    except (TypeError, ValueError):  # the face is gone: stay on the bake
+        pass
 
 
 def set_font_scale(p: "Painter", scale: float) -> bool:

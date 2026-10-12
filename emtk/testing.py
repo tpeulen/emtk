@@ -1043,7 +1043,9 @@ class Driver:
         self.size = tuple(map(int, size))
         if len(self.size) != 2 or min(self.size) <= 0:
             raise ValueError("size must be a positive (width, height) pair")
-        self.surface = ControlSurface(self.app)
+        # Zoom 1: this driver draws at its own size with the screenshot painter, so
+        # the interface zoom (emtk.fonts) must not shrink the box under it.
+        self.surface = ControlSurface(self.app, zoom=1.0)
         self.surface.on_resize(*self.size, 1.0)
         self.painter = None
         self._rects = {}

@@ -41,6 +41,14 @@ painter multiplies by ``ui_font_pt / baked`` once, for all text alike.
 
 Use :func:`text_font` to get the font for a role, or :func:`text_style` /
 :func:`push_text_style` to draw in it. Never pass a literal size.
+
+Faces and the font settings
+---------------------------
+Which face each role is set in -- and its own size, if it is not to follow the
+interface -- is :mod:`emtk.fonts`' configuration: ``code`` (editors, code
+blocks), ``prose`` (``body``), ``heading`` (``h1``-``h4``, spaced by its
+``heading_step`` rather than :data:`STEP` when one is configured), ``caption``
+and ``math``. :data:`PROSE_FAMILY` and :data:`CODE_FAMILY` are the defaults.
 """
 from __future__ import annotations
 
@@ -57,6 +65,7 @@ __all__ = [
     "ui_font_pt",
     "set_ui_font_pt",
     "factor",
+    "role_pt",
     "size_pt",
     "text_font",
     "math_args",
@@ -128,11 +137,32 @@ def set_ui_font_pt(pt: float) -> float:
 
 
 def factor(role: str = "body") -> float:
-    """Size of *role* as a multiple of the body size."""
+    """Size of *role* as a multiple of the body size (the configured heading step)."""
+    from .fonts import heading_step  # noqa: PLC0415
+
     try:
-        return STEP ** ROLES[role]
+        return heading_step() ** ROLES[role]
     except KeyError:
         raise ValueError(f"unknown text role {role!r}; one of {sorted(ROLES)}") from None
+
+
+#: Text role -> the :mod:`emtk.fonts` role that sets its face and size.
+_FONT_ROLE = {"body": "prose", "code": "code", "caption": "caption",
+              "h1": "heading", "h2": "heading", "h3": "heading", "h4": "heading"}
+
+
+def role_pt(role: str = "body") -> float:
+    """The size *role* is drawn at, in emtk points (the font settings applied)."""
+    from . import fonts  # noqa: PLC0415
+
+    factor(role)  # validates the name
+    base_role = _FONT_ROLE[role]
+    own = fonts.config().role(base_role).size
+    if base_role == "caption" and own > 0:
+        return float(own)
+    if base_role == "code":
+        return fonts.role_size_pt("code")
+    return fonts.role_size_pt(base_role) * factor(role)
 
 
 def size_pt(role: str = "body") -> float:
@@ -140,9 +170,10 @@ def size_pt(role: str = "body") -> float:
 
     This is the number a ``push_font({"size": ...})`` takes: the painter scales
     every font spec by ``ui_font_pt() / baked`` once, so the body role is the
-    baked size and the user setting scales every role alike.
+    baked size and the user setting scales every role alike. A role given its
+    own size in :mod:`emtk.fonts` comes out at that size.
     """
-    return _baked_pt() * factor(role)
+    return _baked_pt() * role_pt(role) / ui_font_pt()
 
 
 def _baked_pt() -> float:
@@ -169,14 +200,21 @@ def text_font(role: str = "body", *, bold: bool | None = None,
         A reader's own zoom on top of the scale (a documentation browser's
         A-/A+); 1.0 everywhere else.
     """
-    heading = role.startswith("h")
+    from . import fonts  # noqa: PLC0415
+
+    size = size_pt(role) * float(zoom)
+    configured = fonts.config().role(_FONT_ROLE.get(role, "prose"))
+    if bold is None:
+        bold = configured.bold
     if family is None:
-        family = CODE_FAMILY if role == "code" else PROSE_FAMILY
-    return {
-        "family": family,
-        "size": size_pt(role) * float(zoom),
-        "bold": heading if bold is None else bool(bold),
-    }
+        family = configured.family
+        try:  # a configured face that is not installed must not stop a page drawing
+            from .font_render import font_spec  # noqa: PLC0415
+
+            font_spec({"family": family, "size": size, "bold": bool(bold)})
+        except (ValueError, TypeError):
+            family = CODE_FAMILY if role == "code" else PROSE_FAMILY
+    return {"family": family, "size": size, "bold": bool(bold)}
 
 
 def math_args(role: str = "body", zoom: float = 1.0) -> dict:
@@ -185,7 +223,11 @@ def math_args(role: str = "body", zoom: float = 1.0) -> dict:
     The formula is rasterised at twice its display size (``scale=0.5``) so it
     stays sharp on a 2x display; its display size follows the setting like text.
     """
-    display = size_pt(role) * float(zoom) * ui_font_pt() / _baked_pt()
+    from . import fonts  # noqa: PLC0415
+
+    own = fonts.config().math.size
+    base = own * factor(role) if own > 0 else role_pt(role)
+    display = base * float(zoom)
     return {"font_size": 2.0 * display, "scale": 0.5}
 
 

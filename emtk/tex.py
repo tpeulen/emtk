@@ -98,7 +98,17 @@ def _families(sans: bool = False):
     from .font_render import _faces
 
     faces = _faces()
-    text = next((f for f in (SANS_FAMILIES if sans else TEXT_FAMILIES)
+    candidates = SANS_FAMILIES if sans else TEXT_FAMILIES
+    if not sans:
+        # The configured math face (emtk.fonts' "math" role) goes first; "auto" keeps the list.
+        from .fonts import family_chain, role_family
+
+        chosen = role_family("math")
+        if chosen.strip().casefold() != "auto":
+            named = [next((f for f in faces if f.casefold() == c.casefold()), c)
+                     for c in family_chain(chosen)]
+            candidates = (*named, *candidates)
+    text = next((f for f in candidates
                  if f in faces and any(x.italic for x in faces[f])
                  and any(not x.italic and not x.bold for x in faces[f])), None)
     if text is None:

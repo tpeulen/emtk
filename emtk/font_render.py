@@ -10,7 +10,7 @@ import json
 import math
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 
@@ -23,6 +23,11 @@ class FontSpec:
     size: float = DEFAULT_FONT_PT
     bold: bool = False
     italic: bool = False
+    #: Families tried, in order, for a character *family* lacks -- before the
+    #: system coverage faces (:data:`emtk.dynamic_font.FONT_CANDIDATES`). Filled
+    #: by :func:`font_spec` from a comma-separated family chain and the
+    #: configured :attr:`emtk.fonts.FontConfig.fallbacks`.
+    fallback: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -237,47 +242,33 @@ def font_spec(value=None, size: float | None = 0.0) -> FontSpec:
     effective_size = float(effective_size)
     if not math.isfinite(effective_size) or not 0 < effective_size <= 256:
         raise ValueError("Font size must be finite and between 0 and 256 points")
-    family = data.get("family", "monospace")
+    explicit = "family" in data
+    family = data.get("family") if explicit else _default_family()
     if not isinstance(family, str) or not family.strip():
         raise ValueError("Font family must be a nonempty name")
     for attribute in ("bold", "italic"):
         if attribute in data and not isinstance(data[attribute], bool):
             raise ValueError(f"Font {attribute} must be a boolean")
-    family = family.strip()
-    aliases = {
-        "sans-serif": (
-            "Arial",
-            "Helvetica",
-            "DejaVu Sans",
-            "Liberation Sans",
-            "Noto Sans",
-        ),
-        "sans": ("Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "Noto Sans"),
-        # Running text beside the Menlo/DejaVu Sans Mono chrome (type_scale.PROSE_FAMILY).
-        "prose": (
-            "Verdana",
-            "DejaVu Sans",
-            "Bitstream Vera Sans",
-            "Tahoma",
-            "Lucida Grande",
-            "Arial",
-            "Helvetica",
-            "Liberation Sans",
-            "Noto Sans",
-        ),
-        "serif": (
-            "Times New Roman",
-            "Times",
-            "DejaVu Serif",
-            "Liberation Serif",
-            "Noto Serif",
-        ),
-    }
-    if family.casefold() in aliases:
-        options = aliases[family.casefold()]
-        family = next((name for name in options if name in _faces()), family)
+    chain = [name for name in (_resolve_family(part) for part in family.split(",")
+                               if part.strip()) if name]
+    if not chain:
+        # Nothing in the chain is installed: name the first entry, as a
+        # single unknown family always did.
+        chain = [family.split(",")[0].strip()]
+    primary = chain[0]
+    if not explicit and primary.casefold() != "monospace" and primary not in _faces():
+        primary = "monospace"  # a configured interface face that is gone draws the bake
+    from . import fonts  # noqa: PLC0415
+
+    fallback = tuple(
+        dict.fromkeys(
+            name
+            for name in (*chain[1:], *(_resolve_family(f) for f in fonts._config.fallbacks))
+            if name and name.casefold() != "monospace" and name != primary
+        )
+    )
     spec = FontSpec(
-        family, effective_size, data.get("bold", False), data.get("italic", False)
+        primary, effective_size, data.get("bold", False), data.get("italic", False), fallback
     )
     if spec.family.casefold() == "monospace":
         if spec.italic:
@@ -289,6 +280,48 @@ def font_spec(value=None, size: float | None = 0.0) -> FontSpec:
     return spec
 
 
+#: Generic family names and the installed families they stand for, in preference order.
+GENERIC_FAMILIES: dict[str, tuple[str, ...]] = {
+    "sans-serif": ("Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "Noto Sans"),
+    "sans": ("Arial", "Helvetica", "DejaVu Sans", "Liberation Sans", "Noto Sans"),
+    # Running text beside the Menlo/DejaVu Sans Mono chrome (type_scale.PROSE_FAMILY).
+    "prose": (
+        "Verdana",
+        "DejaVu Sans",
+        "Bitstream Vera Sans",
+        "Tahoma",
+        "Lucida Grande",
+        "Arial",
+        "Helvetica",
+        "Liberation Sans",
+        "Noto Sans",
+    ),
+    "serif": ("Times New Roman", "Times", "DejaVu Serif", "Liberation Serif", "Noto Serif"),
+}
+
+
+@lru_cache(maxsize=512)
+def _resolve_family(name: str) -> str | None:
+    """*name* as an installed family (generics expanded), ``monospace``, or ``None`` if absent."""
+    name = name.strip()
+    if not name:
+        return None
+    key = name.casefold()
+    if key == "monospace":
+        return "monospace"
+    faces = _faces()
+    if key in GENERIC_FAMILIES:
+        return next((f for f in GENERIC_FAMILIES[key] if f in faces), None)
+    return next((f for f in faces if f.casefold() == key), None)
+
+
+def _default_family() -> str:
+    """The family a font without one is drawn in: the configured interface face."""
+    from . import fonts  # noqa: PLC0415
+
+    return fonts._config.ui.family or "monospace"
+
+
 @lru_cache(maxsize=128)
 def _loaded(face: Face, pixels: float):
     from PIL import ImageFont
@@ -297,7 +330,7 @@ def _loaded(face: Face, pixels: float):
 
 
 def _font(spec: FontSpec, scale: float, bold: bool = False):
-    actual = FontSpec(spec.family, spec.size, spec.bold or bold, spec.italic)
+    actual = replace(spec, bold=spec.bold or bold)
     return _loaded(_face(actual), max(1, round(actual.size * PX_PER_PT * scale)))
 
 
@@ -336,19 +369,40 @@ def _cmap(path: str, index: int):
         return None
 
 
+@lru_cache(maxsize=256)
+def _family_face(family: str, bold: bool, italic: bool) -> Face | None:
+    """The face of an installed *family* nearest the requested style, or ``None``."""
+    styles = _faces().get(family)
+    if not styles:
+        return None
+    for want in ((bold, italic), (False, italic), (bold, False), (False, False)):
+        for face in styles:
+            if (face.bold, face.italic) == want:
+                return face
+    return styles[0]
+
+
 @lru_cache(maxsize=4096)
-def _face_for(face: Face, char: str) -> Face:
+def _face_for(face: Face, char: str, chain: tuple = ()) -> Face:
     """*face* when it has *char*, else the first fallback face that has it.
 
     A proportional face (Arial, Helvetica) lacks much of what documentation
     writes -- subscript digits (R\u2080), arrows, dingbats -- and drawing its
     ``.notdef`` box is the bug the baked chrome solved long ago with its own
     fallback list. The same list serves here, so a character looks the same
-    in prose as in a button.
+    in prose as in a button. *chain* -- the spec's own fallback families
+    (:attr:`FontSpec.fallback`) -- is tried first, so a role's fallbacks win.
     """
     covered = _cmap(face.path, face.index)
     if covered is None or ord(char) in covered or char.isspace():
         return face
+    for family in chain:
+        other_face = _family_face(family, face.bold, face.italic)
+        if other_face is None:
+            continue
+        other = _cmap(other_face.path, other_face.index)
+        if other is not None and ord(char) in other:
+            return other_face
     from .dynamic_font import FONT_CANDIDATES  # noqa: PLC0415
 
     for path in FONT_CANDIDATES:
@@ -366,7 +420,7 @@ def _runs(spec: FontSpec, string: str) -> tuple[tuple[Face, int, str], ...]:
     primary = _face(spec)
     runs: list[list] = []
     for index, char in enumerate(string):
-        face = _face_for(primary, char)
+        face = _face_for(primary, char, spec.fallback)
         if runs and runs[-1][0] == face:
             runs[-1][2] += char
         else:
@@ -405,7 +459,7 @@ RASTER_QUANTUM = 8
 
 @lru_cache(maxsize=4096)
 def _glyph(face: Face, pixels: float, char: str, phase: float = 0.0,
-           filter: str = "linear"):
+           filter: str = "linear", antialias: bool = True):
     """*char* of *face* rasterised at *pixels* per em with its pen *phase* px right of a texel edge.
 
     Returns ``(texture, left, top)``: the texture's top-left corner relative to the
@@ -428,7 +482,10 @@ def _glyph(face: Face, pixels: float, char: str, phase: float = 0.0,
     # texel of padding round the ink, and one more on the right for the phase.
     width, height = max(1, right - left + 3), max(1, bottom - top + 2)
     image = Image.new("RGBA", (width, height))
-    ImageDraw.Draw(image).text(
+    draw = ImageDraw.Draw(image)
+    if not antialias:
+        draw.fontmode = "1"  # bi-level glyphs (emtk.fonts antialias=False)
+    draw.text(
         (1 - left + float(phase), 1 - top), char, font=font, anchor="ls",
         fill=(255, 255, 255, 255),
     )
@@ -459,18 +516,24 @@ def glyphs(spec: FontSpec, string: str, scale: float, bold: bool = False,
     phase (:data:`SUBPIXEL_STEPS`) and boxed one texel per device pixel, so
     nothing is resampled and no glyph moves off its advance.
     """
-    actual = FontSpec(spec.family, spec.size, spec.bold or bold, spec.italic)
+    actual = replace(spec, bold=spec.bold or bold)
     em = _px(actual, scale)
     device = float(device) if device and device > 0 else 1.0
+    from . import fonts  # noqa: PLC0415
+
+    # emtk.fonts' oversampling: rasterise finer than the device and scale down.
+    over = max(1.0, fonts.oversample())
+    smooth = fonts.antialias()
     exact = em * device
-    raster = max(1.0, min(round(exact * RASTER_QUANTUM) / RASTER_QUANTUM,
+    raster = max(1.0, min(round(exact * over * RASTER_QUANTUM) / RASTER_QUANTUM,
                           float(MAX_RASTER_PX)))
     unit = em / raster  # caller pixels per raster texel
     k = em / LAYOUT_PX
     ascent = _layout_metrics(actual)[0] * k
     positions = _positions(actual, string)
     faces = [face for face, _, text in _runs(actual, string) for _ in text]
-    # On the grid only when a texel is a device pixel (a clamped, large raster is scaled).
+    # On the grid only when a texel is a device pixel (a clamped or oversampled raster
+    # is scaled).
     snap = origin is not None and abs(raster - exact) * RASTER_QUANTUM <= 1.0
     ox, oy = origin if origin is not None else (0.0, 0.0)
     baseline = round((oy + ascent) * device)
@@ -484,7 +547,7 @@ def glyphs(spec: FontSpec, string: str, scale: float, bold: bool = False,
             phase = round((pen_device - whole) * SUBPIXEL_STEPS) / SUBPIXEL_STEPS
             if phase >= 1.0:
                 whole, phase = whole + 1, 0.0
-            texture, left, top = _glyph(faces[index], raster, char, phase, "nearest")
+            texture, left, top = _glyph(faces[index], raster, char, phase, "nearest", smooth)
             yield (
                 texture,
                 (whole + left) / device,
@@ -493,7 +556,7 @@ def glyphs(spec: FontSpec, string: str, scale: float, bold: bool = False,
                 texture.height / device,
             )
             continue
-        texture, left, top = _glyph(faces[index], raster, char)
+        texture, left, top = _glyph(faces[index], raster, char, 0.0, "linear", smooth)
         yield (texture, ox + pen + left * unit, oy + ascent + top * unit,
                texture.width * unit, texture.height * unit)
 
@@ -564,7 +627,7 @@ def draw_text(
         raise RuntimeError(
             "Selected font rendering requires the host image atlas resolver"
         )
-    spec = FontSpec(spec.family, spec.size, spec.bold or bold, spec.italic)
+    spec = replace(spec, bold=spec.bold or bold)
     span = text_width(spec, string, scale)
     height = line_height(spec, scale)
     left = x + (

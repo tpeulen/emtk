@@ -255,6 +255,9 @@ class QuadPainter:
         self._ascent = atlas.ascent
         self._half_cell_h = (atlas.cell[1] - 2 * atlas.pad) * 0.5
         self._pad = atlas.pad
+        from .painter import adopt_interface_font  # noqa: PLC0415
+
+        adopt_interface_font(self)
 
     def set_font_scale(self, scale: float) -> None:
         """Draw and measure text `scale` times the **interface** size.

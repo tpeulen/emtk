@@ -54,3 +54,57 @@ does this automatically. A missing/full resolver produces an explicit font
 rendering error. Current-frame image handles stay alive and their UVs refresh
 at vertex submission, so repacking the image atlas cannot give earlier quads
 stale regions.
+
+Font settings: one configuration for every role
+-----------------------------------------------
+
+:mod:`emtk.fonts` is the one place an application offers font settings. A
+:class:`~emtk.fonts.FontConfig` holds, per **role** -- ``ui`` (the chrome),
+``code`` (editors and consoles), ``prose`` and ``heading`` (documentation),
+``math`` and ``caption`` -- a family, a size in points (``0`` follows the
+interface size, or for headings and captions the prose size by the steps of the
+type scale) and a weight, plus four settings for all text:
+
+``zoom``
+    Interface magnification (0.5-3). :class:`emtk.app.ControlSurface` lays the
+    control out in a box ``zoom`` times smaller and draws it ``zoom`` times
+    larger, and divides pointer positions by it -- text, paddings, icons and
+    plots grow together and clicks still land where things are drawn.
+``oversample``
+    Raster scale of real-font glyphs (1-4). ``1`` is one texel per device pixel
+    on the device grid; above it glyphs are rasterised finer and scaled down.
+``antialias``
+    Grey-scale (on) or bi-level (off) real-font glyphs. FreeType through Pillow
+    exposes no hinting control, so there is no hinting setting.
+``heading_step``
+    Ratio between heading sizes (the type scale's :data:`~emtk.type_scale.STEP`).
+
+A family may be a chain, ``"Inter, Verdana, prose"``: the first installed entry
+is the face and the rest are tried, in order, for any character it lacks, before
+the system coverage faces. ``fallbacks`` is appended to every role's chain.
+
+::
+
+    from emtk import fonts
+
+    fonts.update(code={"family": "Menlo", "size": 11}, zoom=1.25)
+    settings["fonts"] = fonts.config().to_dict()     # plain dict, YAML/JSON-ready
+    fonts.apply(settings["fonts"])                    # at startup
+    fonts.system_families(monospace=True)             # for a picker
+    fonts.measure("code", "def fit(x):")              # what a layout measures
+    fonts.reset()                                     # back to the defaults
+
+:func:`~emtk.fonts.apply` takes effect on the next frame: it clears the glyph,
+layout and formula caches and bumps :func:`~emtk.fonts.generation`, which every
+host compares to rebuild its painter. A hand-edited dict is clamped, never
+rejected, and a family that is not installed falls back to the role's default,
+so a settings file from another machine cannot stop an interface drawing.
+
+The ``ui`` family defaults to ``monospace``, the baked face. Another family is
+adopted by every new painter (``painter.set_font(None)`` and a font dict
+without a family resolve to it); the interface lays out from measured widths,
+so a proportional face works, at the cost of real-font drawing. The
+:class:`~emtk.widgets.text_editor.TextEditor` draws in the ``code`` role
+(``EditorConfig.font_role``) unless its host pushed a font of its own; its
+columns assume a monospaced face, which is why a ``code`` picker should list
+``system_families(monospace=True)``.

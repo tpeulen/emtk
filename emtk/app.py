@@ -276,13 +276,21 @@ class ControlSurface(Surface):
         by default. A window showing one large picture -- a splash screen's art
         at device resolution -- passes a bigger one: an image that does not fit
         the atlas is declined and drawn as a blank rectangle.
+    zoom : float, optional
+        Interface magnification. By default the surface follows the user's
+        setting, :func:`emtk.fonts.zoom`, from frame to frame: the control is laid
+        out in a box ``zoom`` times smaller and drawn ``zoom`` times larger, and
+        pointer positions are divided by it, so the whole interface scales
+        together and every click still lands where it is drawn.
     """
 
     def __init__(self, control, font_pt: float | None = None,
-                 background: tuple = (30, 32, 38), images=None) -> None:
+                 background: tuple = (30, 32, 38), images=None,
+                 zoom: float | None = None) -> None:
         self.control = control
         self.images = images
         self._font_pt = None if font_pt is None else float(font_pt)
+        self._zoom = None if zoom is None else float(zoom)
         self.background = tuple(background)
         self.renderer = None
         self.format: str | None = None
@@ -291,6 +299,7 @@ class ControlSurface(Surface):
         self._painter = None
         self._painter_ratio: float | None = None
         self._painter_font_pt: float | None = None
+        self._painter_generation: int | None = None
         self._pressed = False
         self._closed = False
 
@@ -307,10 +316,34 @@ class ControlSurface(Surface):
     def font_pt(self, value: float | None) -> None:
         self._font_pt = None if value is None else float(value)
 
+    @property
+    def zoom(self) -> float:
+        """Interface magnification: the one given, else the user's setting."""
+        if self._zoom is not None:
+            return self._zoom
+        from .fonts import zoom  # noqa: PLC0415
+
+        return zoom()
+
+    @zoom.setter
+    def zoom(self, value: float | None) -> None:
+        self._zoom = None if value is None else float(value)
+
+    @property
+    def scale(self) -> float:
+        """Device pixels per interface pixel: the display's ratio times :attr:`zoom`."""
+        return self.ratio * self.zoom
+
     # -- geometry -------------------------------------------------------- #
     def _box(self) -> tuple[float, float, float, float]:
-        """The box the control is drawn in: the whole surface, in logical pixels."""
-        return (0.0, 0.0, self.size[0] / self.ratio, self.size[1] / self.ratio)
+        """The box the control is drawn in: the whole surface, in interface pixels."""
+        scale = self.scale
+        return (0.0, 0.0, self.size[0] / scale, self.size[1] / scale)
+
+    def _at(self, x: float, y: float) -> tuple[float, float]:
+        """A window position (logical pixels) in the control's interface pixels."""
+        z = self.zoom
+        return (float(x) / z, float(y) / z) if z != 1.0 else (float(x), float(y))
 
     def _hook(self, name: str):
         handler = getattr(self.control, name, None)
@@ -353,7 +386,7 @@ class ControlSurface(Surface):
         self.ratio = float(ratio) if float(ratio or 0.0) > 0.0 else 1.0
         resized = self._hook("window_resized")
         if resized is not None:
-            resized(self.size[0] / self.ratio, self.size[1] / self.ratio)
+            resized(*self._box()[2:])
         return True
 
     def render(self, view) -> None:
@@ -362,12 +395,18 @@ class ControlSurface(Surface):
         # Rebuilt when the ratio changes (a window dragged to another
         # display); a stale scale draws at half size while hit tests answer
         # for full size, so every click misses by the ratio.
+        # Also rebuilt when the zoom or the font settings changed (emtk.fonts).
+        from .fonts import generation  # noqa: PLC0415
+
         font_pt = self.font_pt
-        if (self._painter is None or self._painter_ratio != self.ratio
-                or self._painter_font_pt != font_pt):
-            self._painter = self.renderer.painter(font_pt=font_pt, scale=self.ratio)
-            self._painter_ratio = self.ratio
+        scale = self.scale
+        if (self._painter is None or self._painter_ratio != scale
+                or self._painter_font_pt != font_pt
+                or self._painter_generation != generation()):
+            self._painter = self.renderer.painter(font_pt=font_pt, scale=scale)
+            self._painter_ratio = scale
             self._painter_font_pt = font_pt
+            self._painter_generation = generation()
         painter = self._painter
         painter.clear()
         self.control.draw(painter, *self._box())
@@ -385,6 +424,7 @@ class ControlSurface(Surface):
     # -- input ----------------------------------------------------------- #
     def on_pointer_press(self, x, y, button, modifiers, double=False) -> bool:
         clicks = 2 if double else 1
+        x, y = self._at(x, y)
         rich = self._hook("pointer_press")
         if rich is not None:
             rich(float(x), float(y), int(button), int(modifiers), clicks)
@@ -398,6 +438,7 @@ class ControlSurface(Surface):
         return True
 
     def on_pointer_move(self, x, y, buttons, modifiers) -> bool:
+        x, y = self._at(x, y)
         rich = self._hook("pointer_move")
         if rich is not None:
             rich(float(x), float(y), int(buttons), int(modifiers))
@@ -410,6 +451,7 @@ class ControlSurface(Surface):
         return True
 
     def on_pointer_release(self, x, y, button, modifiers) -> bool:
+        x, y = self._at(x, y)
         rich = self._hook("pointer_release")
         if rich is not None:
             rich(float(x), float(y), int(button), int(modifiers))
@@ -423,6 +465,7 @@ class ControlSurface(Surface):
         return True
 
     def on_wheel(self, x, y, steps, modifiers) -> bool:
+        x, y = self._at(x, y)
         rich = self._hook("wheel")
         if rich is not None:
             rich(float(x), float(y), int(steps), int(modifiers))

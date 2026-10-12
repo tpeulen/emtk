@@ -395,6 +395,7 @@ class RealisticDriver(Driver):
         super().__init__(app, size)
         from .native import CanvasEvents  # noqa: PLC0415
 
+        self.surface.zoom = None  # follows the interface zoom, as a real window does
         self.scale = float(scale)
         self.move_steps = max(int(move_steps), 1)
         self.hold_frames = max(int(hold_frames), 1)
@@ -435,7 +436,9 @@ class RealisticDriver(Driver):
             return MetricPainter()
         # As ControlSurface.render builds it: the surface's font size (the user's setting
         # unless one was given) at the surface's device ratio, rebuilt when either changes.
-        key = (self.surface.ratio, float(self.surface.font_pt))
+        from .fonts import generation  # noqa: PLC0415
+
+        key = (self.surface.scale, float(self.surface.font_pt), generation())
         if self._quad is None or getattr(self, "_quad_key", None) != key:
             from .wgpu_host import WgpuRenderer  # noqa: PLC0415
 
@@ -581,13 +584,26 @@ class RealisticDriver(Driver):
                       "button": number, "buttons": self._buttons,
                       "modifiers": self._modifiers, "ntouches": 0, "touches": {}})
 
+    def _zoom(self) -> float:
+        """The surface's interface zoom (:mod:`emtk.fonts`): app pixels -> window pixels."""
+        return float(getattr(self.surface, "zoom", 1.0) or 1.0)
+
+    def _point(self, target):
+        """*target* (an id, caption, point or rect in the app's pixels) in window pixels."""
+        x, y = super()._point(target)
+        z = self._zoom()
+        return x * z, y * z
+
     def _target_box(self, target):
         if isinstance(target, (str, int)):
-            return self.rect(target)
-        if len(target) == 4:
-            return tuple(float(v) for v in target)
-        x, y = target
-        return (float(x) - 1, float(y) - 1, 2.0, 2.0)
+            box = self.rect(target)
+        elif len(target) == 4:
+            box = tuple(float(v) for v in target)
+        else:
+            x, y = target
+            box = (float(x) - 1, float(y) - 1, 2.0, 2.0)
+        z = self._zoom()
+        return tuple(v * z for v in box)
 
     def click(self, target, button=LEFT_BUTTON, modifiers: int = 0):
         """Travel, press, hold (drifting) over frames, release in a later frame."""
@@ -874,13 +890,18 @@ class HostedDriver(RealisticDriver):
         real = getattr(surface, "_painter", None)
         if isinstance(real, HostPainter):
             real = real._real
+        from .fonts import generation  # noqa: PLC0415
+
         font_pt = float(surface.font_pt)
-        if (real is None or surface._painter_ratio != surface.ratio
-                or getattr(surface, "_painter_font_pt", font_pt) != font_pt):
-            real = surface.renderer.painter(font_pt=font_pt, scale=surface.ratio)
+        scale = surface.scale
+        if (real is None or surface._painter_ratio != scale
+                or getattr(surface, "_painter_font_pt", font_pt) != font_pt
+                or getattr(surface, "_painter_generation", None) != generation()):
+            real = surface.renderer.painter(font_pt=font_pt, scale=scale)
         recorder = HostPainter(real)
         surface._painter = recorder
-        surface._painter_ratio = surface.ratio
+        surface._painter_ratio = scale
+        surface._painter_generation = generation()
         if hasattr(surface, "_painter_font_pt"):
             surface._painter_font_pt = font_pt
         return recorder

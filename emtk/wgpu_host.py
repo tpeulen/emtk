@@ -989,9 +989,13 @@ def wgpu_host_class():
             # where it should be, so every click misses by the ratio and the
             # interface looks inert rather than misplaced.
             scale = float(self.get_pixel_ratio())
+            from .fonts import generation  # noqa: PLC0415
+
             if (self._painter is None or self._painter_scale != scale
-                    or getattr(self, "_painter_font_pt", None) != self._resolved_font_pt()):
+                    or getattr(self, "_painter_font_pt", None) != self._resolved_font_pt()
+                    or getattr(self, "_painter_generation", None) != generation()):
                 self._painter = self._make_painter(scale)
+                self._painter_generation = generation()
             painter = self._painter
             painter.clear()
             logical_w, logical_h = width / scale, height / scale

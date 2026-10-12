@@ -1655,6 +1655,10 @@ class EditorConfig:
     caret_color: Colour | None = None
     current_line_color: Colour | None = None
     highlight_current_line: bool = True
+    #: The text role (:mod:`emtk.type_scale`) the editor is set in when its host
+    #: has not pushed a font of its own: ``"code"`` follows the configured editor
+    #: font (:mod:`emtk.fonts`); ``None`` always draws in the painter's font.
+    font_role: str | None = "code"
 
 
 #: The glyphs drawn for a space and a tab when whitespace is shown.
@@ -2791,6 +2795,20 @@ class TextEditor:
         x, y, w, h : float
             The box to draw in.
         """
+        from ..painter import current_font, painter_font
+
+        role = self.config.font_role
+        if role is None or current_font(p)[0] is not None:
+            # A host that pushed a font of its own (a code editor's font picker) keeps it.
+            self._draw(p, x, y, w, h)
+            return
+        from ..type_scale import text_font
+
+        with painter_font(p, text_font(role)):
+            self._draw(p, x, y, w, h)
+
+    def _draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
+        """:meth:`draw` in the font already selected."""
         self.colorizer.update(self.config, self.document)
         if self.document.updated:
             self.bracketeer.update(self.config, self.document)

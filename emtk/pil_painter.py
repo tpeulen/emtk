@@ -99,6 +99,9 @@ class PilPainter:
         self._font_bold = False
         self._clips = [(0, 0, self.width, self.height)]
         self._atlas = load_atlas()
+        from .painter import adopt_interface_font  # noqa: PLC0415
+
+        adopt_interface_font(self)
 
     # -- plumbing ---------------------------------------------------------- #
 
