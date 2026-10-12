@@ -84,3 +84,9 @@ def test_link_words_stay_whole_when_a_line_breaks():
     last = [t for t in painter.texts if "corrections" in t[5]][-1][5]
     _p, clicked = _draw(source, width=150.0, click=last)
     assert clicked == ["docs/x.md"]
+
+
+def test_a_word_wider_than_the_line_is_broken_not_overflowed():
+    painter, _ = _draw("x" * 80 + " tail", width=120.0)
+    assert max(t[0] + t[2] for t in painter.texts) <= 120.0 + 1.0
+    assert len({round(t[1]) for t in painter.texts}) > 1

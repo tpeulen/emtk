@@ -521,7 +521,44 @@ def draw_inline(
     lines: list[list[tuple[float, InlineRun, float]]] = [[]]
     x = 0.0
     line_h = 0.0
+    def _hard_break(atom):
+        """Split a word wider than the line into line-sized chunks (as plain wrapping does)."""
+        out: list[list[InlineRun]] = [[]]
+        used = 0.0
+        for r in atom:
+            buf = ""
+            for ch in r.text:
+                cw = measure(dataclasses.replace(r, text=ch))[0] + (2 * pad if r.code and code_face else 0.0)
+                if used + cw > avail and (buf or out[-1] or used > 0.0):
+                    if buf:
+                        out[-1].append(dataclasses.replace(r, text=buf))
+                        buf = ""
+                    out.append([])
+                    used = 0.0
+                buf += ch
+                used += cw
+            if buf:
+                out[-1].append(dataclasses.replace(r, text=buf))
+        return out
+
+    atoms: list[list[InlineRun]] = []
     for atom in _atoms(runs):
+        probe = sum(measure(r)[0] + (2 * pad if r.code and r.text != " " else 0.0) for r in atom)
+        if probe > avail and not (len(atom) == 1 and atom[0].text == " "):
+            chunks = _hard_break(atom)
+            for k, chunk in enumerate(chunks):
+                if chunk:
+                    atoms.append(chunk)
+                    if k < len(chunks) - 1:
+                        atoms.append([InlineRun("\n")])
+        else:
+            atoms.append(atom)
+    for atom in atoms:
+        if len(atom) == 1 and atom[0].text == "\n":
+            if lines[-1]:
+                lines.append([])
+            x = 0.0
+            continue
         widths = [measure(r)[0] + (2 * pad if r.code and r.text != " " else 0.0) for r in atom]
         for r in atom:
             line_h = max(line_h, measure(r)[1])
