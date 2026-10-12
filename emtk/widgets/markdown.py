@@ -458,6 +458,7 @@ def draw_inline(
     colour=None,
     bold: bool = False,
     prefix: str = "",
+    zoom: float = 1.0,
 ) -> None:
     """Draw one wrapped paragraph of inline Markdown as rich-text runs.
 
@@ -485,7 +486,7 @@ def draw_inline(
         key = (run.text, run.bold, run.code)
         if key not in cache:
             r, b = font_for(run)
-            push_text_style(r, bold=b)
+            push_text_style(r, bold=b, zoom=zoom)
             cache[key] = (ctx.p.text_width(run.text), ctx.p.line_height())
             pop_text_style()
         return cache[key]
@@ -538,7 +539,7 @@ def draw_inline(
             if run.code:
                 ctx.draw.add_rect_filled((x0, y + 1), (x0 + rw, y + line_h - 1), (255, 255, 255, 28), 3.0)
             fr, fb = font_for(run)
-            push_text_style(fr, bold=fb)
+            push_text_style(fr, bold=fb, zoom=zoom)
             if run.target:
                 col = tuple(min(255, int(c) + 40) for c in link_col[:3]) + tuple(link_col[3:]) if hovered else link_col
             elif run.italic:
