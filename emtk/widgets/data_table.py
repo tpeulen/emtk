@@ -1674,6 +1674,8 @@ class TableBinding:
             self.control.sort_by(str(sort["key"]), bool(sort.get("descending", False)))
         self._data_token: tuple = ()
         self._columns_token: tuple = ()
+        #: The value of ``selected_attr`` the table last wrote or followed.
+        self._selected_seen: Any = None
         self.refresh()
 
     # -- reading the model ------------------------------------------------------- #
@@ -1759,7 +1761,64 @@ class TableBinding:
             else:
                 self.control.set_records(data)
             changed = True
+        if self.selected_attr and self._follow_selected_attr():
+            changed = True
         return changed
+
+    def _follow_selected_attr(self) -> bool:
+        """Highlight the row the model's ``selected_attr`` now names (the model may set it, not only the table).
+
+        The table writes the attribute when a row is clicked; a model that assigns it itself (a dataset
+        selected programmatically) used to leave the highlight on the old row, so the selection was
+        stated twice. What the table wrote last is remembered, so only a different value is followed.
+        """
+        owner, _, attr = self.selected_attr.rpartition(".")
+        try:
+            value = getattr(self._lookup(owner) if owner else self.model, attr)
+        except Exception:  # noqa: BLE001
+            return False
+        if value is self._selected_seen:
+            return False
+        self._selected_seen = value
+        control = self.control
+        if value is None or (isinstance(value, Mapping) and not value):
+            moved = control.selected_key is not None or bool(control.also_selected)
+            control.selected_key, control.also_selected, control.anchor_key = None, set(), None
+            return moved
+        for index in range(control.row_count()):
+            record = self.record(index)
+            same = record is value or (
+                isinstance(record, Mapping) and isinstance(value, Mapping)
+                and (record.get(control.row_key) == value.get(control.row_key) if control.row_key
+                     else record == value))
+            if same:
+                key = control.key_of(index)
+                if key == control.selected_key:
+                    return False  # already the highlighted row (other selected rows stay)
+                control.also_selected = set()
+                control.anchor_key = key
+                return control.select_key(key)
+        return False
+
+    def record(self, index: Optional[int]) -> Any:
+        """What a callback receives for source *index*: the record, else the index."""
+        if index is None:
+            return None
+        if self.control.arrays is None and 0 <= index < len(self.control.records):
+            return self.control.records[index]
+        return index
+
+    def _cell_editable(self, index: int, key: str) -> bool:
+        fn = self._lookup(self.editable_call)
+        if not callable(fn):
+            return True
+        try:
+            return bool(fn(self.record(index), key))
+        except Exception:  # noqa: BLE001 - a failing rule refuses the edit
+            return False
+
+    def _muted(self, index: int) -> bool:
+        return bool(self.control.value(index, self.muted_key))
 
     def record(self, index: Optional[int]) -> Any:
         """What a callback receives for source *index*: the record, else the index."""
@@ -1791,8 +1850,9 @@ class TableBinding:
         if self.selected_attr:
             try:
                 owner, _, attr = self.selected_attr.rpartition(".")
-                setattr(self._lookup(owner) if owner else self.model, attr,
-                        payload if payload is not None else {})
+                shown = payload if payload is not None else {}
+                setattr(self._lookup(owner) if owner else self.model, attr, shown)
+                self._selected_seen = shown
             except Exception:  # noqa: BLE001
                 pass
         if self.selected_call:

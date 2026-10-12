@@ -932,3 +932,45 @@ def test_ctrl_click_toggles_rows_and_shift_click_selects_a_range():
     assert control.selected_indices() == [0, 1]
     control.key(KEY_DELETE)
     assert model.deleted == ["PR", "Tau"] and model.picked == []
+
+
+def test_a_model_that_sets_selected_attr_moves_the_highlight():
+    """The model owned the selection and the table drew its own: ``model.picked = row`` changed what the
+    model said and left the highlighted row where the user last clicked."""
+    model = Gates()
+    model.picked = {}
+    section = {**GATE_TABLE, "options": {**GATE_TABLE["options"], "row_key": "name", "selected_attr": "picked"}}
+    binding = TableBinding(section, model)
+    control = binding.control
+    draw(control)
+    assert control.selected_indices() == []
+    model.picked = dict(model.rows[1])
+    binding.refresh()
+    draw(control)
+    assert control.selected_indices() == [1]
+    control.press(*cell(control, 0, 0))
+    assert control.selected_indices() == [0] and model.picked["name"] == "Tau"
+    binding.refresh()
+    assert control.selected_indices() == [0]
+    model.picked = {}
+    binding.refresh()
+    assert control.selected_indices() == []
+
+
+def test_following_selected_attr_keeps_a_multi_selection():
+    """The model re-stating the clicked row (a copy of it) must not collapse a ctrl-click selection."""
+    from emtk.events import CONTROL_MODIFIER
+
+    model = Gates()
+    model.picked = {}
+    model.chosen = []
+    section = {**GATE_TABLE, "options": {**GATE_TABLE["options"], "row_key": "name",
+                                         "selected_attr": "picked", "selection_attr": "chosen"}}
+    binding = TableBinding(section, model)
+    control = binding.control
+    draw(control)
+    control.press(*cell(control, 0, 0))
+    control.press(*cell(control, 1, 0), modifiers=CONTROL_MODIFIER)
+    model.picked = dict(model.picked)
+    binding.refresh()
+    assert control.selected_indices() == [0, 1]

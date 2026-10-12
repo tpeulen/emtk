@@ -704,6 +704,8 @@ class DockManager:
         self.windows: Dict[str, DockWindow] = {}
         #: Floating windows, back to front.
         self.z: List[str] = []
+        #: The window the user last pressed in (a tab, a body, a floating frame) or :meth:`focus` named.
+        self.focused: Optional[str] = None
         self.box: Rect = (0.0, 0.0, 0.0, 0.0)
         #: Last frame's region boxes and splitter bars.
         self.region_boxes: Dict[str, Rect] = {}
@@ -1217,6 +1219,7 @@ class DockManager:
         win = self.windows[key]
         win.visible = True
         win.collapsed = False
+        self.focused = key
         region = self.region_of(key)
         if region is not None:
             self.selected[region] = key
@@ -1860,6 +1863,8 @@ class DockManager:
             prefix = f"##{self.name}.win."
             if name.startswith(prefix) and name[len(prefix):] in self.z:
                 self.raise_window(name[len(prefix):])
+        if io.mouse_clicked[0] or io.mouse_clicked[1]:
+            self._focus_pressed(ctx)
         self.region_boxes, self.splitters = self.compute_layout(self.box)
         submitted: List[str] = []
 
@@ -1902,6 +1907,23 @@ class DockManager:
         self._sync_order(ctx, submitted, before)
         if self._drag is None:
             self.flush()
+
+    def _focus_pressed(self, ctx) -> None:
+        """A press lands in a floating window or in a docked region: that window becomes :attr:`focused`."""
+        hovered = ctx.hovered_window
+        prefix = f"##{self.name}.win."
+        if hovered is not None and hovered.name.startswith(prefix):
+            key = hovered.name[len(prefix):]
+            if key in self.windows:
+                self.focused = key
+                return
+        px, py = ctx.io.mouse_pos
+        for region, (x, y, w, h) in self.region_boxes.items():
+            if x <= px < x + w and y <= py < y + h:
+                top = self.active_tab(region)
+                if top is not None:
+                    self.focused = top
+                return
 
     def _sync_order(self, ctx, names: List[str], before: set) -> None:
         """Put this manager's windows in :mod:`emtk.im`'s display list in drawing order.
@@ -2025,6 +2047,7 @@ class DockManager:
             if hovered and io.mouse_clicked[0] and self._drag is None:
                 if self.selected.get(region) != key:
                     self.selected[region] = key
+                self.focused = key
                 self._drag = {"kind": "tab", "region": region, "key": key, "id": item,
                               "start": tuple(io.mouse_pos),
                               "grab_x": io.mouse_pos[0] - tab[0] + 4.0}

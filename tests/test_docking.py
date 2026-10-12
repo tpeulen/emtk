@@ -776,3 +776,22 @@ def test_a_window_that_raises_inside_its_own_child_does_not_unbalance_the_frame(
     assert "half drawn" in painter.strings, "the window got as far as its child"
     assert "failed to draw" in caplog.text
     assert any(key == "other" for key, _box in log), "the next window still draws"
+
+
+def test_the_focused_window_follows_a_press_in_any_region():
+    """An application asking "which window is the user working in" had only ``active_tab(region)`` for one
+    region, so a press in another tiled region changed nothing it could see."""
+    docks, _log = make()
+    host = Driver(docks)
+    left, center = docks.region_boxes["left"], docks.region_boxes["center"]
+    host.press(center[0] + center[2] / 2.0, center[1] + center[3] / 2.0)
+    host.release(center[0] + center[2] / 2.0, center[1] + center[3] / 2.0)
+    assert docks.focused == "plot"
+    host.press(left[0] + left[2] / 2.0, left[1] + left[3] / 2.0)
+    host.release(left[0] + left[2] / 2.0, left[1] + left[3] / 2.0)
+    assert docks.focused == "form"
+    host.press(*host.title("notes"))
+    host.release(*host.title("notes"))
+    assert docks.focused == "notes"
+    docks.focus("table")
+    assert docks.focused == "table"
