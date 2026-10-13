@@ -81,6 +81,7 @@ is typed. The host draws and routes nothing for it.
 """
 from __future__ import annotations
 
+import itertools
 import math
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -147,6 +148,10 @@ __all__ += ["COMMON_KEYS", "SECTION_KEYS", "TABLE_KEYS", "VIEW_KEYS", "TEXT_KEYS
 
 
 
+#: Gives every :class:`FormState` its own id scope.
+_FORM_SCOPES = itertools.count(1)
+
+
 class FormState:
     """What a form remembers between frames.
 
@@ -173,6 +178,9 @@ class FormState:
     """
 
     def __init__(self, on_used: Callable[[str], None] | None = None) -> None:
+        #: The id scope of this form's widgets (see :func:`draw_sections`).
+        self.scope = next(_FORM_SCOPES)
+        self._depth = 0
         self.tables: dict[str, Any] = {}
         self.folds: dict[str, bool] = {}
         self.tabs: dict[tuple, str] = {}
@@ -1495,7 +1503,29 @@ def draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int =
         edge (:func:`_draw_grid`); a container's ``wrap_indent`` sets it.
     _path : tuple
         Internal section path distinguishing nested tab bars.
+
+    Notes
+    -----
+    A form's widgets are identified inside the form's own id scope
+    (:attr:`FormState.scope`). Without it two forms that name an action or a field
+    alike -- a toolbar's ``import_file`` and a panel's ``import_file`` -- shared one
+    id: pressing the second button released the first one's capture and nothing ran.
     """
+    outermost = state._depth == 0
+    if outermost:
+        _core.get_current_context().push_id(("form", state.scope))
+    state._depth += 1
+    try:
+        _draw_sections(sections, model, state, n_col, titles, indent_wraps, _path)
+    finally:
+        state._depth -= 1
+        if outermost:
+            _core.get_current_context().pop_id()
+
+
+def _draw_sections(sections: Sequence, model: Any, state: FormState, n_col: int,
+                   titles: bool, indent_wraps: bool, _path: tuple) -> None:
+    """The body of :func:`draw_sections` (inside the form's id scope)."""
     leaves: list = []
 
     def flush() -> None:
