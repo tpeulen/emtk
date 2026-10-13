@@ -521,7 +521,10 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _remember(state, f"{name}.stepper")
         wheel = _core.get_io().mouse_wheel
         if not delta and wheel and (field_hovered or _w.is_item_hovered()):
-            delta = 1 if wheel > 0 else -1
+            # One step a notch, as a spin box does: the frame loop spends the wheel once, so
+            # three notches delivered before a frame are three steps in that frame. A
+            # fractional (trackpad) remainder still counts as one step in its direction.
+            delta = int(wheel) or (1 if wheel > 0 else -1)
         if delta and value is not None:
             state.buffers.pop(name, None)
             stepped = parse_value(format_value(float(value) + delta * spin_step(value, section),

@@ -487,6 +487,29 @@ def test_a_spin_value_steps_with_its_arrows_and_the_wheel():
     assert spin_step(1.0, {"kind": "float", "step": 0.25}) == 0.25
 
 
+def test_a_spin_value_steps_once_per_wheel_notch():
+    """Three notches delivered before one frame are three steps, as a spin box takes them:
+    the frame loop spends the wheel once, so a field stepping by the wheel's sign alone
+    lost every notch but the first."""
+    spec = {"sections": [{"type": "value", "attr": "restarts", "label": "Bins", "kind": "int",
+                          "style": "spin", "minimum": 0, "maximum": 10}]}
+    model = Model()
+    model.restarts = 1
+    driver = Driver(spec, model)
+    driver.frame()
+    fx, fy, fw, fh = driver.state.rects["restarts"]
+    driver.io.mouse_pos = (fx + 5, fy + fh / 2)
+    driver.io.mouse_wheel = 3.0
+    driver.frame()
+    assert model.restarts == 4
+    for _ in range(5):                               # idle hovered frames step nothing more
+        driver.frame()
+    assert model.restarts == 4
+    driver.io.mouse_wheel = -0.25                    # a trackpad flick: one step its way
+    driver.frame()
+    assert model.restarts == 3
+
+
 def test_a_value_without_spin_has_no_arrows():
     driver = Driver({"sections": [{"type": "value", "attr": "restarts", "kind": "int"}]},
                     Model())
