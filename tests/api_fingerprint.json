@@ -5729,8 +5729,8 @@
      "bottom": "def(self)",
      "delete_text": "def(self, start, end)",
      "end_of_line": "def(self, pos)",
-     "find_all": "def(self, needle, case_sensitive=True, whole_word=False)",
-     "find_text": "def(self, origin, needle, case_sensitive=True, whole_word=False)",
+     "find_all": "def(self, needle, case_sensitive=True, whole_word=False, regex=False)",
+     "find_text": "def(self, origin, needle, case_sensitive=True, whole_word=False, regex=False)",
      "find_word_end": "def(self, pos, word_only=False)",
      "find_word_start": "def(self, pos, word_only=False)",
      "get_line_text": "def(self, line)",
@@ -5912,7 +5912,7 @@
      "selection_to_lower": "def(self)",
      "selection_to_upper": "def(self)",
      "set_cursor": "def(self, pos)",
-     "set_find_text": "def(self, text, case_sensitive=True, whole_word=False)",
+     "set_find_text": "def(self, text, case_sensitive=True, whole_word=False, regex=False)",
      "set_language": "def(self, language)",
      "set_text": "def(self, text)",
      "spaces_to_tabs": "def(self)",
@@ -6033,6 +6033,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "59afd13748b618abd47d7c3469d5db31d158b00cbe80ed54f4bbd64c4a58018b",
- "version": "0.1.9"
+ "sha256": "1858c735d0b5143e544f16a5dadf10fdb06a6aadd250c068051a7dc64848b5d9",
+ "version": "0.1.10"
 }

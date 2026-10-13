@@ -918,6 +918,7 @@ class Document:
         needle: str,
         case_sensitive: bool = True,
         whole_word: bool = False,
+        regex: bool = False,
     ) -> tuple[Pos, Pos] | None:
         """Search forward from *origin*, wrapping once at the end.
 
@@ -931,6 +932,10 @@ class Document:
             Whether case must match.
         whole_word : bool, optional
             Whether the match must be bounded by non-word characters.
+        regex : bool, optional
+            Read *needle* as a regular expression (Python ``re`` syntax). An
+            invalid expression, or one that only matches the empty string,
+            finds nothing.
 
         Returns
         -------
@@ -944,17 +949,14 @@ class Document:
         line again, so a needle that is not there terminates rather than
         looping. The reference wraps in the same place.
         """
-        if not needle:
+        compiled = _find_pattern(needle, case_sensitive, whole_word, regex)
+        if compiled is None:
             return None
         haystack = self.get_text()
-        flags = 0 if case_sensitive else re.IGNORECASE
-        pattern = re.escape(needle)
-        if whole_word:
-            pattern = rf"\b{pattern}\b"
         offset = self._offset_of(origin)
-        found = re.compile(pattern, flags).search(haystack, offset)
+        found = _first_match(compiled, haystack, offset, len(haystack))
         if found is None:
-            found = re.compile(pattern, flags).search(haystack, 0, offset + len(needle))
+            found = _first_match(compiled, haystack, 0, min(len(haystack), offset + len(needle)))
         if found is None:
             return None
         return self._pos_of(found.start()), self._pos_of(found.end())
@@ -964,18 +966,16 @@ class Document:
         needle: str,
         case_sensitive: bool = True,
         whole_word: bool = False,
+        regex: bool = False,
     ) -> list[tuple[Pos, Pos]]:
-        """Every occurrence in the document, in order."""
-        if not needle:
+        """Every occurrence in the document, in order (empty matches skipped)."""
+        compiled = _find_pattern(needle, case_sensitive, whole_word, regex)
+        if compiled is None:
             return []
-        haystack = self.get_text()
-        flags = 0 if case_sensitive else re.IGNORECASE
-        pattern = re.escape(needle)
-        if whole_word:
-            pattern = rf"\b{pattern}\b"
         return [
             (self._pos_of(one.start()), self._pos_of(one.end()))
-            for one in re.finditer(pattern, haystack, flags)
+            for one in compiled.finditer(self.get_text())
+            if one.end() > one.start()
         ]
 
     def _offset_of(self, pos: Pos) -> int:
@@ -1669,6 +1669,33 @@ class EditorConfig:
     font_role: str | None = "code"
 
 
+def _find_pattern(
+    needle: str, case_sensitive: bool, whole_word: bool, regex: bool
+) -> re.Pattern | None:
+    """The compiled search for find/replace, or ``None`` (empty needle, invalid expression)."""
+    if not needle:
+        return None
+    pattern = needle if regex else re.escape(needle)
+    if whole_word:
+        pattern = rf"\b(?:{pattern})\b"
+    try:
+        return re.compile(pattern, 0 if case_sensitive else re.IGNORECASE)
+    except re.error:
+        return None
+
+
+def _first_match(compiled: re.Pattern, haystack: str, start: int, end: int):
+    """The first non-empty match of *compiled* in ``haystack[start:end]``, or ``None``.
+
+    An expression like ``a*`` matches the empty string everywhere; selecting nothing is not
+    a find, and skipping only the empty ones keeps a real match after them reachable.
+    """
+    for one in compiled.finditer(haystack, start, end):
+        if one.end() > one.start():
+            return one
+    return None
+
+
 #: The glyphs drawn for a space and a tab when whitespace is shown.
 #:
 #: The reference uses ``→`` for a tab, and that glyph is **not baked into the
@@ -1739,6 +1766,7 @@ class TextEditor:
         self._find_text = ""
         self._find_case_sensitive = True
         self._find_whole_word = False
+        self._find_regex = False
         self._changed = False
         self._revision = 0
         #: The input method's provisional text at the main caret, and its
@@ -2279,12 +2307,21 @@ class TextEditor:
 
     # -- find and replace ----------------------------------------------- #
     def set_find_text(
-        self, text: str, case_sensitive: bool = True, whole_word: bool = False
+        self,
+        text: str,
+        case_sensitive: bool = True,
+        whole_word: bool = False,
+        regex: bool = False,
     ) -> None:
-        """Remember what to search for, so :meth:`find_next` needs no arguments."""
+        """Remember what to search for, so :meth:`find_next` needs no arguments.
+
+        With *regex* the text is a regular expression (an invalid one finds nothing);
+        a replacement is always inserted literally.
+        """
         self._find_text = str(text)
         self._find_case_sensitive = bool(case_sensitive)
         self._find_whole_word = bool(whole_word)
+        self._find_regex = bool(regex)
 
     def find_next(self) -> bool:
         """Select the next occurrence of the remembered text."""
@@ -2295,6 +2332,7 @@ class TextEditor:
             self._find_text,
             self._find_case_sensitive,
             self._find_whole_word,
+            self._find_regex,
         )
         if found is None:
             return False
@@ -2307,7 +2345,7 @@ class TextEditor:
         if not self._find_text:
             return False
         matches = self.document.find_all(
-            self._find_text, self._find_case_sensitive, self._find_whole_word
+            self._find_text, self._find_case_sensitive, self._find_whole_word, self._find_regex
         )
         if not matches:
             return False
@@ -2320,7 +2358,7 @@ class TextEditor:
     def find_all(self) -> int:
         """Put a caret on every occurrence of the remembered text."""
         matches = self.document.find_all(
-            self._find_text, self._find_case_sensitive, self._find_whole_word
+            self._find_text, self._find_case_sensitive, self._find_whole_word, self._find_regex
         )
         if not matches:
             return 0
@@ -2350,7 +2388,7 @@ class TextEditor:
         if self.config.read_only or not self._find_text:
             return 0
         matches = self.document.find_all(
-            self._find_text, self._find_case_sensitive, self._find_whole_word
+            self._find_text, self._find_case_sensitive, self._find_whole_word, self._find_regex
         )
         if not matches:
             return 0
