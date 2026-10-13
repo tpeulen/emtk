@@ -1,0 +1,6038 @@
+{
+ "api": {
+  "emtk": {
+   "ALIGN_CENTER": "dynamic",
+   "ALIGN_HCENTER": "dynamic",
+   "ALIGN_LEFT": "dynamic",
+   "ALIGN_RIGHT": "dynamic",
+   "ALIGN_VCENTER": "dynamic",
+   "Axis": "dynamic",
+   "Button": "dynamic",
+   "Checkbox": "dynamic",
+   "ColorEdit4": "dynamic",
+   "Colour": "dynamic",
+   "Combo": "dynamic",
+   "DEEP_PALETTE": "dynamic",
+   "Histogram": "dynamic",
+   "InputInt": "dynamic",
+   "ListBox": "dynamic",
+   "MARKERS": "dynamic",
+   "Painter": "dynamic",
+   "Plot": "dynamic",
+   "PlotLines": "dynamic",
+   "ProgressBar": "dynamic",
+   "RadioGroup": "dynamic",
+   "ScrollBar": "dynamic",
+   "Separator": "dynamic",
+   "SliderFloat": "dynamic",
+   "Table": "dynamic",
+   "Tabs": "dynamic",
+   "TextInput": "dynamic",
+   "Toggle": "dynamic",
+   "Tooltip": "dynamic",
+   "TreeNode": "dynamic",
+   "begin_plot": "dynamic",
+   "draw_marker": "dynamic",
+   "fit_text": "dynamic",
+   "im": "dynamic",
+   "nice_ticks": "dynamic"
+  },
+  "emtk.accents": {
+   "AnyAccent": "value",
+   "caption": "def(text, accent)",
+   "header_colours": "def(style, accent)",
+   "headers": "@contextmanager def(accent)",
+   "mark_item": "def(accent)",
+   "neutral_tab": "def(style)",
+   "region": "@contextmanager def(accent)",
+   "region_colours": "def(style, accent)",
+   "resolve": "def(accent, style=None)"
+  },
+  "emtk.app": {
+   "ControlSurface": {
+    "bases": [
+     "Surface"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, control, font_pt=None, background=(30, 32, 38), images=None, zoom=None)",
+     "animating": "def(self)",
+     "attach": "def(self, device, format, width, height, ratio)",
+     "close": "def(self)",
+     "font_pt": "@property def(self)",
+     "font_pt.setter": "@font_pt.setter def(self, value)",
+     "next_frame_in": "def(self)",
+     "on_close_request": "def(self)",
+     "on_files_dropped": "def(self, paths)",
+     "on_key_press": "def(self, key, text, modifiers)",
+     "on_key_release": "def(self, key, text, modifiers)",
+     "on_pointer_move": "def(self, x, y, buttons, modifiers)",
+     "on_pointer_press": "def(self, x, y, button, modifiers, double=False)",
+     "on_pointer_release": "def(self, x, y, button, modifiers)",
+     "on_resize": "def(self, width, height, ratio)",
+     "on_text_compose": "def(self, text, cursor)",
+     "on_wheel": "def(self, x, y, steps, modifiers)",
+     "render": "def(self, view)",
+     "scale": "@property def(self)",
+     "set_frame_request_callback": "def(self, callback)",
+     "zoom": "@property def(self)",
+     "zoom.setter": "@zoom.setter def(self, value)"
+    }
+   },
+   "ImApp": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, gui, continuous=False, style=None)",
+     "animating": "def(self)",
+     "compose": "def(self, text, cursor=None)",
+     "drag": "def(self, px, py, x=0.0, y=0.0, w=0.0, h=0.0)",
+     "draw": "def(self, painter, x, y, w, h)",
+     "draw_child": "def(self, painter, child, x, y, w, h, *, local_coordinates=False)",
+     "hover": "def(self, px, py, x=0.0, y=0.0, w=0.0, h=0.0)",
+     "ime_caret": "def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "next_frame_in": "def(self)",
+     "pointer_move": "def(self, x, y, buttons=0, modifiers=0)",
+     "pointer_press": "def(self, x, y, button, modifiers=0, clicks=1)",
+     "pointer_release": "def(self, x, y, button, modifiers=0)",
+     "press": "def(self, px, py, x=0.0, y=0.0, w=0.0, h=0.0, modifiers=0, clicks=1)",
+     "release": "def(self)",
+     "remember": "def(self, name, rect=None)",
+     "request_close": "def(self)",
+     "request_frame": "def(self)",
+     "scroll": "def(self, rows)",
+     "set_frame_request_callback": "def(self, callback)",
+     "wheel": "def(self, x, y, steps, modifiers=0)"
+    }
+   },
+   "Surface": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "animating": "def(self)",
+     "attach": "def(self, device, format, width, height, ratio)",
+     "close": "def(self)",
+     "next_frame_in": "def(self)",
+     "on_close_request": "def(self)",
+     "on_files_dropped": "def(self, paths)",
+     "on_key_press": "def(self, key, text, modifiers)",
+     "on_key_release": "def(self, key, text, modifiers)",
+     "on_pointer_move": "def(self, x, y, buttons, modifiers)",
+     "on_pointer_press": "def(self, x, y, button, modifiers, double=False)",
+     "on_pointer_release": "def(self, x, y, button, modifiers)",
+     "on_resize": "def(self, width, height, ratio)",
+     "on_text_compose": "def(self, text, cursor)",
+     "on_wheel": "def(self, x, y, steps, modifiers)",
+     "render": "def(self, view)",
+     "request_frame": "def(self)",
+     "set_frame_request_callback": "def(self, callback)"
+    }
+   },
+   "WHEEL_ROWS": "value",
+   "as_surface": "def(app, **options)",
+   "load_app": "def(spec)",
+   "next_frame_in": "def(app)",
+   "window_title": "def(app)"
+  },
+  "emtk.audio": {
+   "AudioOutput": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, player=..., launcher=None, find=None)",
+     "available": "@property def(self)",
+     "close": "def(self)",
+     "play": "def(self, key, pcm, rate, *, loop=False, volume=1.0)",
+     "playing": "def(self, key)",
+     "stop": "def(self, key=None)"
+    }
+   },
+   "LOOP_SECONDS": "value",
+   "MAX_VOICES": "value",
+   "PLAYERS": "value",
+   "find_player": "def(which=shutil.which)",
+   "write_wav": "def(path, pcm, rate)"
+  },
+  "emtk.clipboard": {
+   "commands": "def()",
+   "copy": "def(text)",
+   "copy_image": "def(png)",
+   "holding": "def()",
+   "image_commands": "def(path)",
+   "last_copied": "def()",
+   "last_copied_image": "def()",
+   "paste": "def()",
+   "paste_commands": "def()",
+   "receive": "def(text)",
+   "set_hook": "def(hook, paste_hook=None)",
+   "set_image_hook": "def(hook)",
+   "use_glfw": "def(window=None)",
+   "use_tk": "def(root)"
+  },
+  "emtk.colormaps": {
+   "Colormap": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__call__": "def(self, x, alpha=None, bytes=False)",
+     "__eq__": "def(self, other)",
+     "__init__": "def(self, name, n=256)",
+     "colors": "def(self, n)",
+     "reversed": "def(self)"
+    }
+   },
+   "get": "@functools.lru_cache(maxsize=128) def(name, n=256)",
+   "has": "def(name)",
+   "lookup_table": "def(name, n=256, gamma=1.0)",
+   "names": "def()",
+   "stops": "@functools.lru_cache(maxsize=256) def(name)",
+   "to_hex": "def(colour, keep_alpha=False)",
+   "to_rgb": "def(colour)",
+   "to_rgba": "def(colour, alpha=None)",
+   "to_rgba_bytes": "def(colour, alpha=None)"
+  },
+  "emtk.control": {
+   "Control": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "box": "@property def(self)",
+     "compose": "def(self, text, cursor)",
+     "contains": "def(self, px, py)",
+     "drag": "def(self, px, py, x, y, w, h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "measure": "def(self, p)",
+     "press": "def(self, px, py, x, y, w, h, modifiers=0, clicks=1)",
+     "release": "def(self)",
+     "remember": "def(self, x, y, w, h)",
+     "scroll": "def(self, amount)",
+     "wants_tab": "field="
+    }
+   }
+  },
+  "emtk.cpp_compat": {
+   "DBL_MAX": "value",
+   "Duration": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "PER_SECOND": "attribute",
+     "__init__": "def(self, seconds, unit='seconds')",
+     "count": "def(self)"
+    }
+   },
+   "FLT_MAX": "value",
+   "FLT_MIN": "value",
+   "INT_MAX": "value",
+   "INT_MIN": "value",
+   "NULL": "value",
+   "Set": {
+    "bases": [
+     "set"
+    ],
+    "decorators": [],
+    "members": {
+     "contains": "def(self, x)",
+     "count": "def(self, x)",
+     "empty": "def(self)",
+     "erase": "def(self, x)",
+     "insert": "def(self, x)",
+     "size": "def(self)"
+    }
+   },
+   "String": {
+    "bases": [
+     "str"
+    ],
+    "decorators": [],
+    "members": {
+     "__new__": "def(cls, value='')",
+     "npos": "attribute",
+     "substr": "def(self, pos=0, count=None)"
+    }
+   },
+   "UINT_MAX": "value",
+   "Vector": {
+    "bases": [
+     "list"
+    ],
+    "decorators": [],
+    "members": {
+     "assign": "def(self, n, value=None)",
+     "at": "def(self, i)",
+     "back": "def(self)",
+     "begin": "def(self)",
+     "data": "def(self)",
+     "emplace_back": "def(self, *a, **kw)",
+     "empty": "def(self)",
+     "end": "attribute",
+     "front": "def(self)",
+     "pop_back": "def(self)",
+     "push_back": "def(self, x)",
+     "reserve": "def(self, _n)",
+     "resize": "def(self, n, value=None)",
+     "shrink_to_fit": "def(self)",
+     "size": "def(self)"
+    }
+   },
+   "const_cast": "value",
+   "dynamic_cast": "value",
+   "fgets": "def(buf, size, stream)",
+   "fprintf": "def(stream, fmt, *args)",
+   "json_is_array": "def(v)",
+   "json_is_boolean": "def(v)",
+   "json_is_null": "def(v)",
+   "json_is_number": "def(v)",
+   "json_is_number_float": "def(v)",
+   "json_is_number_integer": "def(v)",
+   "json_is_object": "def(v)",
+   "json_is_string": "def(v)",
+   "memcpy": "def(dst, src, count=None)",
+   "memset": "def(buf, value, count=None)",
+   "nullptr": "value",
+   "pclose": "def(stream)",
+   "popen": "def(command, mode='r')",
+   "printf": "def(fmt, *args)",
+   "reinterpret_cast": "value",
+   "sizeof": "def(obj)",
+   "snprintf": "def(buf, size, fmt, *args)",
+   "static_cast": "def(value, _type=None)",
+   "std": "value",
+   "stderr": "value",
+   "stdin": "value",
+   "stdout": "value",
+   "strcmp": "def(a, b)",
+   "strncpy": "def(dst, src, count=None)"
+  },
+  "emtk.dialog_window": {
+   "DialogWindow": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "HEADER_H": "attribute",
+     "PADDING": "attribute",
+     "__init__": "def(self, title, size=(420.0, 300.0), pos=None, key='', escape_closes=True, fit_height=False, close_button=True)",
+     "begin": "def(self, frame, buttons=())",
+     "contains": "def(self, x, y)",
+     "end": "def(self)",
+     "hide": "def(self)",
+     "place": "def(self, frame)",
+     "show": "def(self)",
+     "toggle": "def(self)"
+    }
+   }
+  },
+  "emtk.docking": {
+   "ACCENT_STRIPE": "value",
+   "DockManager": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "MIN_TAB_W": "attribute",
+     "__init__": "def(self, layout=None, store=None, on_change=None, snapping=True, name='dock')",
+     "active_tab": "def(self, region)",
+     "add_window": "def(self, key, title='', draw=None, dock=None, box=None, **options)",
+     "admits": "def(self, key, region)",
+     "cascade_workspace": "def(self, keys=None)",
+     "closable_panels": "def(self, keep=())",
+     "close_panels": "def(self, keep=())",
+     "compute_layout": "def(self, box, force=None)",
+     "configure_default_layout": "def(self, layout, docks)",
+     "cycle_workspace": "def(self, step=1)",
+     "dock": "def(self, key, region, index=None, select=True)",
+     "docked": "def(self, region)",
+     "draw": "def(self, box)",
+     "drop_targets": "def(self)",
+     "extra": "def(self, key, default=None)",
+     "floating": "def(self)",
+     "floating_bounds": "def(self, minimized=None)",
+     "flush": "def(self)",
+     "focus": "def(self, key)",
+     "from_json": "@classmethod def(cls, text, layout=None, **kwargs)",
+     "get_target_preview": "def(self, target)",
+     "handle_key": "def(self, key, modifiers=0)",
+     "hide": "def(self, key)",
+     "in_workspace": "def(self, key)",
+     "is_shown": "def(self, key)",
+     "is_visible": "def(self, key)",
+     "load": "def(self)",
+     "minimize": "def(self, key)",
+     "prune_empty": "def(self)",
+     "raise_window": "def(self, key)",
+     "region_of": "def(self, key)",
+     "remove_window": "def(self, key)",
+     "reset": "def(self)",
+     "restore": "def(self, state)",
+     "save": "def(self)",
+     "set_extra": "def(self, key, value)",
+     "set_ratio": "def(self, split, ratio)",
+     "show": "def(self, key)",
+     "split_region": "def(self, region_name, zone, new_region_name=None, ratio=0.5)",
+     "split_root": "def(self, zone, new_region_name=None, ratio=0.3)",
+     "state": "def(self)",
+     "tab_rect": "def(self, key)",
+     "tab_workspace": "def(self, keys=None)",
+     "target_admits": "def(self, key, target)",
+     "target_at": "def(self, px, py, key=None)",
+     "tile_workspace": "def(self, keys=None)",
+     "to_json": "def(self)",
+     "toggle": "def(self, key)",
+     "undock": "def(self, key, box=None)",
+     "window": "def(self, key)",
+     "workspace": "@property def(self)",
+     "workspace_children": "def(self)"
+    }
+   },
+   "DockWindow": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "accent": "field=",
+     "anchor": "field=",
+     "box": "field=",
+     "closable": "field=",
+     "collapsed": "field=",
+     "content": "field=",
+     "core": "field=",
+     "dockable": "field=",
+     "draw": "field=",
+     "frame": "field=",
+     "header_tint": "field=",
+     "key": "field",
+     "min_size": "field=",
+     "minimized": "field=",
+     "movable": "field=",
+     "padding": "field=",
+     "resizable": "field=",
+     "scrollable": "field=",
+     "title": "field=",
+     "tooltip": "field=",
+     "visible": "field=",
+     "workspace": "field="
+    }
+   },
+   "DragStep": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "anchor": "field=",
+     "edges": "field=",
+     "followers": "field=",
+     "stuck": "field=",
+     "x": "field",
+     "y": "field"
+    }
+   },
+   "LayoutStore": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, name, path=None, storage=None)",
+     "clear": "def(self)",
+     "key": "@property def(self)",
+     "load": "def(self)",
+     "save": "def(self, data)"
+    }
+   },
+   "MIN_TILE": "value",
+   "Region": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "keep": "field=",
+     "name": "field",
+     "workspace": "field="
+    }
+   },
+   "SNAP_DISTANCE": "value",
+   "STICK_DISTANCE": "value",
+   "Split": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "axis": "field",
+     "first": "field",
+     "min_size": "field=",
+     "name": "field=",
+     "ratio": "field",
+     "second": "field"
+    }
+   },
+   "TOUCH_SLACK": "value",
+   "WindowDrag": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, key, grab, followers=())",
+     "follower_keys": "@property def(self)",
+     "move": "def(self, px, py, size, frames, bounds=None, snapping=True, stick=STICK_DISTANCE, distance=SNAP_DISTANCE)",
+     "start": "@classmethod def(cls, key, px, py, frames, alone=False, slack=TOUCH_SLACK)"
+    }
+   },
+   "anchored_position": "def(anchor, x, y, w, h, width, height, top=0.0, left=0.0)",
+   "frames_touch": "def(a, b, slack=TOUCH_SLACK)",
+   "load_states": "def(path, fields=None)",
+   "save_states": "def(states, path)",
+   "snap": "def(x, y, w, h, width, height, top=0.0, distance=SNAP_DISTANCE, left=0.0)",
+   "snap_to_frames": "def(key, x, y, w, h, frames, skip=(), stick=STICK_DISTANCE)",
+   "stuck_group": "def(frames, key, slack=TOUCH_SLACK)",
+   "tile_grid": "def(count, width, height, min_tile=MIN_TILE)"
+  },
+  "emtk.drawlist": {
+   "DRAW_FLAGS_CLOSED": "value",
+   "DRAW_FLAGS_ROUND_CORNERS_ALL": "value",
+   "DRAW_FLAGS_ROUND_CORNERS_NONE": "value",
+   "DrawList": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, painter)",
+     "add_bezier_cubic": "def(self, p1, p2, p3, p4, col, thickness=1.0, num_segments=0)",
+     "add_bezier_quadratic": "def(self, p1, p2, p3, col, thickness=1.0, num_segments=0)",
+     "add_callback": "def(self, callback, user_data=None)",
+     "add_circle": "def(self, center, radius, col, num_segments=0, thickness=1.0)",
+     "add_circle_filled": "def(self, center, radius, col, num_segments=0)",
+     "add_concave_poly_filled": "def(self, points, col)",
+     "add_convex_poly_filled": "def(self, points, col)",
+     "add_draw_cmd": "def(self)",
+     "add_ellipse": "def(self, centre, radius, col, rot=0.0, num_segments=0, thickness=1.0)",
+     "add_ellipse_filled": "def(self, centre, radius, col, rot=0.0, num_segments=0)",
+     "add_image": "def(self, handle, p_min, p_max, uv_min=(0.0, 0.0), uv_max=(1.0, 1.0), col=(255, 255, 255, 255))",
+     "add_image_quad": "def(self, handle, p1, p2, p3, p4, uv1=(0.0, 0.0), uv2=(1.0, 0.0), uv3=(1.0, 1.0), uv4=(0.0, 1.0), col=(255, 255, 255, 255))",
+     "add_image_rounded": "def(self, handle, p_min, p_max, uv_min=(0.0, 0.0), uv_max=(1.0, 1.0), col=(255, 255, 255, 255), rounding=0.0, flags=0)",
+     "add_line": "def(self, p1, p2, col, thickness=1.0)",
+     "add_line_h": "def(self, p, width, col, thickness=1.0)",
+     "add_line_v": "def(self, p, height, col, thickness=1.0)",
+     "add_ngon": "def(self, center, radius, col, num_segments, thickness=1.0)",
+     "add_ngon_filled": "def(self, center, radius, col, num_segments)",
+     "add_polyline": "def(self, points, col, flags=0, thickness=1.0)",
+     "add_quad": "def(self, p1, p2, p3, p4, col, thickness=1.0)",
+     "add_quad_filled": "def(self, p1, p2, p3, p4, col)",
+     "add_rect": "def(self, p_min, p_max, col, rounding=0.0, flags=0, thickness=1.0)",
+     "add_rect_filled": "def(self, p_min, p_max, col, rounding=0.0, flags=0)",
+     "add_rect_filled_multi_color": "def(self, p_min, p_max, col_upr_left, col_upr_right, col_bot_right, col_bot_left)",
+     "add_text": "def(self, pos, col, text, bold=False)",
+     "add_triangle": "def(self, p1, p2, p3, col, thickness=1.0)",
+     "add_triangle_filled": "def(self, p1, p2, p3, col)",
+     "calc_text_size": "def(self, text)",
+     "channels_merge": "def(self)",
+     "channels_set_current": "def(self, index)",
+     "channels_split": "def(self, count)",
+     "clone_output": "def(self)",
+     "get_clip_rect_max": "def(self)",
+     "get_clip_rect_min": "def(self)",
+     "get_draw_data": "def(self)",
+     "path_arc_to": "def(self, center, radius, a_min, a_max, num_segments=0)",
+     "path_arc_to_fast": "def(self, centre, radius, a_min_of_12, a_max_of_12)",
+     "path_bezier_cubic_curve_to": "def(self, p2, p3, p4, num_segments=0)",
+     "path_bezier_quadratic_curve_to": "def(self, p2, p3, num_segments=0)",
+     "path_clear": "def(self)",
+     "path_elliptical_arc_to": "def(self, centre, radius, rot, a_min, a_max, num_segments=0)",
+     "path_fill_concave": "def(self, col)",
+     "path_fill_convex": "def(self, col)",
+     "path_line_to": "def(self, pos)",
+     "path_line_to_merge_duplicate": "def(self, pos)",
+     "path_rect": "def(self, rect_min, rect_max, rounding=0.0, flags=0)",
+     "path_stroke": "def(self, col, flags=0, thickness=1.0)",
+     "pop_clip_rect": "def(self)",
+     "pop_texture": "def(self)",
+     "pop_texture_id": "def(self)",
+     "prim_quad_uv": "def(self, a, b, c, d, uv_a, uv_b, uv_c, uv_d, col)",
+     "prim_rect": "def(self, a, c, col)",
+     "prim_rect_uv": "def(self, a, c, uv_a, uv_c, col)",
+     "prim_reserve": "def(self, idx_count, vtx_count)",
+     "prim_unreserve": "def(self, idx_count, vtx_count)",
+     "prim_vtx": "def(self, pos, uv=(0.0, 0.0), col=(255, 255, 255, 255))",
+     "prim_write_idx": "def(self, index)",
+     "prim_write_vtx": "def(self, pos, uv=(0.0, 0.0), col=(255, 255, 255, 255))",
+     "push_clip_rect": "def(self, clip_min, clip_max, intersect_with_current=False)",
+     "push_clip_rect_full_screen": "def(self)",
+     "push_texture": "def(self, texture)",
+     "push_texture_id": "def(self, texture)"
+    }
+   }
+  },
+  "emtk.dynamic_font": {
+   "FONT_CANDIDATES": "value",
+   "GlyphCache": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, cell, ascent, columns=16, rows=16, pad=0, advance=None, em=None)",
+     "capacity": "@property def(self)",
+     "cell_of": "def(self, char)",
+     "take_dirty": "def(self)"
+    }
+   }
+  },
+  "emtk.events": {
+   "ALT_MODIFIER": "value",
+   "CONTROL_MODIFIER": "value",
+   "KeyEvent": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, key, text='', modifiers=NO_MODIFIER)",
+     "accept": "def(self)",
+     "ignore": "def(self)",
+     "isAccepted": "def(self)",
+     "key": "def(self)",
+     "modifiers": "def(self)",
+     "text": "def(self)"
+    }
+   },
+   "LEFT_BUTTON": "value",
+   "META_MODIFIER": "value",
+   "MIDDLE_BUTTON": "value",
+   "NO_BUTTON": "value",
+   "NO_MODIFIER": "value",
+   "Point": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, x, y)",
+     "x": "def(self)",
+     "y": "def(self)"
+    }
+   },
+   "PointerEvent": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, x, y, button=NO_BUTTON, buttons=NO_BUTTON, modifiers=NO_MODIFIER, double=False)",
+     "accept": "def(self)",
+     "button": "def(self)",
+     "buttons": "def(self)",
+     "ignore": "def(self)",
+     "isAccepted": "def(self)",
+     "is_double": "def(self)",
+     "modifiers": "def(self)",
+     "pos": "def(self)",
+     "x": "def(self)",
+     "y": "def(self)"
+    }
+   },
+   "RIGHT_BUTTON": "value",
+   "Rect": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, x, y, width, height)",
+     "bottom": "def(self)",
+     "from_corners": "@classmethod def(cls, x0, y0, x1, y1)",
+     "getRect": "def(self)",
+     "height": "def(self)",
+     "isNull": "def(self)",
+     "left": "def(self)",
+     "normalized": "def(self)",
+     "right": "def(self)",
+     "top": "def(self)",
+     "width": "def(self)",
+     "x": "def(self)",
+     "y": "def(self)"
+    }
+   },
+   "SHIFT_MODIFIER": "value",
+   "button_from_canvas": "def(button)",
+   "button_from_dom": "def(button)",
+   "button_name": "def(button)",
+   "buttons_from_dom": "def(buttons)",
+   "modifier_name": "def(modifiers)",
+   "modifiers_from_canvas": "def(modifiers, mac=None)"
+  },
+  "emtk.export": {
+   "grab": "def(app, size=(1200, 800), frames=3, painter='pixel')",
+   "png_bytes": "def(app, size=(1200, 800), frames=3, painter='pixel')",
+   "save_png": "def(app, path, size=(1200, 800), frames=3, painter='pixel')"
+  },
+  "emtk.figure": {
+   "Axes": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, figure=None)",
+     "add_colorbar": "def(self, label, low, high, colormap='viridis', log=False)",
+     "bars": "def(self, x, heights, *, width=0.8, color=None, alpha=None, edgecolor=None, horizontal=False, label=None)",
+     "errorbars": "def(self, x, y, err, *, color=None, label=None)",
+     "fill_between": "def(self, x, lower, upper, *, color=None, alpha=0.3, label=None)",
+     "heatmap": "def(self, values, *, colormap='viridis', extent=None, levels=None, cell_labels=None, colorbar=None, label=None)",
+     "hide": "def(self)",
+     "hide_tick_labels": "def(self, x=False, y=False)",
+     "hist": "def(self, values, bins=40, *, range=None, density=False, step=False, color=None, alpha=None, width=1.5, label=None)",
+     "hline": "def(self, y, *, color='0.5', width=1.0, dash='-', label=None)",
+     "legend": "def(self, at='ne')",
+     "line": "def(self, x, y, *, color=None, width=1.5, dash='-', marker=None, marker_size=4.0, alpha=None, label=None, right=False)",
+     "mesh": "def(self, x_edges, y_edges, values, *, colormap='viridis', levels=None, log=False, colorbar=None, label=None)",
+     "scatter": "def(self, x, y, *, color=None, colors=None, size=3.0, alpha=None, marker='o', label=None)",
+     "set_labels": "def(self, x=None, y=None)",
+     "set_log": "def(self, x=None, y=None)",
+     "set_right_label": "def(self, label)",
+     "set_title": "def(self, title)",
+     "set_xlim": "def(self, low, high)",
+     "set_xticks": "def(self, values, labels=None)",
+     "set_ylim": "def(self, low, high)",
+     "set_yticks": "def(self, values, labels=None)",
+     "stairs": "def(self, x, y, *, color=None, width=1.5, label=None)",
+     "text": "def(self, x, y, s, *, color='k', offset=(0.0, 0.0))",
+     "vline": "def(self, x, *, color='0.5', width=1.0, dash='-', label=None)",
+     "vspan": "def(self, x0, x1, *, color='C3', alpha=0.1, label=None)"
+    }
+   },
+   "Figure": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__getitem__": "def(self, key)",
+     "__init__": "def(self, rows=1, cols=1, size=(640, 480), title='', height_ratios=None, width_ratios=None)",
+     "ax": "def(self, row=0, col=0)",
+     "axes": "@property def(self)",
+     "pdf_bytes": "def(self)",
+     "png_bytes": "def(self, dpi=None)",
+     "rgba": "def(self)",
+     "save": "def(self, path, dpi=None)",
+     "svg_bytes": "def(self)",
+     "to_bytes": "def(self, fmt, dpi=None)"
+    }
+   },
+   "colorbar_space": "def(log=False)"
+  },
+  "emtk.file_dialog": {
+   "FileDialog": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, title=mark('Open', domain='emtk'), mode='open', filters=((mark('All files', domain='emtk'), ('*',)),), directory=None, filename='', multiselect=False, action=None, rows=12)",
+     "choose": "def(self)",
+     "chosen": "def(self)",
+     "draw": "def(self)",
+     "enter": "def(self, folder)",
+     "matches": "def(self, name)",
+     "refresh": "def(self)",
+     "select": "def(self, name)"
+    }
+   },
+   "parse_filters": "def(spec)"
+  },
+  "emtk.flags": {
+   "Axis": "value",
+   "ChildFlags": "value",
+   "ColorEditFlags": "value",
+   "ComboFlags": "value",
+   "Cond": "value",
+   "DataType": "value",
+   "DragDropFlags": "value",
+   "DrawFlags": "value",
+   "FocusedFlags": "value",
+   "HoveredFlags": "value",
+   "InputTextFlags": "value",
+   "Key": "value",
+   "MouseButton": "value",
+   "MouseCursor": "value",
+   "PopupFlags": "value",
+   "SelectableFlags": "value",
+   "SliderFlags": "value",
+   "SortDirection": "value",
+   "StyleVar": "value",
+   "TabBarFlags": "value",
+   "TabItemFlags": "value",
+   "TreeNodeFlags": "value",
+   "WindowFlags": "value"
+  },
+  "emtk.font": {
+   "ATLAS_DIR": "value",
+   "Atlas": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, meta)",
+     "advance": "def(self, string='')",
+     "baked_height": "@property def(self)",
+     "cache": "@property def(self)",
+     "cell_of": "def(self, char, bold=False)",
+     "covers": "def(self, char)",
+     "font_pt": "@property def(self)",
+     "image_path": "@property def(self)",
+     "line_height": "@property def(self)",
+     "render_scale": "@property def(self)",
+     "texture_height": "@property def(self)"
+    }
+   },
+   "DEFAULT_FONT_PT": "value",
+   "MISSING_GLYPH": "value",
+   "PX_PER_PT": "value",
+   "available_fonts": "def(monospaced=False)",
+   "load_atlas": "def(name='chrome')"
+  },
+  "emtk.font_render": {
+   "Face": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "bold": "field",
+     "index": "field",
+     "italic": "field",
+     "monospaced": "field",
+     "path": "field",
+     "style": "field"
+    }
+   },
+   "FontSpec": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "bold": "field=",
+     "fallback": "field=",
+     "family": "field=",
+     "italic": "field=",
+     "size": "field="
+    }
+   },
+   "GENERIC_FAMILIES": "value",
+   "LAYOUT_PX": "value",
+   "MAX_RASTER_PX": "value",
+   "RASTER_QUANTUM": "value",
+   "SUBPIXEL_STEPS": "value",
+   "available_fonts": "def(monospaced=False)",
+   "draw_text": "def(painter, spec, scale, x, y, w, h, align, string, colour, bold=False, degrees=0.0, require_resolver=False, device=1.0)",
+   "font_spec": "def(value=None, size=0.0)",
+   "glyphs": "def(spec, string, scale, bold=False, device=1.0, origin=None)",
+   "line_height": "def(spec, scale)",
+   "text_width": "@lru_cache(maxsize=16384) def(spec, string, scale)"
+  },
+  "emtk.fonts": {
+   "FontConfig": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "antialias": "field=",
+     "caption": "field=",
+     "code": "field=",
+     "fallbacks": "field=",
+     "from_dict": "@classmethod def(cls, data)",
+     "heading": "field=",
+     "heading_step": "field=",
+     "math": "field=",
+     "oversample": "field=",
+     "prose": "field=",
+     "role": "def(self, name)",
+     "to_dict": "def(self)",
+     "ui": "field=",
+     "zoom": "field="
+    }
+   },
+   "MAX_ZOOM": "value",
+   "MIN_ZOOM": "value",
+   "ROLES": "value",
+   "RoleFont": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "bold": "field=",
+     "family": "field=",
+     "from_dict": "@classmethod def(cls, data, default)",
+     "size": "field=",
+     "to_dict": "def(self)"
+    }
+   },
+   "antialias": "def()",
+   "apply": "def(value=None)",
+   "config": "def()",
+   "family_chain": "def(family)",
+   "generation": "def()",
+   "invalidate_caches": "def()",
+   "measure": "def(role, text)",
+   "oversample": "def()",
+   "reset": "def()",
+   "role_family": "def(role)",
+   "role_font": "def(role)",
+   "role_size_pt": "def(role)",
+   "system_families": "def(monospace=False)",
+   "update": "def(**changes)",
+   "zoom": "def()"
+  },
+  "emtk.frame_errors": {
+   "FrameError": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, error, count=1)",
+     "summary": "@property def(self)"
+    }
+   },
+   "add_frame_error_handler": "def(handler)",
+   "draw_control": "def(control, painter, x, y, w, h)",
+   "draw_error_panel": "def(painter, x, y, w, h, record)",
+   "remove_frame_error_handler": "def(handler)",
+   "report_frame_error": "def(error)"
+  },
+  "emtk.gpu": {
+   "backend_name": "from .api import backend_name",
+   "gpu": "from .api import gpu",
+   "use_backend": "from .api import use_backend"
+  },
+  "emtk.gpu.api": {
+   "BlendFactor": "from .enums import BlendFactor",
+   "BlendOperation": "from .enums import BlendOperation",
+   "BufferBindingType": "from .enums import BufferBindingType",
+   "BufferUsage": "from .enums import BufferUsage",
+   "CompareFunction": "from .enums import CompareFunction",
+   "CullMode": "from .enums import CullMode",
+   "FilterMode": "from .enums import FilterMode",
+   "IndexFormat": "from .enums import IndexFormat",
+   "LoadOp": "from .enums import LoadOp",
+   "PrimitiveTopology": "from .enums import PrimitiveTopology",
+   "SamplerBindingType": "from .enums import SamplerBindingType",
+   "ShaderStage": "from .enums import ShaderStage",
+   "StoreOp": "from .enums import StoreOp",
+   "TextureFormat": "from .enums import TextureFormat",
+   "TextureSampleType": "from .enums import TextureSampleType",
+   "TextureUsage": "from .enums import TextureUsage",
+   "backend_name": "def()",
+   "gpu": "value",
+   "use_backend": "def(module)"
+  },
+  "emtk.gpu.browser": {
+   "configure_canvas": "def(canvas, device, format=None)",
+   "is_available": "def()",
+   "name": "value",
+   "preferred_format": "def()",
+   "request_adapter_async": "async def(power_preference='high-performance')",
+   "request_adapter_sync": "def(power_preference='high-performance')",
+   "to_js": "def(value)"
+  },
+  "emtk.gpu.enums": {
+   "BlendFactor": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "one": "attribute",
+     "one_minus_src_alpha": "attribute",
+     "src_alpha": "attribute"
+    }
+   },
+   "BlendOperation": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "add": "attribute",
+     "max": "attribute",
+     "min": "attribute"
+    }
+   },
+   "BufferBindingType": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "read_only_storage": "attribute",
+     "storage": "attribute",
+     "uniform": "attribute"
+    }
+   },
+   "BufferUsage": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "COPY_DST": "attribute",
+     "COPY_SRC": "attribute",
+     "INDEX": "attribute",
+     "MAP_READ": "attribute",
+     "MAP_WRITE": "attribute",
+     "STORAGE": "attribute",
+     "UNIFORM": "attribute",
+     "VERTEX": "attribute"
+    }
+   },
+   "CompareFunction": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "always": "attribute",
+     "greater": "attribute",
+     "greater_equal": "attribute",
+     "less": "attribute",
+     "less_equal": "attribute"
+    }
+   },
+   "CullMode": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "none": "attribute"
+    }
+   },
+   "FilterMode": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "linear": "attribute",
+     "nearest": "attribute"
+    }
+   },
+   "IndexFormat": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "uint32": "attribute"
+    }
+   },
+   "LoadOp": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "clear": "attribute",
+     "load": "attribute"
+    }
+   },
+   "PrimitiveTopology": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "line_list": "attribute",
+     "triangle_list": "attribute"
+    }
+   },
+   "SamplerBindingType": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "filtering": "attribute",
+     "non_filtering": "attribute"
+    }
+   },
+   "ShaderStage": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "COMPUTE": "attribute",
+     "FRAGMENT": "attribute",
+     "VERTEX": "attribute"
+    }
+   },
+   "StoreOp": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "discard": "attribute",
+     "store": "attribute"
+    }
+   },
+   "TextureFormat": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "bgra8unorm": "attribute",
+     "depth24plus": "attribute",
+     "rgba8unorm": "attribute"
+    }
+   },
+   "TextureSampleType": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "depth": "attribute",
+     "float": "attribute",
+     "unfilterable_float": "attribute"
+    }
+   },
+   "TextureUsage": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "COPY_DST": "attribute",
+     "COPY_SRC": "attribute",
+     "RENDER_ATTACHMENT": "attribute",
+     "TEXTURE_BINDING": "attribute"
+    }
+   }
+  },
+  "emtk.gpu.native": {
+   "is_available": "def()",
+   "name": "value",
+   "request_adapter_sync": "def(power_preference='high-performance')"
+  },
+  "emtk.gpu_atlas": {
+   "ATTRIBUTES": "value",
+   "BAKED_FONT_PT": "value",
+   "DIRTY_LOG": "value",
+   "FLOATS_PER_VERTEX": "value",
+   "IMAGE_ATLAS_SIZE": "value",
+   "ImageAtlas": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, width=IMAGE_ATLAS_SIZE, height=IMAGE_ATLAS_SIZE, *, max_size=None, max_side=MAX_IMAGE_SIDE)",
+     "dirty_since": "def(self, version)",
+     "forget": "def(self, handle)",
+     "region": "def(self, handle)"
+    }
+   },
+   "MAX_IMAGE_ATLAS_SIZE": "value",
+   "MAX_IMAGE_SIDE": "value",
+   "VERTEX_BYTES": "value",
+   "atlas_pixels": "def(atlas)",
+   "image_texel": "def(u, width)",
+   "image_u": "def(texel_x, width)",
+   "png_decode": "def(data)"
+  },
+  "emtk.grapheme": {
+   "clusters": "def(string)",
+   "count": "def(string)",
+   "display": "def(string)",
+   "glyph_of": "@lru_cache(maxsize=4096) def(cluster)",
+   "is_ascii_simple": "def(string)",
+   "next_boundary": "def(string, index)",
+   "prev_boundary": "def(string, index)",
+   "snap": "def(string, index)"
+  },
+  "emtk.help_guide": {
+   "ACCENT_BLUE": "value",
+   "ACCENT_GREEN": "value",
+   "BORDER_BLUE": "value",
+   "BORDER_GREEN": "value",
+   "CLOSE_CAPTION_ICON": "value",
+   "EmTkGuidedTour": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, steps, get_target_rect=None, on_step_change=None, owner=None, wait_for_controls=False, domain=None)",
+     "awaiting": "@property def(self)",
+     "draw": "def(self, width, height)",
+     "next": "def(self)",
+     "next_step": "attribute",
+     "notify_used": "def(self, name)",
+     "prev": "def(self)",
+     "prev_step": "attribute",
+     "start": "def(self, step=0)",
+     "stop": "def(self)"
+    }
+   },
+   "EmTkHelpWindow": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, title=mark('Help & Reference', domain='emtk'), resource=None, text='', owner=None, on_start_guide=None, size=(720.0, 540.0), categories=None, domain=None)",
+     "close": "def(self)",
+     "draw": "def(self, frame)",
+     "hide": "def(self)",
+     "show": "def(self)",
+     "toggle": "def(self)"
+    }
+   },
+   "TEXT_MUTED": "value",
+   "TEXT_WHITE": "value",
+   "TourTarget": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "item_rects": "field",
+     "remember": "def(self, name, rect=None)"
+    }
+   },
+   "logger": "value",
+   "place_tour_card": "def(target_rect, width, height, card_w, card_h, margin=14.0)",
+   "resolve_resource_file": "def(resource, owner=None)"
+  },
+  "emtk.htmltext": {
+   "html_to_markdown": "def(text)",
+   "looks_like_html": "def(text)"
+  },
+  "emtk.i18n": {
+   "EMTK_DOMAIN": "value",
+   "add_catalogue": "def(domain, source)",
+   "add_translations": "def(locale, mapping, context=DEFAULT_CONTEXT, *, domain=None)",
+   "available_languages": "def(domain=None)",
+   "available_locales": "def()",
+   "catalogue_directory": "def()",
+   "default_domain": "def()",
+   "domains": "def()",
+   "generation": "def()",
+   "get_locale": "def()",
+   "language": "def()",
+   "mark": "def(source, context=None, *, domain=None)",
+   "remove_catalogue": "def(domain)",
+   "set_default_domain": "def(domain)",
+   "set_language": "def(code)",
+   "set_language_provider": "def(provider)",
+   "set_locale": "def(locale)",
+   "tr": "def(source, context=None, *, domain=None)",
+   "use_domain": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__enter__": "def(self)",
+     "__exit__": "def(self, *exc)",
+     "__init__": "def(self, domain)"
+    }
+   }
+  },
+  "emtk.i18n.catalogue": {
+   "Message": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "context": "field",
+     "element": "field=",
+     "locations": "field=",
+     "numerus": "field=",
+     "source": "field",
+     "status": "field=",
+     "translation": "field="
+    }
+   },
+   "read_catalogue": "def(path)",
+   "read_messages": "def(path)",
+   "write_messages": "def(path, messages, language=None)"
+  },
+  "emtk.i18n.extract": {
+   "TEXT_KEYS": "value",
+   "collect": "def(package_dir, domain, *, text_keys=TEXT_KEYS, extra_specs=None, docstrings_of=())",
+   "collect_json": "def(data, out, text_keys=TEXT_KEYS)",
+   "collect_python": "def(source, filename, domain, *, functions=('tr', 'mark'), docstrings_of=())",
+   "extract": "def(package_dir, domain, locales, out, *, fmt='ts', extra_specs=None, docstrings_of=())",
+   "main": "def(argv=None)",
+   "merge": "def(existing, extracted)",
+   "parse_spec_args": "def(values)"
+  },
+  "emtk.i18n.testing": {
+   "DEFAULT_KEYWORDS": "value",
+   "DEFAULT_SINKS": "value",
+   "DISPLAY_NAMES": "value",
+   "Literal": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "call": "field",
+     "column": "field",
+     "key": "@property def(self)",
+     "line": "field",
+     "path": "field",
+     "text": "field"
+    }
+   },
+   "isolated": "@contextlib.contextmanager def(language='en')",
+   "literals_in_source": "def(source, path, *, sinks=DEFAULT_SINKS, keywords=DEFAULT_KEYWORDS, receivers=DEFAULT_RECEIVERS, constants=False)",
+   "untranslated_literals": "def(package_dir, *, sinks=DEFAULT_SINKS, keywords=DEFAULT_KEYWORDS, receivers=DEFAULT_RECEIVERS, exclude=(), constants=False)"
+  },
+  "emtk.icons": {
+   "EMOJI_FONTS": "value",
+   "IconTexture": {
+    "bases": [
+     "Texture"
+    ],
+    "decorators": [],
+    "members": {}
+   },
+   "LARGE_ICON": "value",
+   "SMALL_ICON": "value",
+   "caption_width": "def(runs, measure, line_height)",
+   "draw_caption": "def(p, runs, x, y, w, h, align, colour, bold, draw_text, measure, line_height)",
+   "draw_icon": "def(p, icon, x, y, size, colour=(255, 255, 255, 255), enabled=True)",
+   "icon_box": "def(line_height, large=False)",
+   "icon_spans": "@lru_cache(maxsize=4096) def(string)",
+   "icon_texture": "def(icon, pixels)",
+   "pictogram_runs": "def(string)",
+   "plain_text": "@contextmanager def()"
+  },
+  "emtk.im": {
+   "col32": "def(r, g, b, a=255)",
+   "im_col32": "value"
+  },
+  "emtk.im_compat": {
+   "MECHANICAL_ALIASES": "value",
+   "VARIADIC": "value",
+   "install": "def(namespace, names)",
+   "mechanical_name": "def(camel)"
+  },
+  "emtk.im_core": {
+   "BackendFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "HAS_GAMEPAD": "attribute",
+     "HAS_MOUSE_CURSORS": "attribute",
+     "HAS_SET_MOUSE_POS": "attribute",
+     "NONE": "attribute",
+     "RENDERER_HAS_FONTS": "attribute",
+     "RENDERER_HAS_IMAGES": "attribute",
+     "RENDERER_HAS_ROTATED_TEXT": "attribute",
+     "RENDERER_HAS_TEXTURES": "attribute",
+     "RENDERER_HAS_VTX_OFFSET": "attribute"
+    }
+   },
+   "ButtonFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "ALLOW_OVERLAP": "attribute",
+     "MOUSE_BUTTON_LEFT": "attribute",
+     "MOUSE_BUTTON_MIDDLE": "attribute",
+     "MOUSE_BUTTON_RIGHT": "attribute",
+     "NONE": "attribute",
+     "NO_HOLDING_ACTIVE_ID": "attribute",
+     "NO_NAV_ACTIVATE": "attribute",
+     "PRESSED_ON_CLICK": "attribute",
+     "PRESSED_ON_RELEASE": "attribute",
+     "REPEAT": "attribute"
+    }
+   },
+   "CASCADE_FRACTION": "value",
+   "CASCADE_SIZE": "value",
+   "CASCADE_STEP": "value",
+   "Col": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "BORDER": "attribute",
+     "BUTTON": "attribute",
+     "BUTTON_ACTIVE": "attribute",
+     "BUTTON_HOVERED": "attribute",
+     "CHECK_MARK": "attribute",
+     "COUNT": "attribute",
+     "FRAME_BG": "attribute",
+     "FRAME_BG_ACTIVE": "attribute",
+     "FRAME_BG_HOVERED": "attribute",
+     "HEADER": "attribute",
+     "HEADER_ACTIVE": "attribute",
+     "HEADER_HOVERED": "attribute",
+     "MENU_BAR_BG": "attribute",
+     "NAV_HIGHLIGHT": "attribute",
+     "PLOT_HISTOGRAM": "attribute",
+     "PLOT_LINES": "attribute",
+     "POPUP_BG": "attribute",
+     "SCROLLBAR_BG": "attribute",
+     "SCROLLBAR_GRAB": "attribute",
+     "SEPARATOR": "attribute",
+     "SEPARATOR_ACTIVE": "attribute",
+     "SEPARATOR_HOVERED": "attribute",
+     "SLIDER_GRAB": "attribute",
+     "SLIDER_GRAB_ACTIVE": "attribute",
+     "TAB": "attribute",
+     "TAB_SELECTED": "attribute",
+     "TEXT": "attribute",
+     "TEXT_DISABLED": "attribute",
+     "TITLE_BG": "attribute",
+     "TITLE_BG_ACTIVE": "attribute",
+     "WINDOW_BG": "attribute"
+    }
+   },
+   "ConfigFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "DOCKING_ENABLE": "attribute",
+     "NAV_ENABLE_GAMEPAD": "attribute",
+     "NAV_ENABLE_KEYBOARD": "attribute",
+     "NONE": "attribute",
+     "NO_MOUSE": "attribute",
+     "NO_MOUSE_CURSOR_CHANGE": "attribute"
+    }
+   },
+   "Context": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, painter, box, io=None, style=None, storage=None, layout_style=None)",
+     "add_overlay": "def(self, key, draw)",
+     "align_text_to_frame_padding": "def(self)",
+     "begin": "def(self, name, box=None, flags=0, *, no_mouse_inputs=False, auto_resize=False)",
+     "begin_child": "def(self, box, clip=True, child_id=None, scrollable=True)",
+     "begin_popup": "def(self, name)",
+     "button_behavior": "def(self, box, item_id, flags=0)",
+     "clear_active_id": "def(self)",
+     "close_current_popup": "def(self, name)",
+     "context_menu_item": "def(self, label, shortcut='', selected=False, enabled=True, icon=None)",
+     "dock_node": "def(self, dock_id)",
+     "dock_windows": "def(self, dock_id)",
+     "draw_overlays": "def(self)",
+     "end": "def(self)",
+     "end_child": "def(self, clip=True)",
+     "end_frame": "def(self)",
+     "end_popup": "def(self)",
+     "find_hovered_window": "def(self, x, y)",
+     "get_id": "def(self, label)",
+     "get_item_rect": "def(self)",
+     "get_storage": "def(self, key=None)",
+     "hold_input_for_overlays": "def(self)",
+     "is_item_active": "def(self)",
+     "is_item_clicked": "def(self, button=0)",
+     "is_item_hovered": "def(self, allow_when_disabled=False)",
+     "is_nav_focused": "def(self, item_id)",
+     "is_popup_open": "def(self, name)",
+     "item_add": "def(self, box, item_id=None)",
+     "item_hoverable": "def(self, box, item_id=None)",
+     "item_size": "def(self, w, h)",
+     "nav_add": "def(self, item_id)",
+     "nav_move": "def(self, direction)",
+     "new_frame": "def(self, now=None)",
+     "open_context_popup": "def(self, name, position)",
+     "open_popup": "def(self, name)",
+     "overlay_open": "def(self)",
+     "pop_id": "def(self)",
+     "pop_item_flag": "def(self)",
+     "pop_style_color": "def(self, count=1)",
+     "push_id": "def(self, key)",
+     "push_item_flag": "def(self, flag, enabled)",
+     "push_style_color": "def(self, which, colour)",
+     "request_frame": "def(self)",
+     "request_frame_at": "def(self, when)",
+     "set_active_id": "def(self, item_id)",
+     "set_keyboard_focus_here": "def(self, offset=0)",
+     "set_next_item_allow_overlap": "def(self)",
+     "set_next_item_width": "def(self, width)",
+     "set_tooltip": "def(self, text, owner=None)",
+     "set_window_focus": "def(self, name)",
+     "set_window_placement": "def(self, placement)",
+     "stack_mark": "def(self)",
+     "state": "def(self, key)",
+     "take_next_item_width": "def(self, default=None)",
+     "unwind": "def(self, mark)",
+     "window_placement": "@property def(self)"
+    }
+   },
+   "IO": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "ONE_SHOT": "attribute",
+     "backend_flags": "field=",
+     "begin_frame": "def(self, now=None)",
+     "config_flags": "field=",
+     "delta_time": "field=",
+     "end_event": "def(self)",
+     "font_global_scale": "field=",
+     "frame_count": "field=",
+     "frames_open": "field=",
+     "ime_caret": "field=",
+     "key": "field=",
+     "key_alt": "field=",
+     "key_ctrl": "field=",
+     "key_events": "field=",
+     "key_shift": "field=",
+     "key_super": "field=",
+     "mouse_clicked": "field=",
+     "mouse_clicked_pos": "field=",
+     "mouse_delta": "@property def(self)",
+     "mouse_double_clicked": "field=",
+     "mouse_down": "field=",
+     "mouse_drag_delta": "def(self, button=0)",
+     "mouse_pos": "field=",
+     "mouse_pos_frame": "field=",
+     "mouse_pos_prev": "field=",
+     "mouse_released": "field=",
+     "mouse_wheel": "field=",
+     "mouse_wheel_h": "field=",
+     "next_frame_in": "field=",
+     "now": "field=",
+     "one_shot_state": "def(self)",
+     "preedit": "field=",
+     "preedit_cursor": "field=",
+     "text": "field=",
+     "wall_clock": "field=",
+     "want_capture_keyboard": "field=",
+     "want_capture_mouse": "field=",
+     "want_text_input": "field="
+    }
+   },
+   "ImWidget": {
+    "bases": [
+     "Control"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, fn, *args, on_result=None, style=None, **kwargs)",
+     "compose": "def(self, text, cursor=None)",
+     "drag": "def(self, px, py, x=None, y=None, w=None, h=None, modifiers=0, button=LEFT_BUTTON)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, px, py)",
+     "ime_caret": "@property def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "leave": "def(self)",
+     "press": "def(self, px, py, x, y, w, h, modifiers=0, clicks=1, button=LEFT_BUTTON)",
+     "release": "def(self, px=None, py=None, x=None, y=None, w=None, h=None, modifiers=0, button=LEFT_BUTTON)",
+     "scroll": "def(self, px, py, dx, dy, modifiers=0)"
+    }
+   },
+   "ItemFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "BUTTON_REPEAT": "attribute",
+     "DISABLED": "attribute",
+     "LIVE_EDIT_ON_INPUT": "attribute",
+     "LIVE_EDIT_ON_INPUT_SCALAR": "attribute",
+     "LIVE_EDIT_ON_INPUT_TEXT": "attribute",
+     "NONE": "attribute",
+     "NO_NAV": "attribute",
+     "NO_TAB_STOP": "attribute"
+    }
+   },
+   "PLACE_CASCADE": "value",
+   "PLACE_FRAME": "value",
+   "Style": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "color": "def(self, which, default=(200, 200, 200, 255))",
+     "colors": "field=",
+     "disabled_alpha": "field=",
+     "frame_border_size": "field=",
+     "frame_padding": "field=",
+     "frame_rounding": "field=",
+     "grab_min_size": "field=",
+     "grab_rounding": "field=",
+     "item_inner_spacing": "field=",
+     "item_spacing": "field=",
+     "tooltip_delay": "field=",
+     "tooltip_grace": "field=",
+     "tooltip_max_width": "field=",
+     "window_border_size": "field=",
+     "window_shadow_color": "field=",
+     "window_shadow_size": "field="
+    }
+   },
+   "create_context": "def(painter, box, **kwargs)",
+   "frame": "@contextmanager def(painter, box, io=None, style=None, storage=None, now=None)",
+   "get_background_draw_list": "value",
+   "get_current_context": "def()",
+   "get_foreground_draw_list": "value",
+   "get_io": "def()",
+   "get_style": "def()",
+   "get_window_draw_list": "def()",
+   "painter_capabilities": "def(painter)",
+   "set_current_context": "def(ctx)",
+   "split_label": "def(label)"
+  },
+  "emtk.im_widgets": {
+   "action_button": "def(label, tooltip, callback, accent=False)",
+   "begin": "def(name, box=None, flags=0, **kwargs)",
+   "begin_child": "def(id_or_box, size_or_clip=None, clip=True, child_id=None, scrollable=True)",
+   "begin_group": "def()",
+   "bullet": "def()",
+   "bullet_text": "def(s)",
+   "button": "def(label, size=None)",
+   "calc_math_size": "def(formula, font_size=14.0, scale=0.5)",
+   "calc_text_size": "def(text_, text_end=None, hide_double_hash=False, wrap_width=-1.0)",
+   "checkbox": "def(label, value)",
+   "collapsing_header": "def(label, open_=None)",
+   "columns": "def(count=1, id=None, border=True)",
+   "combo": "def(label, current, items, items_count=-1, popup_max_height_in_items=-1)",
+   "drag_float": "def(label, v, speed=1.0, v_min=None, v_max=None, fmt='%.3f')",
+   "drag_int": "def(label, v, speed=1.0, v_min=None, v_max=None, fmt='%d')",
+   "dummy": "def(w, h=None)",
+   "end": "def()",
+   "end_child": "def(clip=True)",
+   "end_group": "def()",
+   "get_cursor_screen_pos": "def()",
+   "get_id": "def(label)",
+   "get_item_rect": "def()",
+   "indent": "def(width=0.0)",
+   "invisible_button": "def(label, size)",
+   "is_item_active": "def()",
+   "is_item_clicked": "def(button=0)",
+   "is_item_hovered": "def(allow_when_disabled=False)",
+   "label_text": "def(label, s)",
+   "math": "def(formula, font_size=14.0, colour=None, scale=0.5, align_center=False, max_width=None)",
+   "math_text": "value",
+   "new_line": "def()",
+   "next_column": "def()",
+   "pop_id": "def()",
+   "progress_bar": "def(fraction, size=None, overlay='')",
+   "push_id": "def(key)",
+   "radio_button": "def(label, active, value=None)",
+   "same_line": "def(offset=0.0, spacing=-1.0)",
+   "selectable": "def(label, selected=False, size=None, icon=None)",
+   "selectable_icon_width": "def()",
+   "separator": "def()",
+   "set_cursor_screen_pos": "def(pos)",
+   "set_next_item_allow_overlap": "def()",
+   "set_tooltip": "def(text_)",
+   "slider_float": "def(label, v, v_min, v_max, fmt='%.3f', flags=0)",
+   "slider_int": "def(label, v, v_min, v_max, fmt='%d', flags=0)",
+   "small_button": "def(label)",
+   "spacing": "def()",
+   "splitter": "def(str_id, axis, thickness, long_axis_size, size1, size2, min_size1=0.0, min_size2=0.0, hover_extend=8.0, bar_margin=4.0, hover_visibility_delay=0.0)",
+   "splitter_behavior": "def(box, item_id, axis, size1, size2, min_size1=0.0, min_size2=0.0, hover_extend=0.0, hover_visibility_delay=0.0, bg_col=None)",
+   "text": "def(s)",
+   "text_colored": "def(col, s)",
+   "text_disabled": "def(s)",
+   "text_ellipsis": "def(s, max_width)",
+   "text_wrapped": "def(s)",
+   "toggle_button": "def(label, value, size=None)",
+   "tree_node": "def(label)",
+   "tree_pop": "def()",
+   "unindent": "def(width=0.0)"
+  },
+  "emtk.ime": {
+   "MarkedTextProbe": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, view)",
+     "composing": "def(self)",
+     "for_glfw_window": "@classmethod def(cls, window)"
+    }
+   },
+   "Preedit": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "cursor": "field=",
+     "text": "field="
+    }
+   },
+   "committed_text": "def(text)",
+   "input_method_probe": "def(canvas)",
+   "splice": "def(text, caret, preedit)"
+  },
+  "emtk.implot": {
+   "BOX_SELECT_DRAG_THRESHOLD": "value",
+   "DEEP_PALETTE": "value",
+   "DRAG_GRAB_HALF_SIZE": "value",
+   "DragLineResult": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "clicked": "field",
+     "held": "field",
+     "hovered": "field",
+     "modified": "field",
+     "value": "field"
+    }
+   },
+   "DragPointResult": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "clicked": "field",
+     "held": "field",
+     "hovered": "field",
+     "modified": "field",
+     "x": "field",
+     "y": "field"
+    }
+   },
+   "DragRectResult": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "clicked": "field",
+     "held": "field",
+     "hovered": "field",
+     "modified": "field",
+     "x_max": "field",
+     "x_min": "field",
+     "y_max": "field",
+     "y_min": "field"
+    }
+   },
+   "InputMap": "value",
+   "MOUSE_CURSOR_DRAG_THRESHOLD": "value",
+   "PlotPoint": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "x": "field",
+     "y": "field"
+    }
+   },
+   "PlotRange": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "contains": "def(self, v)",
+     "max": "field",
+     "min": "field",
+     "size": "def(self)"
+    }
+   },
+   "PlotRect": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "X": "@property def(self)",
+     "Y": "@property def(self)",
+     "contains": "def(self, x, y)",
+     "x_max": "field",
+     "x_min": "field",
+     "y_max": "field",
+     "y_min": "field"
+    }
+   },
+   "PlotSpec": "value",
+   "PlotStyle": "value",
+   "PlotTime": "value",
+   "SUBPLOT_BORDER_SIZE": "value",
+   "SUBPLOT_SPLITTER_HALF_THICKNESS": "value",
+   "VIRIDIS_COLORMAP": "value",
+   "WHEEL_NOTCHES_PER_FRAME": "value",
+   "add_colormap": "def(name, colors, size=None, qual=True)",
+   "add_time": "value",
+   "annotation": "def(x, y, col, pix_offset=(0.0, 0.0), clamp=False, fmt=None, *args, round=False)",
+   "begin_aligned_plots": "def(group_id, vertical=True)",
+   "begin_legend_popup": "def(label_id, mouse_button=1)",
+   "begin_plot": "def(title_id, size=(-1.0, 0.0), flags=0)",
+   "begin_subplots": "def(title_id, rows, cols, size, flags=0, row_ratios=None, col_ratios=None)",
+   "bust_plot_cache": "def()",
+   "cancel_plot_selection": "def()",
+   "ceil_time": "value",
+   "colormap_button": "def(label, size=(0.0, 0.0), cmap=I.IMPLOT_AUTO)",
+   "colormap_icon": "def(cmap)",
+   "colormap_scale": "def(label, scale_min, scale_max, size=(0.0, 0.0), fmt='%g', flags=0, cmap=I.IMPLOT_AUTO)",
+   "colormap_slider": "def(label, t, fmt='', cmap=I.IMPLOT_AUTO)",
+   "combine_date_time": "value",
+   "drag_line_x": "def(n_id, x, col=None, thickness=1.0, flags=0)",
+   "drag_line_y": "def(n_id, y, col=None, thickness=1.0, flags=0)",
+   "drag_point": "def(n_id, x, y, col=None, size=4.0, flags=0)",
+   "drag_rect": "def(n_id, x_min, y_min, x_max, y_max, col=None, flags=0)",
+   "end_aligned_plots": "def()",
+   "end_legend_popup": "def()",
+   "end_plot": "def()",
+   "end_subplots": "def()",
+   "floor_time": "value",
+   "format_date": "value",
+   "format_date_time": "value",
+   "format_time": "value",
+   "get_colormap_color": "def(idx, cmap=I.IMPLOT_AUTO)",
+   "get_colormap_count": "def()",
+   "get_colormap_index": "def(name)",
+   "get_colormap_name": "def(cmap)",
+   "get_colormap_size": "def(cmap=I.IMPLOT_AUTO)",
+   "get_input_map": "def()",
+   "get_last_item_color": "def()",
+   "get_marker_name": "def(idx)",
+   "get_plot_draw_list": "def()",
+   "get_plot_limits": "def(x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
+   "get_plot_mouse_pos": "def(x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
+   "get_plot_pos": "def()",
+   "get_plot_selection": "def(x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
+   "get_plot_size": "def()",
+   "get_style": "def()",
+   "get_style_color_name": "def(idx)",
+   "hide_next_item": "def(hidden=True, cond=I.COND_ONCE)",
+   "is_axis_hovered": "def(axis)",
+   "is_legend_entry_hovered": "def(label_id)",
+   "is_plot_hovered": "def()",
+   "is_plot_selected": "def()",
+   "is_subplots_hovered": "def()",
+   "item_icon": "def(col)",
+   "make_time": "value",
+   "map_input_default": "def(dst=None)",
+   "map_input_reverse": "def(dst=None)",
+   "next_colormap_color": "def()",
+   "next_marker": "def()",
+   "pixels_to_plot": "def(x, y=None, x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
+   "plot_to_pixels": "def(x, y=None, x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
+   "pop_colormap": "def(count=1)",
+   "pop_plot_clip_rect": "def()",
+   "pop_style_color": "def(count=1)",
+   "pop_style_var": "def(count=1)",
+   "push_colormap": "def(cmap)",
+   "push_plot_clip_rect": "def(expand=0.0)",
+   "push_style_color": "def(idx, col)",
+   "push_style_var": "def(idx, val)",
+   "render_color_bar": "def(colors, rect, vertical, reversed_, continuous)",
+   "round_time": "value",
+   "sample_colormap": "def(t, cmap=I.IMPLOT_AUTO)",
+   "set_axes": "def(x_axis, y_axis)",
+   "set_axis": "def(axis)",
+   "set_next_axes_limits": "def(x_min, x_max, y_min, y_max, cond=I.COND_ONCE)",
+   "set_next_axes_to_fit": "def()",
+   "set_next_axis_limits": "def(axis, v_min, v_max, cond=I.COND_ONCE)",
+   "set_next_axis_links": "def(axis, link_min, link_max=None)",
+   "set_next_axis_to_fit": "def(axis)",
+   "set_next_error_bar_style": "def(colour=None, size=I.IMPLOT_AUTO, weight=I.IMPLOT_AUTO)",
+   "set_next_fill_style": "def(colour=None, alpha=I.IMPLOT_AUTO)",
+   "set_next_line_style": "def(colour=None, weight=I.IMPLOT_AUTO, dash=None)",
+   "set_next_marker_style": "def(marker=I.IMPLOT_AUTO, size=I.IMPLOT_AUTO, fill=None, weight=I.IMPLOT_AUTO, outline=None)",
+   "setup_axes": "def(x_label=None, y_label=None, x_flags=0, y_flags=0)",
+   "setup_axes_limits": "def(x_min, x_max, y_min, y_max, cond=I.COND_ONCE)",
+   "setup_axis": "def(axis, label=None, flags=0)",
+   "setup_axis_format": "def(axis, fmt, data=None)",
+   "setup_axis_limits": "def(axis, v_min, v_max, cond=I.COND_ONCE)",
+   "setup_axis_limits_constraints": "def(axis, v_min, v_max)",
+   "setup_axis_links": "def(axis, link_min, link_max=None)",
+   "setup_axis_scale": "def(axis, scale, inverse=None, data=None)",
+   "setup_axis_ticks": "def(axis, values, n_ticks=None, labels=None, keep_default=False, *more)",
+   "setup_axis_zoom_constraints": "def(axis, z_min, z_max)",
+   "setup_finish": "def()",
+   "setup_legend": "def(location=I.LOCATION_NORTH_WEST, flags=0)",
+   "setup_lock": "def()",
+   "setup_mouse_text": "def(location, flags=0)",
+   "show_alt_legend": "def(title_id, vertical=True, size=(0.0, 0.0), interactable=True)",
+   "show_axis_context_menu": "def(axis, equal_axis=None, time_allowed=False)",
+   "show_legend_context_menu": "def(legend, visible)",
+   "show_plot_context_menu": "def(plot, subplot=None)",
+   "show_subplots_context_menu": "def(subplot)",
+   "style_colors_auto": "def(dst=None)",
+   "style_colors_classic": "def(dst=None)",
+   "style_colors_dark": "def(dst=None)",
+   "style_colors_light": "def(dst=None)",
+   "tag_x": "def(x, col, fmt=None, *args, round=False)",
+   "tag_y": "def(y, col, fmt=None, *args, round=False)"
+  },
+  "emtk.implot3d": {
+   "IMPLOT3D_AUTO": "value",
+   "IMPLOT3D_AUTO_COL": "value",
+   "IMPLOT3D_VERSION": "value",
+   "IMPLOT3D_VERSION_NUM": "value"
+  },
+  "emtk.implot3d_demo": {
+   "SECTIONS": "value",
+   "show_about_window": "def()",
+   "show_all_demos": "def()",
+   "show_demo_window": "def()",
+   "show_style_editor": "def(ref=None)"
+  },
+  "emtk.implot3d_items": {
+   "begin_item": "def(label_id, spec=None, item_col=IMPLOT3D_AUTO_COL, item_mkr=MARKER_INVALID)",
+   "end_item": "def()",
+   "get_current_item": "def()",
+   "plot_dummy": "def(label_id, spec=None)",
+   "plot_image": "def(label_id, tex_ref, *args, spec=None)",
+   "plot_line": "def(label_id, xs, ys, zs, count=None, spec=None)",
+   "plot_mesh": "def(label_id, *args, spec=None)",
+   "plot_quad": "def(label_id, xs, ys, zs, count=None, spec=None)",
+   "plot_scatter": "def(label_id, xs, ys, zs, count=None, spec=None)",
+   "plot_surface": "def(label_id, xs, ys, zs, x_count, y_count, scale_min=0.0, scale_max=0.0, spec=None)",
+   "plot_text": "def(text, x, y, z, angle=0.0, pix_offset=(0.0, 0.0))",
+   "plot_triangle": "def(label_id, xs, ys, zs, count=None, spec=None)",
+   "register_or_get_item": "def(label_id, flags)"
+  },
+  "emtk.implot3d_meshes": {
+   "CUBE_IDX": "value",
+   "CUBE_IDX_COUNT": "value",
+   "CUBE_VTX": "value",
+   "CUBE_VTX_COUNT": "value",
+   "DUCK_IDX": "value",
+   "DUCK_IDX_COUNT": "value",
+   "DUCK_VTX": "value",
+   "DUCK_VTX_COUNT": "value",
+   "SPHERE_IDX": "value",
+   "SPHERE_IDX_COUNT": "value",
+   "SPHERE_VTX": "value",
+   "SPHERE_VTX_COUNT": "value",
+   "cube_idx": "value",
+   "cube_vtx": "value",
+   "duck_idx": "value",
+   "duck_vtx": "value",
+   "sphere_idx": "value",
+   "sphere_vtx": "value"
+  },
+  "emtk.implot_demo": {
+   "DEMOS": "value",
+   "STATE": "value",
+   "make_app": "def()",
+   "plot_candlestick": "def(label_id, xs, opens, closes, lows, highs, count, tooltip=True, width_percent=0.25, bull_col=(0.0, 1.0, 0.441, 1.0), bear_col=(0.853, 0.05, 0.31, 1.0))",
+   "show_demo_window": "def()"
+  },
+  "emtk.implot_internal": {
+   "AUTO_COL": "value",
+   "AXIS_COUNT": "value",
+   "AXIS_FLAGS_AUTO_FIT": "value",
+   "AXIS_FLAGS_AUX_DEFAULT": "value",
+   "AXIS_FLAGS_FOREGROUND": "value",
+   "AXIS_FLAGS_INVERT": "value",
+   "AXIS_FLAGS_LOCK": "value",
+   "AXIS_FLAGS_LOCK_MAX": "value",
+   "AXIS_FLAGS_LOCK_MIN": "value",
+   "AXIS_FLAGS_NONE": "value",
+   "AXIS_FLAGS_NO_DECORATIONS": "value",
+   "AXIS_FLAGS_NO_GRID_LINES": "value",
+   "AXIS_FLAGS_NO_HIGHLIGHT": "value",
+   "AXIS_FLAGS_NO_INITIAL_FIT": "value",
+   "AXIS_FLAGS_NO_LABEL": "value",
+   "AXIS_FLAGS_NO_MENUS": "value",
+   "AXIS_FLAGS_NO_SIDE_SWITCH": "value",
+   "AXIS_FLAGS_NO_TICK_LABELS": "value",
+   "AXIS_FLAGS_NO_TICK_MARKS": "value",
+   "AXIS_FLAGS_OPPOSITE": "value",
+   "AXIS_FLAGS_PAN_STRETCH": "value",
+   "AXIS_FLAGS_RANGE_FIT": "value",
+   "AXIS_X1": "value",
+   "AXIS_X2": "value",
+   "AXIS_X3": "value",
+   "AXIS_Y1": "value",
+   "AXIS_Y2": "value",
+   "AXIS_Y3": "value",
+   "AlignmentData": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "begin": "def(self)",
+     "end": "def(self)",
+     "reset": "def(self)",
+     "update": "def(self, pad_a, pad_b)"
+    }
+   },
+   "Axis": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, vertical=False)",
+     "apply_fit": "def(self, padding)",
+     "can_init_fit": "def(self)",
+     "constrain": "def(self)",
+     "extend_fit": "def(self, v)",
+     "extend_fit_with": "def(self, alt, v, v_alt)",
+     "get_aspect": "def(self)",
+     "has_grid_lines": "def(self)",
+     "has_label": "def(self)",
+     "has_menus": "def(self)",
+     "has_tick_labels": "def(self)",
+     "has_tick_marks": "def(self)",
+     "is_auto_fitting": "def(self)",
+     "is_foreground": "def(self)",
+     "is_input_locked": "def(self)",
+     "is_input_locked_max": "def(self)",
+     "is_input_locked_min": "def(self)",
+     "is_inverted": "def(self)",
+     "is_locked": "def(self)",
+     "is_locked_max": "def(self)",
+     "is_locked_min": "def(self)",
+     "is_opposite": "def(self)",
+     "is_pan_locked": "def(self, increasing)",
+     "is_range_locked": "def(self)",
+     "pixel_size": "def(self)",
+     "pixels_to_plot": "def(self, pix)",
+     "plot_to_pixels": "def(self, plt)",
+     "pull_links": "def(self)",
+     "push_links": "def(self)",
+     "range": "@property def(self)",
+     "range_contains": "def(self, v)",
+     "range_size": "def(self)",
+     "reset": "def(self)",
+     "set_aspect": "def(self, unit_per_pix)",
+     "set_max": "def(self, _max, force=False)",
+     "set_min": "def(self, _min, force=False)",
+     "set_range": "def(self, v1, v2)",
+     "update_transform_cache": "def(self)",
+     "will_render": "def(self)"
+    }
+   },
+   "BARS_FLAGS_HORIZONTAL": "value",
+   "BARS_FLAGS_NONE": "value",
+   "BARS_HORIZONTAL": "value",
+   "BAR_GROUPS_FLAGS_HORIZONTAL": "value",
+   "BAR_GROUPS_FLAGS_NONE": "value",
+   "BAR_GROUPS_FLAGS_STACKED": "value",
+   "BIN_RICE": "value",
+   "BIN_SCOTT": "value",
+   "BIN_SQRT": "value",
+   "BIN_STURGES": "value",
+   "BUBBLES_FLAGS_NONE": "value",
+   "COLORMAP_BRBG": "value",
+   "COLORMAP_COOL": "value",
+   "COLORMAP_DARK": "value",
+   "COLORMAP_DEEP": "value",
+   "COLORMAP_GREYS": "value",
+   "COLORMAP_HOT": "value",
+   "COLORMAP_JET": "value",
+   "COLORMAP_PAIRED": "value",
+   "COLORMAP_PASTEL": "value",
+   "COLORMAP_PINK": "value",
+   "COLORMAP_PIYG": "value",
+   "COLORMAP_PLASMA": "value",
+   "COLORMAP_RDBU": "value",
+   "COLORMAP_SCALE_FLAGS_INVERT": "value",
+   "COLORMAP_SCALE_FLAGS_NONE": "value",
+   "COLORMAP_SCALE_FLAGS_NO_LABEL": "value",
+   "COLORMAP_SCALE_FLAGS_OPPOSITE": "value",
+   "COLORMAP_SPECTRAL": "value",
+   "COLORMAP_TWILIGHT": "value",
+   "COLORMAP_VIRIDIS": "value",
+   "COL_AXIS_BG": "value",
+   "COL_AXIS_BG_ACTIVE": "value",
+   "COL_AXIS_BG_HOVERED": "value",
+   "COL_AXIS_GRID": "value",
+   "COL_AXIS_TEXT": "value",
+   "COL_AXIS_TICK": "value",
+   "COL_COUNT": "value",
+   "COL_CROSSHAIRS": "value",
+   "COL_FRAME_BG": "value",
+   "COL_INLAY_TEXT": "value",
+   "COL_LEGEND_BG": "value",
+   "COL_LEGEND_BORDER": "value",
+   "COL_LEGEND_TEXT": "value",
+   "COL_NAMES": "value",
+   "COL_PLOT_BG": "value",
+   "COL_PLOT_BORDER": "value",
+   "COL_SELECTION": "value",
+   "COL_TITLE_TEXT": "value",
+   "COND_ALWAYS": "value",
+   "COND_NONE": "value",
+   "COND_ONCE": "value",
+   "ColormapData": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "append": "def(self, name, keys, qual)",
+     "count": "@property def(self)",
+     "get_index": "def(self, name)",
+     "get_key_color": "def(self, cmap, idx)",
+     "get_key_count": "def(self, cmap)",
+     "get_keys": "def(self, cmap)",
+     "get_name": "def(self, cmap)",
+     "get_table": "def(self, cmap)",
+     "get_table_size": "def(self, cmap)",
+     "is_qual": "def(self, cmap)",
+     "lerp_table": "def(self, cmap, t)",
+     "rebuild_tables": "def(self)",
+     "set_key_color": "def(self, cmap, idx, value)"
+    }
+   },
+   "DATE_FMT_DAY_MO": "value",
+   "DATE_FMT_DAY_MO_YR": "value",
+   "DATE_FMT_MO": "value",
+   "DATE_FMT_MO_YR": "value",
+   "DATE_FMT_NONE": "value",
+   "DATE_FMT_YR": "value",
+   "DBL_EPSILON": "value",
+   "DBL_MAX": "value",
+   "DBL_MIN": "value",
+   "DIGITAL_FLAGS_NONE": "value",
+   "DRAG_TOOL_FLAGS_DELAYED": "value",
+   "DRAG_TOOL_FLAGS_NONE": "value",
+   "DRAG_TOOL_FLAGS_NO_CURSORS": "value",
+   "DRAG_TOOL_FLAGS_NO_FIT": "value",
+   "DRAG_TOOL_FLAGS_NO_INPUTS": "value",
+   "DUMMY_FLAGS_NONE": "value",
+   "DateTimeSpec": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, date=DATE_FMT_NONE, time_=TIME_FMT_NONE, use_24_hr_clk=False, use_iso_8601=False)"
+    }
+   },
+   "ERROR_BARS_FLAGS_HORIZONTAL": "value",
+   "ERROR_BARS_FLAGS_NONE": "value",
+   "FLAGS_CANVAS_ONLY": "value",
+   "FLAGS_CROSSHAIRS": "value",
+   "FLAGS_EQUAL": "value",
+   "FLAGS_NONE": "value",
+   "FLAGS_NO_AUTO_RANGE_BUTTON": "value",
+   "FLAGS_NO_BOX_SELECT": "value",
+   "FLAGS_NO_FRAME": "value",
+   "FLAGS_NO_INPUTS": "value",
+   "FLAGS_NO_LEGEND": "value",
+   "FLAGS_NO_MENUS": "value",
+   "FLAGS_NO_MOUSE_TEXT": "value",
+   "FLAGS_NO_TITLE": "value",
+   "HEATMAP_COL_MAJOR": "value",
+   "HEATMAP_FLAGS_COL_MAJOR": "value",
+   "HEATMAP_FLAGS_NONE": "value",
+   "HEATMAP_NONE": "value",
+   "HISTOGRAM_FLAGS_COL_MAJOR": "value",
+   "HISTOGRAM_FLAGS_CUMULATIVE": "value",
+   "HISTOGRAM_FLAGS_DENSITY": "value",
+   "HISTOGRAM_FLAGS_HORIZONTAL": "value",
+   "HISTOGRAM_FLAGS_NONE": "value",
+   "HISTOGRAM_FLAGS_NO_OUTLIERS": "value",
+   "IMAGE_FLAGS_NONE": "value",
+   "IMPLOT_AUTO": "value",
+   "IMPLOT_LABEL_FORMAT": "value",
+   "IMPLOT_MAX_TIME": "value",
+   "IMPLOT_MIN_TIME": "value",
+   "INF": "value",
+   "INF_LINES_FLAGS_HORIZONTAL": "value",
+   "INF_LINES_FLAGS_NONE": "value",
+   "INF_LINES_HORIZONTAL": "value",
+   "ITEM_FLAGS_NONE": "value",
+   "ITEM_FLAGS_NO_FIT": "value",
+   "ITEM_FLAGS_NO_LEGEND": "value",
+   "InputMap": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)"
+    }
+   },
+   "Item": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)"
+    }
+   },
+   "ItemGroup": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "get_item": "def(self, item_id)",
+     "get_item_by_index": "def(self, i)",
+     "get_item_count": "def(self)",
+     "get_item_index": "def(self, item)",
+     "get_legend_count": "def(self)",
+     "get_legend_item": "def(self, i)",
+     "get_legend_label": "def(self, i)",
+     "get_or_add_item": "def(self, item_id)",
+     "reset": "def(self)"
+    }
+   },
+   "LEGEND_FLAGS_HORIZONTAL": "value",
+   "LEGEND_FLAGS_NONE": "value",
+   "LEGEND_FLAGS_NO_BUTTONS": "value",
+   "LEGEND_FLAGS_NO_HIGHLIGHT_AXIS": "value",
+   "LEGEND_FLAGS_NO_HIGHLIGHT_ITEM": "value",
+   "LEGEND_FLAGS_NO_MENUS": "value",
+   "LEGEND_FLAGS_OUTSIDE": "value",
+   "LEGEND_FLAGS_REVERSE": "value",
+   "LEGEND_FLAGS_SORT": "value",
+   "LINE_FLAGS_LOOP": "value",
+   "LINE_FLAGS_NONE": "value",
+   "LINE_FLAGS_NO_CLIP": "value",
+   "LINE_FLAGS_SEGMENTS": "value",
+   "LINE_FLAGS_SHADED": "value",
+   "LINE_FLAGS_SKIP_NAN": "value",
+   "LOCATION_CENTER": "value",
+   "LOCATION_EAST": "value",
+   "LOCATION_NORTH": "value",
+   "LOCATION_NORTH_EAST": "value",
+   "LOCATION_NORTH_WEST": "value",
+   "LOCATION_SOUTH": "value",
+   "LOCATION_SOUTH_EAST": "value",
+   "LOCATION_SOUTH_WEST": "value",
+   "LOCATION_WEST": "value",
+   "Legend": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "reset": "def(self)"
+    }
+   },
+   "MARKER_ASTERISK": "value",
+   "MARKER_AUTO": "value",
+   "MARKER_CIRCLE": "value",
+   "MARKER_COUNT": "value",
+   "MARKER_CROSS": "value",
+   "MARKER_DIAMOND": "value",
+   "MARKER_DOWN": "value",
+   "MARKER_HORIZONTAL": "value",
+   "MARKER_INVALID": "value",
+   "MARKER_LEFT": "value",
+   "MARKER_NAMES": "value",
+   "MARKER_NONE": "value",
+   "MARKER_PLUS": "value",
+   "MARKER_RIGHT": "value",
+   "MARKER_SQUARE": "value",
+   "MARKER_UP": "value",
+   "MARKER_VERTICAL": "value",
+   "MOD_ALT": "value",
+   "MOD_CTRL": "value",
+   "MOD_NONE": "value",
+   "MOD_SHIFT": "value",
+   "MOD_SUPER": "value",
+   "MONTH_ABRVS": "value",
+   "MONTH_NAMES": "value",
+   "MOUSE_BUTTON_LEFT": "value",
+   "MOUSE_BUTTON_MIDDLE": "value",
+   "MOUSE_BUTTON_RIGHT": "value",
+   "MOUSE_TEXT_FLAGS_NONE": "value",
+   "MOUSE_TEXT_FLAGS_NO_AUX_AXES": "value",
+   "MOUSE_TEXT_FLAGS_NO_FORMAT": "value",
+   "MOUSE_TEXT_FLAGS_SHOW_ALWAYS": "value",
+   "NUM_X_AXES": "value",
+   "NUM_Y_AXES": "value",
+   "NextItemData": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "reset": "def(self)"
+    }
+   },
+   "NextPlotData": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "reset": "def(self)"
+    }
+   },
+   "PIE_CHART_FLAGS_EXPLODING": "value",
+   "PIE_CHART_FLAGS_IGNORE_HIDDEN": "value",
+   "PIE_CHART_FLAGS_NONE": "value",
+   "PIE_CHART_FLAGS_NORMALIZE": "value",
+   "PIE_CHART_FLAGS_NO_SLICE_BORDER": "value",
+   "POLYGON_FLAGS_CONCAVE": "value",
+   "POLYGON_FLAGS_NONE": "value",
+   "PROP_FILL_ALPHA": "value",
+   "PROP_FILL_COLOR": "value",
+   "PROP_FILL_COLORS": "value",
+   "PROP_FLAGS": "value",
+   "PROP_LINE_COLOR": "value",
+   "PROP_LINE_COLORS": "value",
+   "PROP_LINE_WEIGHT": "value",
+   "PROP_MARKER": "value",
+   "PROP_MARKER_FILL_COLOR": "value",
+   "PROP_MARKER_FILL_COLORS": "value",
+   "PROP_MARKER_LINE_COLOR": "value",
+   "PROP_MARKER_LINE_COLORS": "value",
+   "PROP_MARKER_SIZE": "value",
+   "PROP_MARKER_SIZES": "value",
+   "PROP_OFFSET": "value",
+   "PROP_SIZE": "value",
+   "PROP_STRIDE": "value",
+   "Plot": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "enabled_axes_x": "def(self)",
+     "enabled_axes_y": "def(self)",
+     "has_title": "def(self)",
+     "is_input_locked": "def(self)",
+     "set_title": "def(self, title)",
+     "x_axis": "def(self, i)",
+     "y_axis": "def(self, i)"
+    }
+   },
+   "PlotContext": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "box": "@property def(self)",
+     "colormap": "@property def(self)",
+     "colormap.setter": "@colormap.setter def(self, value)",
+     "plot": "@property def(self)",
+     "plot.setter": "@plot.setter def(self, value)"
+    }
+   },
+   "PlotSpec": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, *props, **kw)",
+     "copy": "def(self)",
+     "set_prop": "def(self, *pairs)"
+    }
+   },
+   "PlotStyle": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "copy": "def(self)"
+    }
+   },
+   "PlotTime": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__eq__": "def(self, o)",
+     "__init__": "def(self, s=0, us=0)",
+     "from_double": "@staticmethod def(t)",
+     "roll_over": "def(self)",
+     "to_double": "def(self)"
+    }
+   },
+   "SCALE_LINEAR": "value",
+   "SCALE_LOG10": "value",
+   "SCALE_SYMLOG": "value",
+   "SCALE_TIME": "value",
+   "SCATTER_FLAGS_NONE": "value",
+   "SCATTER_FLAGS_NO_CLIP": "value",
+   "SHADED_FLAGS_NONE": "value",
+   "STAIRS_FLAGS_NONE": "value",
+   "STAIRS_FLAGS_PRE_STEP": "value",
+   "STAIRS_FLAGS_SHADED": "value",
+   "STEMS_FLAGS_HORIZONTAL": "value",
+   "STEMS_FLAGS_NONE": "value",
+   "STYLE_VAR_ANNOTATION_PADDING": "value",
+   "STYLE_VAR_ATTRS": "value",
+   "STYLE_VAR_DIGITAL_PADDING": "value",
+   "STYLE_VAR_DIGITAL_SPACING": "value",
+   "STYLE_VAR_FIT_PADDING": "value",
+   "STYLE_VAR_LABEL_PADDING": "value",
+   "STYLE_VAR_LEGEND_INNER_PADDING": "value",
+   "STYLE_VAR_LEGEND_PADDING": "value",
+   "STYLE_VAR_LEGEND_SPACING": "value",
+   "STYLE_VAR_MAJOR_GRID_SIZE": "value",
+   "STYLE_VAR_MAJOR_TICK_LEN": "value",
+   "STYLE_VAR_MAJOR_TICK_SIZE": "value",
+   "STYLE_VAR_MINOR_ALPHA": "value",
+   "STYLE_VAR_MINOR_GRID_SIZE": "value",
+   "STYLE_VAR_MINOR_TICK_LEN": "value",
+   "STYLE_VAR_MINOR_TICK_SIZE": "value",
+   "STYLE_VAR_MOUSE_POS_PADDING": "value",
+   "STYLE_VAR_PLOT_BORDER_SIZE": "value",
+   "STYLE_VAR_PLOT_DEFAULT_SIZE": "value",
+   "STYLE_VAR_PLOT_MIN_SIZE": "value",
+   "STYLE_VAR_PLOT_PADDING": "value",
+   "SUBPLOT_FLAGS_COL_MAJOR": "value",
+   "SUBPLOT_FLAGS_LINK_ALL_X": "value",
+   "SUBPLOT_FLAGS_LINK_ALL_Y": "value",
+   "SUBPLOT_FLAGS_LINK_COLS": "value",
+   "SUBPLOT_FLAGS_LINK_ROWS": "value",
+   "SUBPLOT_FLAGS_NONE": "value",
+   "SUBPLOT_FLAGS_NO_ALIGN": "value",
+   "SUBPLOT_FLAGS_NO_LEGEND": "value",
+   "SUBPLOT_FLAGS_NO_MENUS": "value",
+   "SUBPLOT_FLAGS_NO_RESIZE": "value",
+   "SUBPLOT_FLAGS_NO_TITLE": "value",
+   "SUBPLOT_FLAGS_SHARE_ITEMS": "value",
+   "Subplot": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)"
+    }
+   },
+   "TEXT_FLAGS_NONE": "value",
+   "TEXT_FLAGS_VERTICAL": "value",
+   "TICK_FILL_X": "value",
+   "TICK_FILL_Y": "value",
+   "TIME_FMT_HR": "value",
+   "TIME_FMT_HR_MIN": "value",
+   "TIME_FMT_HR_MIN_S": "value",
+   "TIME_FMT_HR_MIN_S_MS": "value",
+   "TIME_FMT_MIN_S_MS": "value",
+   "TIME_FMT_NONE": "value",
+   "TIME_FMT_S": "value",
+   "TIME_FMT_S_MS": "value",
+   "TIME_FMT_S_US": "value",
+   "TIME_FMT_US": "value",
+   "TIME_FORMAT_LEVEL0": "value",
+   "TIME_FORMAT_LEVEL1": "value",
+   "TIME_FORMAT_LEVEL1_FIRST": "value",
+   "TIME_FORMAT_MOUSE_CURSOR": "value",
+   "TIME_UNIT_COUNT": "value",
+   "TIME_UNIT_DAY": "value",
+   "TIME_UNIT_HR": "value",
+   "TIME_UNIT_MIN": "value",
+   "TIME_UNIT_MO": "value",
+   "TIME_UNIT_MS": "value",
+   "TIME_UNIT_S": "value",
+   "TIME_UNIT_SPANS": "value",
+   "TIME_UNIT_US": "value",
+   "TIME_UNIT_YR": "value",
+   "Tick": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, value, major, level, show_label)"
+    }
+   },
+   "Ticker": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "add_tick": "def(self, value, major, level, show_label, label=None, formatter=None, data=None)",
+     "get_text": "def(self, idx)",
+     "override_size_late": "def(self, size)",
+     "reset": "def(self)",
+     "tick_count": "def(self)"
+    }
+   },
+   "WD_ABRVS": "value",
+   "add_ticks_custom": "def(values, labels, ticker, formatter, data)",
+   "add_ticks_logarithmic": "def(rng, exp_min, exp_max, exp_step, ticker, formatter, data, label_minors=())",
+   "add_time": "def(t, unit, count)",
+   "almost_equal": "def(v1, v2, ulp=2)",
+   "alpha_u32": "def(col, alpha)",
+   "as_spec": "def(spec)",
+   "calc_bins": "def(values, count, meth, rng)",
+   "calc_hover_color": "def(col)",
+   "calc_legend_size": "def(items, pad, spacing, vertical)",
+   "calc_logarithmic_exponents": "def(rng, pix, vertical)",
+   "calc_symlog_pixel": "def(plt, rng, pixels)",
+   "calc_text_color": "def(bg)",
+   "calc_text_size": "def(text, hide_after_hashes=False)",
+   "call_formatter": "def(formatter, value, data)",
+   "ceil_time": "def(t, unit)",
+   "clamp_legend_rect": "def(legend_rect, outer, pad)",
+   "col_u32_to_float4": "def(col)",
+   "combine_date_time": "def(date_part, tod_part)",
+   "constrain_inf": "def(v)",
+   "constrain_nan": "def(v)",
+   "constrain_time": "def(v)",
+   "floor_time": "def(t, unit)",
+   "format_date": "def(t, fmt, use_iso_8601)",
+   "format_date_time": "def(t, fmt)",
+   "format_printf": "def(fmt, value)",
+   "format_time": "def(t, fmt, use_24_hr_clk)",
+   "formatter_default": "def(value, data=None)",
+   "formatter_logit": "def(value, _data=None)",
+   "get_auto_color": "def(idx)",
+   "get_colormap_color_u32": "def(idx, cmap=IMPLOT_AUTO)",
+   "get_date_time_fmt": "def(table, idx)",
+   "get_date_time_width": "def(fmt)",
+   "get_days_in_month": "def(year, month)",
+   "get_location_pos": "def(outer, inner_size, loc, pad=(0.0, 0.0))",
+   "get_month": "def(t)",
+   "get_style_color_u32": "def(idx)",
+   "get_time_step": "def(max_divs, unit)",
+   "get_unit_for_range": "def(rng)",
+   "get_year": "def(t)",
+   "gp": "value",
+   "has_flag": "def(flags, flag)",
+   "intersection": "def(a1, a2, b1, b2)",
+   "is_leap_year": "def(year)",
+   "key_mods": "def(io)",
+   "lerp_colors": "def(colors, t)",
+   "locator_default": "def(ticker, rng, pixels, vertical, formatter, data)",
+   "locator_log10": "def(ticker, rng, pixels, vertical, formatter, data)",
+   "locator_symlog": "def(ticker, rng, pixels, vertical, formatter, data)",
+   "locator_time": "def(ticker, rng, pixels, vertical, formatter, data)",
+   "make_time": "def(year, month=0, day=1, hour=0, minute=0, sec=0, us=0)",
+   "map_input_default": "def(dst)",
+   "map_input_reverse": "def(dst)",
+   "mix_u32": "def(a, b, s)",
+   "nan_or_inf": "def(v)",
+   "next_colormap_color_u32": "def()",
+   "nice_num": "def(x, round_)",
+   "order_of_magnitude": "def(val)",
+   "order_to_precision": "def(order)",
+   "pools": "def()",
+   "precision": "def(val)",
+   "rect_center": "def(r)",
+   "rect_contains": "def(r, p)",
+   "rect_expand": "def(r, amount)",
+   "rect_overlaps": "def(a, b)",
+   "rect_size": "def(r)",
+   "remap": "def(x, x0, x1, y0, y1)",
+   "reset_ctx_for_next_aligned_plots": "def()",
+   "reset_ctx_for_next_plot": "def()",
+   "reset_ctx_for_next_subplot": "def()",
+   "rgba": "def(colour)",
+   "round_time": "def(t, unit)",
+   "round_to": "def(val, prec)",
+   "sample_colormap_u32": "def(t, cmap=IMPLOT_AUTO)",
+   "split_label": "def(label)",
+   "text_line_height": "def()",
+   "time_label_same": "def(l1, l2)",
+   "transform_forward_log10": "def(v, _data=None)",
+   "transform_forward_logit": "def(v, _data=None)",
+   "transform_forward_symlog": "def(v, _data=None)",
+   "transform_inverse_log10": "def(v, _data=None)",
+   "transform_inverse_logit": "def(v, _data=None)",
+   "transform_inverse_symlog": "def(v, _data=None)",
+   "update_axis_colors": "def(axis)"
+  },
+  "emtk.implot_items": {
+   "begin_item": "def(label_id, spec=None, item_col=None, item_mkr=I.MARKER_INVALID, icon='fill')",
+   "bust_color_cache": "def(plot_title_id=None)",
+   "bust_item_cache": "def()",
+   "end_item": "def()",
+   "fit_point": "def(p)",
+   "fit_point_x": "def(x)",
+   "fit_point_y": "def(y)",
+   "fit_this_frame": "def()",
+   "get_current_item": "def()",
+   "get_item": "def(label_id)",
+   "is_item_hidden": "def(label_id)",
+   "plot_bar_groups": "def(label_ids, values, item_count, group_count, group_size=0.67, shift=0.0, spec=None, **kw)",
+   "plot_bars": "def(label_id, xs, *args, ys=None, count=None, bar_size=None, shift=None, flags=None, spec=None, **kw)",
+   "plot_bars_g": "def(label_id, getter, data, count, bar_size, spec=None, **kw)",
+   "plot_bubbles": "def(label_id, xs, ys, szs=None, *args, **kw)",
+   "plot_digital": "def(label_id, xs, ys, count=None, spec=None, **kw)",
+   "plot_digital_g": "def(label_id, getter, data, count, spec=None, **kw)",
+   "plot_dummy": "def(label_id, spec=None, **kw)",
+   "plot_error_bars": "def(label_id, xs, ys, err, *args, **kw)",
+   "plot_heatmap": "def(label_id, values, rows, cols, scale_min=0.0, scale_max=0.0, label_fmt='%.1f', bounds_min=(0.0, 0.0), bounds_max=(1.0, 1.0), flags=None, spec=None, **kw)",
+   "plot_histogram": "def(label_id, values, count=None, bins=I.BIN_STURGES, bar_scale=1.0, range=None, spec=None, **kw)",
+   "plot_histogram_2d": "def(label_id, xs, ys, count=None, x_bins=I.BIN_STURGES, y_bins=I.BIN_STURGES, range=None, spec=None, **kw)",
+   "plot_image": "def(label_id, texture, bounds_min, bounds_max, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint_col=(1.0, 1.0, 1.0, 1.0), spec=None, **kw)",
+   "plot_inf_lines": "def(label_id, values, count=None, spec=None, **kw)",
+   "plot_line": "def(label_id, xs, ys=None, *args, **kw)",
+   "plot_line_g": "def(label_id, getter, data, count, spec=None, **kw)",
+   "plot_pie_chart": "def(label_ids, values, count=None, x=0.5, y=0.5, radius=0.4, label_fmt='%.1f', angle0=90.0, spec=None, fmt_data=None, **kw)",
+   "plot_polygon": "def(label_id, xs, ys, count=None, spec=None, **kw)",
+   "plot_scatter": "def(label_id, xs, ys=None, *args, **kw)",
+   "plot_scatter_g": "def(label_id, getter, data, count, spec=None, **kw)",
+   "plot_shaded": "def(label_id, xs, ys=None, *args, **kw)",
+   "plot_shaded_g": "def(label_id, getter1, data1, getter2, data2, count, spec=None, **kw)",
+   "plot_stairs": "def(label_id, xs, ys=None, *args, **kw)",
+   "plot_stairs_g": "def(label_id, getter, data, count, spec=None, **kw)",
+   "plot_stems": "def(label_id, xs, ys=None, *args, **kw)",
+   "plot_text": "def(text, x, y, pix_offset=(0.0, 0.0), spec=None, **kw)",
+   "render_markers": "def(pts, marker, rend_fill, fill, rend_line, line, size, weight)"
+  },
+  "emtk.jobs": {
+   "Job": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, spec)",
+     "cancel": "def(self)",
+     "running": "@property def(self)"
+    }
+   },
+   "configure": "def(packages=None)",
+   "in_browser": "def()",
+   "start": "def(spec, params=None, env=None, files=None)",
+   "warm": "def()",
+   "worker_state": "def()"
+  },
+  "emtk.keys": {
+   "KEY_BACKSPACE": "value",
+   "KEY_DELETE": "value",
+   "KEY_DOWN": "value",
+   "KEY_END": "value",
+   "KEY_ENTER": "value",
+   "KEY_ESCAPE": "value",
+   "KEY_F1": "value",
+   "KEY_F10": "value",
+   "KEY_F11": "value",
+   "KEY_F12": "value",
+   "KEY_F2": "value",
+   "KEY_F3": "value",
+   "KEY_F4": "value",
+   "KEY_F5": "value",
+   "KEY_F6": "value",
+   "KEY_F7": "value",
+   "KEY_F8": "value",
+   "KEY_F9": "value",
+   "KEY_HOME": "value",
+   "KEY_INSERT": "value",
+   "KEY_LEFT": "value",
+   "KEY_PAGE_DOWN": "value",
+   "KEY_PAGE_UP": "value",
+   "KEY_RETURN": "value",
+   "KEY_RIGHT": "value",
+   "KEY_TAB": "value",
+   "KEY_UP": "value",
+   "key_from_dom": "def(name)",
+   "letter_of": "def(key, text='')",
+   "mac_behaviors": "def()",
+   "modifiers_from_dom": "def(ctrl, shift, alt, meta, mac=None)",
+   "set_mac_behaviors": "def(flag)",
+   "typed_text": "def(text, modifiers)"
+  },
+  "emtk.layout": {
+   "FRAME_PADDING": "value",
+   "Fill": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, weight=1.0)",
+     "height": "def(self, avail, first, minimum=0.0)"
+    }
+   },
+   "ITEM_SPACING": "value",
+   "Layout": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, p, x, y, w, h, style=None)",
+     "add_fill": "def(self, fill, box)",
+     "advance": "def(self, width, height)",
+     "avail": "def(self)",
+     "begin_group": "def(self)",
+     "column_count": "@property def(self)",
+     "column_index": "@property def(self)",
+     "columns": "def(self, count)",
+     "content_height": "def(self)",
+     "content_width": "def(self)",
+     "cursor": "@property def(self)",
+     "dummy": "def(self, w, h)",
+     "end_columns": "def(self)",
+     "end_group": "def(self)",
+     "fill_box": "def(self, fill, first, minimum=0.0, width=None)",
+     "indent": "def(self, width=None)",
+     "indent_x": "@property def(self)",
+     "line_avail": "def(self)",
+     "move_cursor_to": "def(self, x, y)",
+     "new_line": "def(self)",
+     "next_column": "def(self)",
+     "region": "def(self)",
+     "reset": "def(self, x=None, y=None, w=None, h=None)",
+     "row": "def(self, height=None, width=None)",
+     "same_line": "def(self, offset=0.0, spacing=None)",
+     "separator": "def(self, thickness=None)",
+     "settle_fills": "def(self)",
+     "spacing": "def(self)",
+     "unindent": "def(self, width=None)"
+    }
+   },
+   "LayoutStyle": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "frame_padding_x": "field=",
+     "frame_padding_y": "field=",
+     "indent_spacing": "field=",
+     "item_spacing_x": "field=",
+     "item_spacing_y": "field=",
+     "separator_size": "field="
+    }
+   }
+  },
+  "emtk.mathtext": {
+   "MathTextureCache": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, maxsize=256, max_texels=DEFAULT_MAX_TEXELS)",
+     "clear": "def(self)",
+     "get": "def(self, formula, colour, font_size, dpi)",
+     "put": "def(self, formula, colour, font_size, dpi, texture)",
+     "texels": "@property def(self)"
+    }
+   },
+   "calc_math_size": "def(formula, font_size=14.0, dpi=144, scale=0.5)",
+   "convert_script_markup": "def(s)",
+   "latex_to_unicode": "def(latex)",
+   "normalize_latex": "def(latex)",
+   "render_math_to_texture": "def(formula, colour=(255, 255, 255, 255), font_size=14.0, dpi=144, cache=None)"
+  },
+  "emtk.message_dialog": {
+   "KINDS": "value",
+   "MessageDialogs": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, wake=None, width=440.0)",
+     "answer": "def(self, value=None, *, key=None)",
+     "choice": "def(self, title, message, options, on_answer=None, *, default=None, detail='')",
+     "confirm": "def(self, title, message, on_answer=None, *, default=False, detail='', yes=mark('Yes', domain='emtk'), no=mark('No', domain='emtk'))",
+     "contains": "def(self, x, y)",
+     "current": "@property def(self)",
+     "draw": "def(self, frame)",
+     "message": "def(self, title, message, *, detail='', on_answer=None)",
+     "modal": "@property def(self)",
+     "text": "def(self, title, message, on_answer=None, *, value='', default=None, detail='')"
+    }
+   },
+   "Question": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "default": "field=",
+     "detail": "field=",
+     "dismissed": "field=",
+     "kind": "field",
+     "message": "field",
+     "on_answer": "field=",
+     "options": "field",
+     "rects": "field=",
+     "title": "field",
+     "value": "field=",
+     "window": "field="
+    }
+   },
+   "auto_answer": "@contextlib.contextmanager def(**answers)"
+  },
+  "emtk.native": {
+   "CHAR_BACKENDS": "value",
+   "CanvasEvents": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "DOUBLE_CLICK_DISTANCE": "attribute",
+     "DOUBLE_CLICK_TIME": "attribute",
+     "KEY_REPEAT_DELAY": "attribute",
+     "KEY_REPEAT_INTERVAL": "attribute",
+     "__init__": "def(self, canvas, sink, on_frame=None, loop=None, input_method=None)",
+     "buttons_mask": "@staticmethod def(event)",
+     "close_request": "def(self)",
+     "composing": "def(self)",
+     "connect": "def(self)",
+     "files_dropped": "def(self, paths, position=None)",
+     "key_text": "def(self, event)",
+     "pointer_position": "def(self, event)",
+     "release_keys": "def(self)",
+     "stop_key_repeat": "def(self)",
+     "supports_file_drop": "@property def(self)",
+     "sync_pointer_inside": "def(self, window=None)"
+    }
+   },
+   "DEFAULT_MAX_FPS": "value",
+   "DEFAULT_WINDOW_SIZE": "value",
+   "INTERACTIVE_BACKENDS": "value",
+   "NativeHost": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, app, size=None, title='emtk', backend=None, canvas=None, device=None, loop=None, decorated=True, floating=False, transparent=False, centred=False)",
+     "close": "def(self)",
+     "draw_frame": "def(self)",
+     "is_interactive": "def(self)",
+     "request_draw": "def(self)",
+     "request_draw_threadsafe": "def(self)",
+     "run": "def(self)"
+    }
+   },
+   "SHIFT_MAP": "value",
+   "WHEEL_NOTCH": "value",
+   "canvas_module": "def(backend=None, env='EMTK_CANVAS')",
+   "centred_position": "def(size, rect)",
+   "configure_surface": "def(context, device, format, transparent=False)",
+   "event_types": "def(canvas)",
+   "fit_to_screen": "def(size, workarea)",
+   "launch_qt_first": "def()",
+   "main": "def(argv=None)",
+   "open_canvas": "def(module, size=DEFAULT_WINDOW_SIZE, title='emtk', max_fps=DEFAULT_MAX_FPS, present_method='auto', decorated=True, floating=False, transparent=False, centred=False)",
+   "screen_rect": "def(module)",
+   "screen_workarea": "def(module)",
+   "wheel_steps": "def(event)",
+   "window_hints": "def(decorated=True, floating=False, transparent=False, position=None)"
+  },
+  "emtk.nodes": {
+   "Canvas": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "ZOOM_RANGE": "field=",
+     "ZOOM_STEP": "field=",
+     "__init__": "def(self)",
+     "to_grid": "def(self, pos)",
+     "to_screen": "def(self, pos)",
+     "zoom_at": "def(self, screen_pos, factor)"
+    }
+   },
+   "Col": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "BOX_SELECTOR": "attribute",
+     "BOX_SELECTOR_OUTLINE": "attribute",
+     "GRID_BACKGROUND": "attribute",
+     "GRID_LINE": "attribute",
+     "GRID_LINE_PRIMARY": "attribute",
+     "LINK": "attribute",
+     "LINK_HOVERED": "attribute",
+     "LINK_SELECTED": "attribute",
+     "MINI_MAP_BACKGROUND": "attribute",
+     "MINI_MAP_CANVAS": "attribute",
+     "MINI_MAP_CANVAS_OUTLINE": "attribute",
+     "MINI_MAP_LINK": "attribute",
+     "MINI_MAP_LINK_SELECTED": "attribute",
+     "MINI_MAP_NODE_BACKGROUND": "attribute",
+     "MINI_MAP_NODE_BACKGROUND_SELECTED": "attribute",
+     "MINI_MAP_NODE_OUTLINE": "attribute",
+     "MINI_MAP_OUTLINE": "attribute",
+     "NODE_BACKGROUND": "attribute",
+     "NODE_BACKGROUND_HOVERED": "attribute",
+     "NODE_BACKGROUND_SELECTED": "attribute",
+     "NODE_LABEL": "attribute",
+     "NODE_LABEL_PLATE": "attribute",
+     "NODE_OUTLINE": "attribute",
+     "PIN": "attribute",
+     "PIN_HOVERED": "attribute",
+     "STICK_HINT": "attribute",
+     "TITLE_BAR": "attribute",
+     "TITLE_BAR_HOVERED": "attribute",
+     "TITLE_BAR_SELECTED": "attribute"
+    }
+   },
+   "EditorContext": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, style=None)",
+     "content_bounds": "def(self)",
+     "fit_to_content": "def(self, box, margin=24.0)",
+     "node_ids": "def(self)",
+     "set_zoom": "def(self, zoom)"
+    }
+   },
+   "MiniMapLocation": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "BOTTOM_LEFT": "attribute",
+     "BOTTOM_RIGHT": "attribute",
+     "TOP_LEFT": "attribute",
+     "TOP_RIGHT": "attribute"
+    }
+   },
+   "PinShape": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "CIRCLE": "attribute",
+     "CIRCLE_FILLED": "attribute",
+     "NONE": "attribute",
+     "QUAD": "attribute",
+     "QUAD_FILLED": "attribute",
+     "TRIANGLE": "attribute",
+     "TRIANGLE_FILLED": "attribute"
+    }
+   },
+   "Style": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)"
+    }
+   },
+   "StyleFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "GRID_LINES": "attribute",
+     "GRID_LINES_PRIMARY": "attribute",
+     "GRID_SNAPPING": "attribute",
+     "NODE_OUTLINE": "attribute",
+     "NONE": "attribute"
+    }
+   },
+   "begin_input_attribute": "def(pin_id, shape=PinShape.CIRCLE_FILLED)",
+   "begin_node": "def(node_id, shape=NodeShape.BOX, label='', radius=None)",
+   "begin_node_editor": "def(ctx, box=None)",
+   "begin_node_title_bar": "def()",
+   "begin_output_attribute": "def(pin_id, shape=PinShape.CIRCLE_FILLED)",
+   "begin_static_attribute": "def(pin_id)",
+   "clear_link_selection": "def(ctx, link_id=None)",
+   "clear_node_selection": "def(ctx, node_id=None)",
+   "editor_context": "def(ctx, box=None)",
+   "end_input_attribute": "def()",
+   "end_node": "def()",
+   "end_node_editor": "def()",
+   "end_node_title_bar": "def()",
+   "end_output_attribute": "def()",
+   "end_static_attribute": "def()",
+   "get_node_dimensions": "def(ctx, node_id)",
+   "get_node_grid_space_pos": "def(ctx, node_id)",
+   "get_node_screen_space_pos": "def(ctx, node_id)",
+   "get_selected_links": "def(ctx)",
+   "get_selected_nodes": "def(ctx)",
+   "is_any_attribute_active": "def(ctx)",
+   "is_editor_hovered": "def(ctx)",
+   "is_link_created": "def(ctx)",
+   "is_link_destroyed": "def(ctx)",
+   "is_link_dropped": "def(ctx)",
+   "is_link_hovered": "def(ctx)",
+   "is_link_selected": "def(ctx, link_id)",
+   "is_link_started": "def(ctx)",
+   "is_node_hovered": "def(ctx)",
+   "is_node_selected": "def(ctx, node_id)",
+   "is_pin_hovered": "def(ctx)",
+   "link": "def(link_id, start_pin, end_pin, colour=None, thickness=None, arrow=False)",
+   "mini_map": "def(ctx, size_fraction=0.2, location=MiniMapLocation.TOP_LEFT)",
+   "pop_color_style": "def(count=1)",
+   "pop_style_var": "def(count=1)",
+   "push_color_style": "def(which, color)",
+   "push_style_var": "def(which, value)",
+   "select_link": "def(ctx, link_id)",
+   "select_node": "def(ctx, node_id)",
+   "set_node_draggable": "def(ctx, node_id, draggable)",
+   "set_node_grid_space_pos": "def(ctx, node_id, pos)",
+   "set_node_screen_space_pos": "def(ctx, node_id, pos)",
+   "snap_node_to_grid": "def(ctx, node_id)",
+   "style_colors_dark": "def(style)",
+   "style_colors_light": "def(style)"
+  },
+  "emtk.offset_painter": {
+   "OffsetPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, painter, x, y)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)"
+    }
+   }
+  },
+  "emtk.overlay": {
+   "OverlaySurface": {
+    "bases": [
+     "Surface"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, base, app, font_pt=None)",
+     "animating": "def(self)",
+     "attach": "def(self, device, format, width, height, ratio)",
+     "close": "def(self)",
+     "next_frame_in": "def(self)",
+     "on_files_dropped": "def(self, paths)",
+     "on_key_press": "def(self, key, text, modifiers)",
+     "on_key_release": "def(self, key, text, modifiers)",
+     "on_pointer_move": "def(self, x, y, buttons, modifiers)",
+     "on_pointer_press": "def(self, x, y, button, modifiers, double=False)",
+     "on_pointer_release": "def(self, x, y, button, modifiers)",
+     "on_resize": "def(self, width, height, ratio)",
+     "on_wheel": "def(self, x, y, steps, modifiers)",
+     "render": "def(self, view)",
+     "set_frame_request_callback": "def(self, callback)"
+    }
+   }
+  },
+  "emtk.overlays": {
+   "combo_list": "def(key, labels, current, below=None, filter=None)",
+   "dismiss": "def(storage)",
+   "holding": "def(storage)",
+   "is_open": "def(key)",
+   "open_panels": "def(storage)",
+   "popup": "def(key, panel, on_close=None, on_pick=None)",
+   "take_choice": "def(key)"
+  },
+  "emtk.painter": {
+   "ACCELERATIONS": "value",
+   "ALIGN_CENTER": "value",
+   "ALIGN_HCENTER": "value",
+   "ALIGN_LEFT": "value",
+   "ALIGN_RIGHT": "value",
+   "ALIGN_VCENTER": "value",
+   "Colour": "value",
+   "OPTIONAL_OPERATIONS": "value",
+   "Painter": {
+    "bases": [
+     "Protocol"
+    ],
+    "decorators": [],
+    "members": {
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "set_font": "def(self, font)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)"
+    }
+   },
+   "REQUIRED_OPERATIONS": "value",
+   "fill_circle": "def(p, cx, cy, r, colour, segments=0)",
+   "fill_convex": "def(p, points, colour)",
+   "fill_triangles": "def(p, triangles, colour)",
+   "gradient_triangle": "def(p, p0, p1, p2, c0, c1, c2)",
+   "image_triangle": "def(p, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+   "line": "def(p, x0, y0, x1, y1, width, colour)",
+   "polyline": "def(p, points, width, colour, closed=False)",
+   "stroke_arc": "def(p, cx, cy, r, a0, a1, width, colour, segments=0)",
+   "stroke_circle": "def(p, cx, cy, r, width, colour, segments=0)",
+   "subdivide_gradient": "def(fill, p0, p1, p2, c0, c1, c2, tolerance=6, max_depth=5)",
+   "text_rotated": "def(p, x, y, w, h, align, string, colour, degrees=0.0)"
+  },
+  "emtk.pil_painter": {
+   "PilPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, width, height, background=(0, 0, 0, 255), scale=1.0, frame=None)",
+     "fill_convex": "def(self, points, colour)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "px": "@property def(self)",
+     "set_font": "def(self, value=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)"
+    }
+   }
+  },
+  "emtk.qt_host": {
+   "ControlHost": "def(control, **kwargs)",
+   "DEFAULT_WINDOW_SIZE": "value",
+   "host_class": "def()",
+   "make_control_host": "value"
+  },
+  "emtk.qt_painter": {
+   "QtPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, painter, font_pt=DEFAULT_FONT_PT)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "marker": "def(self, x, y, fill_shape, line_shape, fill, outline, radius, weight)",
+     "polyline": "def(self, points, width, colour, closed=False)",
+     "polylines": "def(self, runs, width, colour)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "set_font": "def(self, font=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)"
+    }
+   },
+   "image_bytes": "def(image)",
+   "png_decode": "def(data)"
+  },
+  "emtk.quad_painter": {
+   "FLOATS_PER_VERTEX": "value",
+   "QuadPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, atlas=None, scale=1.0, font_scale=1.0)",
+     "clear": "def(self)",
+     "fill_convex": "def(self, points, colour)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "fill_triangles": "def(self, triangles, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "polyline": "def(self, points, width, colour, closed=False)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "set_font": "def(self, value=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)",
+     "vertex_count": "@property def(self)",
+     "vertices": "def(self)"
+    }
+   },
+   "VERTICES_PER_QUAD": "value"
+  },
+  "emtk.redraw": {
+   "Always": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__eq__": "def(self, other)"
+    }
+   },
+   "BlockCache": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "__len__": "def(self)",
+     "build": "def(self, blocks)",
+     "clear": "def(self)"
+    }
+   },
+   "Drawable": {
+    "bases": [
+     "Protocol"
+    ],
+    "decorators": [
+     "runtime_checkable"
+    ],
+    "members": {
+     "content_key": "def(self)"
+    }
+   },
+   "always": "def()",
+   "changed": "def(previous, current)",
+   "content_key": "def(control)",
+   "is_always": "def(key)"
+  },
+  "emtk.ribbon": {
+   "Ribbon": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, tabs=(), *, name='ribbon', search=True, pin=False)",
+     "band_height": "def(self)",
+     "current_tab": "def(self)",
+     "draw": "def(self, box, corner=None)",
+     "fit": "def(self, groups, width)",
+     "height": "def(self)",
+     "restore": "def(self, state)",
+     "set_pinned": "def(self, pinned)",
+     "state": "def(self)",
+     "tab_row_height": "def(self)"
+    }
+   },
+   "RibbonButton": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "accent": "field=",
+     "enabled": "field=",
+     "icon": "field=",
+     "is_enabled": "def(self)",
+     "key": "field",
+     "label": "field",
+     "large": "field=",
+     "on_press": "field=",
+     "tooltip": "field="
+    }
+   },
+   "RibbonGroup": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "accent": "field=",
+     "buttons": "field=",
+     "icon": "@property def(self)",
+     "title": "field"
+    }
+   },
+   "RibbonTab": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "groups": "field=",
+     "title": "field"
+    }
+   },
+   "SMALL_ROWS": "value"
+  },
+  "emtk.router": {
+   "Capture": {
+    "bases": [
+     "Verdict"
+    ],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "handler": "field"
+    }
+   },
+   "Consumed": "value",
+   "Event": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "at": "def(self, x, y)",
+     "button": "field=",
+     "buttons": "field=",
+     "clicks": "field=",
+     "key": "field=",
+     "kind": "field",
+     "modifiers": "field=",
+     "text": "field=",
+     "time": "field=",
+     "wheel_dx": "field=",
+     "wheel_dy": "field=",
+     "x": "field=",
+     "y": "field="
+    }
+   },
+   "Handler": {
+    "bases": [
+     "Protocol"
+    ],
+    "decorators": [],
+    "members": {
+     "event": "def(self, ev)"
+    }
+   },
+   "Layer": {
+    "bases": [
+     "Protocol"
+    ],
+    "decorators": [],
+    "members": {
+     "bounds": "def(self)",
+     "event": "def(self, ev)"
+    }
+   },
+   "OverlayStack": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__contains__": "def(self, layer)",
+     "__init__": "def(self)",
+     "__len__": "def(self)",
+     "add": "def(self, layer, *, top=True)",
+     "hit": "def(self, x, y)",
+     "layers": "def(self)",
+     "raise_": "def(self, layer)",
+     "remove": "def(self, layer)"
+    }
+   },
+   "Pass": "value",
+   "Router": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, stack, fallthrough=None)",
+     "cancel": "def(self)",
+     "dispatch": "def(self, ev)"
+    }
+   },
+   "Verdict": {
+    "bases": [],
+    "decorators": [],
+    "members": {}
+   }
+  },
+  "emtk.scaled_painter": {
+   "ScaledPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, painter, k)",
+     "line_height": "def(self)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)"
+    }
+   }
+  },
+  "emtk.script_text": {
+   "SCRIPT_SCALE": "value",
+   "draw_script_text": "def(p, x, y, w, h, align, text, colour)",
+   "has_scripts": "def(text)",
+   "plain_script_text": "def(text)",
+   "script_runs": "def(text)",
+   "script_width": "def(p, text)"
+  },
+  "emtk.style": {
+   "Accent": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "fill": "field",
+     "foreground": "@property def(self)",
+     "ink": "field=",
+     "mute": "def(self, base, share=None)",
+     "mute_readable": "def(self, base, text, share=0.55, behind=None, minimum=4.5)",
+     "muted": "field=",
+     "muted_text": "def(self, background, text)",
+     "text": "field="
+    }
+   },
+   "BORDER": "value",
+   "BTN_BG": "value",
+   "BTN_HELD": "value",
+   "BUTTON": "value",
+   "BUTTON_ACTIVE": "value",
+   "BUTTON_HOVERED": "value",
+   "CHECK_MARK": "value",
+   "CHECK_ON": "value",
+   "Colour": "value",
+   "DIM": "value",
+   "DRAG_DROP_TARGET": "value",
+   "FRAME_BG": "value",
+   "FRAME_BG_ACTIVE": "value",
+   "FRAME_BG_HOVERED": "value",
+   "GOLD": "value",
+   "HEADER": "value",
+   "HEADER_ACTIVE": "value",
+   "HEADER_BG": "value",
+   "HEADER_HOVERED": "value",
+   "LINKED": "value",
+   "MENU_BAR_BG": "value",
+   "MODAL_DIM_BG": "value",
+   "NAV_CURSOR": "value",
+   "PLOT_HISTOGRAM": "value",
+   "PLOT_LINES": "value",
+   "POPUP_BG": "value",
+   "ROW_SEL": "value",
+   "SCROLLBAR_BG": "value",
+   "SCROLLBAR_GRAB": "value",
+   "SCROLLBAR_GRAB_ACTIVE": "value",
+   "SCROLLBAR_GRAB_HOVERED": "value",
+   "SEPARATOR": "value",
+   "SEPARATOR_ACTIVE": "value",
+   "SEPARATOR_HOVERED": "value",
+   "SLIDER_GRAB": "value",
+   "SLIDER_GRAB_ACTIVE": "value",
+   "TAB": "value",
+   "TABLE_BORDER_LIGHT": "value",
+   "TABLE_BORDER_STRONG": "value",
+   "TABLE_HEADER_BG": "value",
+   "TABLE_ROW_BG": "value",
+   "TABLE_ROW_BG_ALT": "value",
+   "TAB_HOVERED": "value",
+   "TAB_SELECTED": "value",
+   "TEXT": "value",
+   "TEXT_DISABLED": "value",
+   "TEXT_LINK": "value",
+   "TEXT_SELECTED_BG": "value",
+   "THUMB": "value",
+   "THUMB_HELD": "value",
+   "TITLE_BG": "value",
+   "TITLE_BG_ACTIVE": "value",
+   "TRACK_BG": "value",
+   "ThemedAccent": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "dark": "field",
+     "light": "field",
+     "resolve": "def(self, background)"
+    }
+   },
+   "WINDOW_BG": "value",
+   "ambient_colours": "@contextmanager def(colours)",
+   "clamp": "def(value, low, high)",
+   "contrast_ratio": "def(a, b)",
+   "current_ambient": "def()",
+   "disc": "def(p, cx, cy, radius, colour)",
+   "fit_text": "def(p, label, room)",
+   "format_value": "def(fmt, value)",
+   "hit": "def(x, y, box_x, box_y, box_w, box_h)",
+   "is_dark": "def(colour)",
+   "lerp": "def(a, b, t)",
+   "lerp_colour": "def(a, b, t)",
+   "most_readable": "def(background, *candidates)",
+   "parse_colour": "def(value)",
+   "relative_luminance": "def(colour)",
+   "use_palette": "def(colours)",
+   "with_alpha": "def(colour, alpha)"
+  },
+  "emtk.svg": {
+   "rasterize_svg": "def(data, scale=1.0, background=None)",
+   "svg_to_png": "def(data, scale=1.0, background=None)",
+   "svg_to_texture": "def(data, scale=1.0, background=None)"
+  },
+  "emtk.tasks": {
+   "MODES": "value",
+   "Task": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, work, args=(), kwargs=None, mode=None, name='')",
+     "cancel": "def(self)",
+     "cancelled": "@property def(self)",
+     "check": "def(self)",
+     "done": "@property def(self)",
+     "elapsed": "@property def(self)",
+     "flush": "def(self)",
+     "log_text": "def(self)",
+     "on_done": "def(self, callback)",
+     "poll": "def(self, budget=DEFAULT_BUDGET)",
+     "report": "def(self, progress=None, message=None)",
+     "running": "@property def(self)",
+     "start": "def(self)",
+     "succeeded": "@property def(self)",
+     "wait": "def(self, timeout=None)",
+     "write": "def(self, text)"
+    }
+   },
+   "TaskCancelled": {
+    "bases": [
+     "Exception"
+    ],
+    "decorators": [],
+    "members": {}
+   },
+   "default_mode": "def()",
+   "start": "def(work, *args, mode=None, name='', **kwargs)",
+   "threads_available": "def()"
+  },
+  "emtk.testing": {
+   "Driver": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, app, size=(1000, 700))",
+     "click": "def(self, target)",
+     "commit": "def(self, text)",
+     "compose": "def(self, text, cursor=None)",
+     "draw": "def(self, frames=2, size=None)",
+     "escape": "def(self)",
+     "frame": "def(self, n=1)",
+     "hover": "def(self, target)",
+     "ids": "def(self)",
+     "key": "def(self, code, text='', modifiers=0)",
+     "press": "def(self, key, mods=0)",
+     "rect": "def(self, target)",
+     "screenshot": "def(self, path=None)",
+     "settle": "def(self, timeout=30.0, extra=2)",
+     "type": "def(self, text)",
+     "wheel": "def(self, dy, at=None, *, dx=0.0)"
+    }
+   },
+   "FIXED_GLYPH_W": "value",
+   "FIXED_LINE_H": "value",
+   "MetricPainter": {
+    "bases": [
+     "RecordingPainter"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "line_height": "def(self)",
+     "set_font": "def(self, value=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "text_width": "def(self, string)"
+    }
+   },
+   "PixelPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, width, height, background=(0, 0, 0, 255), scale=1.0)",
+     "box_has_colour": "def(self, x, y, w, h, colour)",
+     "fill_convex": "def(self, points, colour)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "set_font": "def(self, value=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)"
+    }
+   },
+   "RecordingPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "GLYPH_W": "attribute",
+     "LINE_H": "attribute",
+     "__init__": "def(self)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "set_font": "def(self, value=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_width": "def(self, string)"
+    }
+   },
+   "assert_images_equal": "def(actual, expected_path, max_different=0)",
+   "png_decode": "def(data)",
+   "png_encode": "def(width, height, rgba)",
+   "render": "def(gui, size=(0.0, 0.0, 320.0, 200.0), io=None, frames=2)",
+   "save_png": "def(path, width, height, rgba)",
+   "screenshot": "def(gui, size=(0.0, 0.0, 320.0, 200.0), io=None, frames=2)"
+  },
+  "emtk.testing_realistic": {
+   "HostPainter": {
+    "bases": [
+     "RecordingPainter"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, real)",
+     "clear": "def(self)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "set_font": "def(self, value=None, size=0.0)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_width": "def(self, string)"
+    }
+   },
+   "HostedDriver": {
+    "bases": [
+     "RealisticDriver"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, app, size=(1000, 700), *, backend='offscreen', scale=1.0, **options)",
+     "available": "@classmethod def(cls, backend='offscreen')",
+     "close": "def(self)",
+     "frame": "def(self, n=1)",
+     "screenshot": "def(self, path=None)"
+    }
+   },
+   "RealisticDriver": {
+    "bases": [
+     "Driver"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, app, size=(1000, 700), *, scale=1.0, move_steps=4, hold_frames=2, jitter=1.0, frame_interval=1 / 60, real_painter=True)",
+     "blur": "def(self)",
+     "click": "def(self, target, button=LEFT_BUTTON, modifiers=0)",
+     "double_click": "def(self, target, button=LEFT_BUTTON)",
+     "drag": "def(self, start, end, steps=8, button=LEFT_BUTTON)",
+     "draw": "def(self, frames=2, size=None)",
+     "drop_files": "def(self, paths, target, frames=2)",
+     "focus": "def(self)",
+     "frame": "def(self, n=1)",
+     "hold_key": "def(self, key, seconds, text='', modifiers=0)",
+     "hover": "def(self, target)",
+     "key": "def(self, code, text='', modifiers=0)",
+     "move_window": "def(self, dx, dy, frames=1)",
+     "press": "def(self, key, mods=0)",
+     "press_here": "def(self, button=LEFT_BUTTON)",
+     "release_key": "def(self)",
+     "resize": "def(self, size, frames=2)",
+     "set_scale": "def(self, scale, frames=2)",
+     "swipe": "def(self, dy, at=None, *, events=30, momentum=20)",
+     "type": "def(self, text)",
+     "wheel": "def(self, dy, at=None, *, dx=0.0)"
+    }
+   },
+   "SyntheticCanvas": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, size, ratio=1.0)",
+     "add_event_handler": "def(self, callback, *types, order=0)",
+     "flush": "def(self)",
+     "get_logical_size": "def(self)",
+     "get_physical_size": "def(self)",
+     "get_pixel_ratio": "def(self)",
+     "submit_event": "def(self, event)"
+    }
+   },
+   "VirtualLoop": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, start=1000.0)",
+     "advance": "def(self, seconds)",
+     "call_later": "def(self, delay, callback, *args)",
+     "call_soon": "def(self, callback, *args)",
+     "perf_counter": "def(self)"
+    }
+   },
+   "assert_settles": "def(driver, action, observe=None, *, frames=30, grace=2, allow_animation=False, label='')",
+   "clipped_texts": "def(painter, *, tolerance=0.5, min_chars=2)",
+   "frame_signature": "def(driver)"
+  },
+  "emtk.tex": {
+   "Layout": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "depth": "field",
+     "height": "field",
+     "items": "field",
+     "width": "field"
+    }
+   },
+   "TexError": {
+    "bases": [
+     "ValueError"
+    ],
+    "decorators": [],
+    "members": {}
+   },
+   "render_rgba": "def(latex, size_px, colour=(0, 0, 0, 255), pad=2, display=False, background=None, sans=False)",
+   "typeset": "def(latex, size_px, display=False, sans=False)"
+  },
+  "emtk.texture": {
+   "ImageTextureCache": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, maxsize=256, max_texels=16000000)",
+     "clear": "def(self)",
+     "get": "def(self, path, filter)",
+     "put": "def(self, path, filter, texture)",
+     "texels": "@property def(self)"
+    }
+   },
+   "Texture": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, width, height, pixels=None, filter='linear')",
+     "fill": "def(self, colour)",
+     "from_bytes": "@classmethod def(cls, data, width=None, height=None, filter='linear')",
+     "from_file": "@classmethod def(cls, path, filter='linear', *, svg_scale=1.0)",
+     "from_numpy": "@classmethod def(cls, arr, filter='linear')",
+     "from_pil": "@classmethod def(cls, image, filter='linear')",
+     "get_pixel": "def(self, x, y)",
+     "save": "def(self, path, format=None)",
+     "set_pixel": "def(self, x, y, colour)",
+     "set_rows": "def(self, y, rows)",
+     "size": "@property def(self)",
+     "to_pil": "def(self)",
+     "touch": "def(self)"
+    }
+   },
+   "get_texture": "def(source, filter='linear', cache=None)"
+  },
+  "emtk.tk_host": {
+   "TkHost": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, control, title='emtk', size=(800, 600), background=(30, 32, 38, 255), interval_ms=50, on_close=None, root=None, font_pt=None)",
+     "clipboard_get": "def(self)",
+     "clipboard_set": "def(self, text)",
+     "close": "def(self)",
+     "grab": "def(self)",
+     "paint": "def(self)",
+     "run": "def(self)",
+     "set_icon": "def(self, path)"
+    }
+   },
+   "key_from_tk": "def(keysym, char='')",
+   "modifiers_from_tk": "def(state, platform=None)",
+   "qt_application_exists": "def()"
+  },
+  "emtk.tooltip": {
+   "CURSOR_OFFSET": "value",
+   "MARGIN": "value",
+   "PAD": "value",
+   "place": "def(pointer, size, frame)",
+   "update": "def(ctx)",
+   "wrap": "def(p, text, room)"
+  },
+  "emtk.type_scale": {
+   "CODE_FAMILY": "value",
+   "PROSE_FAMILY": "value",
+   "ROLES": "value",
+   "STEP": "value",
+   "factor": "def(role='body')",
+   "math_args": "def(role='body', zoom=1.0)",
+   "pop_text_style": "def()",
+   "push_text_style": "def(role='body', **kwargs)",
+   "role_pt": "def(role='body')",
+   "set_ui_font_pt": "def(pt)",
+   "size_pt": "def(role='body')",
+   "text_font": "def(role='body', *, bold=None, family=None, zoom=1.0)",
+   "text_style": "@contextmanager def(role='body', **kwargs)",
+   "ui_font_pt": "def()"
+  },
+  "emtk.vector_painter": {
+   "PX_PER_INCH": "value",
+   "PdfPainter": {
+    "bases": [
+     "VectorPainter"
+    ],
+    "decorators": [],
+    "members": {
+     "pdf_bytes": "def(self)"
+    }
+   },
+   "SvgPainter": {
+    "bases": [
+     "VectorPainter"
+    ],
+    "decorators": [],
+    "members": {
+     "FONT_FAMILY": "attribute",
+     "svg_bytes": "def(self)"
+    }
+   },
+   "VectorPainter": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, width, height, background=(255, 255, 255, 255))",
+     "fill_convex": "def(self, points, colour)",
+     "fill_rect": "def(self, x, y, w, h, colour)",
+     "fill_triangle": "def(self, p0, p1, p2, colour)",
+     "fill_triangles": "def(self, triangles, colour)",
+     "gradient_rect": "def(self, x, y, w, h, stops, edge=None)",
+     "gradient_triangle": "def(self, p0, p1, p2, c0, c1, c2)",
+     "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
+     "line_height": "def(self)",
+     "polyline": "def(self, points, width, colour, closed=False)",
+     "pop_clip": "def(self)",
+     "push_clip": "def(self, x, y, w, h)",
+     "reset": "def(self)",
+     "set_font_scale": "def(self, scale)",
+     "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
+     "text": "def(self, x, y, w, h, align, string, colour, bold=False)",
+     "text_rotated": "def(self, x, y, w, h, align, string, colour, degrees=0.0)",
+     "text_width": "def(self, string)"
+    }
+   }
+  },
+  "emtk.view_form": {
+   "FormState": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, on_used=None)",
+     "used": "def(self, name)"
+    }
+   },
+   "draw_form": "def(spec, model, state, titles=True)",
+   "draw_sections": "def(sections, model, state, n_col=1, titles=True, indent_wraps=True, _path=())",
+   "find_section": "def(spec, title)",
+   "format_value": "def(value, section)",
+   "icon_caption": "def(icon, text)",
+   "parse_colour_text": "def(text)",
+   "parse_value": "def(text, section, bounds=None)",
+   "section_name": "def(section)",
+   "spin_step": "def(value, section)"
+  },
+  "emtk.web": {},
+  "emtk.web.page": {
+   "DROP_DIR": "value",
+   "MOUNT_DIR": "value",
+   "WebPage": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "DROP_DIR": "attribute",
+     "MOUNT_DIR": "attribute",
+     "__init__": "def(self, canvas, app, device=None, format=None)",
+     "animating": "def(self)",
+     "clear_keys": "def(self)",
+     "copy": "def(self, cut=False)",
+     "draw": "def(self)",
+     "key": "def(self, name, text='', ctrl=False, shift=False, alt=False, meta=False)",
+     "key_up": "def(self, name, ctrl=False, shift=False, alt=False, meta=False)",
+     "move": "def(self, x, y, buttons=0, ctrl=False, shift=False, alt=False, meta=False)",
+     "open_path": "def(self, path)",
+     "paste": "def(self, text)",
+     "press": "def(self, x, y, button, ctrl=False, shift=False, alt=False, meta=False, double=False)",
+     "release": "def(self, x, y, button=0, ctrl=False, shift=False, alt=False, meta=False)",
+     "resize": "def(self, css_width, css_height, dpr=0.0)",
+     "title": "def(self)",
+     "user_files_dir": "def(self)",
+     "wake_in": "def(self)",
+     "wheel": "def(self, delta_y, x=0.0, y=0.0, ctrl=False, shift=False, alt=False, meta=False)"
+    }
+   },
+   "download": "def(name, data, mime='application/octet-stream', js=None)",
+   "dropped_by_reference": "def(path, js=None)",
+   "in_browser": "def()",
+   "mount": "def(canvas, spec, **options)",
+   "user_files_dir": "def(fallback='/')",
+   "wheel_steps_from_dom": "def(delta_y)"
+  },
+  "emtk.web.serve": {
+   "Bundle": {
+    "bases": [],
+    "decorators": [
+     "dataclasses.dataclass"
+    ],
+    "members": {
+     "app": "field",
+     "drop": "field=",
+     "drop_by_reference_above": "field=",
+     "exclude": "field=",
+     "extra_files": "field=",
+     "extra_packages": "field=",
+     "include_suffixes": "field=",
+     "mount": "field=",
+     "name": "@property def(self)",
+     "packages": "field=",
+     "pyodide_packages": "field=",
+     "pyodide_url": "field=",
+     "ready_message": "field=",
+     "title": "field=",
+     "wheels": "field="
+    }
+   },
+   "DEFAULT_PORT": "value",
+   "DEFAULT_PYODIDE_PACKAGES": "value",
+   "DEFAULT_PYODIDE_URL": "value",
+   "INCLUDE_SUFFIXES": "value",
+   "WEB_DIR": "value",
+   "build": "def(bundle, out_dir=None, pyodide=None)",
+   "default_out_dir": "def(bundle)",
+   "main": "def(argv=None, base=None)",
+   "pack_zip": "def(bundle, destination)",
+   "resolve_package": "def(item)",
+   "serve": "def(bundle, port=DEFAULT_PORT, out_dir=None, pyodide=None, open_browser=False, isolate=False)"
+  },
+  "emtk.wgpu_host": {
+   "BAKED_FONT_PT": "from .gpu_atlas import BAKED_FONT_PT",
+   "IMAGE_ATLAS_SIZE": "from .gpu_atlas import IMAGE_ATLAS_SIZE",
+   "ImageAtlas": "from .gpu_atlas import ImageAtlas",
+   "TEXTURE_FORMAT": "value",
+   "UI_SHADER": "from .wgsl import UI_SHADER",
+   "UNIFORM_FLOATS": "value",
+   "WgpuControlHost": "def(control, **kwargs)",
+   "WgpuRenderer": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, atlas=None, images=None, device=None, format=TEXTURE_FORMAT)",
+     "device": "@property def(self)",
+     "draw": "def(self, render_pass, vertices, width, height, format=None)",
+     "grab": "def(self, vertices, width, height, background=(30, 32, 38))",
+     "painter": "def(self, font_pt=None, scale=1.0)",
+     "pipeline": "def(self, format=None)",
+     "render": "def(self, vertices, width, height, view, background=None, format=None)"
+    }
+   },
+   "default_device": "def()",
+   "image_texel": "from .gpu_atlas import image_texel",
+   "image_u": "from .gpu_atlas import image_u",
+   "make_wgpu_control_host": "value",
+   "ui_bind_group_entries": "def(uniform_buffer, atlas_view, image_view, linear_sampler, nearest_sampler)",
+   "ui_bind_group_layout_entries": "def()",
+   "ui_samplers": "def(device)",
+   "wgpu_host_class": "def()"
+  },
+  "emtk.wgsl": {
+   "UI_SHADER": "value",
+   "WGSL_DIR": "value",
+   "load_wgsl": "def(name=UI_SHADER)",
+   "wgsl_path": "def(name=UI_SHADER)"
+  },
+  "emtk.widgets": {},
+  "emtk.widgets.auto_range": {
+   "INSET": "value",
+   "SIZE": "value",
+   "TOOLTIP": "value",
+   "button_rect": "def(x, y, w, h)",
+   "contains": "def(rect, px, py)",
+   "draw": "def(painter, rect, hovered=False)",
+   "draw_tooltip": "def(painter, rect, bounds)",
+   "tooltip": "def()"
+  },
+  "emtk.widgets.axis": {
+   "Axis": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, v_min=None, v_max=None)",
+     "fit": "def(self, values)",
+     "minor_ticks": "def(self)",
+     "pad": "def(self, fraction)",
+     "range": "@property def(self)",
+     "set_pixels": "def(self, pixel_min, pixel_max)",
+     "ticks": "def(self, target_count=4)",
+     "to_pixels": "def(self, v)",
+     "to_pixels_array": "def(self, values)",
+     "to_plot": "def(self, px)"
+    }
+   },
+   "nice_ticks": "def(lo, hi, target_count=4)"
+  },
+  "emtk.widgets.basic": {
+   "Button": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "Checkbox": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, checked=False)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "toggle": "def(self)"
+    }
+   },
+   "ColorEdit4": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', color=(255, 255, 255, 255))",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)"
+    }
+   },
+   "Combo": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, options, index=0)",
+     "cycle": "def(self, step=1)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "value": "@property def(self)"
+    }
+   },
+   "Histogram": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, values, v_min=None, v_max=None)",
+     "draw": "def(self, p, x, y, w, h)",
+     "range": "def(self)"
+    }
+   },
+   "InputInt": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, value=0, v_min=0, v_max=100, step=1)",
+     "decrement": "def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "increment": "def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "set_value": "def(self, value)"
+    }
+   },
+   "ListBox": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, items, index=0, visible_rows=6)",
+     "draw": "def(self, p, x, y, w, h)",
+     "first_visible": "@property def(self)",
+     "move": "def(self, delta)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "value": "@property def(self)"
+    }
+   },
+   "PlotLines": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, values, v_min=None, v_max=None)",
+     "draw": "def(self, p, x, y, w, h)",
+     "range": "def(self)"
+    }
+   },
+   "ProgressBar": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', fraction=0.0, fmt='%.0%')",
+     "draw": "def(self, p, x, y, w, h)"
+    }
+   },
+   "RadioGroup": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, options, index=0)",
+     "cycle": "def(self, step=1)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "select": "def(self, index)",
+     "value": "@property def(self)"
+    }
+   },
+   "ScrollBar": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, width=7.0)",
+     "clamp": "def(self, total, visible)",
+     "drag": "def(self, y)",
+     "drag_to": "def(self, y)",
+     "draw": "def(self, p, x, y, h)",
+     "hit": "def(self, x, y)",
+     "needed": "def(self)",
+     "press": "def(self, x, y)",
+     "release": "def(self)",
+     "scroll": "def(self, rows)"
+    }
+   },
+   "Separator": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='')",
+     "draw": "def(self, p, x, y, w, h)"
+    }
+   },
+   "SliderFloat": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, v_min, v_max, value=0.0, fmt='%.2f', step=None)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "fraction": "@property def(self)",
+     "nudge": "def(self, delta)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "set_fraction": "def(self, fraction)"
+    }
+   },
+   "Table": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, headers, rows, col_widths=None, selected_row=None, sort_col=None, sort_ascending=True, row_scale=1.15)",
+     "drag": "def(self, y)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "scroll": "def(self, rows)",
+     "sort": "def(self, col_index)",
+     "top": "@property def(self)"
+    }
+   },
+   "Tabs": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, labels, index=0)",
+     "cycle": "def(self, step=1)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "select": "def(self, index)",
+     "value": "@property def(self)"
+    }
+   },
+   "TextInput": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', text='', placeholder='')",
+     "backspace": "def(self)",
+     "cursor": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "insert": "def(self, text)",
+     "move": "def(self, delta)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "set_text": "def(self, text)",
+     "text": "@property def(self)"
+    }
+   },
+   "Toggle": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, on=False)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "toggle": "def(self)"
+    }
+   },
+   "Tooltip": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, lines)",
+     "draw": "def(self, p, x, y, w, h)",
+     "size": "def(self, p)"
+    }
+   },
+   "TreeNode": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, expanded=False, children=None)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "toggle": "def(self)"
+    }
+   },
+   "fit_text": "from ..style import fit_text"
+  },
+  "emtk.widgets.buttons": {
+   "ArrowButton": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, direction=DIR_RIGHT)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "ButtonState": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "background": "def(self, base=BUTTON, hovered=BUTTON_HOVERED, active=BUTTON_ACTIVE)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "CheckboxFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, flags=0, flags_value=0)",
+     "all_on": "@property def(self)",
+     "any_on": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "mixed": "@property def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "toggle": "def(self)"
+    }
+   },
+   "DIR_DOWN": "value",
+   "DIR_LEFT": "value",
+   "DIR_RIGHT": "value",
+   "DIR_UP": "value",
+   "InvisibleButton": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, name='')",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "RadioButton": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, active=False)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "SmallButton": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "size": "def(self, p)"
+    }
+   }
+  },
+  "emtk.widgets.chat": {
+   "ChatHistory": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, max_messages=200)",
+     "add_message": "def(self, role, content='', status='complete', tool_calls=None, metadata=None)",
+     "add_or_update_tool_call": "def(self, call_id, name, arguments=None, status='running', output='')",
+     "append_chunk": "def(self, chunk)",
+     "clear": "def(self)",
+     "finish_generation": "def(self, status='complete')",
+     "load_list": "def(self, data)",
+     "to_list": "def(self)"
+    }
+   },
+   "ChatMessage": {
+    "bases": [],
+    "decorators": [
+     "dataclasses.dataclass"
+    ],
+    "members": {
+     "content": "field",
+     "from_dict": "@classmethod def(cls, data)",
+     "metadata": "field=",
+     "role": "field",
+     "status": "field=",
+     "timestamp": "field=",
+     "to_dict": "def(self)",
+     "tool_calls": "field="
+    }
+   },
+   "draw_chat_input_bar": "def(prompt_text, is_generating=False, on_send=None, on_cancel=None, on_clear=None, input_height=56.0)",
+   "draw_chat_transcript": "def(history, size=(0.0, 0.0), on_insert_code=None, on_replace_code=None, on_link=None)",
+   "parse_code_blocks": "def(text)"
+  },
+  "emtk.widgets.circle": {
+   "CirclePlot": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, x, y, w, h, *, start=0.0, end=360.0, space=2.0, endspace=True)",
+     "band": "def(self, name, start, end, r_lim, *, colour)",
+     "centre": "@property def(self)",
+     "draw": "def(self, p)",
+     "get_sector": "def(self, name)",
+     "link": "def(self, region1, region2, *, r=72.0, colour=(150, 160, 180, 140), height_ratio=0.5, width=0.0)",
+     "point": "def(self, name, x, r, *, radius=3.0, colour=(230, 200, 120))",
+     "scale": "@property def(self)",
+     "sector": "def(self, name, size, *, colour=(110, 120, 140), clockwise=True)",
+     "text": "def(self, name, x, r, label, *, colour=_LABEL, outside=True)",
+     "ticks": "def(self, name, positions, r, *, length=3.0, labels=None, colour=_AXIS)",
+     "to_pixels": "def(self, rad, r)"
+    }
+   },
+   "CircleSector": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "clockwise": "field=",
+     "colour": "field=",
+     "end": "field",
+     "name": "field",
+     "rad_end": "field",
+     "rad_start": "field",
+     "size": "@property def(self)",
+     "start": "field",
+     "x_to_rad": "def(self, x)"
+    }
+   },
+   "begin_circle": "@contextmanager def(p, x, y, w, h, **kwargs)"
+  },
+  "emtk.widgets.color": {
+   "ColorButton": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, color=(255, 255, 255, 255), label='', show_alpha=True)",
+     "color": "@property def(self)",
+     "color.setter": "@color.setter def(self, value)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "ColorEditRGB": {
+    "bases": [
+     "ColorEditRGBA"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', color=(255, 255, 255, 255), mode='RGB')"
+    }
+   },
+   "ColorEditRGBA": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', color=(255, 255, 255, 255), mode='RGB', alpha=True)",
+     "color": "@property def(self)",
+     "color.setter": "@color.setter def(self, value)",
+     "components": "@property def(self)",
+     "cycle_mode": "def(self, step=1)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "set_hex": "def(self, text)",
+     "set_value": "def(self, index, value)",
+     "values": "def(self)"
+    }
+   },
+   "ColorPicker3": {
+    "bases": [
+     "ColorPicker4"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, color=(255, 0, 0, 255), label='')"
+    }
+   },
+   "ColorPicker4": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, color=(255, 0, 0, 255), alpha_bar=True, label='')",
+     "color": "@property def(self)",
+     "color.setter": "@color.setter def(self, value)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hsv": "@property def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "zone": "@property def(self)"
+    }
+   },
+   "ColorState": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, rgba=(255, 255, 255, 255))",
+     "alpha": "@property def(self)",
+     "floats": "@property def(self)",
+     "hex": "def(self, alpha=True)",
+     "hsv": "@property def(self)",
+     "rgb": "@property def(self)",
+     "rgba": "@property def(self)",
+     "set_alpha": "def(self, alpha)",
+     "set_hex": "def(self, text)",
+     "set_hsv": "def(self, h=None, s=None, v=None)",
+     "set_rgba": "def(self, rgba)"
+    }
+   },
+   "floats_to_rgba": "def(values)",
+   "hsv_to_rgb": "def(h, s, v)",
+   "rgb_to_hsv": "def(r, g, b)",
+   "rgba_to_floats": "def(rgba)"
+  },
+  "emtk.widgets.combo": {
+   "COMBO_HEIGHT_LARGE": "value",
+   "COMBO_HEIGHT_LARGEST": "value",
+   "COMBO_HEIGHT_MASK": "value",
+   "COMBO_HEIGHT_REGULAR": "value",
+   "COMBO_HEIGHT_SMALL": "value",
+   "COMBO_NONE": "value",
+   "COMBO_NO_ARROW_BUTTON": "value",
+   "COMBO_NO_PREVIEW": "value",
+   "COMBO_POPUP_ALIGN_LEFT": "value",
+   "COMBO_WIDTH_FIT_PREVIEW": "value",
+   "ComboBox": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, options, index=0, flags=COMBO_NONE)",
+     "arrow_size": "def(self, h)",
+     "close": "def(self)",
+     "contains": "def(self, x, y)",
+     "drag": "def(self, y)",
+     "draw": "def(self, p, x, y, w, h)",
+     "ensure_visible": "def(self, index, visible)",
+     "frame_rect": "@property def(self)",
+     "frame_width": "def(self, p, w, h)",
+     "max_items": "@property def(self)",
+     "open_popup": "def(self)",
+     "options": "@property def(self)",
+     "popup_metrics": "def(self, p, frame_w)",
+     "popup_rect": "@property def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "scroll": "def(self, rows)",
+     "select": "def(self, index)",
+     "set_options": "def(self, options, index=None)",
+     "set_viewport": "def(self, width, height)",
+     "value": "@property def(self)"
+    }
+   },
+   "ComboPress": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "changed": "field",
+     "closed": "field",
+     "consumed": "field",
+     "index": "field"
+    }
+   },
+   "EditableComboBox": {
+    "bases": [
+     "ComboBox"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, options, index=0, on_change=None, flags=COMBO_NONE)",
+     "draw": "def(self, p, x, y, w, h)",
+     "focus_lost": "def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "set_text": "def(self, text)",
+     "text": "@property def(self)",
+     "value": "@property def(self)"
+    }
+   },
+   "FRAME_PAD": "value",
+   "INNER_SPACING": "value",
+   "PAD": "value",
+   "ROW_SCALE": "value"
+  },
+  "emtk.widgets.command_line": {
+   "CommandLine": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "DEFAULT_FEEDBACK": "attribute",
+     "MAX_HISTORY": "attribute",
+     "MAX_LOG": "attribute",
+     "__init__": "def(self, run=None, prompt=PROMPT)",
+     "append": "def(self, text, kind='message')",
+     "append_error": "def(self, text)",
+     "append_message": "def(self, text)",
+     "clear_log": "def(self)",
+     "complete": "def(self)",
+     "insert": "def(self, text)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "recall": "def(self, delta)",
+     "set_focus": "def(self, focused)",
+     "set_run": "def(self, run)",
+     "set_text": "def(self, text, cursor=None)",
+     "submit": "def(self)",
+     "visible_log": "def(self)"
+    }
+   },
+   "LogLine": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "kind": "field=",
+     "text": "field"
+    }
+   }
+  },
+  "emtk.widgets.data_table": {
+   "BAR_COLOUR": "value",
+   "DataTable": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "COLLAPSE_HYSTERESIS": "attribute",
+     "COLLAPSE_SLACK": "attribute",
+     "DRAG_THRESHOLD": "attribute",
+     "FLEX_MIN": "attribute",
+     "TREE_INDENT": "attribute",
+     "WHEEL_ROWS": "attribute",
+     "__init__": "def(self, columns=(), *, on_select=None, on_activate=None, filter_box=False, tooltip_key='', row_key='', row_scale=1.45, on_edit=None, on_delete=None, on_context=None, min_column_width=0.0, cell_editable=None, muted=None, status=False, column_picker=False, tree_key='', linked=None)",
+     "begin_edit": "def(self, index, key)",
+     "can_edit": "def(self, index, key)",
+     "cancel_edit": "def(self)",
+     "changed": "def(self)",
+     "clear_selection": "def(self)",
+     "collapse_tiers": "def(self)",
+     "collapsed_text": "def(self, index)",
+     "colour_of": "def(self, key, value)",
+     "column_at": "def(self, x)",
+     "column_editable": "def(self, key)",
+     "commit_edit": "def(self)",
+     "context": "def(self, x, y)",
+     "depth_of": "def(self, index)",
+     "drag": "def(self, x, y, *_box)",
+     "draw": "def(self, p, x, y, w, h)",
+     "fit_columns": "def(self)",
+     "hover": "def(self, x, y, *_box)",
+     "is_parent": "def(self, index)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "key_of": "def(self, index)",
+     "natural_height": "def(self, line)",
+     "order": "def(self)",
+     "press": "def(self, x, y, *box, **kw)",
+     "release": "def(self, *_args, **_kw)",
+     "row_at": "def(self, x, y)",
+     "row_count": "def(self)",
+     "scroll": "def(self, rows)",
+     "scroll_columns": "def(self, steps)",
+     "select_all": "def(self)",
+     "select_key": "def(self, key)",
+     "selected_index": "def(self)",
+     "selected_indices": "def(self)",
+     "set_arrays": "def(self, arrays)",
+     "set_column_hidden": "def(self, key, hidden)",
+     "set_expanded": "def(self, key, expanded)",
+     "set_records": "def(self, records)",
+     "sort_by": "def(self, key, descending=None)",
+     "status_text": "def(self)",
+     "toggle": "def(self, index)",
+     "tooltip_at": "def(self, x, y)",
+     "value": "def(self, index, key)",
+     "visible_columns": "def(self)",
+     "wanted_columns": "def(self)"
+    }
+   },
+   "NEGATIVE_COLOUR": "value",
+   "POSITIVE_COLOUR": "value",
+   "TableBinding": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, section, model)",
+     "record": "def(self, index)",
+     "refresh": "def(self)",
+     "selected_records": "def(self)"
+    }
+   },
+   "TableColumn": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "align_right": "field=",
+     "background": "field=",
+     "bar": "def(self, value)",
+     "collapse_order": "field=",
+     "display": "field=",
+     "editable": "field=",
+     "fmt": "field=",
+     "from_spec": "@classmethod def(cls, spec, editable=False)",
+     "key": "field",
+     "min_width": "field=",
+     "range": "field=",
+     "shade": "field=",
+     "shown_title": "def(self)",
+     "text": "def(self, value)",
+     "title": "field=",
+     "tooltip": "field=",
+     "units": "field=",
+     "visible": "field=",
+     "width": "field="
+    }
+   },
+   "draw_table": "def(binding, name, width=None, height=None)",
+   "is_table_section": "def(section)",
+   "parse_number": "def(text)"
+  },
+  "emtk.widgets.drag": {
+   "DRAG_SPEED_DEFAULT_RATIO": "value",
+   "DRAG_THRESHOLD": "value",
+   "DragFloat": {
+    "bases": [
+     "_DragScalar"
+    ],
+    "decorators": [],
+    "members": {}
+   },
+   "DragFloatN": {
+    "bases": [
+     "_DragScalarN"
+    ],
+    "decorators": [],
+    "members": {}
+   },
+   "DragFloatRange2": {
+    "bases": [
+     "_DragRange2"
+    ],
+    "decorators": [],
+    "members": {}
+   },
+   "DragInt": {
+    "bases": [
+     "_DragScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', value=0, v_speed=1.0, v_min=0, v_max=0, fmt='%d', logarithmic=False, wrap=False, clamp_on_input=False)"
+    }
+   },
+   "DragIntN": {
+    "bases": [
+     "_DragScalarN"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', values=(0, 0, 0), v_speed=1.0, v_min=0, v_max=0, fmt='%d', logarithmic=False, wrap=False, clamp_on_input=False)"
+    }
+   },
+   "DragIntRange2": {
+    "bases": [
+     "_DragRange2"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', low=0, high=1, v_speed=1.0, v_min=0, v_max=0, fmt='%d', fmt_max=None, logarithmic=False, clamp_on_input=False)"
+    }
+   }
+  },
+  "emtk.widgets.dragdrop": {
+   "AcceptFlags": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "ACCEPT_BEFORE_DELIVERY": "attribute",
+     "ACCEPT_NO_DRAW_DEFAULT_RECT": "attribute",
+     "ACCEPT_NO_PREVIEW_TOOLTIP": "attribute",
+     "ACCEPT_PEEK_ONLY": "attribute",
+     "NONE": "attribute",
+     "SOURCE_ALLOW_NULL_ID": "attribute",
+     "SOURCE_NO_PREVIEW_TOOLTIP": "attribute"
+    }
+   },
+   "DELAY_NONE": "value",
+   "DELAY_NORMAL": "value",
+   "DELAY_SHORT": "value",
+   "DelayedTooltip": {
+    "bases": [
+     "Tooltip"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, lines, delay=DELAY_SHORT, stationary=True)",
+     "draw_at": "def(self, p, x, y)",
+     "draw_if_visible": "def(self, p)",
+     "hover": "def(self, x, y, now)",
+     "leave": "def(self)",
+     "position": "@property def(self)",
+     "unlocked": "@property def(self)",
+     "visible": "@property def(self)"
+    }
+   },
+   "DragDropContext": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "accepting": "@property def(self)",
+     "active": "@property def(self)",
+     "begin": "def(self, source)",
+     "clear": "def(self)",
+     "drop": "def(self)",
+     "hover": "def(self, target)",
+     "move": "def(self, x, y)",
+     "preview_suppressed": "def(self)"
+    }
+   },
+   "DragDropSource": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, source_id, payload_type, data=None, label='', flags=AcceptFlags.NONE)",
+     "armed": "@property def(self)",
+     "drag": "def(self, ctx, x, y)",
+     "draw_preview": "def(self, p, ctx)",
+     "effective_id": "def(self)",
+     "make_payload": "def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "preview_size": "def(self, p)",
+     "release": "def(self)"
+    }
+   },
+   "DragDropTarget": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, target_id, types, flags=AcceptFlags.NONE)",
+     "accepts": "def(self, ctx)",
+     "accepts_type": "def(self, payload)",
+     "box": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "over": "def(self, ctx)",
+     "place": "def(self, x, y, w, h)",
+     "surface": "@property def(self)"
+    }
+   },
+   "Payload": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, payload_type, data=None, source_id=0)",
+     "clear": "def(self)",
+     "is_data_type": "def(self, payload_type)",
+     "is_delivery": "def(self)",
+     "is_preview": "def(self)"
+    }
+   },
+   "STATIONARY_DELAY": "value"
+  },
+  "emtk.widgets.icons": {
+   "CLOSED_EYE": "value",
+   "OPEN_EYE": "value",
+   "draw_eye": "def(p, rect, colour, *, shown)",
+   "draw_glyph": "def(p, rect, rows, colour)"
+  },
+  "emtk.widgets.inputs": {
+   "InputDouble": {
+    "bases": [
+     "InputScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', value=0.0, step=0.0, step_fast=0.0, fmt='%.6f', v_min=None, v_max=None)"
+    }
+   },
+   "InputFloat": {
+    "bases": [
+     "InputScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', value=0.0, step=0.0, step_fast=0.0, fmt='%.3f', v_min=None, v_max=None)"
+    }
+   },
+   "InputFloat2": "def(label='', values=(0.0, 0.0), fmt='%.3f')",
+   "InputFloat3": "def(label='', values=(0.0, 0.0, 0.0), fmt='%.3f')",
+   "InputFloat4": "def(label='', values=(0.0, 0.0, 0.0, 0.0), fmt='%.3f')",
+   "InputInt2": "def(label='', values=(0, 0))",
+   "InputInt3": "def(label='', values=(0, 0, 0))",
+   "InputInt4": "def(label='', values=(0, 0, 0, 0))",
+   "InputScalar": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', value=0.0, step=0.0, step_fast=0.0, fmt='%.3f', v_min=None, v_max=None, integer=False)",
+     "backspace": "def(self)",
+     "begin_edit": "def(self)",
+     "cancel": "def(self)",
+     "commit": "def(self)",
+     "decrement": "def(self, fast=False)",
+     "display_text": "def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "edit_text": "def(self)",
+     "increment": "def(self, fast=False)",
+     "insert": "def(self, text)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h, fast=False)",
+     "select_all": "@property def(self)",
+     "select_all.setter": "@select_all.setter def(self, on)",
+     "set_value": "def(self, value)"
+    }
+   },
+   "InputScalarN": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', values=(0.0, 0.0), step=0.0, step_fast=0.0, fmt='%.3f', v_min=None, v_max=None, integer=False)",
+     "commit": "def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "editing": "@property def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h, fast=False)",
+     "set_values": "def(self, values)",
+     "values": "@property def(self)"
+    }
+   },
+   "InputTextMultiline": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', text='', visible_rows=4)",
+     "backspace": "def(self)",
+     "column": "@property def(self)",
+     "cursor": "@property def(self)",
+     "delete": "def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "end": "def(self)",
+     "home": "def(self)",
+     "insert": "def(self, text)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "lines": "@property def(self)",
+     "move_down": "def(self)",
+     "move_left": "def(self)",
+     "move_right": "def(self)",
+     "move_up": "def(self)",
+     "newline": "def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "scroll": "def(self, rows)",
+     "set_cursor": "def(self, row, column)",
+     "set_text": "def(self, text)",
+     "text": "@property def(self)"
+    }
+   },
+   "InputTextWithHint": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', hint='', text='')",
+     "backspace": "def(self)",
+     "cursor": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hint": "@property def(self)",
+     "insert": "def(self, text)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "set_text": "def(self, text)",
+     "showing_hint": "@property def(self)",
+     "text": "@property def(self)"
+    }
+   },
+   "apply_from_text": "def(text, current, fmt='%f', when_empty=None)",
+   "format_precision": "def(fmt, default=3)",
+   "trim_decorations": "def(fmt)"
+  },
+  "emtk.widgets.list_view": {
+   "ListRows": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, rows=())",
+     "row": "def(self, index)",
+     "row_count": "def(self)",
+     "set_rows": "def(self, rows)"
+    }
+   },
+   "ListView": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "WHEEL_ROWS": "attribute",
+     "__init__": "def(self, model, *, row_height=15.0, multi_select=False, zebra=True, on_activate=None)",
+     "drag": "def(self, x, y)",
+     "draw": "def(self, p, x, y, w, h)",
+     "draw_row": "def(self, p, index, row, x, y, w, h)",
+     "event": "def(self, ev)",
+     "press": "def(self, x, y, modifiers=0, clicks=1)",
+     "press_row": "def(self, index, ev)",
+     "release": "def(self)",
+     "row_at": "def(self, x, y)",
+     "row_count": "def(self)",
+     "scroll_to": "def(self, index)",
+     "visible_rows": "def(self, h)",
+     "wheel": "def(self, steps)"
+    }
+   },
+   "Row": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "background": "field=",
+     "colour": "field=",
+     "indent": "field=",
+     "key": "field=",
+     "right": "field=",
+     "right_colour": "field=",
+     "selectable": "field=",
+     "text": "field=",
+     "twisty": "field="
+    }
+   },
+   "RowModel": {
+    "bases": [
+     "Protocol"
+    ],
+    "decorators": [],
+    "members": {
+     "revision": "field",
+     "row": "def(self, index)",
+     "row_count": "def(self)"
+    }
+   },
+   "TreeItem": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "children": "field=",
+     "colour": "field=",
+     "key": "field",
+     "right": "field=",
+     "text": "field"
+    }
+   },
+   "TreeRows": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, roots=(), expanded=None)",
+     "is_expanded": "def(self, key)",
+     "node_at": "def(self, index)",
+     "row": "def(self, index)",
+     "row_count": "def(self)",
+     "set_roots": "def(self, roots)",
+     "toggle": "def(self, key)"
+    }
+   },
+   "TreeView": {
+    "bases": [
+     "ListView"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, model, **kwargs)",
+     "press_row": "def(self, index, ev)"
+    }
+   }
+  },
+  "emtk.widgets.markdown": {
+   "InlineRun": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "bold": "field=",
+     "code": "field=",
+     "italic": "field=",
+     "target": "field=",
+     "text": "field"
+    }
+   },
+   "MarkdownBlock": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "arg": "field=",
+     "items": "field=",
+     "kind": "field",
+     "text": "field="
+    }
+   },
+   "draw_inline": "def(text, on_link=None, tag='inl', role='body', colour=None, bold=False, prefix='', zoom=1.0)",
+   "parse_inline": "def(text, _bold=False, _italic=False, _target='')",
+   "parse_markdown": "def(raw_text)",
+   "render_markdown": "def(content, on_link=None, max_width=None)"
+  },
+  "emtk.widgets.markers": {
+   "MARKERS": "value",
+   "draw_marker": "def(p, name, cx, cy, r, colour)"
+  },
+  "emtk.widgets.memory_editor": {
+   "BufferSource": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, data, name='buffer', base_address=0, writable=None)",
+     "read": "def(self, offset, length)",
+     "size": "def(self)",
+     "write": "def(self, offset, value)"
+    }
+   },
+   "MemoryEditor": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, source=None, columns=16, read_only=True)",
+     "address_at": "def(self, px, py)",
+     "base_address": "@property def(self)",
+     "drag": "def(self, px, py, x=0.0, y=0.0, w=0.0, h=0.0)",
+     "draw": "def(self, p, x, y, w, h)",
+     "goto": "def(self, address, highlight_to=None)",
+     "hover": "def(self, px, py, x, y, w, h)",
+     "ideal_width": "def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "press": "def(self, px, py, x, y, w, h)",
+     "release": "def(self)",
+     "row_count": "@property def(self)",
+     "scroll": "def(self, rows)",
+     "set_source": "def(self, source)",
+     "size": "@property def(self)"
+    }
+   },
+   "MemorySource": {
+    "bases": [
+     "Protocol"
+    ],
+    "decorators": [
+     "runtime_checkable"
+    ],
+    "members": {
+     "name": "field",
+     "read": "def(self, offset, length)",
+     "size": "def(self)"
+    }
+   },
+   "PREVIEW_TYPES": "value"
+  },
+  "emtk.widgets.menus": {
+   "FILTER_MIN_ITEMS": "value",
+   "FILTER_PLACEHOLDER": "value",
+   "MARK_SCALE": "value",
+   "Menu": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, entries=(), title='', enabled=True, icon=None, tooltip=None)",
+     "close": "def(self)",
+     "contains": "def(self, x, y)",
+     "cut": "def(self, p, w)",
+     "display_label": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "draw_panel": "def(self, p, row_x, row_y, row_w, row_h)",
+     "draw_row": "def(self, p, x, y, w, h)",
+     "panel_rect": "@property def(self)",
+     "panel_size": "def(self, p)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "set_viewport": "def(self, width, height)"
+    }
+   },
+   "MenuBar": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, menus=(), title_pad=10.0)",
+     "close": "def(self, keep=None)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "set_viewport": "def(self, width, height)",
+     "title_width": "def(self, p, menu)"
+    }
+   },
+   "MenuItem": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, shortcut='', checked=False, enabled=True, checkable=False, tooltip=None, icon=None)",
+     "cut": "def(self, p, w)",
+     "display_label": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "draw_row": "def(self, p, x, y, w, h)",
+     "label_room": "def(self, p, w)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "toggle": "def(self)"
+    }
+   },
+   "NO_MATCH": "value",
+   "OVERLAP": "value",
+   "PAD": "value",
+   "Popup": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, entries=(), title='')",
+     "close": "def(self)",
+     "contains": "def(self, x, y)",
+     "drag": "def(self, x, y)",
+     "draw": "def(self, p, x, y, w, h)",
+     "filter_rect": "@property def(self)",
+     "hover": "def(self, x, y)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "max_scroll": "@property def(self)",
+     "modal": "attribute",
+     "open_at": "def(self, x=None, y=None)",
+     "open_below": "def(self, field, current=None, filter=False)",
+     "panel_rect": "@property def(self)",
+     "panel_size": "def(self, p)",
+     "place": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "query": "@property def(self)",
+     "query.setter": "@query.setter def(self, value)",
+     "release": "def(self)",
+     "row_rect": "def(self, index)",
+     "set_query": "def(self, query)",
+     "shown": "def(self)",
+     "view_rect": "@property def(self)",
+     "wheel": "def(self, x, y, steps)"
+    }
+   },
+   "PopupModal": {
+    "bases": [
+     "Popup"
+    ],
+    "decorators": [],
+    "members": {
+     "modal": "attribute"
+    }
+   },
+   "PopupPress": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "closed": "field",
+     "consumed": "field",
+     "item": "field"
+    }
+   },
+   "ROW_SCALE": "value",
+   "SCROLLBAR_W": "value",
+   "SEPARATOR_SCALE": "value",
+   "SPACING": "value",
+   "WHEEL_ROWS": "value",
+   "best_popup_pos": "def(ref, size, outer, avoid, last_dir=None)",
+   "filter_marks": "def(label, query)"
+  },
+  "emtk.widgets.pane_stack": {
+   "PaneStack": {
+    "bases": [
+     "Control"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, panes, weights=None, axis=Axis.Y, thickness=5.0, collapsible=True, min_size=24.0)",
+     "drag": "def(self, px, py, *_args)",
+     "draw": "def(self, p, x, y, w, h)",
+     "focus_lost": "def(self)",
+     "hover": "def(self, px, py, *_args)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "layout": "def(self, x, y, w, h)",
+     "measure": "def(self, p)",
+     "press": "def(self, px, py, x, y, w, h, modifiers=0, clicks=1)",
+     "release": "def(self, *_args)",
+     "scroll": "def(self, rows, *_args)",
+     "set_weights": "def(self, weights)",
+     "tooltip_at": "def(self, px, py)"
+    }
+   }
+  },
+  "emtk.widgets.plot": {
+   "DEEP_PALETTE": "value",
+   "Plot": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__enter__": "def(self)",
+     "__exit__": "def(self, exc_type, exc, tb)",
+     "__init__": "def(self, x, y, w, h, x_range=None, y_range=None, show_ticks=False, show_legend=True)",
+     "draw": "def(self, p)",
+     "format_tick": "def(self, v)",
+     "hline": "def(self, value, colour, label=None)",
+     "line": "def(self, label, xs, ys, colour=None, width=1.5, dash=None)",
+     "scatter": "def(self, label, xs, ys, colour=None, marker='circle', radius=2.5)"
+    }
+   },
+   "begin_plot": "def(p, x, y, w, h, x_range=None, y_range=None, show_ticks=False)"
+  },
+  "emtk.widgets.progress": {
+   "ProgressOverlay": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "BAR_H": "attribute",
+     "MAX_W": "attribute",
+     "MIN_W": "attribute",
+     "PAD": "attribute",
+     "WIDTH_FRACTION": "attribute",
+     "__init__": "def(self)",
+     "begin": "def(self, title, *, message='', cancellable=False)",
+     "end": "def(self)",
+     "eta_seconds": "def(self)",
+     "handle_press": "def(self, x, y)",
+     "paint": "def(self, painter, width, height, scale=1.0)",
+     "status_text": "def(self)",
+     "update": "def(self, fraction=None, message=None)"
+    }
+   }
+  },
+  "emtk.widgets.selection": {
+   "CollapsingHeader": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, expanded=False, closable=False, visible=True, children=None)",
+     "body_visible": "@property def(self)",
+     "close_box": "def(self, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "draw_body": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "toggle": "def(self)"
+    }
+   },
+   "MultiSelectState": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, count=0, single_select=False)",
+     "anchor": "@property def(self)",
+     "clear": "def(self)",
+     "click": "def(self, index, ctrl=False, shift=False)",
+     "is_selected": "def(self, index)",
+     "select_all": "def(self)",
+     "selection": "def(self)",
+     "set_count": "def(self, count)",
+     "set_range": "def(self, first, last, selected)"
+    }
+   },
+   "SELECTABLE_ALLOW_DOUBLE_CLICK": "value",
+   "SELECTABLE_DISABLED": "value",
+   "SELECTABLE_DONT_CLOSE_POPUPS": "value",
+   "SELECTABLE_NONE": "value",
+   "SELECTABLE_SPAN_ALL_COLUMNS": "value",
+   "Selectable": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, selected=False, flags=SELECTABLE_NONE)",
+     "closes_popup": "@property def(self)",
+     "disabled": "@property def(self)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h, double=False)",
+     "release": "def(self)"
+    }
+   },
+   "SelectableList": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, items, row_scale=1.15, multi_select=True, disabled=None)",
+     "drag": "def(self, y)",
+     "draw": "def(self, p, x, y, w, h)",
+     "ensure_visible": "def(self, index)",
+     "items": "@property def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h, ctrl=False, shift=False, double=False)",
+     "release": "def(self)",
+     "scroll": "def(self, rows)",
+     "selected_labels": "def(self)",
+     "selection": "def(self)",
+     "set_items": "def(self, items, disabled=None)",
+     "type_char": "def(self, ch, now)"
+    }
+   },
+   "TypingSelect": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, timeout=1.8, single_char_lock_count=4)",
+     "draw": "def(self, p, x, y, w, h)",
+     "find_best_leading": "@staticmethod def(prefix, items)",
+     "find_next_single_char": "@staticmethod def(ch, items, current=-1)",
+     "reset": "def(self)",
+     "type_char": "def(self, ch, items, now, current=-1)"
+    }
+   }
+  },
+  "emtk.widgets.settings_editor": {
+   "ACTION": "value",
+   "BOOL": "value",
+   "CHOICE": "value",
+   "COLOUR": "value",
+   "FLOAT": "value",
+   "INT": "value",
+   "Setting": {
+    "bases": [],
+    "decorators": [
+     "dataclasses.dataclass"
+    ],
+    "members": {
+     "default": "field=",
+     "description": "field=",
+     "fmt": "field=",
+     "group": "field=",
+     "key": "field",
+     "kind": "field",
+     "label": "field=",
+     "options": "field=",
+     "source": "field=",
+     "step": "field=",
+     "v_max": "field=",
+     "v_min": "field="
+    }
+   },
+   "SettingsEditor": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "ALL": "attribute",
+     "CONTROL_SHARE": "attribute",
+     "__init__": "def(self, model, visible_rows=12)",
+     "adjust": "def(self, direction)",
+     "drag": "def(self, x, y)",
+     "draw": "def(self, p, x, y, w, h)",
+     "first_visible": "def(self)",
+     "group": "@property def(self)",
+     "move": "def(self, delta)",
+     "move_group": "def(self, delta)",
+     "press": "def(self, x, y)",
+     "release": "def(self)",
+     "rows": "def(self)",
+     "scroll": "def(self, rows)",
+     "selected": "def(self)",
+     "top": "@property def(self)",
+     "top.setter": "@top.setter def(self, value)"
+    }
+   },
+   "SettingsModel": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, settings, getter, setter)",
+     "adjust": "def(self, setting, direction)",
+     "control": "def(self, setting)",
+     "from_mapping": "@classmethod def(cls, mapping, meta=None, setter=None, skip=())",
+     "get": "def(self, key)",
+     "groups": "def(self)",
+     "rows": "def(self, group='', search='')",
+     "set": "def(self, key, value)"
+    }
+   },
+   "TEXT": "value"
+  },
+  "emtk.widgets.sliders": {
+   "GRAB_MIN_SIZE": "value",
+   "GRAB_PADDING": "value",
+   "INNER_SPACING": "value",
+   "LOG_SLIDER_DEADZONE": "value",
+   "SliderAngle": {
+    "bases": [
+     "SliderScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, radians=0.0, v_degrees_min=-360.0, v_degrees_max=+360.0, fmt='%.0f deg')",
+     "degrees": "@property def(self)",
+     "radians": "@property def(self)",
+     "radians.setter": "@radians.setter def(self, value)"
+    }
+   },
+   "SliderFloatN": {
+    "bases": [
+     "SliderScalarN"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, values, v_min, v_max, fmt=None, logarithmic=False)"
+    }
+   },
+   "SliderInt": {
+    "bases": [
+     "SliderScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, v_min, v_max, value=0, fmt=None, logarithmic=False)"
+    }
+   },
+   "SliderIntN": {
+    "bases": [
+     "SliderScalarN"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, values, v_min, v_max, fmt=None, logarithmic=False)"
+    }
+   },
+   "SliderScalar": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, v_min, v_max, value=0.0, fmt=None, is_int=False, logarithmic=False, round_to_format=True, vertical=False)",
+     "deadzone": "@property def(self)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "fraction": "@property def(self)",
+     "log_epsilon": "@property def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "set_fraction": "def(self, fraction)",
+     "set_value": "def(self, value)",
+     "step": "def(self, delta)",
+     "text": "@property def(self)"
+    }
+   },
+   "SliderScalarN": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, values, v_min, v_max, fmt=None, is_int=False, logarithmic=False)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "held": "@property def(self)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "set_values": "def(self, values)",
+     "values": "@property def(self)"
+    }
+   },
+   "VSliderFloat": {
+    "bases": [
+     "SliderScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, v_min, v_max, value=0.0, fmt=None, logarithmic=False)"
+    }
+   },
+   "VSliderInt": {
+    "bases": [
+     "SliderScalar"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, v_min, v_max, value=0, fmt=None, logarithmic=False)"
+    }
+   },
+   "parse_precision": "def(fmt, default_precision=3)",
+   "ratio_from_value": "def(value, v_min, v_max, log_epsilon=0.0, deadzone=0.0)",
+   "round_to_format": "def(fmt, value)",
+   "value_from_ratio": "def(t, v_min, v_max, log_epsilon=0.0, deadzone=0.0, is_int=False)"
+  },
+  "emtk.widgets.splitter": {
+   "Splitter": {
+    "bases": [
+     "Control"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, size1, axis=Axis.X, thickness=12.0, min_size1=0.0, min_size2=0.0, bar_margin=4.0, hover_extend=8.0)",
+     "clamp": "def(self, total=None)",
+     "drag": "def(self, px, py, x, y, w, h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, px, py)",
+     "measure": "def(self, p)",
+     "press": "def(self, px, py, x, y, w, h, modifiers=0, clicks=1)",
+     "release": "def(self)",
+     "size2": "@property def(self)",
+     "split": "def(self, x, y, w, h)"
+    }
+   }
+  },
+  "emtk.widgets.table_menu": {
+   "KEY_MENU": "value",
+   "draw": "def(binding, name, hovered)",
+   "request": "def(binding, record, column, x, y)"
+  },
+  "emtk.widgets.tables": {
+   "BORDER_SIZE": "value",
+   "Column": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, name, width=None, init_width_or_weight=-1.0, *, no_resize=False, no_reorder=False, no_hide=False, no_sort=False, no_sort_ascending=False, no_sort_descending=False, prefer_sort_descending=False, default_hide=False, default_sort=False, disabled=False, no_header_width=False)",
+     "avail_sort_direction": "def(self, n)",
+     "fix_sort_direction": "def(self)",
+     "is_fixed": "def(self)",
+     "is_stretch": "def(self)",
+     "next_sort_direction": "def(self)"
+    }
+   },
+   "DataTable": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, columns, rows=(), *, sizing=SIZING_STRETCH_SAME, resizable=True, reorderable=True, hideable=True, sortable=True, sort_multi=True, sort_tristate=False, row_bg=True, borders_inner_v=True, borders_outer_v=True, borders_inner_h=True, borders_outer_h=True, freeze_rows=0, freeze_cols=0, scroll_x=False, keep_columns_visible=True, precise_widths=False, cell_padding=4.0, outer_padding=0.0, min_column_width=4.0, row_scale=1.15, show_headers=True, selected_row=None)",
+     "auto_fit_all": "def(self)",
+     "auto_fit_column": "def(self, index)",
+     "can_hide_column": "def(self, index)",
+     "clear_bg_overrides": "def(self)",
+     "click_header": "def(self, index, append=None)",
+     "close_context_menu": "def(self)",
+     "column_at": "def(self, x)",
+     "column_border_at": "def(self, x)",
+     "column_width_auto": "def(self, p, index)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "enabled_columns": "def(self)",
+     "max_display_order_allowed": "def(self, src_order, dst_order)",
+     "menu_items": "def(self)",
+     "open_context_menu": "def(self, column=-1, at=None)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)",
+     "reset_display_order": "def(self)",
+     "reset_visibility": "def(self)",
+     "scroll": "def(self, rows)",
+     "set_cell_bg": "def(self, row, column, colour)",
+     "set_column_display_order": "def(self, index, dst_order)",
+     "set_column_enabled": "def(self, index, enabled)",
+     "set_column_sort_direction": "def(self, index, direction, append=False)",
+     "set_column_width": "def(self, index, width)",
+     "set_row_bg": "def(self, row, colour)",
+     "sort_rows": "def(self)",
+     "sort_specs": "def(self)",
+     "sort_specs_count": "def(self)",
+     "top": "@property def(self)",
+     "update_layout": "def(self, p, x, w)",
+     "update_weights_from_width": "def(self)"
+    }
+   },
+   "RESIZE_HALF_THICKNESS": "value",
+   "SIZING_FIXED_FIT": "value",
+   "SIZING_FIXED_SAME": "value",
+   "SIZING_STRETCH_PROP": "value",
+   "SIZING_STRETCH_SAME": "value",
+   "SORT_ASCENDING": "value",
+   "SORT_DESCENDING": "value",
+   "SORT_NONE": "value",
+   "SortSpec": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__eq__": "def(self, other)",
+     "__init__": "def(self, column_index, sort_order, sort_direction)"
+    }
+   },
+   "WIDTH_FIXED": "value",
+   "WIDTH_STRETCH": "value"
+  },
+  "emtk.widgets.tabs": {
+   "MAX_TAB_WIDTH_EM": "value",
+   "PAD_X": "value",
+   "SHRINK_MIN_WIDTH": "value",
+   "TAB_BAR_AUTO_SELECT_NEW_TABS": "value",
+   "TAB_BAR_FITTING_POLICY_DEFAULT": "value",
+   "TAB_BAR_FITTING_POLICY_MASK": "value",
+   "TAB_BAR_FITTING_POLICY_RESIZE_DOWN": "value",
+   "TAB_BAR_FITTING_POLICY_SCROLL": "value",
+   "TAB_BAR_NONE": "value",
+   "TAB_BAR_NO_CLOSE_WITH_MIDDLE_MOUSE_BUTTON": "value",
+   "TAB_BAR_NO_TAB_LIST_SCROLLING_BUTTONS": "value",
+   "TAB_BAR_REORDERABLE": "value",
+   "TAB_BAR_SCROLL_VIEW": "value",
+   "TAB_BAR_TAB_LIST_POPUP_BUTTON": "value",
+   "TAB_SPACING": "value",
+   "TabBar": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, items=(), flags=TAB_BAR_NONE, index=0)",
+     "add": "def(self, item)",
+     "close": "def(self, item)",
+     "cycle": "def(self, step=1)",
+     "drag": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "index": "@property def(self)",
+     "labels": "@property def(self)",
+     "layout": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h, button=0)",
+     "release": "def(self)",
+     "select": "def(self, index)",
+     "selected": "@property def(self)",
+     "value": "@property def(self)"
+    }
+   },
+   "TabItem": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, closable=False, modified=False, disabled=False, button=False, reorderable=True, no_close_with_middle_mouse=False)",
+     "close_button_box": "def(self, p, x, y, w, h)",
+     "content_width": "def(self, p)",
+     "draw": "def(self, p, x, y, w, h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h, button=0)"
+    }
+   },
+   "TabItemButton": {
+    "bases": [
+     "TabItem"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, disabled=False)"
+    }
+   },
+   "TabPress": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "action": "field",
+     "index": "field",
+     "item": "field"
+    }
+   },
+   "shrink_widths": "def(widths, excess, width_min=SHRINK_MIN_WIDTH)"
+  },
+  "emtk.widgets.text": {
+   "Bullet": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, colour=style.TEXT)",
+     "advance": "def(self, p)",
+     "draw": "def(self, p, x, y, w, h)"
+    }
+   },
+   "BulletText": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='', colour=style.TEXT)",
+     "draw": "def(self, p, x, y, w, h)",
+     "size": "def(self, p)"
+    }
+   },
+   "LabelText": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label, value='', value_fraction=_ITEM_WIDTH_FRACTION)",
+     "draw": "def(self, p, x, y, w, h)",
+     "value_width": "def(self, w)"
+    }
+   },
+   "SeparatorText": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label='', align=0.0)",
+     "draw": "def(self, p, x, y, w, h)"
+    }
+   },
+   "Text": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='', colour=style.TEXT)",
+     "draw": "def(self, p, x, y, w, h)",
+     "lines": "def(self)",
+     "size": "def(self, p)"
+    }
+   },
+   "TextColored": {
+    "bases": [
+     "Text"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, colour, text='')"
+    }
+   },
+   "TextDisabled": {
+    "bases": [
+     "Text"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='')"
+    }
+   },
+   "TextLink": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, label)",
+     "draw": "def(self, p, x, y, w, h)",
+     "extent": "def(self, box_x, box_y, box_w, box_h)",
+     "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
+     "release": "def(self)"
+    }
+   },
+   "TextWrapped": {
+    "bases": [
+     "Text"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='', colour=style.TEXT)",
+     "draw": "def(self, p, x, y, w, h)",
+     "size": "def(self, p, w=0.0)",
+     "wrapped": "def(self, p, w)"
+    }
+   },
+   "Value": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, prefix, value, float_format='%.3f', colour=style.TEXT)",
+     "draw": "def(self, p, x, y, w, h)",
+     "formatted": "@property def(self)",
+     "size": "def(self, p)",
+     "text": "@property def(self)"
+    }
+   },
+   "wrap_lines": "def(p, text, width)"
+  },
+  "emtk.widgets.text_editor": {
+   "Action": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "end": "field",
+     "insert": "field",
+     "start": "field",
+     "text": "field"
+    }
+   },
+   "BracketPair": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "close_char": "field",
+     "end": "field",
+     "level": "field",
+     "open_char": "field",
+     "start": "field",
+     "surrounds": "def(self, pos)",
+     "visible": "field"
+    }
+   },
+   "Bracketeer": {
+    "bases": [
+     "list"
+    ],
+    "decorators": [],
+    "members": {
+     "at": "def(self, pos)",
+     "enclosing": "def(self, pos)",
+     "update": "def(self, config, document)"
+    }
+   },
+   "Colorizer": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "update": "def(self, config, document)"
+    }
+   },
+   "Cursor": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, start=Pos(), end=None)",
+     "grow": "def(self, pos)",
+     "has_selection": "@property def(self)",
+     "selection": "def(self)",
+     "update": "def(self, pos, keep_selection=False)"
+    }
+   },
+   "Cursors": {
+    "bases": [
+     "list"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "add_cursor": "def(self, start, end=None)",
+     "all_have_selection": "@property def(self)",
+     "any_has_selection": "@property def(self)",
+     "clear_additional": "def(self)",
+     "clear_all": "def(self)",
+     "current": "@property def(self)",
+     "in_document_order": "def(self)",
+     "main": "@property def(self)",
+     "merge_overlapping": "def(self)",
+     "set_cursor": "def(self, start, end=None)"
+    }
+   },
+   "DARK_PALETTE": "value",
+   "Document": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='')",
+     "__len__": "def(self)",
+     "bottom": "def(self)",
+     "delete_text": "def(self, start, end)",
+     "end_of_line": "def(self, pos)",
+     "find_all": "def(self, needle, case_sensitive=True, whole_word=False)",
+     "find_text": "def(self, origin, needle, case_sensitive=True, whole_word=False)",
+     "find_word_end": "def(self, pos, word_only=False)",
+     "find_word_start": "def(self, pos, word_only=False)",
+     "get_line_text": "def(self, line)",
+     "get_section_text": "def(self, start, end)",
+     "get_text": "def(self)",
+     "identifiers": "def(self)",
+     "insert_text": "def(self, start, text)",
+     "is_empty": "@property def(self)",
+     "is_whole_word": "def(self, start, end)",
+     "left": "def(self, pos, word_mode=False)",
+     "normalize": "def(self, pos)",
+     "right": "def(self, pos, word_mode=False)",
+     "set_text": "def(self, text)",
+     "start_of_line": "def(self, pos)",
+     "top": "def(self)",
+     "word_at": "def(self, pos)"
+    }
+   },
+   "EditorConfig": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "auto_indent": "field=",
+     "background_color": "field=",
+     "caret_color": "field=",
+     "carets_visible": "field=",
+     "complete_paired_glyphs": "field=",
+     "current_line_color": "field=",
+     "font_role": "field=",
+     "highlight_current_line": "field=",
+     "insert_spaces_on_tabs": "field=",
+     "language": "field=",
+     "left_margin": "field=",
+     "line_number_color": "field=",
+     "line_spacing": "field=",
+     "margin_color": "field=",
+     "overwrite": "field=",
+     "read_only": "field=",
+     "selection_color": "field=",
+     "show_line_numbers": "field=",
+     "show_matching_brackets": "field=",
+     "show_spaces": "field=",
+     "show_tabs": "field=",
+     "tab_size": "field=",
+     "text_margin": "field="
+    }
+   },
+   "LIGHT_PALETTE": "value",
+   "Language": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "c": "@staticmethod def()",
+     "case_sensitive": "field=",
+     "commands": "@staticmethod def(commands=(), words=(), name='commands')",
+     "comment_end": "field=",
+     "comment_prefix": "field=",
+     "comment_start": "field=",
+     "cpp": "@staticmethod def()",
+     "declarations": "field=",
+     "glsl": "@staticmethod def()",
+     "has_double_quoted_strings": "field=",
+     "has_single_quoted_strings": "field=",
+     "identifier_pattern": "field=",
+     "identifiers": "field=",
+     "indentation_for_blocks": "field=",
+     "json": "@staticmethod def()",
+     "keywords": "field=",
+     "lua": "@staticmethod def()",
+     "markdown": "@staticmethod def()",
+     "name": "field=",
+     "number_pattern": "field=",
+     "other_string_alt_end": "field=",
+     "other_string_alt_start": "field=",
+     "other_string_end": "field=",
+     "other_string_start": "field=",
+     "preprocess": "field=",
+     "punctuation": "field=",
+     "python": "@staticmethod def()",
+     "single_line_comment": "field=",
+     "single_line_comment_alt": "field=",
+     "sql": "@staticmethod def()",
+     "string_escape": "field=",
+     "yaml": "@staticmethod def()"
+    }
+   },
+   "Line": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='')",
+     "__len__": "def(self)",
+     "paint": "def(self, start, end, token)",
+     "set_text": "def(self, text)"
+    }
+   },
+   "LineState": {
+    "bases": [
+     "IntEnum"
+    ],
+    "decorators": [],
+    "members": {
+     "IN_COMMENT": "attribute",
+     "IN_DOUBLE_QUOTED_STRING": "attribute",
+     "IN_OTHER_STRING": "attribute",
+     "IN_OTHER_STRING_ALT": "attribute",
+     "IN_SINGLE_QUOTED_STRING": "attribute",
+     "IN_TEXT": "attribute"
+    }
+   },
+   "Pos": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "index": "field=",
+     "line": "field="
+    }
+   },
+   "TextEditor": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, text='', language=None, read_only=False)",
+     "add_marker": "def(self, line, number_colour, text_colour, tooltip='')",
+     "add_next_occurrence": "def(self)",
+     "backspace": "def(self)",
+     "clear_markers": "def(self)",
+     "compose": "def(self, text, cursor=None)",
+     "copy": "def(self)",
+     "cut": "def(self)",
+     "deindent_lines": "def(self)",
+     "delete": "def(self)",
+     "drag": "def(self, px, py, x, y, w, h)",
+     "draw": "def(self, p, x, y, w, h)",
+     "find_all": "def(self)",
+     "find_next": "def(self)",
+     "find_previous": "def(self)",
+     "indent_lines": "def(self)",
+     "insert": "def(self, text)",
+     "is_empty": "@property def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "language_name": "@property def(self)",
+     "line_count": "@property def(self)",
+     "mark_saved": "def(self)",
+     "modified": "@property def(self)",
+     "move_down": "def(self, select=False, lines=1)",
+     "move_end": "def(self, select=False, document=False)",
+     "move_home": "def(self, select=False, document=False)",
+     "move_left": "def(self, select=False, word=False)",
+     "move_lines": "def(self, down)",
+     "move_right": "def(self, select=False, word=False)",
+     "move_up": "def(self, select=False, lines=1)",
+     "newline": "def(self)",
+     "paste": "def(self, text=None)",
+     "position_at": "def(self, px, py)",
+     "press": "def(self, px, py, x, y, w, h, modifiers=0, clicks=1)",
+     "redo": "def(self)",
+     "release": "def(self)",
+     "replace_all": "def(self, text)",
+     "replace_current": "def(self, text)",
+     "replace_section": "def(self, start, end, text)",
+     "revision": "@property def(self)",
+     "scroll": "def(self, lines)",
+     "scroll_columns": "def(self, columns)",
+     "scroll_to_line": "def(self, line, align='middle')",
+     "select_all": "def(self)",
+     "select_all_occurrences": "def(self)",
+     "select_line": "def(self, line)",
+     "select_region": "def(self, start, end)",
+     "select_to_brackets": "def(self, include_brackets=True)",
+     "select_word_at": "def(self, pos)",
+     "selected_text": "def(self)",
+     "selection_to_lower": "def(self)",
+     "selection_to_upper": "def(self)",
+     "set_cursor": "def(self, pos)",
+     "set_find_text": "def(self, text, case_sensitive=True, whole_word=False)",
+     "set_language": "def(self, language)",
+     "set_text": "def(self, text)",
+     "spaces_to_tabs": "def(self)",
+     "strip_trailing_whitespace": "def(self)",
+     "tabs_to_spaces": "def(self)",
+     "text": "@property def(self)",
+     "text.setter": "@text.setter def(self, value)",
+     "toggle_comments": "def(self)",
+     "undo": "def(self)"
+    }
+   },
+   "Token": {
+    "bases": [
+     "IntEnum"
+    ],
+    "decorators": [],
+    "members": {
+     "BRACKET_ERROR": "attribute",
+     "BRACKET_LEVEL1": "attribute",
+     "BRACKET_LEVEL2": "attribute",
+     "BRACKET_LEVEL3": "attribute",
+     "COMMENT": "attribute",
+     "DECLARATION": "attribute",
+     "IDENTIFIER": "attribute",
+     "KEYWORD": "attribute",
+     "KNOWN_IDENTIFIER": "attribute",
+     "NUMBER": "attribute",
+     "PREPROCESSOR": "attribute",
+     "PUNCTUATION": "attribute",
+     "STRING": "attribute",
+     "TEXT": "attribute",
+     "WHITESPACE": "attribute"
+    }
+   },
+   "Transaction": {
+    "bases": [],
+    "decorators": [
+     "dataclass"
+    ],
+    "members": {
+     "actions": "field=",
+     "add_delete": "def(self, start, end, text)",
+     "add_insert": "def(self, start, end, text)",
+     "after": "field=",
+     "before": "field="
+    }
+   },
+   "Transactions": {
+    "bases": [
+     "list"
+    ],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "add": "def(self, transaction)",
+     "can_redo": "@property def(self)",
+     "can_undo": "@property def(self)",
+     "redo": "def(self, document, cursors)",
+     "reset": "def(self)",
+     "undo": "def(self, document, cursors)"
+    }
+   }
+  },
+  "emtk.widgets.text_field": {
+   "TextField": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, on_change=None, placeholder='')",
+     "clear": "def(self)",
+     "compose": "def(self, text, cursor=None)",
+     "copy": "def(self)",
+     "cursor": "@property def(self)",
+     "cursor.setter": "@cursor.setter def(self, value)",
+     "cut": "def(self)",
+     "delete_selection": "def(self)",
+     "has_selection": "def(self)",
+     "insert": "def(self, text, typing=False)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "move": "def(self, index, extend=False)",
+     "paste": "def(self, text=None)",
+     "redo": "def(self)",
+     "select_all": "def(self)",
+     "select_word_at": "def(self, index)",
+     "selected_text": "def(self)",
+     "selection": "def(self)",
+     "set_text": "def(self, text)",
+     "undo": "def(self)",
+     "word_left": "def(self, i)",
+     "word_right": "def(self, i, mac)"
+    }
+   },
+   "index_at": "def(xs, x)",
+   "paint": "def(p, field, x, y, w, h, colour, caret_colour=None, pad=4.0)"
+  },
+  "emtk.widgets.view_spec": {
+   "CONTAINER_TYPES": "value",
+   "FIELD_KINDS": "value",
+   "ViewSpecPanel": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, spec, model, on_change=None, visible_rows=6, domain=None)",
+     "drag": "def(self, px, py, *box)",
+     "draw": "def(self, painter, x, y, w, h)",
+     "hover": "def(self, px, py, *box)",
+     "item_rects": "@property def(self)",
+     "key": "def(self, key, text='', modifiers=0)",
+     "press": "def(self, px, py, *box, **kw)",
+     "release": "def(self, *args, **kw)",
+     "scroll": "def(self, rows)"
+    }
+   },
+   "load_view_spec": "def(path)",
+   "model_from_view_spec": "def(spec, model, on_change=None)",
+   "settings_from_view_spec": "def(spec, model)",
+   "table_bindings": "def(spec, model)",
+   "unsupported_sections": "def(spec, model)"
+  }
+ },
+ "sha256": "59afd13748b618abd47d7c3469d5db31d158b00cbe80ed54f4bbd64c4a58018b",
+ "version": "0.1.9"
+}
