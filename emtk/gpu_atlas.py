@@ -398,6 +398,11 @@ class ImageAtlas:
         self._shelf_x = 0
         self._shelf_y = 0
         self._shelf_h = 0
+        #: ``[y, h, x]`` of every shelf closed so far: its top, its height and where
+        #: its free tail starts. A shelf is closed when an image does not fit the rest
+        #: of its width, but a narrower one still does -- after a repack by height the
+        #: tail of a row of wide figures is the only room left for a glyph.
+        self._rows: list = []
         #: Whether the live images are packed as tightly as a repack packs them: true
         #: right after one, false after any placement or release. A full atlas is only
         #: repacked when this is false, so a newcomer that cannot fit even after the
@@ -631,12 +636,29 @@ class ImageAtlas:
         return (x, y, width, height)
 
     def _shelf(self, width: int, height: int):
-        """Space at the end of the shelves; ``None`` -- and nothing moved -- if none."""
+        """Space at the end of the shelves; ``None`` -- and nothing moved -- if none.
+
+        The tail of a closed shelf comes first (the lowest one tall enough), then the
+        open shelf, then a new one below it.
+        """
+        best = None
+        for row in self._rows:
+            if row[1] >= height and row[2] + width <= self.width and (
+                    best is None or row[1] < best[1]):
+                best = row
+        if best is not None:
+            x = best[2]
+            best[2] = x + width
+            return (x, best[0], width, height)
         x, y, h = self._shelf_x, self._shelf_y, self._shelf_h
+        closed = None
         if x + width > self.width:
+            closed = [y, h, x]
             x, y, h = 0, y + h, 0
         if y + height > self.height:
             return None
+        if closed is not None and closed[1] > 0 and closed[2] < self.width:
+            self._rows.append(closed)
         self._shelf_x, self._shelf_y, self._shelf_h = x + width, y, max(h, height)
         return (x, y, width, height)
 
@@ -655,6 +677,7 @@ class ImageAtlas:
         self._placed.clear()
         self._free.clear()
         self._shelf_x = self._shelf_y = self._shelf_h = 0
+        self._rows = []
         for key, (ref, _rev, _x, _y, w, h) in live:
             handle = ref()
             spot = self._shelf(w, h)

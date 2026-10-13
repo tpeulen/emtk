@@ -462,6 +462,25 @@ def test_a_full_but_fragmented_atlas_packs_again_instead_of_declining():
     assert _texels(atlas, newcomer) == (32, 16, 50)
 
 
+def test_the_tail_of_a_closed_shelf_takes_a_narrower_image():
+    """A shelf closes when the next image is wider than what is left of it, and its
+    tail was lost for good. After a repack by height a page of wide figures (two
+    1900 px screenshots to a 4096 px row) left only those tails free, so a 4096 x 4096
+    atlas 66 % full declined a 1 x 1 glyph and the help reader's page failed to draw."""
+    atlas = ImageAtlas(64, 64, max_size=64)
+    kept = [_solid(40, 32, 10), _solid(40, 32, 20), _solid(24, 32, 30)]
+    for image in kept:
+        assert atlas.region(image) is not None
+    newcomer = _solid(24, 32, 40)
+    assert atlas.region(newcomer) is not None
+    assert atlas._placed[id(newcomer)][4:] == (24, 32), "stored at its own size"
+    glyph = _solid(1, 1, 50)
+    atlas.forget(newcomer)
+    assert atlas.region(glyph) is not None
+    for image, value in zip(kept, (10, 20, 30)):
+        assert _texels(atlas, image) == (image.width, image.height, value)
+
+
 def test_a_truly_full_atlas_repacks_once_not_per_halving():
     """When packing cannot make room the newcomer is halved; each halving must not
     rewrite every live image again."""
