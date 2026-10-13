@@ -63,6 +63,21 @@ What the user can do:
 * drag the bar between two regions to resize them. A region with nothing
   visible in it gives its space to its neighbour.
 
+The workspace
+-------------
+A region declared ``Region("center", workspace=True)`` is the **workspace**:
+the one place unbound windows live, so none can drift out of reach. Every
+floating window is kept inside it (and clamped back in when the box shrinks),
+and it can never be closed -- it is a region, not a window, and it keeps its
+space when it is empty. A tool bar along its top arranges its children (the
+windows floating in it and the tabs docked in it): *Tile* lays them out in a
+near-square grid of usable tiles (:func:`tile_grid`; what does not fit is
+minimized), *Cascade* floats them, each a step below the last, *Tabbed* docks
+them all as its tabs, and *Windows* lists them to pick one. A floating
+window's ``_`` minimizes it to the strip along the workspace's bottom, where
+a click brings it back; Ctrl+Tab (:meth:`DockManager.handle_key`) cycles the
+children. Without a workspace region floating windows range over the whole box.
+
 :meth:`DockManager.state` / :meth:`DockManager.restore` are the whole layout
 -- floating boxes, what is docked where, tab order, the selected tabs, split
 ratios, visibility, and the application's own values (:meth:`DockManager.set_extra`)
@@ -107,6 +122,8 @@ __all__ = [
     "DockWindow",
     "DockManager",
     "ACCENT_STRIPE",
+    "MIN_TILE",
+    "tile_grid",
 ]
 
 logger = logging.getLogger(__name__)
@@ -527,6 +544,38 @@ class LayoutStore:
             logger.debug("emtk.docking: could not remove %s", self.path, exc_info=True)
 
 
+#: The smallest tile :func:`tile_grid` makes, logical pixels: below it a window is a sliver.
+MIN_TILE = (380.0, 280.0)
+
+
+def tile_grid(count: int, width: float, height: float,
+              min_tile: Tuple[float, float] = MIN_TILE) -> Tuple[int, int]:
+    """``(rows, cols)`` of the grid *count* windows are tiled into in a *width* x *height* area.
+
+    The grid is the most square-tiled one (tiles near 4:3, few empty cells) that keeps every
+    tile at least *min_tile*; when even the largest such grid holds fewer than *count*, that
+    largest grid is returned and the caller decides where the rest go.
+    """
+    import math
+
+    count = max(int(count), 1)
+    max_cols = max(1, int(width // min_tile[0]))
+    max_rows = max(1, int(height // min_tile[1]))
+    best = None
+    for cols in range(1, min(count, max_cols) + 1):
+        rows = math.ceil(count / cols)
+        if rows > max_rows:
+            continue
+        aspect = abs(math.log(max(width / cols, 1.0) / max(height / rows, 1.0))
+                     - math.log(4.0 / 3.0))
+        score = (rows * cols - count, aspect)
+        if best is None or score < best[0]:
+            best = (score, rows, cols)
+    if best is None:
+        return max_rows, max_cols
+    return best[1], best[2]
+
+
 # --------------------------------------------------------------------------- #
 # Regions and windows
 # --------------------------------------------------------------------------- #
@@ -540,10 +589,16 @@ class Region:
     keep : bool
         Keep the region's space (drawn empty) when nothing is docked in it.
         Off by default: an empty region gives its space to its neighbour.
+    workspace : bool
+        The manager's workspace: floating windows are kept inside it, it
+        draws the workspace tool bar and the minimized strip, and it always
+        keeps its space (see the module docstring). One per manager; the
+        first one declared counts.
     """
 
     name: str
     keep: bool = False
+    workspace: bool = False
 
 
 @dataclass
@@ -611,6 +666,9 @@ class DockWindow:
     header_tint : bool
         Tint the section headers drawn inside the window with a muted share of its
         :attr:`accent`.
+    minimized : bool
+        Floating in the workspace but shown only as a chip on its minimized
+        strip (:meth:`DockManager.minimize`); focusing it brings it back.
     frame, content : (x, y, w, h) or None
         Where it was drawn last frame (``None`` when not drawn).
     """
@@ -633,6 +691,7 @@ class DockWindow:
     tooltip: str = ""
     accent: Optional[Any] = None
     header_tint: bool = False
+    minimized: bool = False
     frame: Optional[Rect] = None
     content: Optional[Rect] = None
 
@@ -731,6 +790,13 @@ class DockManager:
         #: The application's own layout values (a splitter inside a window, a
         #: panel's size), kept and saved with the layout: :meth:`set_extra`.
         self.extras: Dict[str, Any] = {}
+        #: Keep floating windows inside the workspace region (when the layout has one). A
+        #: host turns it off only to float a window over the whole box on purpose (a figure).
+        self.confine = True
+        #: Where each region's tab strip and content were drawn last frame (the workspace's
+        #: lie under its tool bar and above its minimized strip; the others are the region box).
+        self._inner_boxes: Dict[str, Rect] = {}
+        self._last_bounds: Optional[Rect] = None
 
     # ------------------------------------------------------------ the tree
     def configure_default_layout(self, layout: Node, docks: dict[str, str]) -> bool:
@@ -850,6 +916,7 @@ class DockManager:
                 "type": "region",
                 "name": node.name,
                 "keep": bool(node.keep),
+                "workspace": bool(getattr(node, "workspace", False)),
                 "dynamic": bool(getattr(node, "_dynamic", False)),
             }
         return {
@@ -867,7 +934,8 @@ class DockManager:
             return None
         ntype = data.get("type")
         if ntype == "region":
-            r = Region(name=str(data["name"]), keep=bool(data.get("keep", False)))
+            r = Region(name=str(data["name"]), keep=bool(data.get("keep", False)),
+                       workspace=bool(data.get("workspace", False)))
             if data.get("dynamic"):
                 r._dynamic = True
             return r
@@ -1107,7 +1175,9 @@ class DockManager:
         if win is None or not win.visible:
             return False
         region = self.region_of(key)
-        return region is None or self.active_tab(region) == key
+        if region is None:
+            return not win.minimized
+        return self.active_tab(region) == key
 
     def _forget(self, key: str) -> None:
         for name, keys in self.tabs.items():
@@ -1137,6 +1207,7 @@ class DockManager:
         win = self.windows[key]
         self._put(key, region, index)
         win.anchor = None
+        win.minimized = False
         if select:
             self.selected[region] = key
         self._dirty = True
@@ -1219,6 +1290,7 @@ class DockManager:
         win = self.windows[key]
         win.visible = True
         win.collapsed = False
+        win.minimized = False
         self.focused = key
         region = self.region_of(key)
         if region is not None:
@@ -1245,6 +1317,156 @@ class DockManager:
         if key in self.z and self.z[-1] != key:
             self.z.remove(key)
             self.z.append(key)
+
+    # ----------------------------------------------------------- workspace
+    @property
+    def workspace(self) -> Optional[str]:
+        """The name of the workspace region (``Region(..., workspace=True)``), ``None`` if none."""
+        return next((name for name, region in self.regions.items() if region.workspace), None)
+
+    def workspace_children(self) -> List[str]:
+        """The windows of the workspace, in the order they were added: the floating ones
+        (minimized too) and the tabs docked in the workspace region. Hidden ones are left out."""
+        region = self.workspace
+        docked = set(self.tabs.get(region, [])) if region is not None else set()
+        return [key for key, win in self.windows.items()
+                if win.visible and (key in self.z or key in docked)]
+
+    def _workspace_rect(self) -> Optional[Rect]:
+        region = self.workspace
+        if region is None:
+            return None
+        rect = self.region_boxes.get(region)
+        if rect is None and self.box[2] > 0:
+            rect = self.compute_layout(self.box)[0].get(region)
+        return rect
+
+    def _strip_height(self, minimized: Optional[bool] = None) -> float:
+        if minimized is None:
+            minimized = any(self.windows[k].minimized and self.windows[k].visible for k in self.z)
+        return self._title_h + 4.0 if minimized else 0.0
+
+    def floating_bounds(self, minimized: Optional[bool] = None) -> Rect:
+        """The box floating windows are kept in: the workspace under its tool bar (and under
+        its tab strip while it has tabs), above its minimized strip -- or the whole box when
+        there is no workspace or :attr:`confine` is off. *minimized* asks as if the strip
+        were (``True``) or were not (``False``) shown."""
+        rect = self._workspace_rect() if self.confine else None
+        if rect is None:
+            return self.box
+        x, y, w, h = rect
+        top = self._title_h
+        if any(self.windows[k].visible for k in self.tabs.get(self.workspace, [])):
+            top += self._title_h
+        bottom = self._strip_height(minimized)
+        return (x, y + top, w, max(h - top - bottom, self._title_h))
+
+    def minimize(self, key: str) -> None:
+        """Minimize *key* to the workspace's strip (a docked window is floated first)."""
+        win = self.windows[key]
+        if key not in self.z:
+            self.undock(key)
+        win.minimized = True
+        if self.focused == key:
+            rest = [k for k in self.workspace_children() if not self.windows[k].minimized]
+            self.focused = rest[-1] if rest else None
+            if self.focused is not None:
+                self.focus(self.focused)
+        self._dirty = True
+
+    def tile_workspace(self, keys: Optional[Sequence[str]] = None) -> None:
+        """*Tile*: the workspace's windows float in a near-square grid (:func:`tile_grid`).
+
+        No tile is smaller than :data:`MIN_TILE`; when the workspace cannot hold them all, the
+        grid is as large as fits and the rest are minimized to the strip, from where a click (or
+        *Windows*, or Ctrl+Tab) brings each back in its tile.
+        """
+        keys = list(self.workspace_children() if keys is None else keys)
+        if not keys:
+            return
+        for key in keys:
+            if key not in self.z:
+                self.undock(key)
+        bounds = self.floating_bounds(minimized=False)
+        rows, cols = tile_grid(len(keys), bounds[2], bounds[3])
+        if rows * cols < len(keys):
+            bounds = self.floating_bounds(minimized=True)
+            rows, cols = tile_grid(len(keys), bounds[2], bounds[3])
+        capacity = rows * cols
+        bx, by, bw, bh = bounds
+        cw, ch = bw / cols, bh / rows
+        for index, key in enumerate(keys):
+            slot = index % capacity
+            row, col = divmod(slot, cols)
+            win = self.windows[key]
+            win.box = (bx + col * cw, by + row * ch, cw, ch)
+            win.anchor = None
+            win.collapsed = False
+            win.minimized = index >= capacity
+        for key in reversed(keys[:capacity]):
+            self.raise_window(key)
+        self._dirty = True
+
+    def cascade_workspace(self, keys: Optional[Sequence[str]] = None) -> None:
+        """*Cascade*: the workspace's windows float, each a title bar below and right of the last."""
+        keys = list(self.workspace_children() if keys is None else keys)
+        if not keys:
+            return
+        for key in keys:
+            if key not in self.z:
+                self.undock(key)
+            self.windows[key].minimized = False
+        bx, by, bw, bh = self.floating_bounds(minimized=False)
+        step = self._title_h + 8.0
+        w, h = max(bw * 0.6, 240.0), max(bh * 0.6, 160.0)
+        span = max(int(min((bw - w), (bh - h)) // step), 0) + 1
+        for index, key in enumerate(keys):
+            offset = step * (index % span)
+            win = self.windows[key]
+            win.box = (bx + offset, by + offset, w, h)
+            win.anchor = None
+            win.collapsed = False
+            self.raise_window(key)
+        self._dirty = True
+
+    def tab_workspace(self, keys: Optional[Sequence[str]] = None) -> None:
+        """*Tabbed*: every window of the workspace a tab of the workspace region."""
+        region = self.workspace
+        keys = list(self.workspace_children() if keys is None else keys)
+        if region is None or not keys:
+            return
+        front = self.focused if self.focused in keys else keys[0]
+        for key in keys:
+            if self.region_of(key) != region:
+                self.dock(key, region, select=False)
+            self.windows[key].minimized = False
+        self.selected[region] = front
+        self._dirty = True
+
+    def cycle_workspace(self, step: int = 1) -> Optional[str]:
+        """Bring the next (``step=-1``: the previous) window of the workspace to the front."""
+        keys = self.workspace_children()
+        if not keys:
+            return None
+        index = keys.index(self.focused) if self.focused in keys else (-1 if step > 0 else 0)
+        key = keys[(index + (1 if step > 0 else -1)) % len(keys)]
+        self.focus(key)
+        return key
+
+    def handle_key(self, key: int, modifiers: int = 0) -> bool:
+        """A host's key hook: Ctrl+Tab and Ctrl+Shift+Tab cycle the workspace's windows.
+
+        Returns whether the key was taken. :meth:`draw` reads the same keys from the frame's
+        input, for a host that passes keys on without asking first.
+        """
+        from .events import CONTROL_MODIFIER, SHIFT_MODIFIER
+        from .keys import KEY_TAB
+
+        if int(key) != KEY_TAB or not int(modifiers) & CONTROL_MODIFIER:
+            return False
+        if self.workspace is None:
+            return False
+        return self.cycle_workspace(-1 if int(modifiers) & SHIFT_MODIFIER else 1) is not None
 
     def set_ratio(self, split: str, ratio: float) -> None:
         self.splits[split].ratio = min(max(float(ratio), 0.02), 0.98)
@@ -1280,6 +1502,7 @@ class DockManager:
                 "box": None if win.box is None else [round(float(v), 2) for v in win.box],
                 "visible": bool(win.visible),
                 "collapsed": bool(win.collapsed),
+                "minimized": bool(win.minimized),
                 "anchor": win.anchor,
             }
         regions = {}
@@ -1320,8 +1543,13 @@ class DockManager:
         if "layout" in state and isinstance(state["layout"], dict):
             new_layout = self._deserialize_node(state["layout"])
             if new_layout is not None:
+                declared = {name for name, region in self.regions.items() if region.workspace}
                 self.layout = new_layout
                 self._reindex()
+                # A layout saved before the application declared its workspace still gets it.
+                for name in declared:
+                    if name in self.regions:
+                        self.regions[name].workspace = True
                 self._rehome_orphans()
         for name, ratio in (state.get("splits") or {}).items():
             if name in self.splits:
@@ -1385,6 +1613,8 @@ class DockManager:
             win.visible = bool(entry["visible"])
         if "collapsed" in entry:
             win.collapsed = bool(entry["collapsed"])
+        if "minimized" in entry:
+            win.minimized = bool(entry["minimized"])
         if "anchor" in entry:
             win.anchor = str(entry["anchor"]) if entry["anchor"] else None
         if "dock" in entry:
@@ -1444,6 +1674,7 @@ class DockManager:
             default = self._defaults.get(key) or {}
             win.visible = bool(default.get("visible", True))
             win.collapsed = bool(default.get("collapsed", False))
+            win.minimized = False
             win.anchor = None
             win.box = default.get("box")
             if default.get("dock"):
@@ -1482,7 +1713,7 @@ class DockManager:
     # -------------------------------------------------------------- layout
     def _present(self, node: Node, force: Optional[str] = None) -> bool:
         if isinstance(node, Region):
-            return (node.keep or node.name == force
+            return (node.keep or node.workspace or node.name == force
                     or any(self.windows[k].visible for k in self.tabs[node.name]))
         return self._present(node.first, force) or self._present(node.second, force)
 
@@ -1543,7 +1774,8 @@ class DockManager:
             side = min(max(min(w, h) * PAD_FRACTION, PAD_MIN), PAD_MAX, min(w, h))
             btn = min(side * 0.65, 32.0)
             pad = (x + (w - btn) / 2.0, y + (h - btn) / 2.0, btn, btn)
-            strip = (x, y, w, self._title_h)
+            inner = self._inner_boxes.get(name, rect)
+            strip = (inner[0], inner[1], inner[2], self._title_h)
             targets[name] = (rect, pad, strip)
         return targets
 
@@ -1648,8 +1880,8 @@ class DockManager:
         return None
 
     def _floating_frame(self, win: DockWindow) -> Rect:
-        """The frame a floating window is drawn at: its box, kept inside the dock box."""
-        bx, by, bw, bh = self.box
+        """The frame a floating window is drawn at: its box, kept inside :meth:`floating_bounds`."""
+        bx, by, bw, bh = self.floating_bounds()
         x, y, w, h = win.box if win.box is not None else (bx + 40.0, by + 40.0, 320.0, 240.0)
         mw, mh = win.min_size
         w = min(max(w, mw), max(bw, mw))
@@ -1661,10 +1893,10 @@ class DockManager:
 
     def _follow_box(self, box: Rect) -> None:
         """Anchored windows follow their edge; every floating window stays reachable."""
-        old = self.box
         self.box = tuple(float(v) for v in box)
-        bx, by, bw, bh = self.box
-        moved = old != self.box
+        old = self._last_bounds
+        bx, by, bw, bh = self._last_bounds = self.floating_bounds()
+        moved = old is not None and old != self._last_bounds
         for key in self.z:
             win = self.windows[key]
             if win.box is None:
@@ -1680,7 +1912,7 @@ class DockManager:
 
     def _frames(self, keys: Iterable[str]) -> Dict[str, Rect]:
         return {k: self._floating_frame(self.windows[k]) for k in keys
-                if self.windows[k].visible}
+                if self.windows[k].visible and not self.windows[k].minimized}
 
     # --------------------------------------------------------------- drags
     def _begin_move(self, ctx, key: str, px: float, py: float, item_id, alone: bool) -> None:
@@ -1737,7 +1969,8 @@ class DockManager:
         frame = self._floating_frame(win)
         others = [k for k in self.z if k != key]
         step = mover.move(px, py, (frame[2], frame[3]), self._frames(others),
-                          bounds=self.box, snapping=self.snapping and target is None)
+                          bounds=self.floating_bounds(),
+                          snapping=self.snapping and target is None)
         _x, _y, w, h = win.box
         win.box = (step.x, step.y, w, h)
         win.anchor = step.anchor
@@ -1757,7 +1990,7 @@ class DockManager:
 
     def _drag_tab(self, ctx, drag: dict, px: float, py: float) -> None:
         region, key = drag["region"], drag["key"]
-        rect = self.region_boxes.get(region)
+        rect = self._inner_boxes.get(region, self.region_boxes.get(region))
         win = self.windows.get(key)
         if rect is None or win is None or key not in self.tabs.get(region, []):
             self._drag = None
@@ -1855,8 +2088,15 @@ class DockManager:
         # under the docks -- and so the ones the docks must hit-test in front of.
         before = {id(w) for w in ctx.windows if w.active}
         self._title_h = float(ctx.p.line_height() + ctx.style.frame_padding[1] * 2.0)
+        self.box = tuple(float(v) for v in box)
+        self.region_boxes, self.splitters = self.compute_layout(self.box)
         self._follow_box(box)
         self._update_drag(ctx)
+        from .keys import KEY_TAB
+
+        if io.key == KEY_TAB and io.key_ctrl and self.workspace is not None:
+            # Ctrl+Tab, from a host that passes keys on without asking :meth:`handle_key` first.
+            self.cycle_workspace(-1 if io.key_shift else 1)
         # A press on a floating window brings it to the front.
         if (io.mouse_clicked[0] or io.mouse_clicked[1]) and ctx.hovered_window is not None:
             name = ctx.hovered_window.name
@@ -1877,17 +2117,23 @@ class DockManager:
                 self._open_context(ctx, "empty", None)
         ctx.end()
 
+        workspace = self.workspace
         for region, rect in self.region_boxes.items():
             name = f"##{self.name}.region.{region}"
             ctx.begin(name, rect)
             submitted.append(name)
-            self._draw_region(ctx, region, rect)
+            if region == workspace:
+                self._draw_workspace(ctx, region, rect)
+            else:
+                self._inner_boxes[region] = rect
+                self._draw_region(ctx, region, rect)
             ctx.end()
 
-        front = self.z[-1] if self.z else None
+        shown = [k for k in self.z if self.windows[k].visible and not self.windows[k].minimized]
+        front = shown[-1] if shown else None
         for key in list(self.z):
             win = self.windows[key]
-            if not win.visible:
+            if not win.visible or win.minimized:
                 win.frame = win.content = None
                 continue
             name = f"##{self.name}.win.{key}"
@@ -2092,6 +2338,130 @@ class DockManager:
         top_win.frame = rect
         self._draw_content(ctx, top_win, (x, y + th, w, h - th))
 
+    def _draw_workspace(self, ctx, region: str, rect: Rect) -> None:
+        """The workspace region: its tool bar, its tabs and content, and its minimized strip."""
+        io = ctx.io
+        draw = ctx.draw
+        style = ctx.style
+        x, y, w, h = rect
+        th = self._title_h
+        pad_x = style.frame_padding[0]
+        draw.add_rect_filled((x, y), (x + w, y + th), style.color(_core.Col.MENU_BAR_BG))
+        draw.add_line((x, y + th - 1.0), (x + w, y + th - 1.0), style.color(_core.Col.BORDER))
+        children = self.workspace_children()
+        buttons = [
+            ("tile", tr("Tile", domain="emtk"),
+             tr("Arrange the workspace's windows side by side in a grid.", domain="emtk"),
+             self.tile_workspace),
+            ("cascade", tr("Cascade", domain="emtk"),
+             tr("Float the workspace's windows, each a little below the last.", domain="emtk"),
+             self.cascade_workspace),
+            ("tabbed", tr("Tabbed", domain="emtk"),
+             tr("Show the workspace's windows as tabs.", domain="emtk"),
+             self.tab_workspace),
+            ("windows", tr("Windows", domain="emtk"),
+             tr("List the workspace's windows and bring one to the front.", domain="emtk"),
+             None),
+        ]
+        right = x + w - 2.0
+        self._workspace_buttons: Dict[str, Rect] = {}
+        for key, label, tip, action in reversed(buttons):
+            arrow = th * 0.6 if action is None else 0.0
+            bw = ctx.p.text_width(label) + pad_x * 2.0 + arrow
+            right -= bw
+            button = (right, y + 2.0, bw, th - 4.0)
+            right -= 3.0
+            self._workspace_buttons[key] = button
+            enabled = bool(children)
+            draw.add_rect_filled((button[0], button[1]),
+                                 (button[0] + button[2], button[1] + button[3]),
+                                 style.color(_core.Col.BUTTON), 3.0)
+            if arrow:
+                # The list opens below: a small down-pointing triangle after the caption.
+                cx, cy, r = button[0] + bw - pad_x - arrow / 2.0, y + th / 2.0, th * 0.16
+                draw.add_triangle_filled((cx - r, cy - r * 0.6), (cx + r, cy - r * 0.6),
+                                         (cx, cy + r * 0.7),
+                                         style.color(_core.Col.TEXT if enabled
+                                                     else _core.Col.TEXT_DISABLED))
+                label_rect = (button[0], button[1], bw - arrow, button[3])
+            else:
+                label_rect = button
+            if self._button(ctx, button, self._id("workspace", key), None, tooltip=tip,
+                            enabled=enabled):
+                if action is None:
+                    self._open_context(ctx, "workspace", None)
+                    self._context_positions["workspace"] = (button[0], button[1] + th)
+                else:
+                    action()
+                    self._changed()
+            tw = ctx.p.text_width(label)
+            draw.add_text((label_rect[0] + (label_rect[2] - tw) / 2.0,
+                           y + (th - ctx.p.line_height()) / 2.0),
+                          style.color(_core.Col.TEXT if enabled else _core.Col.TEXT_DISABLED),
+                          label)
+        caption = tr("Workspace", domain="emtk")
+        caption_rect = (x, y, max(right - x, 0.0), th)
+        item = self._id("workspace", "bar")
+        hovered = ctx.item_add(caption_rect, item)
+        if hovered:
+            ctx.set_tooltip(tr("Floating windows live here and cannot leave it. Right-click "
+                               "for Tile, Cascade, Tabbed and the list of windows.",
+                               domain="emtk"))
+            if io.mouse_clicked[1]:
+                self._open_context(ctx, "workspace", None)
+        ctx.p.push_clip(*caption_rect)
+        draw.add_text((x + pad_x, y + (th - ctx.p.line_height()) / 2.0),
+                      style.color(_core.Col.TEXT_DISABLED), caption)
+        ctx.p.pop_clip()
+
+        minimized = [k for k in self.z if self.windows[k].visible and self.windows[k].minimized]
+        strip_h = self._strip_height(bool(minimized))
+        inner = (x, y + th, w, max(h - th - strip_h, th))
+        self._inner_boxes[region] = inner
+        top = self.active_tab(region)
+        if top is not None:
+            self._draw_region(ctx, region, inner)
+        else:
+            # No tabs: no empty tab strip either -- the floating windows have the whole of it.
+            self._tab_rects[region] = []
+            for key in self.tabs[region]:
+                self.windows[key].frame = self.windows[key].content = None
+            body = inner
+            item = self._id("workspace", "body")
+            if ctx.item_add(body, item) and io.mouse_clicked[1]:
+                self._open_context(ctx, "workspace", None)
+        if not minimized:
+            return
+        sy = y + h - strip_h
+        draw.add_rect_filled((x, sy), (x + w, y + h), style.color(_core.Col.MENU_BAR_BG))
+        cursor = x + 2.0
+        for key in minimized:
+            win = self.windows[key]
+            title = tr(win.title)
+            cw = min(ctx.p.text_width(title) + pad_x * 2.0 + 8.0, 200.0)
+            chip = (cursor, sy + 2.0, cw, th)
+            cursor += cw + 3.0
+            if chip[0] + chip[2] > x + w:
+                break
+            item = self._id("minimized", key)
+            hovered, held, pressed = ctx.button_behavior(chip, item)
+            accent = resolve(win.accent, style)
+            fill, ink = self._tab_colours(style, accent, False, hovered or held)
+            draw.add_rect_filled((chip[0], chip[1]), (chip[0] + chip[2], chip[1] + chip[3]), fill)
+            if accent is not None:
+                draw.add_rect_filled((chip[0], chip[1]), (chip[0] + chip[2], chip[1] + ACCENT_STRIPE),
+                                     accent.fill)
+            ctx.p.push_clip(*chip)
+            draw.add_text((chip[0] + pad_x + 2.0, chip[1] + (th - ctx.p.line_height()) / 2.0),
+                          ink, title)
+            ctx.p.pop_clip()
+            if hovered:
+                ctx.set_tooltip(tr("Restore {title} in the workspace.", domain="emtk")
+                                .format(title=title))
+            if pressed:
+                self.focus(key)
+                self._changed()
+
     def _draw_floating(self, ctx, win: DockWindow, frame: Rect, front: bool) -> None:
         io = ctx.io
         draw = ctx.draw
@@ -2123,12 +2493,18 @@ class DockManager:
             if self._button(ctx, close_rect, self._id("close", win.key), "×"):
                 win.visible = False
                 self._changed()
+        if self.workspace is not None and self.confine:
+            minimize_rect = (right - th, y, th, th)
+            right = minimize_rect[0]
+            if self._button(ctx, minimize_rect, self._id("minimize", win.key), "_",
+                            tooltip=tr("Minimize this window to the workspace's strip.",
+                                       domain="emtk")):
+                self.minimize(win.key)
+                self._changed()
         title_rect = (x + th, y, max(right - x - th, 0.0), th)
         item = self._id("title", win.key)
         hovered = ctx.item_add(title_rect, item)
         if hovered and win.tooltip:
-            from .i18n import tr
-
             ctx.set_tooltip(tr(win.tooltip), owner=item)
         context = f"floating.{win.key}"
         if hovered and io.mouse_clicked[1]:
@@ -2142,8 +2518,6 @@ class DockManager:
                                  alone=bool(io.key_shift))
         ctx.p.push_clip(*title_rect)
         text_h = ctx.p.line_height()
-        from .i18n import tr
-
         draw.add_text((title_rect[0] + 2.0, y + (th - text_h) / 2.0),
                       title_text, tr(win.title))
         ctx.p.pop_clip()
@@ -2178,6 +2552,9 @@ class DockManager:
         from . import im
 
         if not ctx.begin_popup(f"##{self.name}.context.{scope}"):
+            return
+        if scope == "workspace":
+            self._draw_workspace_menu(ctx, scope)
             return
         win = self.windows.get(self._context_targets.get(scope))
         width = min(260.0, self.box[2])
@@ -2240,6 +2617,65 @@ class DockManager:
         ctx.end()
         ctx.end_popup()
 
+    def _draw_workspace_menu(self, ctx, scope: str) -> None:
+        """The workspace's menu: Tile, Cascade, Tabbed, then every window of it to pick."""
+        from . import im
+
+        children = self.workspace_children()
+        width = min(280.0, self.box[2])
+        height = self._context_heights.get(scope) or (4 + len(children)) * self._title_h + 16.0
+        height = min(height, self.box[3])
+        px, py = self._context_positions[scope]
+        px = max(self.box[0], min(px, self.box[0] + self.box[2] - width))
+        py = max(self.box[1], min(py, self.box[1] + self.box[3] - height))
+        menu_box = (px, py, width, height)
+        popup = f"##{self.name}.context.{scope}"
+        from .keys import KEY_ESCAPE
+
+        if ctx.io.key == KEY_ESCAPE:
+            ctx.close_current_popup(popup)
+            return
+        if ((ctx.io.mouse_clicked[0] or ctx.io.mouse_clicked[1])
+                and not _hit(*ctx.io.mouse_pos, menu_box)
+                and not any(_hit(*ctx.io.mouse_pos, r)
+                            for r in getattr(self, "_workspace_buttons", {}).values())):
+            ctx.close_current_popup(popup)
+            return
+        ctx.begin(f"##{self.name}.context-window.{scope}", menu_box)
+        for label, tip, action in (
+                (tr("Tile", domain="emtk"),
+                 tr("Arrange the workspace's windows side by side in a grid.", domain="emtk"),
+                 self.tile_workspace),
+                (tr("Cascade", domain="emtk"),
+                 tr("Float the workspace's windows, each a little below the last.", domain="emtk"),
+                 self.cascade_workspace),
+                (tr("Tabbed", domain="emtk"),
+                 tr("Show the workspace's windows as tabs.", domain="emtk"),
+                 self.tab_workspace)):
+            if im.menu_item(label + "##workspace", enabled=bool(children)):
+                action()
+                self._changed()
+                im.close_current_popup()
+            im.set_item_tooltip(tip)
+        im.separator()
+        if not children:
+            im.text_disabled(tr("No windows in the workspace.", domain="emtk"))
+        for key in children:
+            win = self.windows[key]
+            title = tr(win.title)
+            if win.minimized:
+                title = tr("{title} (minimized)", domain="emtk").format(title=title)
+            if im.menu_item(f"{title}##workspace.{key}", selected=key == self.focused):
+                self.focus(key)
+                self._changed()
+                im.close_current_popup()
+            im.set_item_tooltip(tr("Bring this window to the front.", domain="emtk"))
+        last = im.get_item_rect()
+        if last is not None:
+            self._context_heights[scope] = last[1] + last[3] + 8.0 - menu_box[1]
+        ctx.end()
+        ctx.end_popup()
+
     def _draw_content(self, ctx, win: DockWindow, body: Rect) -> None:
         x, y, w, h = body
         p = win.padding
@@ -2287,15 +2723,18 @@ class DockManager:
         background = accent.mute(base, share)
         return background, accent.muted_text(background, text)
 
-    def _button(self, ctx, rect: Rect, item, label: Optional[str]) -> bool:
+    def _button(self, ctx, rect: Rect, item, label: Optional[str], tooltip: str = "",
+                enabled: bool = True) -> bool:
         """A title-bar button: highlighted under the pointer, pressed on release."""
         hovered, held, pressed = ctx.button_behavior(rect, item)
         if hovered:
             from .i18n import tr
 
-            ctx.set_tooltip(tr("Close this panel; reopen it from a dock header context menu.",
-                               domain="emtk")
-                            if label == "×" else tr("Collapse or expand this panel.", domain="emtk"))
+            ctx.set_tooltip(tooltip or (
+                tr("Close this panel; reopen it from a dock header context menu.", domain="emtk")
+                if label == "×" else tr("Collapse or expand this panel.", domain="emtk")))
+        if not enabled:
+            hovered = held = pressed = False
         if hovered or held:
             x, y, w, h = rect
             ctx.draw.add_rect_filled((x + 2.0, y + 2.0), (x + w - 2.0, y + h - 2.0),
@@ -2306,7 +2745,8 @@ class DockManager:
             tw = ctx.p.text_width(label)
             th = ctx.p.line_height()
             ctx.draw.add_text((x + (w - tw) / 2.0, y + (h - th) / 2.0),
-                              ctx.style.color(_core.Col.TEXT), label)
+                              ctx.style.color(_core.Col.TEXT if enabled
+                                              else _core.Col.TEXT_DISABLED), label)
         return bool(pressed)
 
     @staticmethod

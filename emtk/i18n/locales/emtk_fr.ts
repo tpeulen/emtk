@@ -808,5 +808,65 @@
             <source>The full traceback is in the log.</source>
             <translation>La trace complète se trouve dans le journal.</translation>
         </message>
+        <message>
+            <source>Workspace</source>
+            <translation>Espace de travail</translation>
+        </message>
+        <message>
+            <source>Tile</source>
+            <translation>Mosaïque</translation>
+        </message>
+        <message>
+            <source>Cascade</source>
+            <translation>Cascade</translation>
+        </message>
+        <message>
+            <source>Tabbed</source>
+            <translation>En onglets</translation>
+        </message>
+        <message>
+            <source>Windows</source>
+            <translation>Fenêtres</translation>
+        </message>
+        <message>
+            <source>Arrange the workspace's windows side by side in a grid.</source>
+            <translation>Disposer les fenêtres de l'espace de travail côte à côte dans une grille.</translation>
+        </message>
+        <message>
+            <source>Float the workspace's windows, each a little below the last.</source>
+            <translation>Rendre flottantes les fenêtres de l'espace de travail, chacune un peu sous la précédente.</translation>
+        </message>
+        <message>
+            <source>Show the workspace's windows as tabs.</source>
+            <translation>Afficher les fenêtres de l'espace de travail en onglets.</translation>
+        </message>
+        <message>
+            <source>List the workspace's windows and bring one to the front.</source>
+            <translation>Lister les fenêtres de l'espace de travail et en amener une au premier plan.</translation>
+        </message>
+        <message>
+            <source>Floating windows live here and cannot leave it. Right-click for Tile, Cascade, Tabbed and the list of windows.</source>
+            <translation>Les fenêtres flottantes vivent ici et ne peuvent pas en sortir. Clic droit pour Mosaïque, Cascade, En onglets et la liste des fenêtres.</translation>
+        </message>
+        <message>
+            <source>Restore {title} in the workspace.</source>
+            <translation>Restaurer {title} dans l'espace de travail.</translation>
+        </message>
+        <message>
+            <source>Minimize this window to the workspace's strip.</source>
+            <translation>Réduire cette fenêtre dans la barre de l'espace de travail.</translation>
+        </message>
+        <message>
+            <source>No windows in the workspace.</source>
+            <translation>Aucune fenêtre dans l'espace de travail.</translation>
+        </message>
+        <message>
+            <source>{title} (minimized)</source>
+            <translation>{title} (réduite)</translation>
+        </message>
+        <message>
+            <source>Bring this window to the front.</source>
+            <translation>Amener cette fenêtre au premier plan.</translation>
+        </message>
     </context>
 </TS>

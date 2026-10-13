@@ -181,6 +181,21 @@ retain precedence; empty restore metadata remains fresh. Validation failures
 leave the tree, windows, defaults and store untouched. The caller's tree is
 copied, and visibility, callbacks, floating boxes and selected windows survive.
 
+The workspace
+-------------
+
+``Region("center", workspace=True)`` makes a region the manager's workspace:
+every floating window lives inside it and is clamped back in when the box
+shrinks, and it keeps its space when empty, so it can never be closed. Its tool
+bar (and a right-click) offers *Tile* (a near-square grid from ``tile_grid``,
+no tile below ``MIN_TILE``; what does not fit is minimized), *Cascade*,
+*Tabbed* and *Windows* (a list to pick one). A floating window's ``_`` minimizes
+it to the strip along the workspace's bottom. ``DockManager.handle_key`` takes
+Ctrl+Tab / Ctrl+Shift+Tab to cycle the children (the keyboard focus ring leaves
+Ctrl+Tab alone). Arrangement and minimized state are part of ``state()``; a
+layout saved before the workspace was declared still gets it on restore.
+``confine = False`` lets a host float a window over the whole box on purpose.
+
 Text commit and cancellation
 ----------------------------
 

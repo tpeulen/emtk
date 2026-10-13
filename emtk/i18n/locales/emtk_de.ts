@@ -808,5 +808,65 @@
             <source>The full traceback is in the log.</source>
             <translation>Der vollständige Traceback steht im Protokoll.</translation>
         </message>
+        <message>
+            <source>Workspace</source>
+            <translation>Arbeitsbereich</translation>
+        </message>
+        <message>
+            <source>Tile</source>
+            <translation>Kacheln</translation>
+        </message>
+        <message>
+            <source>Cascade</source>
+            <translation>Kaskadieren</translation>
+        </message>
+        <message>
+            <source>Tabbed</source>
+            <translation>Als Tabs</translation>
+        </message>
+        <message>
+            <source>Windows</source>
+            <translation>Fenster</translation>
+        </message>
+        <message>
+            <source>Arrange the workspace's windows side by side in a grid.</source>
+            <translation>Die Fenster des Arbeitsbereichs nebeneinander in einem Raster anordnen.</translation>
+        </message>
+        <message>
+            <source>Float the workspace's windows, each a little below the last.</source>
+            <translation>Die Fenster des Arbeitsbereichs schweben lassen, jedes etwas unter dem vorigen.</translation>
+        </message>
+        <message>
+            <source>Show the workspace's windows as tabs.</source>
+            <translation>Die Fenster des Arbeitsbereichs als Tabs zeigen.</translation>
+        </message>
+        <message>
+            <source>List the workspace's windows and bring one to the front.</source>
+            <translation>Die Fenster des Arbeitsbereichs auflisten und eines nach vorn holen.</translation>
+        </message>
+        <message>
+            <source>Floating windows live here and cannot leave it. Right-click for Tile, Cascade, Tabbed and the list of windows.</source>
+            <translation>Schwebende Fenster liegen hier und können ihn nicht verlassen. Rechtsklick für Kacheln, Kaskadieren, Als Tabs und die Fensterliste.</translation>
+        </message>
+        <message>
+            <source>Restore {title} in the workspace.</source>
+            <translation>{title} im Arbeitsbereich wiederherstellen.</translation>
+        </message>
+        <message>
+            <source>Minimize this window to the workspace's strip.</source>
+            <translation>Dieses Fenster in die Leiste des Arbeitsbereichs minimieren.</translation>
+        </message>
+        <message>
+            <source>No windows in the workspace.</source>
+            <translation>Keine Fenster im Arbeitsbereich.</translation>
+        </message>
+        <message>
+            <source>{title} (minimized)</source>
+            <translation>{title} (minimiert)</translation>
+        </message>
+        <message>
+            <source>Bring this window to the front.</source>
+            <translation>Dieses Fenster nach vorn holen.</translation>
+        </message>
     </context>
 </TS>

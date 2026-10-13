@@ -630,8 +630,9 @@ class Context:
         from .keys import KEY_TAB  # noqa: PLC0415
         # ... except while a text editor holds the keyboard: Tab is its indent key.
         tab_owned = self.storage.pop("__tab_owned__", False)
+        # Ctrl+Tab is not the ring's either: it switches windows, as in Dear ImGui.
         if (self.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD and self.io.key == KEY_TAB
-                and not tab_owned):
+                and not tab_owned and not self.io.key_ctrl):
             self.nav_move(-1 if self.io.key_shift else 1)
             self.io.key = 0
             self.io.key_events[:] = [event for event in self.io.key_events if event[0] != KEY_TAB]
