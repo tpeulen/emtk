@@ -24,7 +24,10 @@ window:
 It reads the same dialect AutoForm reads -- ``panel`` (``title``, ``n_col``,
 ``hidden_when``), ``value`` (``kind`` int/float/str, ``minimum``, ``maximum``,
 ``decimals``, ``style`` ``"slider"``/``"scientific"``, ``read_only``,
-``call``; a slider with ``"field": false`` is the slider alone, its value
+``call``, ``enter_call`` (a model method run with no argument when Enter is pressed in
+the field -- after the commit, changed or not; a click elsewhere only commits: a login or
+search box's "go"), ``live`` (a ``str`` field that commits every edit as it is typed, a
+search-as-you-type box; the model debounces if it must); a slider with ``"field": false`` is the slider alone, its value
 written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``descriptions`` (a tooltip per radio option), ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row`` (a button's
 ``icon`` is drawn in front of its ``label``),
@@ -107,7 +110,7 @@ COMMON_KEYS = frozenset({
 _CONTAINER_KEYS = frozenset({"sections", "n_col", "collapsible", "collapsed"})
 _VALUE_KEYS = frozenset({
     "kind", "minimum", "maximum", "decimals", "step", "special_text", "suffix",
-    "style", "read_only", "field", "spin", "placeholder", "lines", "call",
+    "style", "read_only", "field", "spin", "placeholder", "lines", "call", "enter_call", "live",
 })
 TABLE_KEYS = frozenset({
     "source", "target", "columns_source", "columns", "selected_call", "selected_attr",
@@ -535,12 +538,22 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     text = text.replace("\r", "").replace("\n", "")
     if text != shown:
         state.buffers[name] = text
+        if section.get("live") and not read_only and kind in ("str", "password"):
+            # A live field (a search box) commits every edit, not only on Enter.
+            _commit_value_buffer(section, model, state, shown_value, bounds)
     io = _core.get_io()
     clicked_away = io.mouse_clicked[0] and not _w.is_item_hovered()
     if io.key == KEY_ESCAPE:
         state.buffers.pop(name, None)
     elif name in state.buffers and (entered or clicked_away):
         _commit_value_buffer(section, model, state, shown_value, bounds)
+    if entered and not read_only and section.get("enter_call"):
+        # Enter in the field is the form's "go" (a login box, a search box): run the action
+        # after the commit, whether or not the text changed. A click elsewhere only commits.
+        fn = getattr(model, str(section["enter_call"]), None)
+        if callable(fn):
+            fn()
+            state.used(name)
 
     if colour and name in state.pickers:
         changed, rgb = _w.color_picker3(f"##{name}.picker", _rgb(value))
