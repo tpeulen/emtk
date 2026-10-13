@@ -1,4 +1,4 @@
-"""emtk.docking: the workspace -- the one region every unbound window lives in.
+"""emtk.docking: the workspace -- the region the documents (``workspace=True`` windows) live in.
 
 Driven as a host drives an app: pointer and key events into an :class:`~emtk.app.ImApp`
 that draws a :class:`~emtk.docking.DockManager`, one frame after each event.
@@ -75,7 +75,8 @@ def make(windows=("a", "b", "c")) -> DockManager:
     docks.add_window("tools", "Tools", _content("tools"), dock="left", closable=False, core=True)
     for index, key in enumerate(windows):
         docks.add_window(key, key.upper(), _content(key),
-                         box=(400.0 + 30 * index, 100.0 + 30 * index, 420.0, 300.0))
+                         box=(400.0 + 30 * index, 100.0 + 30 * index, 420.0, 300.0),
+                         workspace=True)
     return docks
 
 
@@ -296,3 +297,89 @@ def test_without_a_workspace_floating_windows_range_over_the_whole_box():
     assert docks.floating_bounds() == BOX
     assert docks.window("a").frame[:2] == (10.0, 10.0)
     assert not docks.handle_key(KEY_TAB, CONTROL_MODIFIER)
+
+
+# -- documents live in the workspace, docks everywhere else ---------------------------------- #
+
+
+def _with_tool(docks, key="tool", **options):
+    docks.add_window(key, key.title(), _content(key), **options)
+    return docks
+
+
+def test_a_dock_is_never_a_workspace_child_and_floats_over_the_whole_box():
+    docks = _with_tool(make(), box=(10.0, 10.0, 300.0, 200.0))
+    host = Host(docks)
+    assert "tool" not in docks.workspace_children()
+    frame = docks.window("tool").frame
+    assert frame[0] < docks.floating_bounds()[0], "it floats over the Tools dock, outside the workspace"
+    # Tile, Cascade and Tabbed leave it where it is.
+    docks.tile_workspace()
+    docks.cascade_workspace()
+    docks.tab_workspace()
+    host.frame()
+    assert docks.region_of("tool") is None and "tool" in docks.z
+    assert sorted(docks.tabs["center"]) == ["a", "b", "c"]
+
+
+def test_a_dock_asked_into_the_workspace_docks_where_it_was_declared_or_floats():
+    docks = _with_tool(make(), dock="left")
+    docks.dock("tool", "center")
+    assert docks.region_of("tool") == "left", "the workspace takes no docks"
+    _with_tool(docks, "loose", box=(10.0, 10.0, 300.0, 200.0))
+    docks.dock("loose", "center")
+    assert docks.region_of("loose") is None
+    docks.add_window("born", "Born", _content("born"), dock="center")
+    assert docks.region_of("born") is None, "added into the workspace, it floats instead"
+
+
+def test_a_document_docks_only_in_the_workspace():
+    docks = make()
+    docks.dock("a", "left")
+    assert docks.region_of("a") == "center"
+    assert docks.admits("a", "center") and not docks.admits("a", "left")
+    assert docks.admits("tools", "left") and not docks.admits("tools", "center")
+
+
+def test_drop_targets_follow_the_rule():
+    docks = _with_tool(make(), box=(10.0, 10.0, 300.0, 200.0))
+    Host(docks)
+    assert not docks.target_admits("tool", "center")
+    assert docks.target_admits("tool", "center:left"), "beside the workspace is a dock of its own"
+    assert docks.target_admits("tool", "left")
+    assert docks.target_admits("a", "center")
+    assert not docks.target_admits("a", "left") and not docks.target_admits("a", "center:left")
+    assert not docks.target_admits("a", "root:left")
+
+
+def test_dragging_a_dock_onto_the_workspace_pad_does_not_dock_it_there():
+    docks = _with_tool(make(windows=()), box=(10.0, 10.0, 300.0, 200.0))
+    host = Host(docks)
+    cx, cy, cw, ch = docks.region_boxes["center"]
+    middle = (cx + cw / 2.0, cy + ch / 2.0)
+    host.drag(host.title("tool"), (middle[0] - 50.0, middle[1]), middle)
+    assert docks.region_of("tool") is None, "the workspace's centre pad is not offered to a dock"
+    left = docks.region_boxes["left"]
+    middle = (left[0] + left[2] / 2.0, left[1] + left[3] / 2.0)
+    host.drag(host.title("tool"), (middle[0] + 20.0, middle[1]), middle)
+    assert docks.region_of("tool") == "left"
+
+
+def test_only_documents_have_a_minimize_button():
+    docks = _with_tool(make(), box=(10.0, 10.0, 300.0, 200.0))
+    host = Host(docks)
+    host.frame()
+    labels = [t[5] for t in host.painter.texts]
+    assert labels.count("_") == 3, "a, b and c; not the tool"
+    docks.minimize("tool")
+    assert not docks.window("tool").minimized
+
+
+def test_a_saved_layout_with_a_dock_in_the_workspace_puts_it_back_where_it_belongs():
+    docks = _with_tool(make(), dock="left")
+    state = docks.state()
+    state["windows"]["tool"]["dock"] = "center"
+    state["regions"]["center"] = {"tabs": ["tool"], "selected": "tool"}
+    fresh = _with_tool(make(), dock="left")
+    fresh.restore(json.loads(json.dumps(state)))
+    assert fresh.region_of("tool") == "left"

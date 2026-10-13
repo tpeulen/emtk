@@ -66,11 +66,15 @@ What the user can do:
 The workspace
 -------------
 A region declared ``Region("center", workspace=True)`` is the **workspace**:
-the one place unbound windows live, so none can drift out of reach. Every
-floating window is kept inside it (and clamped back in when the box shrinks),
-and it can never be closed -- it is a region, not a window, and it keeps its
+the place the application's *documents* live -- the windows added with
+``workspace=True`` (ChiSurf's fit windows), so none can drift out of reach.
+They float inside it (clamped back in when the box shrinks) or are its tabs,
+and they dock nowhere else. Every other window is a dock: it docks in any
+other region (or beside the workspace, splitting it), floats over the whole
+box, and is never one of the workspace's children nor one of its tabs. The
+workspace can never be closed -- it is a region, not a window, and it keeps its
 space when it is empty. A tool bar along its top arranges its children (the
-windows floating in it and the tabs docked in it): *Tile* lays them out in a
+workspace windows floating in it and docked in it): *Tile* lays them out in a
 near-square grid of usable tiles (:func:`tile_grid`; what does not fit is
 minimized), *Cascade* floats them, each a step below the last, *Tabbed* docks
 them all as its tabs, and *Windows* lists them to pick one. A floating
@@ -669,6 +673,10 @@ class DockWindow:
     minimized : bool
         Floating in the workspace but shown only as a chip on its minimized
         strip (:meth:`DockManager.minimize`); focusing it brings it back.
+    workspace : bool
+        A document of the workspace (``Region(..., workspace=True)``): it floats
+        inside the workspace or is its tab, and docks nowhere else. ``False`` (a
+        dock): it docks in any other region and floats over the whole box.
     frame, content : (x, y, w, h) or None
         Where it was drawn last frame (``None`` when not drawn).
     """
@@ -692,6 +700,7 @@ class DockWindow:
     accent: Optional[Any] = None
     header_tint: bool = False
     minimized: bool = False
+    workspace: bool = False
     frame: Optional[Rect] = None
     content: Optional[Rect] = None
 
@@ -1121,8 +1130,9 @@ class DockManager:
         self.windows[key] = win
         self._defaults[key] = {"dock": dock, "box": win.box, "visible": win.visible,
                                "collapsed": win.collapsed}
-        if dock is not None:
-            self._put(key, dock)
+        home = self._home(key, dock) if dock is not None else None
+        if home is not None:
+            self._put(key, home)
         else:
             if win.box is None:
                 win.box = (40.0, 40.0, 320.0, 240.0)
@@ -1205,6 +1215,15 @@ class DockManager:
         if region not in self.regions:
             raise KeyError(f"no region {region!r}")
         win = self.windows[key]
+        home = self._home(key, region)
+        if home is None:
+            # A dock asked into the workspace, with nowhere else declared: it floats.
+            if key not in self.z:
+                self.undock(key)
+            return
+        if home != region:
+            index = None
+        region = home
         self._put(key, region, index)
         win.anchor = None
         win.minimized = False
@@ -1325,12 +1344,47 @@ class DockManager:
         return next((name for name, region in self.regions.items() if region.workspace), None)
 
     def workspace_children(self) -> List[str]:
-        """The windows of the workspace, in the order they were added: the floating ones
-        (minimized too) and the tabs docked in the workspace region. Hidden ones are left out."""
+        """The windows of the workspace, in the order they were added: the ``workspace=True``
+        windows floating in it (minimized too) and docked in it. Hidden ones are left out."""
         region = self.workspace
-        docked = set(self.tabs.get(region, [])) if region is not None else set()
+        if region is None:
+            return []
+        docked = set(self.tabs.get(region, []))
         return [key for key, win in self.windows.items()
-                if win.visible and (key in self.z or key in docked)]
+                if win.visible and win.workspace and (key in self.z or key in docked)]
+
+    def in_workspace(self, key: str) -> bool:
+        """Whether *key* is a document of the workspace (added with ``workspace=True``, and the
+        layout has a workspace region)."""
+        win = self.windows.get(key)
+        return win is not None and win.workspace and self.workspace is not None
+
+    def admits(self, key: str, region: Optional[str]) -> bool:
+        """Whether *key* may dock in *region*: a workspace window only in the workspace, any
+        other window anywhere but the workspace."""
+        if region is None or region not in self.regions:
+            return False
+        if self.workspace is None:
+            return True
+        return (region == self.workspace) == self.in_workspace(key)
+
+    def _home(self, key: str, region: Optional[str]) -> Optional[str]:
+        """Where *key* docks when asked into *region*: *region* when it is admitted, else the
+        workspace for a workspace window, else the window's declared dock if admitted, else
+        ``None`` (it floats)."""
+        if self.admits(key, region):
+            return region
+        if self.in_workspace(key):
+            return self.workspace
+        declared = (self._defaults.get(key) or {}).get("dock")
+        return declared if self.admits(key, declared) else None
+
+    def _bounds_of(self, win: DockWindow) -> Rect:
+        """The box *win* floats in: :meth:`floating_bounds` for a workspace window, the whole
+        box for any other."""
+        if win.workspace:
+            return self.floating_bounds()
+        return self.box
 
     def _workspace_rect(self) -> Optional[Rect]:
         region = self.workspace
@@ -1362,8 +1416,13 @@ class DockManager:
         return (x, y + top, w, max(h - top - bottom, self._title_h))
 
     def minimize(self, key: str) -> None:
-        """Minimize *key* to the workspace's strip (a docked window is floated first)."""
+        """Minimize *key* to the workspace's strip (a docked window is floated first).
+
+        Only a workspace window has a place on the strip; any other is left as it is.
+        """
         win = self.windows[key]
+        if not self.in_workspace(key):
+            return
         if key not in self.z:
             self.undock(key)
         win.minimized = True
@@ -1381,7 +1440,7 @@ class DockManager:
         grid is as large as fits and the rest are minimized to the strip, from where a click (or
         *Windows*, or Ctrl+Tab) brings each back in its tile.
         """
-        keys = list(self.workspace_children() if keys is None else keys)
+        keys = self._workspace_keys(keys)
         if not keys:
             return
         for key in keys:
@@ -1409,7 +1468,7 @@ class DockManager:
 
     def cascade_workspace(self, keys: Optional[Sequence[str]] = None) -> None:
         """*Cascade*: the workspace's windows float, each a title bar below and right of the last."""
-        keys = list(self.workspace_children() if keys is None else keys)
+        keys = self._workspace_keys(keys)
         if not keys:
             return
         for key in keys:
@@ -1432,7 +1491,7 @@ class DockManager:
     def tab_workspace(self, keys: Optional[Sequence[str]] = None) -> None:
         """*Tabbed*: every window of the workspace a tab of the workspace region."""
         region = self.workspace
-        keys = list(self.workspace_children() if keys is None else keys)
+        keys = self._workspace_keys(keys)
         if region is None or not keys:
             return
         front = self.focused if self.focused in keys else keys[0]
@@ -1442,6 +1501,12 @@ class DockManager:
             self.windows[key].minimized = False
         self.selected[region] = front
         self._dirty = True
+
+    def _workspace_keys(self, keys: Optional[Sequence[str]]) -> List[str]:
+        """*keys* (default: :meth:`workspace_children`), keeping the workspace windows only."""
+        if keys is None:
+            return self.workspace_children()
+        return [key for key in keys if self.in_workspace(key)]
 
     def cycle_workspace(self, step: int = 1) -> Optional[str]:
         """Bring the next (``step=-1``: the previous) window of the workspace to the front."""
@@ -1620,8 +1685,14 @@ class DockManager:
         if "dock" in entry:
             region = entry.get("dock")
             if region in self.regions:
-                if self.region_of(win.key) != region:
-                    self._put(win.key, region)
+                # A layout saved before the window's place was ruled (a tool docked in the
+                # workspace) puts it where the rule allows.
+                home = self._home(win.key, region)
+                if home is None:
+                    if self.region_of(win.key) is not None:
+                        self.undock(win.key)
+                elif self.region_of(win.key) != home:
+                    self._put(win.key, home)
             elif region is None and self.region_of(win.key) is not None:
                 self.undock(win.key)
 
@@ -1866,22 +1937,36 @@ class DockManager:
             return (rx, ry + rh * 0.5, rw, rh * 0.5)
         return rect
 
-    def target_at(self, px: float, py: float) -> Optional[str]:
-        """The drop target under ``(px, py)``, or ``None``."""
+    def target_admits(self, key: Optional[str], target: str) -> bool:
+        """Whether a drop of *key* on *target* is allowed: a workspace window only into the
+        workspace (as its tab), any other window anywhere but into the workspace -- beside it
+        (a split of it) is a dock of its own."""
+        if key is None or key not in self.windows or self.workspace is None:
+            return True
+        if target.startswith("root:"):
+            return not self.in_workspace(key)
+        region, _, zone = target.partition(":")
+        zone = zone or "center"
+        if self.in_workspace(key):
+            return region == self.workspace and zone == "center"
+        return region != self.workspace or zone != "center"
+
+    def target_at(self, px: float, py: float, key: Optional[str] = None) -> Optional[str]:
+        """The drop target under ``(px, py)`` for window *key* (any window: ``None``), or ``None``."""
         drop_specs = self._all_target_specs()
         for target_id, pad_rect, _preview in drop_specs.get("buttons", []):
-            if _hit(px, py, pad_rect):
+            if _hit(px, py, pad_rect) and self.target_admits(key, target_id):
                 return target_id
 
         for r_name, (_rect, _pad, strip) in self.drop_targets().items():
-            if _hit(px, py, strip):
+            if _hit(px, py, strip) and self.target_admits(key, r_name):
                 return r_name
 
         return None
 
     def _floating_frame(self, win: DockWindow) -> Rect:
-        """The frame a floating window is drawn at: its box, kept inside :meth:`floating_bounds`."""
-        bx, by, bw, bh = self.floating_bounds()
+        """The frame a floating window is drawn at: its box, kept inside its bounds (:meth:`_bounds_of`)."""
+        bx, by, bw, bh = self._bounds_of(win)
         x, y, w, h = win.box if win.box is not None else (bx + 40.0, by + 40.0, 320.0, 240.0)
         mw, mh = win.min_size
         w = min(max(w, mw), max(bw, mw))
@@ -1895,12 +1980,15 @@ class DockManager:
         """Anchored windows follow their edge; every floating window stays reachable."""
         self.box = tuple(float(v) for v in box)
         old = self._last_bounds
-        bx, by, bw, bh = self._last_bounds = self.floating_bounds()
-        moved = old is not None and old != self._last_bounds
+        workspace_bounds = self.floating_bounds()
+        self._last_bounds = (workspace_bounds, self.box)
         for key in self.z:
             win = self.windows[key]
             if win.box is None:
                 continue
+            kind = 0 if win.workspace else 1
+            bx, by, bw, bh = self._last_bounds[kind]
+            moved = old is not None and old[kind] != self._last_bounds[kind]
             x, y, w, h = win.box
             if moved and win.anchor:
                 fw, fh = self._floating_frame(win)[2:]
@@ -1964,12 +2052,12 @@ class DockManager:
             return
         drag["moved"] = True
         mover: WindowDrag = drag["drag"]
-        target = self.target_at(px, py) if win.dockable else None
+        target = self.target_at(px, py, key) if win.dockable else None
         self.drop_target = target
         frame = self._floating_frame(win)
         others = [k for k in self.z if k != key]
         step = mover.move(px, py, (frame[2], frame[3]), self._frames(others),
-                          bounds=self.floating_bounds(),
+                          bounds=self._bounds_of(win),
                           snapping=self.snapping and target is None)
         _x, _y, w, h = win.box
         win.box = (step.x, step.y, w, h)
@@ -2493,7 +2581,7 @@ class DockManager:
             if self._button(ctx, close_rect, self._id("close", win.key), "×"):
                 win.visible = False
                 self._changed()
-        if self.workspace is not None and self.confine:
+        if self.in_workspace(win.key) and self.confine:
             minimize_rect = (right - th, y, th, th)
             right = minimize_rect[0]
             if self._button(ctx, minimize_rect, self._id("minimize", win.key), "_",
@@ -2779,6 +2867,8 @@ class DockManager:
 
             drop_specs = self._all_target_specs()
             for target_id, pad_rect, _prev in drop_specs.get("buttons", []):
+                if not self.target_admits(drag["key"], target_id):
+                    continue
                 px, py, pw, ph = pad_rect
                 lit = target_id == self.drop_target
                 draw.add_rect_filled((px, py), (px + pw, py + ph),
