@@ -185,7 +185,7 @@ from ..keys import (
     KEY_UP,
 )
 from ..layout import Fill
-from ..painter import ALIGN_HCENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
+from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 from ..script_text import draw_script_text, script_width
 from ..style import fit_text
 from .basic import ScrollBar, TextInput
