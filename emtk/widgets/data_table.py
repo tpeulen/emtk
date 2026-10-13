@@ -562,7 +562,7 @@ class DataTable:
         self._title_w: dict[str, float] = {}
         #: Size the columns to their contents whenever the rows change.
         self.auto_fit = False
-        self._fitted_for = -1
+        self._fitted_for: tuple = ()
         self._shown: list[TableColumn] = []
         self._hbar_box: Optional[tuple] = None
         self._hbar_held = False
@@ -1074,7 +1074,17 @@ class DataTable:
                 # different number. Text columns give way instead, and elide.
                 self._title_w[column.key] = widest
         self._fitted = fitted
-        self._fitted_for = self.revision
+        self._fitted_for = self._fit_token()
+
+    def _fit_token(self) -> tuple:
+        """What fitted widths depend on: the rows, and the language the headers are drawn in.
+
+        A language switch re-measures a fitted table, or its translated headers
+        (usually longer than the English) stay squeezed into the old widths.
+        """
+        from ..i18n import generation
+
+        return (self.revision, generation())
 
     def scroll_columns(self, steps: int) -> None:
         """Move the leftmost column by *steps* (positive is right)."""
@@ -1165,7 +1175,9 @@ class DataTable:
         self.bar.clamp(len(order), self._visible)
         bar_w = self.bar.width if self.bar.needed() else 0.0
         list_w = max(w - bar_w, 1.0)
-        if self._fit_pending or (self.auto_fit and self._fitted_for != self.revision):
+        token = self._fit_token()
+        relabelled = bool(self._fitted) and self._fitted_for[1:] != token[1:]
+        if self._fit_pending or relabelled or (self.auto_fit and self._fitted_for != token):
             self._measure(p, order)
         self._decide_collapse(list_w)
         widths = self._column_widths(list_w)

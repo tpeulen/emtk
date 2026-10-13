@@ -144,3 +144,20 @@ def test_a_table_without_collapse_order_still_scrolls():
     table.draw(RecordingPainter(), 0, 0, 120, 200)
     assert table.collapsed == set()
     assert table._hbar_box is not None
+
+
+def test_a_language_switch_re_measures_the_headers():
+    """Translated headers are re-measured, so they are neither cut nor make the table collapse late."""
+    from emtk import i18n
+
+    table = _table()
+    table.draw(RecordingPainter(), 0, 0, 2000, 200)
+    english = dict(table._title_w)
+    before = i18n.language()
+    try:
+        i18n.add_translations("xx", {"Fixed": "Festgehaltener Wert"})
+        i18n.set_language("xx")
+        table.draw(RecordingPainter(), 0, 0, 2000, 200)
+        assert table._title_w["fixed"] > english["fixed"]
+    finally:
+        i18n.set_language(before)
