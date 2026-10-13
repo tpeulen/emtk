@@ -797,6 +797,14 @@
             <translation>lié à {name}</translation>
         </message>
         <message>
+            <source>on</source>
+            <translation>activé</translation>
+        </message>
+        <message>
+            <source>off</source>
+            <translation>désactivé</translation>
+        </message>
+        <message>
             <source>This window failed to draw.</source>
             <translation>Cette fenêtre n’a pas pu être dessinée.</translation>
         </message>

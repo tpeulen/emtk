@@ -797,6 +797,14 @@
             <translation>verknüpft mit {name}</translation>
         </message>
         <message>
+            <source>on</source>
+            <translation>an</translation>
+        </message>
+        <message>
+            <source>off</source>
+            <translation>aus</translation>
+        </message>
+        <message>
             <source>This window failed to draw.</source>
             <translation>Dieses Fenster konnte nicht gezeichnet werden.</translation>
         </message>

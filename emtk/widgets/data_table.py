@@ -92,6 +92,14 @@ table needs them and neither dialect had them:
     columns never get narrower than this; when they do not fit, the table
     scrolls sideways (a bar under the rows, the horizontal wheel, or shift and
     the wheel);
+``collapse_order`` on a column
+    a table short of width **drops whole columns before it scrolls**, least
+    useful first: every column declaring ``collapse_order`` 1 goes together,
+    then those declaring 2, and so on, until the rest fit; a column without one
+    (``0``) is never dropped. The decision is re-made from the measured width
+    every frame, with a few pixels of slack before a tier goes and a wider margin
+    before it comes back, so dragging a splitter never makes a column flicker. A
+    dropped column stays reachable: the row's tooltip lists its cells;
 dotted names
     every model name above (``source``, the ``*_call`` and ``*_attr``
     options, ``columns_source``) may be a dotted path into the model --
@@ -265,6 +273,9 @@ class TableColumn:
     background: Optional[dict] = None
     #: The unit a spec appended to :attr:`title` as ``" (units)"``.
     units: str = ""
+    #: When the table is short of width, columns with ``collapse_order`` 1 are
+    #: dropped first, then 2, ...; ``0`` is never dropped (see the module notes).
+    collapse_order: int = 0
 
     def shown_title(self) -> str:
         """The title in the active language: measured and drawn, never :attr:`title`.
@@ -305,6 +316,7 @@ class TableColumn:
             editable=bool(spec.get("editable", editable)),
             shade=bool(spec.get("shade", True)),
             background=_backgrounds(spec.get("background")),
+            collapse_order=max(int(spec.get("collapse_order", 0) or 0), 0),
         )
 
     def text(self, value: Any) -> str:
@@ -515,6 +527,11 @@ class DataTable:
         self.column_picker = bool(column_picker)
         #: Keys of the columns the user hid through the picker.
         self.hidden: set = set()
+        #: Keys of the columns dropped because the table is short of width
+        #: (``collapse_order``), decided by every draw; never the user's choice.
+        self.collapsed: set = set()
+        #: How many collapse tiers the last draw dropped.
+        self._collapse_tiers = 0
         #: Where the header was right-clicked, while the column list is due.
         self.picker_at: Optional[tuple] = None
         #: The column list while it is open (a :class:`~.menus.Popup`).
@@ -633,13 +650,20 @@ class DataTable:
         """The identity of the row at source *index*."""
         return self.value(index, self.row_key) if self.row_key else index
 
-    def visible_columns(self) -> list[TableColumn]:
-        """The columns drawn: declared visible, and not hidden by the user."""
+    def wanted_columns(self) -> list[TableColumn]:
+        """The columns the spec and the user want: declared visible, not hidden by the picker.
+
+        What is drawn is these less the ones dropped for width (:attr:`collapsed`).
+        """
         return [c for c in self.columns if c.visible and c.key not in self.hidden]
+
+    def visible_columns(self) -> list[TableColumn]:
+        """The columns drawn: wanted, and not dropped because the table is short of width."""
+        return [c for c in self.wanted_columns() if c.key not in self.collapsed]
 
     def set_column_hidden(self, key: str, hidden: bool) -> None:
         """Hide or show one column, as the picker does. The last one stays."""
-        if hidden and len([c for c in self.visible_columns() if c.key != key]) == 0:
+        if hidden and len([c for c in self.wanted_columns() if c.key != key]) == 0:
             return
         if (key in self.hidden) == bool(hidden):
             return
@@ -664,7 +688,9 @@ class DataTable:
         if wanted == self._order_for:
             return self._order
         count = self.row_count()
-        columns = self.visible_columns()
+        # Filter on what the user wants shown, not on what fits: a narrower
+        # window must not change which rows a filter keeps.
+        columns = self.wanted_columns()
         needle = self.filter.text.strip().lower()
         indices = list(range(count))
         if needle:
@@ -861,18 +887,19 @@ class DataTable:
             index = self.order()[position]
             column = self.column_at(x)
             full = self._elided.get((index, column.key)) if column is not None else None
+            hidden = self.collapsed_text(index) if self.collapsed else ""
             if full:
                 assert column is not None
-                return (full, ("cell", index, column.key))
+                return ("\n".join(t for t in (full, hidden) if t), ("cell", index, column.key))
             master = self.linked(index) if self.linked is not None else ""
             if master:
                 from ..i18n import tr
 
-                return (tr("linked to {name}", domain="emtk").format(name=master), ("link", index))
-            if self.tooltip_key:
-                note = str(self.value(index, self.tooltip_key) or "")
-                if note:
-                    return (note, ("row", index))
+                text = tr("linked to {name}", domain="emtk").format(name=master)
+                return ("\n".join(t for t in (text, hidden) if t), ("link", index))
+            note = str(self.value(index, self.tooltip_key) or "") if self.tooltip_key else ""
+            if note or hidden:
+                return ("\n".join(t for t in (note, hidden) if t), ("row", index))
         return ("", None)
 
     def column_at(self, x: float) -> Optional[TableColumn]:
@@ -929,6 +956,86 @@ class DataTable:
         take = min(deficit / slack, 1.0)
         return [w - take * max(w - m, 0.0) for w, m in zip(widths, least)]
 
+    #: Pixels a table may overrun its box before a collapse tier is dropped: a
+    #: measured width is a few pixels optimistic, and a whole tier over one
+    #: pixel reads as flicker while a splitter is dragged (the Qt table's 8).
+    COLLAPSE_SLACK = 8.0
+    #: Room to spare a dropped tier needs before it comes back. Wider than a
+    #: scroll bar, so a vertical bar that appears because a horizontal one went
+    #: away cannot toggle a tier between frames.
+    COLLAPSE_HYSTERESIS = 16.0
+
+    def collapse_tiers(self) -> list[list[TableColumn]]:
+        """The wanted columns that may be dropped for width, grouped, first to go first."""
+        orders = sorted({c.collapse_order for c in self.wanted_columns() if c.collapse_order > 0})
+        return [[c for c in self.wanted_columns() if c.collapse_order == o] for o in orders]
+
+    def _decide_collapse(self, total: float) -> None:
+        """Drop the fewest collapse tiers that let the wanted columns fit *total* at their natural widths.
+
+        Only once nothing droppable is left does the table squeeze text columns
+        and then scroll (:meth:`_column_widths`).
+
+        A pure function of the measured widths and *total*, except for the
+        hysteresis: a tier dropped last frame comes back only with
+        :attr:`COLLAPSE_HYSTERESIS` to spare, so no width toggles a column.
+        """
+        tiers = self.collapse_tiers()
+        wanted = self.wanted_columns()
+        if not tiers:
+            self.collapsed, self._collapse_tiers = set(), 0
+            return
+
+        floor = self.min_column_width
+        natural = {}
+        for column in wanted:
+            width = self._fitted.get(column.key) or column.width
+            natural[column.key] = max(width or max(floor, self.FLEX_MIN), floor, column.min_width)
+
+        def need(dropped: int) -> float:
+            # Natural widths, not squeezed ones: an optional column goes before a
+            # name is shortened to make room for it.
+            gone = {c.key for tier in tiers[:dropped] for c in tier}
+            return sum(natural[c.key] for c in wanted if c.key not in gone)
+
+        current = min(self._collapse_tiers, len(tiers))
+        chosen = len(tiers)
+        for dropped in range(len(tiers) + 1):
+            if need(dropped) <= total + self.COLLAPSE_SLACK:
+                chosen = dropped
+                break
+        if chosen < current:
+            # Bring a tier back only with room to spare; otherwise keep what is dropped.
+            for dropped in range(chosen, current):
+                if need(dropped) <= total - self.COLLAPSE_HYSTERESIS:
+                    break
+            else:
+                dropped = current
+            chosen = dropped
+        collapsed = {c.key for tier in tiers[:chosen] for c in tier}
+        if collapsed != self.collapsed:
+            self.first_column = 0
+        self.collapsed, self._collapse_tiers = collapsed, chosen
+
+    def collapsed_text(self, index: int) -> str:
+        """``"Lo: 0.1  Hi: 10"``: the cells of the row at source *index* that were dropped for width."""
+        from ..i18n import tr
+
+        parts = []
+        for column in self.wanted_columns():
+            if column.key not in self.collapsed:
+                continue
+            value = self.value(index, column.key)
+            if value is None:
+                continue
+            if isinstance(value, (bool, _np_bool())):
+                text = tr("on", domain="emtk") if value else tr("off", domain="emtk")
+            else:
+                text = column.text(value)
+            if text != "":
+                parts.append(f"{column.shown_title()}: {text}")
+        return "\n".join(parts)
+
     def natural_height(self, line: float) -> float:
         """Height that shows the header and every row without scrolling, for a *line* height."""
         rows = max(len(self.order()), 1)
@@ -944,8 +1051,10 @@ class DataTable:
         self._fit_pending = False
         rows = order[self.bar.top:self.bar.top + max(self._visible, 1) + 50]
         fitted = {}
-        first = next(iter(self.visible_columns()), None)
-        for column in self.visible_columns():
+        # Every wanted column, dropped or not: the collapse decision compares
+        # widths of columns that are not drawn right now.
+        first = next(iter(self.wanted_columns()), None)
+        for column in self.wanted_columns():
             # The cell margins (6 each side), a little air, and room for the
             # sort mark only on the column that carries it.
             mark = p.text_width("▴ ") if column.key == self.sort_key_name else 0.0
@@ -1058,6 +1167,7 @@ class DataTable:
         list_w = max(w - bar_w, 1.0)
         if self._fit_pending or (self.auto_fit and self._fitted_for != self.revision):
             self._measure(p, order)
+        self._decide_collapse(list_w)
         widths = self._column_widths(list_w)
         wide = sum(widths) > list_w + 0.5
         if wide:
