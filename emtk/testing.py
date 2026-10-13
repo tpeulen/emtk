@@ -432,15 +432,23 @@ class PixelPainter:
                 base = yy * stride + x0 * 4
                 self.px[base : base + len(row)] = row
             return
+        # Translucent: every channel value v of the rectangle becomes one fixed
+        # function of v, so it is a 256-entry table applied with bytes.translate
+        # to each channel's strided slice of a row -- the same arithmetic as the
+        # per-pixel blend, done in C. Per pixel, a modal backdrop over a
+        # 1500x4000 screenshot took tens of seconds.
+        sa = a / 255.0
+        tables = [
+            bytes(int(c * sa + v * (1 - sa)) for v in range(256)) for c in (r, g, b)
+        ]
+        tables.append(bytes(max(v, int(a)) for v in range(256)))
+        span = (x1 - x0) * 4
+        px = self.px
         for yy in range(y0, y1):
             base = yy * stride + x0 * 4
-            for i in range(x0, x1):
-                o = base + (i - x0) * 4
-                sa = a / 255.0
-                self.px[o] = int(r * sa + self.px[o] * (1 - sa))
-                self.px[o + 1] = int(g * sa + self.px[o + 1] * (1 - sa))
-                self.px[o + 2] = int(b * sa + self.px[o + 2] * (1 - sa))
-                self.px[o + 3] = max(self.px[o + 3], a)
+            for k, table in enumerate(tables):
+                lane = slice(base + k, base + span, 4)
+                px[lane] = bytes(px[lane]).translate(table)
 
     # -- the six required operations --------------------------------------- #
 
