@@ -2348,7 +2348,7 @@ class DockManager:
         from .i18n import tr
 
         tab_widths = [
-            ctx.p.text_width(tr(self.windows[k].title)) + pad_x * 2.0 + 8.0 for k in shown
+            ctx.p.text_width(tr(self.windows[k].title)) + pad_x * 2.0 + 2.0 for k in shown
         ]
         available_w = max(right - x, 0.0)
         # Tabs too wide for the strip first give way: the longest titles end in an ellipsis, down to a
@@ -2388,13 +2388,13 @@ class DockManager:
             win = self.windows[key]
 
             title = tr(win.title)
-            tw = ctx.p.text_width(title) + pad_x * 2.0 + 6.0
+            tw = ctx.p.text_width(title) + pad_x * 2.0 + 2.0
             shown_title = title
-            if wanted - 2.0 < tw:
-                tw = wanted - 2.0
+            if wanted < tw:
+                tw = wanted
                 from .widgets.menus import _ellipsize  # noqa: PLC0415
 
-                shown_title = _ellipsize(ctx.p, title, tw - pad_x * 2.0 - 6.0)
+                shown_title = _ellipsize(ctx.p, title, tw - pad_x * 2.0 - 2.0)
             tab = (cursor, y + 1.0, tw, th - 1.0)
             rects.append((key, tab))
             item = self._id("tab", key)

@@ -60,7 +60,7 @@ DISPLAY_NAMES = frozenset({
 #: Name fragments that make a name *not* display text despite a display word
 #: (``TEXT_FAMILIES`` lists fonts, ``LABEL_KEY`` is an identifier).
 NOT_DISPLAY_NAMES = frozenset({"family", "families", "font", "fonts", "key", "keys", "id",
-                               "ids", "attr", "attrs", "path", "paths", "format"})
+                               "ids", "attr", "attrs", "path", "paths", "format", "surface", "surfaces"})
 
 
 def _display_name(name: str) -> bool:

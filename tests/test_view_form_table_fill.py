@@ -189,7 +189,7 @@ def test_settle_measures_from_the_fill_to_the_end_of_the_region():
     layout.add_fill(fill, box)
     layout.row()                                    # a 16 px row after it
     assert layout.settle_fills() is True
-    assert fill.tail == 3 + 16                      # the gap and the row
+    assert fill.tail == layout.style.item_spacing_y + layout.row_height  # the gap and the row
     assert layout.settle_fills() is False           # nothing left to settle
 
 

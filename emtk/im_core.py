@@ -394,7 +394,7 @@ class Style:
     #: The same defaults :class:`~emtk.layout.LayoutStyle` lays rows out with.
     frame_padding: tuple[float, float] = FRAME_PADDING
     item_spacing: tuple[float, float] = ITEM_SPACING
-    item_inner_spacing: tuple[float, float] = (4.0, 4.0)
+    item_inner_spacing: tuple[float, float] = (3.0, 2.0)
     frame_rounding: float = 0.0
     #: ``FrameBorderSize``: an outline in ``Col.BORDER`` around buttons, check
     #: boxes and fields. Zero (the dark theme) draws none; a light desktop

@@ -863,7 +863,7 @@ def _button_label(item: dict, model: Any) -> str:
 
 
 #: The narrowest a button-row button is drawn, however short its label.
-BUTTON_MIN_WIDTH = 30.0
+BUTTON_MIN_WIDTH = 20.0
 
 
 def _button_natural(label: str) -> float:
@@ -1018,7 +1018,7 @@ def _fixed_width(section: dict, model: Any = None) -> float:
 
 #: Characters a control shows at the least, before its line wraps: a choice
 #: (a parameter name), and a value field. ``min_chars`` in a section overrides.
-MIN_CHARS = {"choice": 12, "value": 5}
+MIN_CHARS = {"choice": 8, "value": 4}
 
 
 def _min_width(section: dict, model: Any = None) -> float:
@@ -1047,13 +1047,13 @@ def _min_width(section: dict, model: Any = None) -> float:
             + style.item_inner_spacing[0] * (len(buttons) - 1)
     chars = section.get("min_chars", MIN_CHARS.get(kind))
     if chars is None:
-        return 30.0
+        return 20.0
     text = _w.calc_text_size("0" * int(chars))[0]
     if kind == "choice":
         if str(section.get("style", "")).lower() in ("radio", "radio_list"):
-            return 30.0
+            return 20.0
         # _combo_field: padding, text, a padding's gap, the arrow, padding
-        return text + 3.0 * pad + fh * 0.32 * 1.4 + pad
+        return text + 2.0 * pad + fh * 0.32 * 1.4 + pad
     if kind == "value":
         style_name = str(section.get("style", "")).lower()
         spin = style_name == "spin" or bool(section.get("spin"))
@@ -1063,7 +1063,7 @@ def _min_width(section: dict, model: Any = None) -> float:
             text = max(text, _w.calc_text_size(tr(str(special)))[0])
         return text + 2.0 * pad + (fh * 0.75 if spin else 0.0) \
             + (40.0 if style_name == "slider" else 0.0)
-    return 30.0
+    return 20.0
 
 
 def _draw_control(section: dict, model: Any, state: FormState, width: float) -> None:
@@ -1333,14 +1333,14 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
             # A control alone on its line never runs past it: a weight-0 button row
             # sized to its labels then wraps inside the line instead of leaving the window.
             c = run[0]
-            widths[c] = min(widths[c], max(avail - indent - label_w[c], 30.0))
+            widths[c] = min(widths[c], max(avail - indent - label_w[c], 20.0))
         # A lone control whose label leaves it less than its minimum would start past the right edge (or as a
         # sliver of it) and draw empty: the label goes on a line of its own above the control instead.
         stacked = (len(run) == 1 and label_w[run[0]] > 0
                    and indent + least > avail + 0.5 and (fixed_w[run[0]] or weight[run[0]] > 0))
         if stacked:
             c = run[0]
-            widths = {c: max(avail - indent, 30.0)}
+            widths = {c: max(avail - indent, 20.0)}
         x, column_x = indent, {}
         for c in run:
             column_x[c] = x
@@ -1365,14 +1365,14 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
                     # (a section of this column without a label of its own, a button row
                     # under a stacked field, draws no empty label line above itself)
                     text = _label_of(section)
-                    shown = _fit_text(text, max(avail - column_x[c], 30.0))
+                    shown = _fit_text(text, max(avail - column_x[c], 20.0))
                     _label(shown)
                     if shown != text and _w.is_item_hovered():
                         _w.set_tooltip(text)
                 elif label_w[c] > 0 and not stacked:
                     _label(_label_of(section), label_w[c])
                     _w.same_line(column_x[c] + label_w[c])
-                _draw_control(section, model, state, max(widths[c], 30.0))
+                _draw_control(section, model, state, max(widths[c], 20.0))
                 _w.end_disabled()
 
 

@@ -81,10 +81,10 @@ Rect = tuple[float, float, float, float]
 #: emtk's default metrics, shared by :class:`LayoutStyle` and
 #: :class:`emtk.im_core.Style` so the two cannot drift. Denser than the
 #: reference's ``FramePadding = (4, 3)`` / ``ItemSpacing = (8, 4)``: a field is
-#: its text line plus 2 px above and below (still a comfortable hit target),
-#: and lines are 3 px apart -- panels full of controls show more of them.
-FRAME_PADDING = (4.0, 2.0)
-ITEM_SPACING = (8.0, 3.0)
+#: its text line plus 1.5 px above and below (still a comfortable hit target),
+#: and lines are 2 px apart -- panels full of controls show more of them.
+FRAME_PADDING = (3.0, 1.5)
+ITEM_SPACING = (5.0, 2.0)
 
 
 def _trunc(value: float) -> float:

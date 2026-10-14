@@ -583,17 +583,17 @@ def test_an_auto_resizing_window_still_sizes_to_its_content():
     assert all(size[0] < 100 for size in seen[1:]), seen
 
 
-def test_emtks_defaults_are_a_text_line_plus_2_px_and_3_px_apart():
-    """emtk's own density: a field is its line plus 2 px above and below, and
-    the next line starts 3 px under it -- the same numbers the ``Style`` has."""
+def test_emtks_defaults_are_a_text_line_plus_1_5_px_and_2_px_apart():
+    """emtk's own density: a field is its line plus 1.5 px above and below, and
+    the next line starts 2 px under it -- the same numbers the ``Style`` has."""
     from emtk import Style
     from emtk.layout import FRAME_PADDING, ITEM_SPACING
 
     layout = Layout(RecordingPainter(), *BOX)
-    assert layout.row() == (10.0, 20.0, 200.0, 16.0)
-    assert layout.row() == (10.0, 39.0, 200.0, 16.0)
-    assert Style().frame_padding == FRAME_PADDING == (4.0, 2.0)
-    assert Style().item_spacing == ITEM_SPACING == (8.0, 3.0)
+    assert layout.row() == (10.0, 20.0, 200.0, 15.0)
+    assert layout.row() == (10.0, 37.0, 200.0, 15.0)
+    assert Style().frame_padding == FRAME_PADDING == (3.0, 1.5)
+    assert Style().item_spacing == ITEM_SPACING == (5.0, 2.0)
 
 
 def test_move_cursor_to_preserves_content_height_and_origin():
