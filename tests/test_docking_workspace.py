@@ -383,3 +383,30 @@ def test_a_saved_layout_with_a_dock_in_the_workspace_puts_it_back_where_it_belon
     fresh = _with_tool(make(), dock="left")
     fresh.restore(json.loads(json.dumps(state)))
     assert fresh.region_of("tool") == "left"
+
+
+def test_the_workspace_background_is_drawn_in_its_body_under_the_floating_windows():
+    """A host's watermark: drawn into the workspace body (under its tool bar) every frame,
+    before -- so under -- the floating windows; a failing hook is logged, not raised."""
+    docks = make(("a",))
+    seen = []
+
+    def background(rect):
+        seen.append(rect)
+        im.get_window_draw_list().add_text((rect[0] + 4.0, rect[1] + 4.0), (1, 1, 1, 0.3),
+                                           "WATERMARK")
+
+    docks.workspace_background = background
+    host = Host(docks)
+    painter = host.frame()
+    inner = docks._inner_boxes["center"]
+    assert seen and seen[-1] == inner
+    order = [t[5] for t in painter.texts]
+    assert "WATERMARK" in order and "content of a" in order
+    assert order.index("WATERMARK") < order.index("content of a"), "drawn before the window"
+
+    def broken(rect):
+        raise RuntimeError("boom")
+
+    docks.workspace_background = broken
+    host.frame()  # does not raise

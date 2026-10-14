@@ -806,6 +806,11 @@ class DockManager:
         #: lie under its tool bar and above its minimized strip; the others are the region box).
         self._inner_boxes: Dict[str, Rect] = {}
         self._last_bounds: Optional[Rect] = None
+        #: ``workspace_background(rect)``, drawn into the workspace's body each frame, under
+        #: the floating windows and over a tab that fills the body: a host's watermark (the
+        #: machine, the versions). Draw-list only -- it takes no input -- and a failure is
+        #: logged, never raised into the frame.
+        self.workspace_background: Optional[Callable[[Rect], Any]] = None
 
     # ------------------------------------------------------------ the tree
     def configure_default_layout(self, layout: Node, docks: dict[str, str]) -> bool:
@@ -2540,6 +2545,16 @@ class DockManager:
             item = self._id("workspace", "body")
             if ctx.item_add(body, item) and io.mouse_clicked[1]:
                 self._open_context(ctx, "workspace", None)
+        if self.workspace_background is not None:
+            # A tab on top drew its own window: the background goes into the region's, so it
+            # shows over the tab's body but stays under every floating window.
+            ctx.p.push_clip(*inner)
+            try:
+                self.workspace_background(inner)
+            except Exception:  # noqa: BLE001 - a watermark must not take the frame down
+                logger.exception("the workspace background failed to draw")
+            finally:
+                ctx.p.pop_clip()
         if not minimized:
             return
         sy = y + h - strip_h

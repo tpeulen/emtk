@@ -136,7 +136,7 @@ NAMESPACED_MODULES = (
 #: emtk's own version. It is a library with its own tests, examples and docs
 #: (see ``README.md``), so it says what it is rather than borrowing the
 #: application's number.
-__version__ = "0.1.14"
+__version__ = "0.1.15"
 
 
 def version_info() -> dict:
