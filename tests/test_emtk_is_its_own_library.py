@@ -106,6 +106,28 @@ def test_the_prose_names_no_application_either():
     assert not offenders, offenders
 
 
+def _bare(code: str):
+    """Run *code* in an interpreter that loads nothing before it: no ``site``.
+
+    An environment's ``site`` hooks run before any code -- a ``.pth`` file or a
+    ``sitecustomize`` on the path (a development checkout of another package
+    puts one there) may import numpy at start-up -- and would be blamed on emtk.
+    With ``-S`` the only imports are emtk's own, from this checkout; emtk needs
+    nothing from site-packages to import.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+    env["PYTHONPATH"] = str(ROOT)
+    return subprocess.run([sys.executable, "-S", "-c", code], cwd=ROOT,
+                          capture_output=True, text=True, env=env)
+
+
+def test_a_bare_interpreter_has_loaded_none_of_it():
+    """The check below is only meaningful if the interpreter starts empty."""
+    out = _bare("import sys; print(sorted(m for m in ('numpy', 'qtpy', 'wgpu') if m in sys.modules))")
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert out.stdout.strip() == "[]", out.stdout
+
+
 def test_importing_it_pulls_in_nothing_else():
     """And at run time, which is the half a static check cannot see."""
     code = (
@@ -113,8 +135,7 @@ def test_importing_it_pulls_in_nothing_else():
         "print(sorted({m.split('.')[0] for m in sys.modules "
         "if m.split('.')[0] in %r}))" % (FOREIGN,)
     )
-    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT,
-                         capture_output=True, text=True)
+    out = _bare(code)
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip() == "[]", out.stdout
 
@@ -127,8 +148,7 @@ def test_it_needs_no_toolkit():
         "if m.split('.')[0] in ('PyQt5','PyQt6','PySide2','PySide6','qtpy',"
         "'wgpu','rendercanvas','numpy')])"
     )
-    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT,
-                         capture_output=True, text=True)
+    out = _bare(code)
     assert out.returncode == 0, out.stderr[-2000:]
     assert out.stdout.strip() == "[]", out.stdout
 
