@@ -778,8 +778,8 @@ BUTTON_ROLES: dict[str, ThemedButtonRole] = {
         light=ButtonRole((30, 126, 58), (26, 112, 52), (20, 96, 44)),
     ),
     "danger": ThemedButtonRole(
-        dark=ButtonRole((186, 48, 48), (200, 54, 54), (160, 38, 38)),
-        light=ButtonRole((196, 40, 40), (176, 34, 34), (150, 28, 28)),
+        dark=ButtonRole((156, 52, 52), (172, 60, 60), (136, 44, 44)),
+        light=ButtonRole((176, 48, 48), (158, 40, 40), (136, 32, 32)),
     ),
 }
 #: Other spellings a spec may use for a role.
