@@ -46,7 +46,7 @@ from . import im_core as _core
 from . import im_widgets as _w
 from .dialog_window import DialogWindow
 from .i18n import mark, tr
-from .keys import KEY_ENTER, KEY_RETURN
+from .keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN
 
 __all__ = ["KINDS", "MessageDialogs", "Question", "auto_answer"]
 
@@ -306,6 +306,9 @@ class MessageDialogs:
         pressed = window.begin(frame)
         io = _core.get_io()
         enter = io.key in (KEY_RETURN, KEY_ENTER)
+        # A question is modal: Escape dismisses it wherever the pointer is, as Esc
+        # rejects a Qt message box (the window's own Escape only acts when hovered).
+        escape = io.key == KEY_ESCAPE
         _w.text_wrapped(question.message)
         if question.detail:
             _w.text_disabled(question.detail)
@@ -331,7 +334,7 @@ class MessageDialogs:
             question.rects["window"] = window.box
         if chosen is not None:
             self.answer(key=chosen)
-        elif pressed == "close":
+        elif pressed == "close" or escape:
             self.answer(question.dismissed)
         elif enter:
             if question.kind == "text":

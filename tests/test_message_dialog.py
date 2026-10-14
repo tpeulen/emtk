@@ -160,3 +160,22 @@ def test_answer_by_key_matches_the_buttons():
     dialogs.answer(key="yes")
     dialogs.answer(key="ok")
     assert answers == [True, "v"]
+
+
+def test_escape_dismisses_a_question_wherever_the_pointer_is():
+    """A question is modal: Esc rejects it as Esc rejects a Qt message box, pointer or not."""
+    answers = []
+    dialogs = MessageDialogs()
+    host = Host(dialogs)
+    options = {"save": "Save", "discard": "Don't Save", "cancel": "Cancel"}
+    dialogs.choice("Unsaved Project", "Save changes?", options, answers.append, default="cancel")
+    host.frame()
+    host.io.mouse_pos = (2.0, 2.0)  # far outside the window, e.g. on the menu bar
+    assert not dialogs.current.window.contains(*host.io.mouse_pos)
+    host.key(KEY_ESCAPE)
+    assert answers == [None], "Escape dismissed the choice (the safe answer: nothing chosen)"
+    assert not dialogs.modal
+    dialogs.confirm("Quit", "Are you sure to quit?", answers.append)
+    host.frame()
+    host.key(KEY_ESCAPE)
+    assert answers == [None, False], "Escape declines a confirm"
