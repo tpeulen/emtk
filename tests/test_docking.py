@@ -795,3 +795,23 @@ def test_the_focused_window_follows_a_press_in_any_region():
     assert docks.focused == "notes"
     docks.focus("table")
     assert docks.focused == "table"
+
+
+def test_a_removed_window_goes_back_where_the_user_left_it():
+    """A tool closed and opened again keeps the place the user chose (floating here), and
+    ``remembers`` tells a host not to pick a first place for it."""
+    from emtk.docking import DockManager, Region, Split
+
+    docks = DockManager(Split("h", 0.5, Region("left"), Region("right")))
+    docks.add_window("tool", "Tool", lambda box: None, dock="right")
+    assert not docks.remembers("tool")
+    docks.undock("tool", (100.0, 80.0, 600.0, 400.0))
+    docks.remove_window("tool")
+    assert docks.remembers("tool")
+    win = docks.add_window("tool", "Tool", lambda box: None, dock="right")
+    assert docks.region_of("tool") is None, "it floats again, as the user left it"
+    assert tuple(win.box) == (100.0, 80.0, 600.0, 400.0)
+    docks.dock("tool", "left")
+    docks.remove_window("tool")
+    docks.add_window("tool", "Tool", lambda box: None, dock="right")
+    assert docks.region_of("tool") == "left"

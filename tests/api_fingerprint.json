@@ -362,6 +362,7 @@
      "prune_empty": "def(self)",
      "raise_window": "def(self, key)",
      "region_of": "def(self, key)",
+     "remembers": "def(self, key)",
      "remove_window": "def(self, key)",
      "reset": "def(self)",
      "restore": "def(self, state)",
@@ -6033,6 +6034,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "1858c735d0b5143e544f16a5dadf10fdb06a6aadd250c068051a7dc64848b5d9",
- "version": "0.1.12"
+ "sha256": "4ec4cec315d0a263787f0553a8b65f83088ddedbf15251bb0b9c82b0a1592c34",
+ "version": "0.1.14"
 }

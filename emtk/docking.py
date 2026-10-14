@@ -1144,9 +1144,25 @@ class DockManager:
         return win
 
     def remove_window(self, key: str) -> bool:
-        """Drop a window. Returns whether there was one."""
+        """Drop a window. Returns whether there was one.
+
+        Its place (docked region and tab, or floating frame) is kept, as for a window
+        a restored layout names but that is not added yet: added again, it goes back
+        where the user left it (:meth:`remembers`).
+        """
         if key not in self.windows:
             return False
+        entry = self.state()["windows"].get(key)
+        if entry is not None:
+            saved = self._saved if isinstance(self._saved, dict) else {}
+            saved.setdefault("windows", {})[key] = entry
+            region = entry.get("dock")
+            if region:
+                tabs = saved.setdefault("regions", {}).setdefault(region, {}).setdefault(
+                    "tabs", list(self.tabs.get(region, [])))
+                if key not in tabs:
+                    tabs.append(key)
+            self._saved = saved
         self._forget(key)
         self.windows.pop(key, None)
         self._defaults.pop(key, None)
@@ -1155,6 +1171,12 @@ class DockManager:
 
     def window(self, key: str) -> Optional[DockWindow]:
         return self.windows.get(key)
+
+    def remembers(self, key: str) -> bool:
+        """Whether a place for *key* is known: from a restored layout, or from when it was
+        last open (:meth:`remove_window`). A host uses it to choose a first place (docked
+        or floating) only for a window the user has never placed."""
+        return isinstance((self._saved.get("windows") or {}).get(key), dict)
 
     def region_of(self, key: str) -> Optional[str]:
         """The region *key* is docked in, or ``None`` when it floats."""
