@@ -480,6 +480,8 @@ class DataTable:
     """
 
     WHEEL_ROWS = 3
+    #: Horizontal padding inside each cell.
+    CELL_PAD_X = 4.0
     #: Indent per tree level, and the room of the disclosure triangle.
     TREE_INDENT = 14.0
 
@@ -492,7 +494,7 @@ class DataTable:
         filter_box: bool = False,
         tooltip_key: str = "",
         row_key: str = "",
-        row_scale: float = 1.45,
+        row_scale: float = 1.25,
         on_edit: Optional[Callable[[int, str, Any], None]] = None,
         on_delete: Optional[Callable[[int], None]] = None,
         on_context: Optional[Callable[[Optional[int], Optional[str], float, float], None]] = None,
@@ -914,7 +916,7 @@ class DataTable:
         return None
 
     #: The least a column without a declared width is given, before any shrinking to fit.
-    FLEX_MIN = 72.0
+    FLEX_MIN = 50.0
 
     def _column_widths(self, total: float) -> list[float]:
         """Widths of every visible column, filling *total*.
@@ -1041,7 +1043,7 @@ class DataTable:
         rows = max(len(self.order()), 1)
         filter_h = line * 1.5 + 4.0 if self.show_filter else 0.0
         status_h = line * 1.2 if self.show_status else 0.0
-        return filter_h + line * 1.35 + rows * line * self.row_scale + status_h + 4.0
+        return filter_h + line * 1.25 + rows * line * self.row_scale + status_h + 4.0
 
     def fit_columns(self) -> None:
         """Size every column to its header and the rows in view, on the next draw."""
@@ -1054,11 +1056,12 @@ class DataTable:
         # Every wanted column, dropped or not: the collapse decision compares
         # widths of columns that are not drawn right now.
         first = next(iter(self.wanted_columns()), None)
+        pad = self.CELL_PAD_X
         for column in self.wanted_columns():
-            # The cell margins (6 each side), a little air, and room for the
+            # The cell margins (pad each side), a little air, and room for the
             # sort mark only on the column that carries it.
             mark = p.text_width("▴ ") if column.key == self.sort_key_name else 0.0
-            widest = p.text_width(column.shown_title()) + 16.0 + mark
+            widest = p.text_width(column.shown_title()) + pad * 2.0 + 2.0 + mark
             self._title_w[column.key] = widest
             numeric = False
             for index in rows:
@@ -1067,7 +1070,7 @@ class DataTable:
                 indent = self._indent(index) if column is first else 0.0
                 text = column.text(value)
                 shown_w = script_width(p, text) if column.display == "script" else p.text_width(text)
-                widest = max(widest, shown_w + 14.0 + indent)
+                widest = max(widest, shown_w + pad * 2.0 + 1.0 + indent)
             fitted[column.key] = widest
             if numeric:
                 # A number is never shortened to fit: '2048' cut to '20.' is a
@@ -1167,7 +1170,7 @@ class DataTable:
         note_h = note_lines * line + (6.0 if note_lines else 0.0)
         status_h = line * 1.2 if self.show_status else 0.0
         note_h += status_h
-        header_h = line * 1.35
+        header_h = line * 1.25
         order = self.order()
         body_top = cursor + header_h
         body_h = max(y + h - note_h - body_top, row_h)
@@ -1208,9 +1211,9 @@ class DataTable:
                 mark = "▾" if self.descending else "▴"
             shown = column.shown_title()
             title = (f"{mark} {shown}" if right else f"{shown} {mark}") if mark else shown
-            p.text(col_x + 6.0, cursor, max(width - 12.0, 1.0), header_h,
+            p.text(col_x + self.CELL_PAD_X, cursor, max(width - self.CELL_PAD_X * 2.0, 1.0), header_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
-                   fit_text(p, title, width - 12.0), _style.TABLE_HEADER_TEXT, bold=True)
+                   fit_text(p, title, width - self.CELL_PAD_X * 2.0), _style.TABLE_HEADER_TEXT, bold=True)
             if position:
                 p.fill_rect(col_x, cursor + 3.0, 1.0, header_h - 6.0, _style.BORDER)
             col_x += width
@@ -1320,22 +1323,22 @@ class DataTable:
             text = column.text(value)
             if column.display == "script":
                 # Scripts are not elided: a label cut inside "w_{z}" would show its markup.
-                draw_script_text(p, col_x + 6.0 + indent, y + 1.0, max(width - 12.0 - indent, 1.0),
+                draw_script_text(p, col_x + self.CELL_PAD_X + indent, y + 1.0, max(width - self.CELL_PAD_X * 2.0 - indent, 1.0),
                                  text_h, ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT),
                                  text, colour)
                 col_x += width
                 continue
-            shown = fit_text(p, text, width - 12.0 - indent)
+            shown = fit_text(p, text, width - self.CELL_PAD_X * 2.0 - indent)
             if shown != text:
                 self._elided[(index, column.key)] = text
             link = column.display == "link" and bool(text)
             ink = _style.CHECK_MARK if link else (ink_on_fill or colour)
-            p.text(col_x + 6.0 + indent, y + 1.0, max(width - 12.0 - indent, 1.0), text_h,
+            p.text(col_x + self.CELL_PAD_X + indent, y + 1.0, max(width - self.CELL_PAD_X * 2.0 - indent, 1.0), text_h,
                    ALIGN_VCENTER | (ALIGN_RIGHT if right else ALIGN_LEFT), shown, ink)
             if link:
-                room = max(width - 12.0 - indent, 1.0)
+                room = max(width - self.CELL_PAD_X * 2.0 - indent, 1.0)
                 tw = min(p.text_width(shown), room)
-                lx = col_x + 6.0 + indent + (room - tw if right else 0.0)
+                lx = col_x + self.CELL_PAD_X + indent + (room - tw if right else 0.0)
                 p.fill_rect(lx, y + 1.0 + (text_h + p.line_height()) / 2.0, tw, 1.0, ink)
             col_x += width
 

@@ -473,7 +473,7 @@ class DataTable:
         scroll_x: bool = False,
         keep_columns_visible: bool = True,
         precise_widths: bool = False,
-        cell_padding: float = 4.0,
+        cell_padding: float = 3.0,
         outer_padding: float = 0.0,
         min_column_width: float = 4.0,
         row_scale: float = 1.15,

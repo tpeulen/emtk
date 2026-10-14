@@ -60,8 +60,8 @@ def test_click_on_the_triangle_and_keys_open_and_close():
     painter = RecordingPainter()
     table.draw(painter, 0.0, 0.0, 300.0, 200.0)
     assert len(painter.triangles) == 1          # one parent, one triangle
-    header_h = 16.0 * 1.35
-    row_h = 16.0 * 1.45
+    header_h = 16.0 * 1.25
+    row_h = 16.0 * table.row_scale
     y = header_h + row_h * 1.5                  # the gamma row
     table.press(6.0, y)                         # on its triangle
     assert "gamma" in table.expanded
@@ -91,17 +91,17 @@ def test_fitted_first_column_has_room_for_the_indent():
     table.expanded.add("gamma")
     table.auto_fit = True
     table.draw(RecordingPainter(), 0.0, 0.0, 600.0, 200.0)
-    # "gamma[HF]" (9 glyphs) at level 1: indent 28 + text 63 + margins 14.
-    assert table._fitted["name"] >= 2 * DataTable.TREE_INDENT + 9 * 7.0 + 14.0
+    # "gamma[HF]" (9 glyphs) at level 1: indent 28 + text 63 + margins (DataTable.CELL_PAD_X * 2.0 + 1.0).
+    assert table._fitted["name"] >= 2 * DataTable.TREE_INDENT + 9 * 7.0 + (DataTable.CELL_PAD_X * 2.0 + 1.0)
 
 
 def test_a_shortened_cell_shows_its_whole_text_as_tooltip():
     table = DataTable([TableColumn("name", "Name", width=40.0), TableColumn("v", "V")])
     table.set_records([{"name": "forster_radius", "v": 52.0}])
     table.draw(RecordingPainter(), 0.0, 0.0, 200.0, 100.0)
-    text, part = table.tooltip_at(10.0, 16.0 * 1.35 + 5.0)
+    text, part = table.tooltip_at(10.0, 16.0 * 1.25 + 5.0)
     assert text == "forster_radius" and part[0] == "cell"
-    assert table.tooltip_at(150.0, 16.0 * 1.35 + 5.0) == ("", None)
+    assert table.tooltip_at(150.0, 16.0 * 1.25 + 5.0) == ("", None)
 
 
 class Model:
@@ -134,4 +134,4 @@ def test_a_tree_without_parents_is_not_indented():
     table.set_records([{"name": "a", "parent": ""}, {"name": "b", "parent": ""}])
     painter = RecordingPainter()
     table.draw(painter, 0.0, 0.0, 200.0, 100.0)
-    assert {t[0] for t in painter.texts if t[5] in ("a", "b")} == {6.0}
+    assert {t[0] for t in painter.texts if t[5] in ("a", "b")} == {DataTable.CELL_PAD_X}

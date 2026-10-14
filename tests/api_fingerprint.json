@@ -4499,13 +4499,14 @@
     "bases": [],
     "decorators": [],
     "members": {
+     "CELL_PAD_X": "attribute",
      "COLLAPSE_HYSTERESIS": "attribute",
      "COLLAPSE_SLACK": "attribute",
      "DRAG_THRESHOLD": "attribute",
      "FLEX_MIN": "attribute",
      "TREE_INDENT": "attribute",
      "WHEEL_ROWS": "attribute",
-     "__init__": "def(self, columns=(), *, on_select=None, on_activate=None, filter_box=False, tooltip_key='', row_key='', row_scale=1.45, on_edit=None, on_delete=None, on_context=None, min_column_width=0.0, cell_editable=None, muted=None, status=False, column_picker=False, tree_key='', linked=None)",
+     "__init__": "def(self, columns=(), *, on_select=None, on_activate=None, filter_box=False, tooltip_key='', row_key='', row_scale=1.25, on_edit=None, on_delete=None, on_context=None, min_column_width=0.0, cell_editable=None, muted=None, status=False, column_picker=False, tree_key='', linked=None)",
      "begin_edit": "def(self, index, key)",
      "can_edit": "def(self, index, key)",
      "cancel_edit": "def(self)",
@@ -5486,7 +5487,7 @@
     "bases": [],
     "decorators": [],
     "members": {
-     "__init__": "def(self, columns, rows=(), *, sizing=SIZING_STRETCH_SAME, resizable=True, reorderable=True, hideable=True, sortable=True, sort_multi=True, sort_tristate=False, row_bg=True, borders_inner_v=True, borders_outer_v=True, borders_inner_h=True, borders_outer_h=True, freeze_rows=0, freeze_cols=0, scroll_x=False, keep_columns_visible=True, precise_widths=False, cell_padding=4.0, outer_padding=0.0, min_column_width=4.0, row_scale=1.15, show_headers=True, selected_row=None)",
+     "__init__": "def(self, columns, rows=(), *, sizing=SIZING_STRETCH_SAME, resizable=True, reorderable=True, hideable=True, sortable=True, sort_multi=True, sort_tristate=False, row_bg=True, borders_inner_v=True, borders_outer_v=True, borders_inner_h=True, borders_outer_h=True, freeze_rows=0, freeze_cols=0, scroll_x=False, keep_columns_visible=True, precise_widths=False, cell_padding=3.0, outer_padding=0.0, min_column_width=4.0, row_scale=1.15, show_headers=True, selected_row=None)",
      "auto_fit_all": "def(self)",
      "auto_fit_column": "def(self, index)",
      "can_hide_column": "def(self, index)",
@@ -6103,6 +6104,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "2b6f48c2d44727af37e46ffc2987402d33a0ec23f381d49347e60dd9509f6860",
- "version": "0.1.20"
+ "sha256": "399ed67449745a162466e0a8a6e0065178d98382f073f5e64388aa4067000d3e",
+ "version": "0.1.21"
 }

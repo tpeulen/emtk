@@ -511,12 +511,12 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _remember(state, f"{name}.swatch")
         _tooltip(section)
         _w.same_line()
-        field_w = max(width - swatch - 8.0, 30.0)
+        field_w = max(width - swatch - 6.0, 24.0)
     spin = ((str(section.get("style", "")).lower() == "spin" or bool(section.get("spin")))
             and kind in ("int", "float") and not read_only)
-    stepper_w = _core.get_frame_height() * 0.75 if spin else 0.0
+    stepper_w = _core.get_frame_height() * 0.6 if spin else 0.0
     shown = state.buffers.get(name, shown_value)
-    _w.set_next_item_width(max(field_w - stepper_w, 20.0))
+    _w.set_next_item_width(max(field_w - stepper_w, 16.0))
     flags = InputTextFlags.ENTER_RETURNS_TRUE | (InputTextFlags.READ_ONLY if read_only else 0)
     if kind in ("int", "float"):
         # A number is replaced, not extended, as ImGui's InputScalar does.
@@ -578,7 +578,7 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         lo = 0.0 if lo is None else float(lo)
         hi = lo if hi is None else max(float(hi), lo)
         _w.same_line()
-        _w.set_next_item_width(max(width - field_w - 8.0, 20.0))
+        _w.set_next_item_width(max(width - field_w - 8.0, 16.0))
         current = value if value is not None else lo
         if kind == "int":
             changed, new = _w.slider_int(f"##{name}.slider", int(current), int(lo), int(hi))
@@ -666,7 +666,7 @@ def _draw_bare_slider(section: dict, model: Any, state: FormState, width: float,
     hi = lo if hi is None else max(float(hi), lo)
     current = value if value is not None else lo
     fmt = _slider_format(section, kind)
-    _w.set_next_item_width(max(width, 20.0))
+    _w.set_next_item_width(max(width, 16.0))
     if kind == "int":
         changed, new = _w.slider_int(f"##{name}.slider", int(current), int(lo), int(hi), fmt)
     else:
@@ -805,11 +805,11 @@ def _combo_field(item_id: str, caption: str, width: float) -> bool:
                          _w._col(_core.Col.FRAME_BG_HOVERED if hovered else _core.Col.FRAME_BG),
                          style.frame_rounding)
     _w._frame_border(ctx, box)
-    arrow = h * 0.32
-    ax = x + w - style.frame_padding[0] - arrow * 1.4
+    arrow = max(h * 0.25, 3.5)
+    ax = x + w - style.frame_padding[0] - arrow * 1.1
     # room ends a padding short of the arrow: a glyph cut flush against it
     # reads as part of the arrow ("rati▾")
-    room = ax - style.frame_padding[0] - (x + style.frame_padding[0])
+    room = max(ax - 2.0 - (x + style.frame_padding[0]), 1.0)
     shown = _fit_text(caption, room)
     th = _w.calc_text_size(shown)[1]
     draw.push_clip_rect((x, y), (ax, y + h))
@@ -819,8 +819,8 @@ def _combo_field(item_id: str, caption: str, width: float) -> bool:
     if hovered and shown != caption:
         _w.set_tooltip(caption)
     cy = y + h / 2.0
-    draw.add_triangle_filled((ax, cy - arrow * 0.45), (ax + arrow * 1.2, cy - arrow * 0.45),
-                             (ax + arrow * 0.6, cy + arrow * 0.45), _w._col(_core.Col.TEXT))
+    draw.add_triangle_filled((ax, cy - arrow * 0.4), (ax + arrow * 1.0, cy - arrow * 0.4),
+                             (ax + arrow * 0.5, cy + arrow * 0.4), _w._col(_core.Col.TEXT))
     return pressed
 
 
@@ -863,7 +863,7 @@ def _button_label(item: dict, model: Any) -> str:
 
 
 #: The narrowest a button-row button is drawn, however short its label.
-BUTTON_MIN_WIDTH = 20.0
+BUTTON_MIN_WIDTH = 16.0
 
 
 def _button_natural(label: str) -> float:
@@ -1047,13 +1047,13 @@ def _min_width(section: dict, model: Any = None) -> float:
             + style.item_inner_spacing[0] * (len(buttons) - 1)
     chars = section.get("min_chars", MIN_CHARS.get(kind))
     if chars is None:
-        return 20.0
+        return 16.0
     text = _w.calc_text_size("0" * int(chars))[0]
     if kind == "choice":
         if str(section.get("style", "")).lower() in ("radio", "radio_list"):
-            return 20.0
+            return 16.0
         # _combo_field: padding, text, a padding's gap, the arrow, padding
-        return text + 2.0 * pad + fh * 0.32 * 1.4 + pad
+        return text + 2.0 * pad + fh * 0.25 + 2.0
     if kind == "value":
         style_name = str(section.get("style", "")).lower()
         spin = style_name == "spin" or bool(section.get("spin"))
@@ -1061,9 +1061,9 @@ def _min_width(section: dict, model: Any = None) -> float:
         if special:
             # The sentinel's spelling is shown in the field; in its language.
             text = max(text, _w.calc_text_size(tr(str(special)))[0])
-        return text + 2.0 * pad + (fh * 0.75 if spin else 0.0) \
-            + (40.0 if style_name == "slider" else 0.0)
-    return 20.0
+        return text + 2.0 * pad + (fh * 0.6 if spin else 0.0) \
+            + (32.0 if style_name == "slider" else 0.0)
+    return 16.0
 
 
 def _draw_control(section: dict, model: Any, state: FormState, width: float) -> None:
@@ -1333,14 +1333,14 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
             # A control alone on its line never runs past it: a weight-0 button row
             # sized to its labels then wraps inside the line instead of leaving the window.
             c = run[0]
-            widths[c] = min(widths[c], max(avail - indent - label_w[c], 20.0))
+            widths[c] = min(widths[c], max(avail - indent - label_w[c], 16.0))
         # A lone control whose label leaves it less than its minimum would start past the right edge (or as a
         # sliver of it) and draw empty: the label goes on a line of its own above the control instead.
         stacked = (len(run) == 1 and label_w[run[0]] > 0
                    and indent + least > avail + 0.5 and (fixed_w[run[0]] or weight[run[0]] > 0))
         if stacked:
             c = run[0]
-            widths = {c: max(avail - indent, 20.0)}
+            widths = {c: max(avail - indent, 16.0)}
         x, column_x = indent, {}
         for c in run:
             column_x[c] = x
@@ -1365,14 +1365,14 @@ def _draw_grid(leaves: list, model: Any, state: FormState, n_col: int,
                     # (a section of this column without a label of its own, a button row
                     # under a stacked field, draws no empty label line above itself)
                     text = _label_of(section)
-                    shown = _fit_text(text, max(avail - column_x[c], 20.0))
+                    shown = _fit_text(text, max(avail - column_x[c], 16.0))
                     _label(shown)
                     if shown != text and _w.is_item_hovered():
                         _w.set_tooltip(text)
                 elif label_w[c] > 0 and not stacked:
                     _label(_label_of(section), label_w[c])
                     _w.same_line(column_x[c] + label_w[c])
-                _draw_control(section, model, state, max(widths[c], 20.0))
+                _draw_control(section, model, state, max(widths[c], 16.0))
                 _w.end_disabled()
 
 

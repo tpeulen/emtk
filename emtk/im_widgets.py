@@ -3141,7 +3141,7 @@ class _Table:
         #: Top edge of every row opened so far, for the horizontal rules.
         self.row_tops: list = []
         self.current = -1
-        self.cell_padding = (4.0, 2.0)
+        self.cell_padding = (3.0, 1.5)
         self.freeze = (0, 0)
         self.bg: dict = {}
         self.sort: SortSpecs | None = None

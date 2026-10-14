@@ -140,16 +140,16 @@ _HEIGHT_ITEMS: dict[int, int | None] = {
 #: The popup's own padding above and below its rows. The reference's
 #: ``WindowPadding.y``, which is what ``CalcMaxPopupHeightFromItemCount`` adds
 #: twice on top of the rows themselves.
-PAD = 6.0
+PAD = 3.0
 
 #: Padding between the frame's edge and the preview text. The reference's
 #: ``FramePadding.x``, which it also uses as the popup's horizontal padding so
 #: an option in the list sits directly under the preview of itself.
-FRAME_PAD = 4.0
+FRAME_PAD = 3.0
 
 #: Gap between the frame and the label drawn after it. The reference's
 #: ``ItemInnerSpacing.x``.
-INNER_SPACING = 4.0
+INNER_SPACING = 3.0
 
 #: A popup row's height, as a multiple of the painter's line height. The
 #: reference's row is ``FontSize + ItemSpacing.y``, which at its own defaults
