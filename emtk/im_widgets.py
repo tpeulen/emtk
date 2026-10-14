@@ -907,9 +907,37 @@ def _nav_ring(ctx, box, item_id):
                           thickness=1.0)
 
 
-def button(label: str, size=None) -> bool:
-    """``ImGui::Button``: True on the frame the click completes."""
+def _role_colours(ctx, role):
+    """``(fill, hovered, active, text, ring)`` of button *role* in the current style; ``None`` if neutral.
+
+    The theme is read from the window background (:func:`emtk.style.button_role`). Disabled,
+    the fill is mostly the neutral button colour (:meth:`emtk.style.ButtonRole.disabled_fill`)
+    and dimmed like any disabled item, the text the theme's own: the main action that cannot
+    run must not look like one that can.
+    """
+    from . import style as _style  # noqa: PLC0415
+
+    colours = _style.button_role(role, ctx.style.color(Col.WINDOW_BG))
+    if colours is None:
+        return None
+    if ctx.item_flags & ItemFlags.DISABLED:
+        fill = colours.disabled_fill(ctx.style.color(Col.BUTTON))
+        dim = (*fill[:3], int(255 * ctx.style.disabled_alpha))
+        return dim, dim, dim, _col(Col.TEXT), None
+    return colours.fill, colours.hovered, colours.active, colours.text, colours.text
+
+
+def button(label: str, size=None, role: str | None = None) -> bool:
+    """``ImGui::Button``: True on the frame the click completes.
+
+    *role* says what kind of action the button is, and colours it from the theme's
+    :data:`emtk.style.BUTTON_ROLES`: ``"primary"`` (the one main action of a panel),
+    ``"success"`` (a confirming action), ``"danger"`` (a destructive one); ``None`` or
+    ``"default"`` is the neutral button. A ``push_style_color`` of the button colours does
+    not reach a role button -- the role is the declaration.
+    """
     ctx = get_current_context()
+    roled = _role_colours(ctx, role)
     shown = _visible_label(label)
     width, height = _calc_item_size(
         size,
@@ -927,15 +955,27 @@ def button(label: str, size=None) -> bool:
         shown = _elided(ctx, shown, width - ctx.style.frame_padding[0] * 2.0)
     box = ctx.layout.row(height=height, width=width)
     hovered, held, pressed = ctx.button_behavior(box, ctx.get_id(label))
-    colour = _col(Col.BUTTON_ACTIVE) if held else (_col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON))
+    if roled is None:
+        colour = _col(Col.BUTTON_ACTIVE) if held else (_col(Col.BUTTON_HOVERED) if hovered else _col(Col.BUTTON))
+        text_colour = _col(Col.TEXT)
+    else:
+        colour = roled[2] if held else (roled[1] if hovered else roled[0])
+        text_colour = roled[3]
     ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
                              colour, ctx.style.frame_rounding)
     _frame_border(ctx, box)
-    _nav_ring(ctx, box, ctx.get_id(label))
+    if roled is not None and roled[4] is not None and ctx.is_nav_focused(ctx.get_id(label)) \
+            and ctx.nav_visible and ctx.state(("nav",)).get("visible", True):
+        # the theme's focus blue vanishes on a primary fill: the ring takes the text colour
+        x, y, w, h = box
+        ctx.draw.add_rect((x + 2, y + 2), (x + w - 2, y + h - 2), roled[4],
+                          ctx.style.frame_rounding, thickness=1.5)
+    else:
+        _nav_ring(ctx, box, ctx.get_id(label))
     if shown:
         tw, th = ctx.draw.calc_text_size(shown)
         ctx.draw.add_text((box[0] + (box[2] - tw) * 0.5,
-                           box[1] + (box[3] - th) * 0.5), _col(Col.TEXT), shown)
+                           box[1] + (box[3] - th) * 0.5), text_colour, shown)
     return pressed
 
 
@@ -946,23 +986,19 @@ def small_button(label: str) -> bool:
     return button(label, (width, ctx.p.line_height()))
 
 
-def action_button(label: str, tooltip: str, callback, accent: bool = False) -> bool:
+def action_button(label: str, tooltip: str, callback, accent: bool = False,
+                  role: str | None = None) -> bool:
     """A button that carries its tooltip and fires *callback* when pressed.
 
     The shape every tool window reaches for: a labelled button that explains
-    itself on hover and runs an action when clicked, with the optional accent
-    style for the one headline action a panel leads with. Returns whether the
-    click completed, so a caller can chain a same-line sibling after it.
+    itself on hover and runs an action when clicked, coloured by *role* (see
+    :func:`button`). ``accent=True`` is the older spelling of
+    ``role="success"``. Returns whether the click completed, so a caller can
+    chain a same-line sibling after it.
     """
-    if accent:
-        from .im_core import Col  # noqa: PLC0415
-
-        push_style_color(Col.BUTTON, ACCENT_GREEN_BUTTON)
-        push_style_color(Col.BUTTON_HOVERED, (56, 180, 77, 255))
-        push_style_color(Col.BUTTON_ACTIVE, (36, 140, 57, 255))
-    pressed = button(label)
-    if accent:
-        pop_style_color(3)
+    if accent and role is None:
+        role = "success"
+    pressed = button(label, role=role)
     set_item_tooltip(tooltip)
     if pressed and callback is not None:
         callback()

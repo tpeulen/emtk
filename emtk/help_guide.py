@@ -214,13 +214,11 @@ class EmTkHelpWindow:
 
         if callable(self.on_start_guide):
             im.same_line()
-            im.push_style_color(Col.BUTTON, ACCENT_GREEN)
-            if im.button(tr("Start Guided Tour", domain="emtk") + "##help"):
+            if im.button(tr("Start Guided Tour", domain="emtk") + "##help", role="primary"):
                 self.hide()
                 self.on_start_guide()
             im.set_item_tooltip(tr("Walk through the tool controls and workflow step by step.",
                                    domain="emtk"))
-            im.pop_style_color()
 
         im.same_line()
         # The one close control of the window (besides Escape; the title bar has no ×):
@@ -581,16 +579,14 @@ class EmTkGuidedTour:
         is_last = self.step_idx == len(self.steps) - 1
         next_label = (tr("Finish", domain="emtk") if is_last
                       else tr("Next", domain="emtk") + " ▶") + "##tour_next"
-        im.push_style_color(Col.BUTTON, ACCENT_GREEN)
         im.begin_disabled(self.awaiting)
-        if im.button(next_label):
+        if im.button(next_label, role="primary"):
             self.next()
         im.set_item_tooltip(tr("Use the highlighted control to continue.", domain="emtk")
                             if self.awaiting
                             else tr("Finish the guided tour.", domain="emtk") if is_last
                             else tr("Go to the next tour step.", domain="emtk"))
         im.end_disabled()
-        im.pop_style_color()
 
         # Escape closes tour
         if ctx.io.key == KEY_ESCAPE:

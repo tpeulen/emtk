@@ -1530,13 +1530,13 @@
    "split_label": "def(label)"
   },
   "emtk.im_widgets": {
-   "action_button": "def(label, tooltip, callback, accent=False)",
+   "action_button": "def(label, tooltip, callback, accent=False, role=None)",
    "begin": "def(name, box=None, flags=0, **kwargs)",
    "begin_child": "def(id_or_box, size_or_clip=None, clip=True, child_id=None, scrollable=True)",
    "begin_group": "def()",
    "bullet": "def()",
    "bullet_text": "def(s)",
-   "button": "def(label, size=None)",
+   "button": "def(label, size=None, role=None)",
    "calc_math_size": "def(formula, font_size=14.0, scale=0.5)",
    "calc_text_size": "def(text_, text_end=None, hide_double_hash=False, wrap_width=-1.0)",
    "checkbox": "def(label, value)",
@@ -3266,6 +3266,21 @@
    "BUTTON": "value",
    "BUTTON_ACTIVE": "value",
    "BUTTON_HOVERED": "value",
+   "BUTTON_ROLES": "value",
+   "ButtonRole": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "active": "field",
+     "disabled_fill": "def(self, neutral)",
+     "disabled_share": "field=",
+     "fill": "field",
+     "hovered": "field",
+     "text": "field="
+    }
+   },
    "CHECK_MARK": "value",
    "CHECK_ON": "value",
    "Colour": "value",
@@ -3286,6 +3301,7 @@
    "PLOT_HISTOGRAM": "value",
    "PLOT_LINES": "value",
    "POPUP_BG": "value",
+   "ROLE_ALIASES": "value",
    "ROW_SEL": "value",
    "SCROLLBAR_BG": "value",
    "SCROLLBAR_GRAB": "value",
@@ -3324,8 +3340,20 @@
      "resolve": "def(self, background)"
     }
    },
+   "ThemedButtonRole": {
+    "bases": [],
+    "decorators": [
+     "dataclass(frozen=True)"
+    ],
+    "members": {
+     "dark": "field",
+     "light": "field",
+     "resolve": "def(self, background)"
+    }
+   },
    "WINDOW_BG": "value",
    "ambient_colours": "@contextmanager def(colours)",
+   "button_role": "def(role, background)",
    "clamp": "def(value, low, high)",
    "contrast_ratio": "def(a, b)",
    "current_ambient": "def()",
@@ -3339,6 +3367,7 @@
    "most_readable": "def(background, *candidates)",
    "parse_colour": "def(value)",
    "relative_luminance": "def(colour)",
+   "set_button_role": "def(name, role)",
    "use_palette": "def(colours)",
    "with_alpha": "def(colour, alpha)"
   },
@@ -6034,6 +6063,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "4ec4cec315d0a263787f0553a8b65f83088ddedbf15251bb0b9c82b0a1592c34",
- "version": "0.1.15"
+ "sha256": "0c567691aeaf753486ba963ef76b689989aafca4b6e3b0caef99ab90b972566a",
+ "version": "0.1.16"
 }

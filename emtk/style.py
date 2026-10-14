@@ -108,6 +108,12 @@ __all__ = [
     "disc",
     "Accent",
     "ThemedAccent",
+    "ButtonRole",
+    "ThemedButtonRole",
+    "BUTTON_ROLES",
+    "ROLE_ALIASES",
+    "button_role",
+    "set_button_role",
     "parse_colour",
     "relative_luminance",
     "contrast_ratio",
@@ -710,3 +716,97 @@ def ambient_colours(colours: dict):
 def current_ambient() -> dict:
     """The colours of the innermost :func:`ambient_colours` block (empty outside any)."""
     return _AMBIENT[-1] if _AMBIENT else {}
+
+
+# --------------------------------------------------------------------------
+# Button roles: what kind of action a button is
+# --------------------------------------------------------------------------
+@dataclass(frozen=True)
+class ButtonRole:
+    """The colours of a button whose kind of action is declared (its *role*).
+
+    A panel leads with one main action (Fit, Run, Compute) and may carry a destructive one
+    (Delete, Clear, Stop); the rest are neutral. A role names that kind, and the toolkit draws
+    it from these colours: :attr:`fill` at rest, :attr:`hovered` under the pointer,
+    :attr:`active` while held, :attr:`text` on all three. Each must keep :attr:`text` at
+    WCAG AA (4.5:1) -- ``tests/test_button_roles.py`` holds every shipped role to it.
+
+    A disabled role button does not keep its colour: :meth:`disabled_fill` mixes only
+    :attr:`disabled_share` of :attr:`fill` into the neutral button colour, so a primary
+    action that cannot run reads as unavailable, not as a live button drawn faintly.
+    """
+
+    fill: Colour
+    hovered: Colour
+    active: Colour
+    text: Colour = (255, 255, 255, 255)
+    disabled_share: float = 0.3
+
+    def __post_init__(self) -> None:
+        for name in ("fill", "hovered", "active", "text"):
+            object.__setattr__(self, name, parse_colour(getattr(self, name)))
+
+    def disabled_fill(self, neutral: Colour) -> tuple[int, int, int, int]:
+        """*neutral* (the theme's button colour) with :attr:`disabled_share` of :attr:`fill`, opaque."""
+        mixed = lerp_colour(neutral, self.fill, self.disabled_share)
+        return (mixed[0], mixed[1], mixed[2], 255)
+
+
+@dataclass(frozen=True)
+class ThemedButtonRole:
+    """A :class:`ButtonRole` per theme, picked by the window background's lightness at draw time."""
+
+    dark: ButtonRole
+    light: ButtonRole
+
+    def resolve(self, background: Colour) -> ButtonRole:
+        """:attr:`dark` on a dark *background*, else :attr:`light`."""
+        return self.dark if is_dark(background) else self.light
+
+
+#: The shipped roles. ``"default"`` (or ``None``) is the neutral button and has no entry.
+#: ``primary`` is the one main action of a panel (accent blue), ``success`` a confirming
+#: action (green), ``danger`` a destructive one (red). Light-theme fills are darker so the
+#: white text keeps its contrast; hover darkens there and lightens on the dark theme.
+BUTTON_ROLES: dict[str, ThemedButtonRole] = {
+    "primary": ThemedButtonRole(
+        dark=ButtonRole((38, 104, 196), (44, 112, 206), (28, 88, 170)),
+        light=ButtonRole((25, 103, 210), (21, 90, 190), (13, 71, 161)),
+    ),
+    "success": ThemedButtonRole(
+        dark=ButtonRole((28, 120, 56), (34, 134, 64), (24, 104, 48)),
+        light=ButtonRole((30, 126, 58), (26, 112, 52), (20, 96, 44)),
+    ),
+    "danger": ThemedButtonRole(
+        dark=ButtonRole((186, 48, 48), (200, 54, 54), (160, 38, 38)),
+        light=ButtonRole((196, 40, 40), (176, 34, 34), (150, 28, 28)),
+    ),
+}
+#: Other spellings a spec may use for a role.
+ROLE_ALIASES: dict[str, str] = {"confirm": "success", "destructive": "danger", "accent": "primary"}
+
+
+def button_role(role: str | None, background: Colour) -> ButtonRole | None:
+    """The colours of *role* on *background* (the window background); ``None`` for a neutral button.
+
+    Raises
+    ------
+    ValueError
+        For a role that is not :data:`BUTTON_ROLES` or :data:`ROLE_ALIASES` -- a typo in a
+        spec must fail where it is drawn, not silently draw a plain button.
+    """
+    if role is None or role == "" or role == "default":
+        return None
+    name = ROLE_ALIASES.get(role, role)
+    themed = BUTTON_ROLES.get(name)
+    if themed is None:
+        known = ", ".join(sorted({"default", *BUTTON_ROLES, *ROLE_ALIASES}))
+        raise ValueError(f"{role!r} is not a button role ({known})")
+    return themed.resolve(background)
+
+
+def set_button_role(name: str, role: ThemedButtonRole) -> ThemedButtonRole | None:
+    """Give role *name* an application's colours; returns the previous ones (``None`` for a new role)."""
+    previous = BUTTON_ROLES.get(name)
+    BUTTON_ROLES[name] = role
+    return previous
