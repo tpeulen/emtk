@@ -347,6 +347,14 @@ _LIGHT: dict = dict(
         Col.GRID_BACKGROUND: (225, 225, 225, 255),
         Col.GRID_LINE: (180, 180, 180, 100),
         Col.GRID_LINE_PRIMARY: (120, 120, 120, 100),
+        # imnodes keeps the dark mini map on its light style; a light window wants a light one.
+        Col.MINI_MAP_BACKGROUND: (205, 207, 214, 170),
+        Col.MINI_MAP_OUTLINE: (120, 120, 128, 120),
+        Col.MINI_MAP_NODE_BACKGROUND: (110, 112, 122, 110),
+        Col.MINI_MAP_NODE_BACKGROUND_SELECTED: (60, 62, 70, 255),
+        Col.MINI_MAP_NODE_OUTLINE: (90, 92, 100, 110),
+        Col.MINI_MAP_CANVAS: (0, 0, 0, 22),
+        Col.MINI_MAP_CANVAS_OUTLINE: (60, 62, 70, 200),
     },
 )
 
