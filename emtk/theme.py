@@ -137,6 +137,7 @@ LIGHT: dict[str, tuple] = {
     "TEXT_QUOTE": (80, 88, 104, 255),
     "CARD_BG": (252, 252, 253, 252),
     "WORKSPACE_BG": (228, 230, 234, 255),
+    "HOST_BG": (214, 217, 223, 255),
     "WATERMARK": (0, 0, 0, 16),
 }
 

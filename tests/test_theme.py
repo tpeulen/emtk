@@ -142,3 +142,18 @@ def test_a_text_editor_takes_the_light_token_palette_unless_given_one():
 def test_button_roles_take_the_light_variant():
     theme.apply_theme("light")
     assert st.button_role("primary", Style().color(Col.WINDOW_BG)) is st.BUTTON_ROLES["primary"].light
+
+
+def test_a_surface_without_a_background_is_cleared_in_the_theme():
+    from emtk.app import ControlSurface
+
+    class Nothing:
+        def draw(self, painter, x, y, w, h):
+            pass
+
+    surface = ControlSurface(Nothing())
+    assert surface.background == st.HOST_BG
+    theme.apply_theme("light")
+    assert surface.background == theme.LIGHT["HOST_BG"]
+    pinned = ControlSurface(Nothing(), background=(1, 2, 3))
+    assert pinned.background == (1, 2, 3), "a background given is kept"

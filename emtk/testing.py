@@ -1024,7 +1024,11 @@ class _ScreenshotPainter(PixelPainter):
     """Rasterize and record text so screenshot targets are the latest frame."""
 
     def __init__(self, width, height):
-        super().__init__(width, height)
+        # Cleared as a real host clears its surface (the theme's HOST_BG), so a screenshot
+        # shows the gaps between docks in the colour the window shows them.
+        from . import style as _style  # noqa: PLC0415
+
+        super().__init__(width, height, background=tuple(_style.HOST_BG))
         self.texts = []
         self.strings = []
         self.icons = []

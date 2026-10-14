@@ -55,9 +55,11 @@
     ],
     "decorators": [],
     "members": {
-     "__init__": "def(self, control, font_pt=None, background=(30, 32, 38), images=None, zoom=None)",
+     "__init__": "def(self, control, font_pt=None, background=None, images=None, zoom=None)",
      "animating": "def(self)",
      "attach": "def(self, device, format, width, height, ratio)",
+     "background": "@property def(self)",
+     "background.setter": "@background.setter def(self, value)",
      "close": "def(self)",
      "font_pt": "@property def(self)",
      "font_pt.setter": "@font_pt.setter def(self, value)",
@@ -3302,6 +3304,7 @@
    "HEADING_2": "value",
    "HEADING_3": "value",
    "HEADING_4": "value",
+   "HOST_BG": "value",
    "LINKED": "value",
    "MENU_BAR_BG": "value",
    "MODAL_DIM_BG": "value",
@@ -6100,6 +6103,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "7e10df6a0f5c6837eeb568ff816f2773e6b1442ecee59445ad5cd97ffff7fd9e",
- "version": "0.1.18"
+ "sha256": "9ecec08f5c6c29c379b4c2a957efeecdf921bf7c24be9231340d67cb79dd94cc",
+ "version": "0.1.19"
 }

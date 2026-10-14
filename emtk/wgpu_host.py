@@ -863,7 +863,8 @@ def wgpu_host_class():
             Point size of the interface font; by default the user's setting
             (:func:`emtk.type_scale.ui_font_pt`), followed from frame to frame.
         background : tuple, optional
-            Cleared to before the control draws, as 0-255 RGB.
+            Cleared to before the control draws, as 0-255 RGB. By default the
+            theme's ``HOST_BG`` (:mod:`emtk.theme`), read every frame.
         on_change : callable, optional
             Called with the control after any event it consumed.
         images : ImageAtlas, optional
@@ -898,7 +899,7 @@ def wgpu_host_class():
             self,
             control,
             font_pt: float | None = None,
-            background: tuple = (30, 32, 38),
+            background: tuple | None = None,
             on_change: Callable[[object], None] | None = None,
             images=None,
             renderer=None,
@@ -912,7 +913,7 @@ def wgpu_host_class():
             use_qt_clipboard()        # copy *and* paste through QClipboard
             #: ``None`` follows the user's setting (:mod:`emtk.type_scale`).
             self.font_pt = None if font_pt is None else float(font_pt)
-            self.background = tuple(background)
+            self._background = None if background is None else tuple(background)
             self.on_change = on_change
             if renderer is None:
                 renderer = WgpuRenderer(images=images)
@@ -1008,6 +1009,19 @@ def wgpu_host_class():
                 background=self.background,
                 format=self._format,
             )
+
+        @property
+        def background(self) -> tuple:
+            """The clear colour: the one given, else the theme's ``HOST_BG``."""
+            if self._background is not None:
+                return self._background
+            from . import style as _style  # noqa: PLC0415
+
+            return tuple(_style.HOST_BG)
+
+        @background.setter
+        def background(self, value) -> None:
+            self._background = None if value is None else tuple(value)
 
         def _box(self) -> tuple[float, float, float, float]:
             """The box the control is drawn in: the whole widget."""

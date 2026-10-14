@@ -103,6 +103,7 @@ def host_class():
             Filled before the control draws. The chrome is normally drawn over
             a lit 3-D scene and most controls do not paint their own backdrop;
             in a form there is nothing behind them, so the host supplies one.
+            By default the theme's ``HOST_BG`` (:mod:`emtk.theme`), read each paint.
         on_change : callable, optional
             Called with the control after any event the control consumed. This
             is what a form binds to.
@@ -121,7 +122,7 @@ def host_class():
             self,
             control,
             font_pt: float | None = None,
-            background: tuple = (30, 32, 38),
+            background: tuple | None = None,
             on_change: Callable[[object], None] | None = None,
             parent=None,
         ) -> None:
@@ -166,11 +167,7 @@ def host_class():
                 set_callback(request_frame)
             #: ``None`` follows the user's setting (:mod:`emtk.type_scale`).
             self.font_pt = None if font_pt is None else float(font_pt)
-            bg_vals = tuple(background[:3])
-            if any(isinstance(c, float) and c <= 1.0 for c in bg_vals):
-                self.background = tuple(int(round(c * 255)) for c in bg_vals)
-            else:
-                self.background = tuple(int(round(c)) for c in bg_vals)
+            self.background = background
             self.on_change = on_change
             self._pressed = False
             self.setFocusPolicy(QtCore.Qt.StrongFocus)
@@ -255,6 +252,26 @@ def host_class():
             super().resizeEvent(event)
 
         # -- painting ----------------------------------------------------- #
+        @property
+        def background(self) -> tuple:
+            """The fill behind the control: the one given, else the theme's ``HOST_BG``."""
+            if self._background is not None:
+                return self._background
+            from . import style as _style  # noqa: PLC0415
+
+            return tuple(_style.HOST_BG[:3])
+
+        @background.setter
+        def background(self, value) -> None:
+            if value is None:
+                self._background = None
+                return
+            bg_vals = tuple(value[:3])
+            if any(isinstance(c, float) and c <= 1.0 for c in bg_vals):
+                self._background = tuple(int(round(c * 255)) for c in bg_vals)
+            else:
+                self._background = tuple(int(round(c)) for c in bg_vals)
+
         def paintEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Draw the control across the whole widget."""
             from .qt_painter import QtPainter

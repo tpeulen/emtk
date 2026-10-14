@@ -270,7 +270,8 @@ class ControlSurface(Surface):
         Point size of the interface font. By default the surface follows the
         user's setting, :func:`emtk.type_scale.ui_font_pt`, from frame to frame.
     background : tuple, optional
-        0-255 RGB(A) cleared to before the control draws.
+        0-255 RGB(A) cleared to before the control draws. By default the theme's
+        ``HOST_BG`` (:mod:`emtk.theme`), read every frame.
     images : emtk.gpu_atlas.ImageAtlas, optional
         Where this surface's images are packed on the GPU; a 1024-texel atlas
         by default. A window showing one large picture -- a splash screen's art
@@ -285,13 +286,13 @@ class ControlSurface(Surface):
     """
 
     def __init__(self, control, font_pt: float | None = None,
-                 background: tuple = (30, 32, 38), images=None,
+                 background: tuple | None = None, images=None,
                  zoom: float | None = None) -> None:
         self.control = control
         self.images = images
         self._font_pt = None if font_pt is None else float(font_pt)
         self._zoom = None if zoom is None else float(zoom)
-        self.background = tuple(background)
+        self._background = None if background is None else tuple(background)
         self.renderer = None
         self.format: str | None = None
         self.size = (1, 1)
@@ -302,6 +303,19 @@ class ControlSurface(Surface):
         self._painter_generation: int | None = None
         self._pressed = False
         self._closed = False
+
+    @property
+    def background(self) -> tuple:
+        """What the surface is cleared to: the colour given, else the theme's ``HOST_BG``."""
+        if self._background is not None:
+            return self._background
+        from . import style as _style  # noqa: PLC0415
+
+        return tuple(_style.HOST_BG)
+
+    @background.setter
+    def background(self, value) -> None:
+        self._background = None if value is None else tuple(value)
 
     @property
     def font_pt(self) -> float:

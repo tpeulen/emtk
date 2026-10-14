@@ -122,6 +122,7 @@ __all__ = [
     "TEXT_QUOTE",
     "CARD_BG",
     "WORKSPACE_BG",
+    "HOST_BG",
     "WATERMARK",
     "FRAME_BORDER_SIZE",
     "hit",
@@ -314,6 +315,8 @@ TEXT_DANGER = (245, 110, 110, 255)
 TEXT_QUOTE = (160, 175, 195, 255)
 #: A panel drawn over the window (a tour card, a dialog body).
 CARD_BG = (26, 28, 36, 250)
+#: What a host surface is cleared to before the control draws (the gaps between docks).
+HOST_BG = (30, 32, 38, 255)
 #: A host-drawn workspace behind the docked windows, and a watermark drawn on it.
 WORKSPACE_BG = (12, 12, 14, 255)
 WATERMARK = (255, 255, 255, 18)
