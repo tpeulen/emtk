@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER
 from ..painter import line as _painter_line
 from ..painter import polyline as _painter_polyline
+from .. import style as _style
 from .axis import Axis
 from .markers import draw_marker
 
@@ -39,11 +40,8 @@ DEEP_PALETTE: tuple[tuple[int, int, int], ...] = (
     (204, 185, 116), (100, 181, 205),
 )
 
-_FRAME_BG = (0, 0, 0, 60)
-_GRID_COLOUR = (255, 255, 255, 20)
-_MINOR_GRID_COLOUR = (255, 255, 255, 9)
-_TICK_TEXT = (160, 165, 175)
-_AXIS_LINE = (110, 115, 125)
+# The plot's chrome is read from the palette as it draws (``PLOT_*`` in :mod:`emtk.style`),
+# so a theme switch reaches a plot that already exists.
 
 
 def column_extremes_index(px, py, run_id=None):
@@ -219,7 +217,7 @@ class Plot:
         else:
             self._y_axis.set_pixels(y + h, y)  # bottom -> Min, top -> Max: inverts Y.
 
-        p.fill_rect(x, y, w, h, _FRAME_BG)
+        p.fill_rect(x, y, w, h, _style.PLOT_FRAME_BG)
         # The tick *labels* sit in the margin to the left of the box, so they
         # have to be drawn before the clip that bounds the box -- inside it
         # they are clipped away and the plot draws gridlines with nothing to
@@ -241,7 +239,7 @@ class Plot:
                 p.fill_rect(x, py, w, 1.0, colour)
         finally:
             p.pop_clip()
-        p.stroke_rect(x, y, w, h, _AXIS_LINE)
+        p.stroke_rect(x, y, w, h, _style.PLOT_AXIS_LINE)
         self._draw_legend(p)
 
     def _grid_colours(self) -> tuple[tuple, tuple] | None:
@@ -253,7 +251,7 @@ class Plot:
         def scaled(colour):
             return (*colour[:3], min(255, int(round(colour[3] * factor))))
 
-        return scaled(_GRID_COLOUR), scaled(_MINOR_GRID_COLOUR)
+        return scaled(_style.PLOT_GRID), scaled(_style.PLOT_MINOR_GRID)
 
     def _draw_gridlines(self, p) -> None:
         colours = self._grid_colours()
@@ -284,7 +282,7 @@ class Plot:
         for v in self._y_axis.ticks(self.y_tick_target):
             py = self._y_axis.to_pixels(v)
             p.text(x - 34.0, py - 6.0, 30.0, 12.0, ALIGN_RIGHT | ALIGN_VCENTER,
-                   self.format_tick(v), _TICK_TEXT)
+                   self.format_tick(v), _style.PLOT_TICK_TEXT)
 
     def format_tick(self, v: float) -> str:
         """How a tick value is spelled. Overridden by a log axis, where the
@@ -375,7 +373,7 @@ class Plot:
         height = row_h * len(entries) + pad * 2.0
         lx = self.x + self.w - width - pad
         ly = self.y + pad
-        p.fill_rect(lx, ly, width, height, (20, 22, 26, 200))
+        p.fill_rect(lx, ly, width, height, _style.PLOT_LEGEND_BG)
         for i, (label, colour, pen) in enumerate(entries):
             row_y = ly + pad + i * row_h
             sx, sy = lx + pad, row_y + row_h * 0.5
@@ -393,7 +391,7 @@ class Plot:
                 else:
                     _painter_line(p, sx, sy, sx + swatch, sy, line_w, colour)
             p.text(lx + pad * 2.0 + swatch, row_y, width - swatch - pad * 3.0, row_h,
-                   ALIGN_LEFT | ALIGN_VCENTER, label, _TICK_TEXT)
+                   ALIGN_LEFT | ALIGN_VCENTER, label, _style.PLOT_TICK_TEXT)
 
     # -- context manager -----------------------------------------------
 

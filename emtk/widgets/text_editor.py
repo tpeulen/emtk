@@ -67,7 +67,8 @@ from typing import NamedTuple
 
 from .. import grapheme, icons
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Colour, Painter
-from ..style import BORDER, FRAME_BG, TEXT, clamp, hit
+from .. import style as _style
+from ..style import clamp, hit
 from .basic import ScrollBar
 
 __all__ = [
@@ -144,10 +145,8 @@ DARK_PALETTE: tuple[Colour, ...] = (
     (198, 8, 32),     # matching bracket error
 )
 
-#: The reference's ``GetLightPalette``, same halving. Nothing in emtk selects
-#: it yet -- the chrome is drawn over a lit 3-D scene and is dark throughout --
-#: but a palette is data and dropping half the reference's would be a silent
-#: loss the next reader could not see.
+#: The reference's ``GetLightPalette``, same halving. An editor without an
+#: assigned palette uses it on a light window (:mod:`emtk.theme`).
 LIGHT_PALETTE: tuple[Colour, ...] = (
     (64, 64, 64),
     (170, 0, 220),
@@ -1732,6 +1731,17 @@ class TextEditor:
     would land on every frame.
     """
 
+    @property
+    def palette(self) -> tuple[Colour, ...]:
+        """Token colours: the one assigned, else the theme's (:data:`LIGHT_PALETTE` on a light window)."""
+        if self._palette is not None:
+            return self._palette
+        return DARK_PALETTE if _style.is_dark(_style.WINDOW_BG) else LIGHT_PALETTE
+
+    @palette.setter
+    def palette(self, value) -> None:
+        self._palette = None if value is None else tuple(value)
+
     def __init__(
         self,
         text: str = "",
@@ -1739,7 +1749,7 @@ class TextEditor:
         read_only: bool = False,
     ) -> None:
         self.config = EditorConfig(language=language, read_only=read_only)
-        self.palette: tuple[Colour, ...] = DARK_PALETTE
+        self._palette: tuple[Colour, ...] | None = None
         self.document = Document(text)
         self.cursors = Cursors()
         self.transactions = Transactions()
@@ -2881,7 +2891,7 @@ class TextEditor:
         self.vbar.top = self.first_visible_line
         self.vbar.clamp(len(self.document), self.visible_lines)
 
-        p.fill_rect(x, y, w, h, self.config.background_color or FRAME_BG)
+        p.fill_rect(x, y, w, h, self.config.background_color or _style.FRAME_BG)
         if self.config.margin_color is not None and self.config.show_line_numbers:
             p.fill_rect(x, y, gutter, h, self.config.margin_color)
         p.push_clip(x, y, w, h)
@@ -2910,7 +2920,7 @@ class TextEditor:
         if bar_w:
             self.vbar.draw(p, x + w - bar_w, y, h)
         p.pop_clip()
-        p.stroke_rect(x, y, w, h, BORDER)
+        p.stroke_rect(x, y, w, h, _style.BORDER)
 
     def _draw_line_number(
         self, p: Painter, line: Line, number: int, x: float, row_y: float, gutter: float
@@ -3107,13 +3117,13 @@ class TextEditor:
             return
         left, top = point
         width = max(p.text_width(self.preedit), 1.0)
-        p.fill_rect(left, top, width, self._line_h, self.config.background_color or FRAME_BG)
+        p.fill_rect(left, top, width, self._line_h, self.config.background_color or _style.FRAME_BG)
         p.text(left, top, width + self._glyph_w, self._line_h, ALIGN_LEFT | ALIGN_VCENTER,
                self.preedit, self.palette[Token.TEXT])
         p.fill_rect(left, top + self._line_h - 2.0, width, 1.0, self.palette[Token.TEXT])
         caret = left + p.text_width(self.preedit[: self.preedit_cursor])
         p.fill_rect(caret, top + self._line_h * 0.1, max(1.0, self._glyph_w * 0.12),
-                    self._line_h * 0.8, self.config.caret_color or TEXT)
+                    self._line_h * 0.8, self.config.caret_color or _style.TEXT)
         self.ime_caret = (caret, top, self._line_h)
 
     def _draw_carets(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
@@ -3136,5 +3146,5 @@ class TextEditor:
                 y + row * self._line_h + self._line_h * 0.1,
                 max(1.0, self._glyph_w * 0.12),
                 self._line_h * 0.8,
-                self.config.caret_color or (TEXT if one.main else (200, 200, 210)),
+                self.config.caret_color or (_style.TEXT if one.main else (200, 200, 210)),
             )

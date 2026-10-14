@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .. import im
+from .. import style as _style
 from ..i18n import tr
 from ..im_core import Col
 from ..painter import Colour
@@ -197,7 +198,7 @@ def draw_chat_transcript(
 
     if not messages:
         im.dummy(0.0, 16.0)
-        im.text_colored((140, 170, 210, 255), tr("ChiSurf AI Assistant", domain="emtk"))
+        im.text_colored(_style.HEADING_1, tr("ChiSurf AI Assistant", domain="emtk"))
         im.dummy(0.0, 4.0)
         im.text_disabled(tr("Ready to assist with scripting, burst analysis,", domain="emtk"))
         im.text_disabled(tr("and ChiSurf algorithms.", domain="emtk"))
@@ -212,15 +213,15 @@ def draw_chat_transcript(
         # Sender header badge
         role = msg.role.lower()
         if role == "user":
-            im.text_colored((110, 190, 255, 255), tr("> You", domain="emtk"))
+            im.text_colored(_style.TEXT_NOTE, tr("> You", domain="emtk"))
         elif role == "assistant":
-            im.text_colored((130, 220, 140, 255), tr("Assistant", domain="emtk"))
+            im.text_colored(_style.TEXT_TIP, tr("Assistant", domain="emtk"))
         elif role == "tool":
-            im.text_colored((235, 185, 95, 255), tr("[Tool]", domain="emtk"))
+            im.text_colored(_style.TEXT_WARNING, tr("[Tool]", domain="emtk"))
         elif role == "error":
-            im.text_colored((245, 110, 110, 255), tr("[Error]", domain="emtk"))
+            im.text_colored(_style.TEXT_DANGER, tr("[Error]", domain="emtk"))
         else:
-            im.text_colored((180, 180, 180, 255), f"[{msg.role.capitalize()}]")
+            im.text_colored(_style.DIM, f"[{msg.role.capitalize()}]")
 
         # Message body
         if msg.content:
@@ -254,7 +255,7 @@ def draw_chat_transcript(
                         im.set_item_tooltip(tr("Replace the selected editor text with this code.", domain="emtk"))
 
                     # Code box display
-                    im.push_style_color(Col.FRAME_BG, (20, 22, 28, 255))
+                    im.push_style_color(Col.FRAME_BG, _style.CODE_BG)
                     im.text_wrapped(b_content)
                     im.pop_style_color()
                     im.dummy(0.0, 3.0)
@@ -280,7 +281,7 @@ def draw_chat_transcript(
                 im.pop_id()
 
         if msg.status == "streaming":
-            im.text_colored((130, 215, 140, 255), tr("... Thinking...", domain="emtk"))
+            im.text_colored(_style.TEXT_TIP, tr("... Thinking...", domain="emtk"))
 
         im.dummy(0.0, 4.0)
         im.separator()

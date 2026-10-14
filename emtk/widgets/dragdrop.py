@@ -72,7 +72,8 @@ from collections.abc import Hashable, Sequence
 from typing import Any
 
 from ..painter import ALIGN_LEFT, ALIGN_VCENTER, Painter
-from ..style import BORDER, DRAG_DROP_TARGET, POPUP_BG, TEXT, fit_text, hit, with_alpha
+from .. import style as _style
+from ..style import fit_text, hit, with_alpha
 from .basic import Tooltip
 
 __all__ = [
@@ -513,8 +514,8 @@ class DragDropSource:
         width, height = self.preview_size(p)
         x = ctx.x + _CURSOR_OFFSET[0]
         y = ctx.y + _CURSOR_OFFSET[1]
-        faded = with_alpha(POPUP_BG, int(POPUP_BG[3] * 0.60) if len(POPUP_BG) > 3 else 153)
-        p.stroke_rect(x, y, width, height, BORDER, faded)
+        faded = with_alpha(_style.POPUP_BG, int(_style.POPUP_BG[3] * 0.60) if len(_style.POPUP_BG) > 3 else 153)
+        p.stroke_rect(x, y, width, height, _style.BORDER, faded)
         inner = max(width - 2.0 * _PREVIEW_PAD, 1.0)
         p.push_clip(x, y, width, height)
         p.text(
@@ -524,7 +525,7 @@ class DragDropSource:
             height,
             ALIGN_VCENTER | ALIGN_LEFT,
             fit_text(p, self.label, inner),
-            TEXT,
+            _style.TEXT,
         )
         p.pop_clip()
 
@@ -685,10 +686,10 @@ class DragDropTarget:
         by = y - _TARGET_PADDING
         bw = w + 2.0 * _TARGET_PADDING
         bh = h + 2.0 * _TARGET_PADDING
-        p.fill_rect(bx, by, bw, bh, with_alpha(DRAG_DROP_TARGET, 40))
+        p.fill_rect(bx, by, bw, bh, with_alpha(_style.DRAG_DROP_TARGET, 40))
         for ring in range(_TARGET_BORDER):
             p.stroke_rect(bx + ring, by + ring, bw - 2.0 * ring, bh - 2.0 * ring,
-                          DRAG_DROP_TARGET, None)
+                          _style.DRAG_DROP_TARGET, None)
 
 
 class DragDropContext:

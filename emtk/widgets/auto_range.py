@@ -23,6 +23,7 @@ off by a narrow axis gutter.
 
 from __future__ import annotations
 
+from .. import style as _style
 from ..i18n import mark, tr
 from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER
 
@@ -44,10 +45,8 @@ INSET = 3.0
 #: The tooltip's source string (translated by :func:`tooltip`).
 TOOLTIP = mark("Auto-range: fit the view to the data", domain="emtk")
 
-_FILL = (20, 22, 28, 200)
-_FILL_HOVERED = (66, 150, 250, 230)
-_EDGE = (150, 150, 160, 230)
-_TEXT = (235, 235, 240)
+# Colours come from the palette as the button is drawn, so a theme switch reaches it:
+# the legend box's fill, the hovered button's, the border and the text.
 
 
 def tooltip() -> str:
@@ -76,8 +75,9 @@ def contains(rect, px: float, py: float) -> bool:
 def draw(painter, rect, hovered: bool = False) -> None:
     """Draw the boxed "A" at *rect*; lit while *hovered*."""
     x, y, w, h = rect
-    painter.stroke_rect(x, y, w, h, _EDGE, _FILL_HOVERED if hovered else _FILL)
-    painter.text(x, y, w, h, ALIGN_CENTER, "A", _TEXT)
+    painter.stroke_rect(x, y, w, h, _style.BORDER,
+                        _style.BUTTON_HOVERED if hovered else _style.PLOT_LEGEND_BG)
+    painter.text(x, y, w, h, ALIGN_CENTER, "A", _style.TEXT)
 
 
 def draw_tooltip(painter, rect, bounds) -> None:
@@ -96,5 +96,6 @@ def draw_tooltip(painter, rect, bounds) -> None:
     y = rect[1] + rect[3] - height
     x = max(x, bx)
     y = max(min(y, by + bh - height), by)
-    painter.stroke_rect(x, y, width, height, _EDGE, (20, 20, 20, 240))
-    painter.text(x + pad, y + pad, width - 2.0 * pad, row, ALIGN_LEFT | ALIGN_VCENTER, text, _TEXT)
+    painter.stroke_rect(x, y, width, height, _style.BORDER, _style.POPUP_BG)
+    painter.text(x + pad, y + pad, width - 2.0 * pad, row, ALIGN_LEFT | ALIGN_VCENTER, text,
+                 _style.TEXT)

@@ -36,7 +36,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER, Colour, Painter
-from ..style import BORDER, DIM, FRAME_BG, GOLD, TEXT, clamp, fit_text, hit
+from .. import style as _style
+from ..style import clamp, fit_text, hit
 
 __all__ = [
     "rgb_to_hsv",
@@ -511,11 +512,11 @@ class ColorButton:
             p.fill_rect(x, y, size, size, rgba)
         else:
             p.fill_rect(x, y, size, size, _opaque(rgba))
-        p.stroke_rect(x, y, size, size, GOLD if self._held else BORDER, None)
+        p.stroke_rect(x, y, size, size, _style.GOLD if self._held else _style.BORDER, None)
         room = w - size - _GAP
         if self.label and room > 0.0:
             p.text(x + size + _GAP, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, room), TEXT)
+                   fit_text(p, self.label, room), _style.TEXT)
 
     def press(
         self,
@@ -748,16 +749,16 @@ class ColorEditRGBA:
         label_w, swatch, fields_x, fields_w, tag_x, tag_w = self._layout(p, x, y, w, h)
         if label_w > 0.0:
             p.text(x, y, label_w - _GAP, h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, label_w - _GAP), TEXT)
+                   fit_text(p, self.label, label_w - _GAP), _style.TEXT)
         self.swatch.color = self.state.rgba
         self.swatch.show_alpha = self.alpha
         self.swatch.draw(p, x + label_w, y, swatch, h)
 
         p.push_clip(fields_x, y, fields_w, h)
         if self.mode == "HEX":
-            p.stroke_rect(fields_x, y, fields_w, h, BORDER, FRAME_BG)
+            p.stroke_rect(fields_x, y, fields_w, h, _style.BORDER, _style.FRAME_BG)
             p.text(fields_x, y, fields_w, h, ALIGN_CENTER,
-                   fit_text(p, self.state.hex(self.alpha), fields_w - 6.0), TEXT)
+                   fit_text(p, self.state.hex(self.alpha), fields_w - 6.0), _style.TEXT)
         else:
             count = self.components
             cell = fields_w / count
@@ -766,14 +767,14 @@ class ColorEditRGBA:
             for index, value in enumerate(self.values()):
                 cell_x = fields_x + index * cell
                 held = self._drag_field == index
-                p.stroke_rect(cell_x, y, cell - 1.0, h, BORDER, FRAME_BG)
+                p.stroke_rect(cell_x, y, cell - 1.0, h, _style.BORDER, _style.FRAME_BG)
                 shown = f"{value:d}" if hide_prefix else f"{prefixes[index]}:{value:d}"
                 p.text(cell_x, y, cell - 1.0, h, ALIGN_CENTER,
-                       fit_text(p, shown, cell - 3.0), GOLD if held else TEXT)
+                       fit_text(p, shown, cell - 3.0), _style.GOLD if held else _style.TEXT)
         p.pop_clip()
 
-        p.stroke_rect(tag_x, y, tag_w, h, BORDER, FRAME_BG)
-        p.text(tag_x, y, tag_w, h, ALIGN_CENTER, self.mode, DIM)
+        p.stroke_rect(tag_x, y, tag_w, h, _style.BORDER, _style.FRAME_BG)
+        p.text(tag_x, y, tag_w, h, ALIGN_CENTER, self.mode, _style.DIM)
 
     # -- input ---------------------------------------------------------- #
     def press(
@@ -1019,7 +1020,7 @@ class ColorPicker4:
             tint = floats_to_rgba(hsv_to_rgb(hue, 1.0, level))
             p.gradient_rect(x, y + row * band, square, band + 1.0, [grey, tint])
         p.pop_clip()
-        p.stroke_rect(x, y, square, square, BORDER, None)
+        p.stroke_rect(x, y, square, square, _style.BORDER, None)
         self._draw_square_cursor(p, x, y, square, sat, val)
 
         # The hue bar: one flat strip per band.
@@ -1029,7 +1030,7 @@ class ColorPicker4:
             p.fill_rect(hue_x, y + row * band, bar_w, band + 1.0,
                         floats_to_rgba(hsv_to_rgb(level, 1.0, 1.0)))
         p.pop_clip()
-        p.stroke_rect(hue_x, y, bar_w, square, BORDER, None)
+        p.stroke_rect(hue_x, y, bar_w, square, _style.BORDER, None)
         self._draw_bar_cursor(p, hue_x, y, bar_w, square, hue)
 
         # The alpha bar: the colour fading to nothing over a checkerboard.
@@ -1042,14 +1043,14 @@ class ColorPicker4:
                 p.fill_rect(alpha_x, y + row * band, bar_w, band + 1.0,
                             (rgb[0], rgb[1], rgb[2], int(level * 255.0 + 0.5)))
             p.pop_clip()
-            p.stroke_rect(alpha_x, y, bar_w, square, BORDER, None)
+            p.stroke_rect(alpha_x, y, bar_w, square, _style.BORDER, None)
             self._draw_bar_cursor(p, alpha_x, y, bar_w, square,
                                   1.0 - self.state.alpha / 255.0)
 
         room = h - square - _GAP
         if self.label and room > p.line_height() * 0.5:
             p.text(x, y + square + _GAP, w, room, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, w), TEXT)
+                   fit_text(p, self.label, w), _style.TEXT)
 
     def _draw_square_cursor(
         self, p: Painter, x: float, y: float, square: float, sat: float, val: float

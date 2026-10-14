@@ -55,20 +55,8 @@ import re
 from collections.abc import Sequence
 
 from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER, Painter
-from ..style import (
-    BORDER,
-    DIM,
-    FRAME_BG,
-    FRAME_BG_ACTIVE,
-    SLIDER_GRAB,
-    SLIDER_GRAB_ACTIVE,
-    TEXT,
-    clamp,
-    fit_text,
-    format_value,
-    hit,
-    lerp,
-)
+from .. import style as _style
+from ..style import clamp, fit_text, format_value, hit, lerp
 
 __all__ = [
     "GRAB_MIN_SIZE",
@@ -696,12 +684,12 @@ class SliderScalar:
                 self._label_w = min(p.text_width(self.label) + INNER_SPACING, w * 0.5)
         frame = self._frame(x, y, w, h)
         f_x, f_y, f_w, f_h = frame
-        p.stroke_rect(f_x, f_y, f_w, f_h, BORDER,
-                      FRAME_BG_ACTIVE if self._held else FRAME_BG)
+        p.stroke_rect(f_x, f_y, f_w, f_h, _style.BORDER,
+                      _style.FRAME_BG_ACTIVE if self._held else _style.FRAME_BG)
 
         pos_min, pos_max, grab_sz = self._track(frame)
         grab_pos = lerp(pos_min, pos_max, self._grab_t())
-        grab_colour = SLIDER_GRAB_ACTIVE if self._held else SLIDER_GRAB
+        grab_colour = _style.SLIDER_GRAB_ACTIVE if self._held else _style.SLIDER_GRAB
         if grab_sz > 0.0:
             if self.vertical:
                 p.fill_rect(f_x + GRAB_PADDING, grab_pos - grab_sz * 0.5,
@@ -715,18 +703,18 @@ class SliderScalar:
             # The value rides at the top of the track, over the frame padding,
             # as the reference draws it.
             p.text(f_x, f_y + GRAB_PADDING, f_w, p.line_height(),
-                   ALIGN_CENTER, fit_text(p, self.text, f_w), TEXT)
+                   ALIGN_CENTER, fit_text(p, self.text, f_w), _style.TEXT)
         else:
-            p.text(f_x, f_y, f_w, f_h, ALIGN_CENTER, fit_text(p, self.text, f_w), TEXT)
+            p.text(f_x, f_y, f_w, f_h, ALIGN_CENTER, fit_text(p, self.text, f_w), _style.TEXT)
         p.pop_clip()
 
         if self.vertical and self._label_h > 0.0:
             p.text(f_x, f_y + f_h, f_w, self._label_h,
-                   ALIGN_CENTER, fit_text(p, self.label, f_w), DIM)
+                   ALIGN_CENTER, fit_text(p, self.label, f_w), _style.DIM)
         elif self._label_w > 0.0:
             room = max(self._label_w - INNER_SPACING, 1.0)
             p.text(f_x + f_w + INNER_SPACING, y, room, h,
-                   ALIGN_VCENTER | ALIGN_LEFT, fit_text(p, self.label, room), TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, fit_text(p, self.label, room), _style.TEXT)
 
     # -- interaction ----------------------------------------------------- #
     def press(
@@ -1091,7 +1079,7 @@ class SliderScalarN:
             left = last_x + last_w + INNER_SPACING
             room = max(x + w - left, 1.0)
             p.text(left, y, room, h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, room), TEXT)
+                   fit_text(p, self.label, room), _style.TEXT)
 
     # -- interaction ----------------------------------------------------- #
     def press(

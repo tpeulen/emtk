@@ -27,7 +27,7 @@ from __future__ import annotations
 from ..control import Control
 from ..flags import Axis
 from ..painter import Painter
-from ..style import SEPARATOR, SEPARATOR_ACTIVE, SEPARATOR_HOVERED
+from .. import style as _style
 
 __all__ = ["Splitter"]
 
@@ -168,8 +168,8 @@ class Splitter(Control):
         span = self.thickness
         bar = max(2.0, span - self.bar_margin * 2.0)
         inset = (span - bar) * 0.5
-        colour = (SEPARATOR_ACTIVE if self.held
-                  else SEPARATOR_HOVERED if self.hovered else SEPARATOR)
+        colour = (_style.SEPARATOR_ACTIVE if self.held
+                  else _style.SEPARATOR_HOVERED if self.hovered else _style.SEPARATOR)
         if self.axis:
             p.fill_rect(x, y + inset, w, bar, colour)
         else:

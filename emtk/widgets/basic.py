@@ -67,21 +67,8 @@ __all__ = [
 # `from .style import X as _X` because fourteen aliased imports are split into
 # fourteen statements by the import sorter, which buries the one thing this
 # block is trying to say: that these names are that module's, unchanged.
+from .. import style as _style
 from ..style import (
-    TEXT as _TEXT,
-    DIM as _DIM,
-    GOLD as _GOLD,
-    HEADER_BG as _HEADER_BG,
-    TRACK_BG as _TRACK_BG,
-    THUMB as _THUMB_COLOR,
-    THUMB_HELD as _THUMB_HELD,
-    BORDER as _BORDER,
-    TABLE_ROW_BG as _ROW_EVEN,
-    TABLE_ROW_BG_ALT as _ROW_ODD,
-    ROW_SEL as _ROW_SEL,
-    CHECK_ON as _CHECK_ON,
-    BTN_BG as _BTN_BG,
-    BTN_HELD as _BTN_HELD,
     _PERCENT_SPEC as _PERCENT_SPEC,
     fit_text as fit_text,
     format_value as _format,
@@ -140,25 +127,25 @@ class SliderFloat:
         norm = self.fraction
 
         # Track background
-        p.stroke_rect(x, y, w, h, _BORDER, _TRACK_BG)
+        p.stroke_rect(x, y, w, h, _style.BORDER, _style.TRACK_BG)
 
         # Filled track progress
         fill_w = norm * w
         if fill_w > 0:
-            p.fill_rect(x, y, fill_w, h, _THUMB_COLOR)
+            p.fill_rect(x, y, fill_w, h, _style.THUMB)
 
         # Thumb knob, centred on the value: the pointer sets the fraction of
         # the track, so the thumb has to sit *on* that point rather than
         # starting at it, or the knob trails the cursor by half its width.
         thumb_w = 8.0
         thumb_x = min(max(x + norm * w - thumb_w * 0.5, x), x + max(w - thumb_w, 0.0))
-        thumb_color = _THUMB_HELD if self._held else _GOLD
+        thumb_color = _style.THUMB_HELD if self._held else _style.GOLD
         p.fill_rect(thumb_x, y, thumb_w, h, thumb_color)
 
         # Value text + label
         text_val = _format(self.fmt, self.value)
         display = f"{self.label}: {text_val}" if self.label else text_val
-        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, display, _TEXT)
+        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, display, _style.TEXT)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Process mouse press. Returns True if press hit the control."""
@@ -233,10 +220,10 @@ class ColorEdit4:
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the color swatch square and label text."""
         swatch_size = h
-        p.stroke_rect(x, y, swatch_size, swatch_size, _BORDER, self.color)
+        p.stroke_rect(x, y, swatch_size, swatch_size, _style.BORDER, self.color)
 
         if self.label:
-            p.text(x + swatch_size + 6.0, y, max(w - swatch_size - 6.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+            p.text(x + swatch_size + 6.0, y, max(w - swatch_size - 6.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Returns True if click landed inside the swatch control."""
@@ -283,14 +270,14 @@ class ScrollBar:
     def draw(self, p: Painter, x: float, y: float, h: float) -> None:
         """Paint the bar down the right-hand edge of a list."""
         self._box = (x, y, self.width, h)
-        p.fill_rect(x, y, self.width, h, _ROW_ODD)
+        p.fill_rect(x, y, self.width, h, _style.TABLE_ROW_BG_ALT)
         if not self.needed():
             return
         span = max(h * self._visible / max(self._total, 1), 10.0)
         travel = max(h - span, 0.0)
         at = y + travel * (self.top / max(self._total - self._visible, 1))
         p.fill_rect(x + 1.0, at, max(self.width - 2.0, 1.0), span,
-                    _THUMB_HELD if self.held else _DIM)
+                    _style.THUMB_HELD if self.held else _style.DIM)
 
     # ------------------------------------------------------------------ #
     def hit(self, x: float, y: float) -> bool:
@@ -429,15 +416,15 @@ class Table:
 
         p.push_clip(x, y, w, h)
 
-        p.stroke_rect(x, y, list_w, header_h, _BORDER, _HEADER_BG)
+        p.stroke_rect(x, y, list_w, header_h, _style.BORDER, _style.HEADER_BG)
         col_x = x
         for idx, head in enumerate(self.headers):
             cw = widths[idx]
             sort_mark = " ▴" if (self.sort_col == idx and self.sort_ascending) else (" ▾" if self.sort_col == idx else "")
             p.text(col_x + 3.0, y, max(cw - 6.0, 1.0), header_h,
                    ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, f"{head}{sort_mark}", cw - 6.0), _GOLD, bold=True)
-            p.stroke_rect(col_x, y, cw, header_h, _BORDER, None)
+                   fit_text(p, f"{head}{sort_mark}", cw - 6.0), _style.GOLD, bold=True)
+            p.stroke_rect(col_x, y, cw, header_h, _style.BORDER, None)
             col_x += cw
 
         row_y = y + header_h
@@ -446,15 +433,15 @@ class Table:
             if r_idx >= len(self.rows):
                 break
             row_data = self.rows[r_idx]
-            bg_color = _ROW_SEL if (self.selected_row == r_idx) else (_ROW_EVEN if (r_idx % 2 == 0) else _ROW_ODD)
-            p.stroke_rect(x, row_y, list_w, row_h, _BORDER, bg_color)
+            bg_color = _style.ROW_SEL if (self.selected_row == r_idx) else (_style.TABLE_ROW_BG if (r_idx % 2 == 0) else _style.TABLE_ROW_BG_ALT)
+            p.stroke_rect(x, row_y, list_w, row_h, _style.BORDER, bg_color)
             col_x = x
             for c_idx in range(num_cols):
                 cw = widths[c_idx]
                 cell_text = str(row_data[c_idx]) if c_idx < len(row_data) else ""
                 p.text(col_x + 3.0, row_y, max(cw - 6.0, 1.0), row_h,
                        ALIGN_VCENTER | ALIGN_LEFT,
-                       fit_text(p, cell_text, cw - 6.0), _TEXT)
+                       fit_text(p, cell_text, cw - 6.0), _style.TEXT)
                 col_x += cw
             row_y += row_h
 
@@ -523,7 +510,7 @@ class Checkbox:
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the checkbox square, checkmark and label text."""
         box_size = h * 0.8
-        p.stroke_rect(x, y + (h - box_size) * 0.5, box_size, box_size, _BORDER, _TRACK_BG)
+        p.stroke_rect(x, y + (h - box_size) * 0.5, box_size, box_size, _style.BORDER, _style.TRACK_BG)
 
         if self.checked:
             p.fill_rect(
@@ -531,11 +518,11 @@ class Checkbox:
                 y + (h - box_size) * 0.5 + box_size * 0.25,
                 box_size * 0.5,
                 box_size * 0.5,
-                _CHECK_ON,
+                _style.CHECK_ON,
             )
 
         if self.label:
-            p.text(x + box_size + 6.0, y, max(w - box_size - 6.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+            p.text(x + box_size + 6.0, y, max(w - box_size - 6.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Process mouse press. Toggles state if hit."""
@@ -569,8 +556,8 @@ class Combo:
         """Paint selector box `< Value >` and label."""
         val_str = self.value
         display = f"{self.label}: < {val_str} >" if self.label else f"< {val_str} >"
-        p.stroke_rect(x, y, w, h, _BORDER, _BTN_BG)
-        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, display, _GOLD)
+        p.stroke_rect(x, y, w, h, _style.BORDER, _style.BTN_BG)
+        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, display, _style.GOLD)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> str:
         """Process mouse press. Cycles option if hit."""
@@ -588,9 +575,9 @@ class Button:
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint button box and label text."""
-        bg = _BTN_HELD if self._held else _BTN_BG
-        p.stroke_rect(x, y, w, h, _BORDER, bg)
-        p.text(x, y, w, h, ALIGN_CENTER, f"[ {self.label} ]", _TEXT)
+        bg = _style.BTN_HELD if self._held else _style.BTN_BG
+        p.stroke_rect(x, y, w, h, _style.BORDER, bg)
+        p.text(x, y, w, h, ALIGN_CENTER, f"[ {self.label} ]", _style.TEXT)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Process mouse press. Returns True if hit."""
@@ -615,14 +602,14 @@ class ProgressBar:
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint progress bar background, fill and text."""
-        p.stroke_rect(x, y, w, h, _BORDER, _TRACK_BG)
+        p.stroke_rect(x, y, w, h, _style.BORDER, _style.TRACK_BG)
         fill_w = self.fraction * w
         if fill_w > 0:
-            p.fill_rect(x, y, fill_w, h, _THUMB_COLOR)
+            p.fill_rect(x, y, fill_w, h, _style.THUMB)
 
         percent_str = _format(self.fmt, self.fraction)
         display = f"{self.label} {percent_str}".strip()
-        p.text(x, y, w, h, ALIGN_CENTER, display, _TEXT)
+        p.text(x, y, w, h, ALIGN_CENTER, display, _style.TEXT)
 
 
 class TreeNode:
@@ -647,7 +634,7 @@ class TreeNode:
         """Paint disclosure arrow `v` / `>` and node label."""
         arrow = "v " if self.expanded else "> "
         display = f"{arrow}{self.label}"
-        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, display, _GOLD)
+        p.text(x + 4.0, y, max(w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT, display, _style.GOLD)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Process mouse press. Toggles node expansion if hit."""
@@ -675,13 +662,13 @@ class Separator:
         mid = y + h * 0.5
         rule_h = max(1.0, h * 0.25)
         if not self.label:
-            p.fill_rect(x, mid - rule_h * 0.5, w, rule_h, _BORDER)
+            p.fill_rect(x, mid - rule_h * 0.5, w, rule_h, _style.BORDER)
             return
         text_w = min(p.text_width(self.label) + 8.0, max(w - 24.0, 0.0))
-        p.text(x, y, text_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _DIM)
+        p.text(x, y, text_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.DIM)
         rest = w - text_w
         if rest > 0.0:
-            p.fill_rect(x + text_w, mid - rule_h * 0.5, rest, rule_h, _BORDER)
+            p.fill_rect(x + text_w, mid - rule_h * 0.5, rest, rule_h, _style.BORDER)
 
 
 class Toggle:
@@ -712,15 +699,15 @@ class Toggle:
         track_w = h * 2.0
         track_h = h * 0.7
         track_y = y + (h - track_h) * 0.5
-        p.stroke_rect(x, track_y, track_w, track_h, _BORDER,
-                      _CHECK_ON if self.on else _TRACK_BG)
+        p.stroke_rect(x, track_y, track_w, track_h, _style.BORDER,
+                      _style.CHECK_ON if self.on else _style.TRACK_BG)
         knob_w = track_w * 0.45
         knob_x = x + (track_w - knob_w) if self.on else x
-        p.fill_rect(knob_x, track_y, knob_w, track_h, _GOLD if self.on else _DIM)
+        p.fill_rect(knob_x, track_y, knob_w, track_h, _style.GOLD if self.on else _style.DIM)
         if self.label:
             left = x + track_w + 6.0
             p.text(left, y, max(w - track_w - 6.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:
         """Process mouse press. Flips the switch if hit."""
@@ -771,7 +758,7 @@ class RadioGroup:
         left = x
         if self.label:
             label_w = min(p.text_width(self.label) + 8.0, w * 0.5)
-            p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+            p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
             left = x + label_w
         if not self.options:
             return
@@ -781,12 +768,12 @@ class RadioGroup:
             cell_x = left + idx * cell
             dot = h * 0.5
             dot_y = y + (h - dot) * 0.5
-            p.stroke_rect(cell_x, dot_y, dot, dot, _BORDER, _TRACK_BG)
+            p.stroke_rect(cell_x, dot_y, dot, dot, _style.BORDER, _style.TRACK_BG)
             if picked:
                 p.fill_rect(cell_x + dot * 0.25, dot_y + dot * 0.25,
-                            dot * 0.5, dot * 0.5, _THUMB_COLOR)
+                            dot * 0.5, dot * 0.5, _style.THUMB)
             p.text(cell_x + dot + 4.0, y, max(cell - dot - 4.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, option, _GOLD if picked else _DIM)
+                   ALIGN_VCENTER | ALIGN_LEFT, option, _style.GOLD if picked else _style.DIM)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> str:
         """Process mouse press. Picks the option the press landed on."""
@@ -845,13 +832,13 @@ class InputInt:
         btn = h
         if self.label:
             label_w = max(w - btn * 2.0 - 40.0, 1.0)
-            p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+            p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
         right = x + w
-        p.stroke_rect(right - btn, y, btn, h, _BORDER, _BTN_BG)
-        p.text(right - btn, y, btn, h, ALIGN_CENTER, "+", _TEXT)
-        p.stroke_rect(right - btn * 3.0, y, btn, h, _BORDER, _BTN_BG)
-        p.text(right - btn * 3.0, y, btn, h, ALIGN_CENTER, "-", _TEXT)
-        p.text(right - btn * 3.0, y, btn * 3.0, h, ALIGN_CENTER, str(self.value), _GOLD)
+        p.stroke_rect(right - btn, y, btn, h, _style.BORDER, _style.BTN_BG)
+        p.text(right - btn, y, btn, h, ALIGN_CENTER, "+", _style.TEXT)
+        p.stroke_rect(right - btn * 3.0, y, btn, h, _style.BORDER, _style.BTN_BG)
+        p.text(right - btn * 3.0, y, btn, h, ALIGN_CENTER, "-", _style.TEXT)
+        p.text(right - btn * 3.0, y, btn * 3.0, h, ALIGN_CENTER, str(self.value), _style.GOLD)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> int:
         """Process mouse press. Steps up or down when a stepper is hit."""
@@ -917,10 +904,10 @@ class ListBox:
         top = y
         if self.label:
             head_h = h / (self.visible_rows + 1)
-            p.text(x, y, w, head_h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _DIM)
+            p.text(x, y, w, head_h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.DIM)
             top = y + head_h
         body_h = max(y + h - top, 1.0)
-        p.stroke_rect(x, top, w, body_h, _BORDER, _ROW_EVEN)
+        p.stroke_rect(x, top, w, body_h, _style.BORDER, _style.TABLE_ROW_BG)
         p.push_clip(x, top, w, body_h)
         row_h = body_h / self.visible_rows
         start = self.first_visible
@@ -930,10 +917,10 @@ class ListBox:
                 break
             row_y = top + offset * row_h
             if idx == self.index:
-                p.fill_rect(x, row_y, w, row_h, _ROW_SEL)
+                p.fill_rect(x, row_y, w, row_h, _style.ROW_SEL)
             p.text(x + 5.0, row_y, max(w - 10.0, 1.0), row_h,
                    ALIGN_VCENTER | ALIGN_LEFT, self.items[idx],
-                   _TEXT if idx == self.index else _DIM)
+                   _style.TEXT if idx == self.index else _style.DIM)
         p.pop_clip()
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> int | None:
@@ -997,11 +984,11 @@ class Tabs:
             current = idx == self.index
             cell_x = x + idx * cell
             pill_w = cell * 0.92
-            p.stroke_rect(cell_x, y, pill_w, h, _BORDER,
-                          _HEADER_BG if current else _TRACK_BG)
+            p.stroke_rect(cell_x, y, pill_w, h, _style.BORDER,
+                          _style.HEADER_BG if current else _style.TRACK_BG)
             p.text(cell_x, y, pill_w, h, ALIGN_CENTER,
                    fit_text(p, label, pill_w - 4.0),
-                   _GOLD if current else _DIM)
+                   _style.GOLD if current else _style.DIM)
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> int | None:
         """Process mouse press. Returns the tab index hit, or ``None``."""
@@ -1060,7 +1047,7 @@ class PlotLines:
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the frame, the staircase and the caption."""
-        p.stroke_rect(x, y, w, h, _BORDER, _TRACK_BG)
+        p.stroke_rect(x, y, w, h, _style.BORDER, _style.TRACK_BG)
         if len(self.values) >= 2:
             p.push_clip(x, y, w, h)
             step = w / (len(self.values) - 1)
@@ -1071,12 +1058,12 @@ class PlotLines:
                 seg_x = x + (idx - 1) * step
                 top = min(previous, here)
                 span = max(abs(here - previous), thick)
-                p.fill_rect(seg_x, top, max(step, thick), span, _THUMB_COLOR)
+                p.fill_rect(seg_x, top, max(step, thick), span, _style.THUMB)
                 previous = here
             p.pop_clip()
         if self.label:
             p.text(x + 4.0, y, max(w - 8.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
 
 class Histogram:
@@ -1117,7 +1104,7 @@ class Histogram:
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the frame, one bar per sample and the caption."""
-        p.stroke_rect(x, y, w, h, _BORDER, _TRACK_BG)
+        p.stroke_rect(x, y, w, h, _style.BORDER, _style.TRACK_BG)
         if self.values:
             p.push_clip(x, y, w, h)
             low, high = self.range()
@@ -1127,11 +1114,11 @@ class Histogram:
                 norm = min(max(norm, 0.0), 1.0)
                 bar_h = norm * h
                 p.fill_rect(x + idx * cell + cell * 0.1, y + h - bar_h,
-                            max(cell * 0.8, 1.0), max(bar_h, 1.0), _THUMB_COLOR)
+                            max(cell * 0.8, 1.0), max(bar_h, 1.0), _style.THUMB)
             p.pop_clip()
         if self.label:
             p.text(x + 4.0, y, max(w - 8.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
 
 class Tooltip:
@@ -1154,11 +1141,11 @@ class Tooltip:
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the box and its lines."""
-        p.stroke_rect(x, y, w, h, _BORDER, _ROW_ODD)
+        p.stroke_rect(x, y, w, h, _style.BORDER, _style.TABLE_ROW_BG_ALT)
         line_h = p.line_height() * 1.2
         for idx, line in enumerate(self.lines):
             p.text(x + 6.0, y + 4.0 + idx * line_h, max(w - 12.0, 1.0), line_h,
-                   ALIGN_VCENTER | ALIGN_LEFT, line, _TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, line, _style.TEXT)
 
 
 class TextInput:
@@ -1230,19 +1217,19 @@ class TextInput:
         box_w = w
         if self.label:
             label_w = min(p.text_width(self.label) + 8.0, w * 0.5)
-            p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _TEXT)
+            p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
             left = x + label_w
             box_w = max(w - label_w, 1.0)
-        p.stroke_rect(left, y, box_w, h, _BORDER, _TRACK_BG)
+        p.stroke_rect(left, y, box_w, h, _style.BORDER, _style.TRACK_BG)
         p.push_clip(left, y, box_w, h)
         if self.field.text:
             from .text_field import paint  # noqa: PLC0415
 
-            paint(p, self.field, left, y, box_w, h, _TEXT, _GOLD)
+            paint(p, self.field, left, y, box_w, h, _style.TEXT, _style.GOLD)
         else:
             p.text(left + 4.0, y, max(box_w - 8.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, _tr_hint(self.field.placeholder), _DIM)
-            p.fill_rect(left + 4.0, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _GOLD)
+                   ALIGN_VCENTER | ALIGN_LEFT, _tr_hint(self.field.placeholder), _style.DIM)
+            p.fill_rect(left + 4.0, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
         p.pop_clip()
 
     def press(self, x: float, y: float, box_x: float, box_y: float, box_w: float, box_h: float) -> bool:

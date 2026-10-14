@@ -27,14 +27,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
+from .. import style as _style
 from .basic import (
-    _BORDER,
-    _DIM,
-    _GOLD,
-    _ROW_EVEN,
-    _ROW_ODD,
-    _ROW_SEL,
-    _TEXT,
     Button,
     ColorEdit4,
     Combo,
@@ -503,13 +497,13 @@ class SettingsEditor:
         self.groups.label = ""
         self.groups.draw(p, *self._tab_box)
         p.text(self._tab_box[0], y, self._tab_box[2] - 6.0, head_h,
-               ALIGN_VCENTER | ALIGN_RIGHT, f"{shown}", _DIM)
+               ALIGN_VCENTER | ALIGN_RIGHT, f"{shown}", _style.DIM)
         self.filter.draw(p, *self._filter_box)
 
         body_y = y + head_h + 4.0
         body_h = max(h - head_h - foot_h - 8.0, line)
         list_w = max(w - self.bar.width, 1.0)
-        p.stroke_rect(x, body_y, list_w, body_h, _BORDER, _ROW_EVEN)
+        p.stroke_rect(x, body_y, list_w, body_h, _style.BORDER, _style.TABLE_ROW_BG)
 
         rows = self.rows()
         row_h = body_h / self.visible_rows
@@ -523,15 +517,15 @@ class SettingsEditor:
             setting = rows[index]
             row_y = body_y + offset * row_h
             if index == self.row:
-                p.fill_rect(x, row_y, list_w, row_h, _ROW_SEL)
+                p.fill_rect(x, row_y, list_w, row_h, _style.ROW_SEL)
             elif index % 2:
-                p.fill_rect(x, row_y, list_w, row_h, _ROW_ODD)
+                p.fill_rect(x, row_y, list_w, row_h, _style.TABLE_ROW_BG_ALT)
 
             label_w = list_w * (1.0 - self.CONTROL_SHARE)
             p.text(x + 6.0, row_y, max(label_w - 12.0, 1.0), row_h,
                    ALIGN_VCENTER | ALIGN_LEFT,
                    fit_text(p, setting.label, label_w - 12.0),
-                   _GOLD if index == self.row else _TEXT)
+                   _style.GOLD if index == self.row else _style.TEXT)
             box = (x + label_w, row_y + row_h * 0.15,
                    list_w * self.CONTROL_SHARE - 8.0, row_h * 0.7)
             control = self.model.control(setting)
@@ -547,7 +541,7 @@ class SettingsEditor:
 
         Separator().draw(p, x, y + h - foot_h - 2.0, w, 4.0)
         p.text(x + 6.0, y + h - foot_h, max(w - 12.0, 1.0), foot_h,
-               ALIGN_VCENTER | ALIGN_LEFT, self._note(p, max(w - 12.0, 1.0)), _DIM)
+               ALIGN_VCENTER | ALIGN_LEFT, self._note(p, max(w - 12.0, 1.0)), _style.DIM)
 
     def _note(self, p: Painter, room: float) -> str:
         """The footer line for the selected row, shortened to fit ``room``.

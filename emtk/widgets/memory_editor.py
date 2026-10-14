@@ -38,7 +38,8 @@ from collections.abc import Callable
 from typing import Protocol, runtime_checkable
 
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Colour, Painter
-from ..style import BORDER, FRAME_BG, TEXT, TEXT_DISABLED, clamp, hit
+from .. import style as _style
+from ..style import clamp, hit
 from .basic import ScrollBar
 
 __all__ = [
@@ -295,7 +296,7 @@ class MemoryEditor:
             The box to draw in.
         """
         self._calc_sizes(p)
-        p.fill_rect(x, y, w, h, FRAME_BG)
+        p.fill_rect(x, y, w, h, _style.FRAME_BG)
         p.push_clip(x, y, w, h)
 
         footer = (self._line_h * 4.0) if self.show_data_preview else 0.0
@@ -322,13 +323,13 @@ class MemoryEditor:
 
         if self.source is None:
             p.text(x, y, w, self._line_h, ALIGN_LEFT | ALIGN_VCENTER,
-                   "no memory source", TEXT_DISABLED)
+                   "no memory source", _style.TEXT_DISABLED)
             p.pop_clip()
-            p.stroke_rect(x, y, w, h, BORDER)
+            p.stroke_rect(x, y, w, h, _style.BORDER)
             return
 
         if self.show_ascii:
-            p.fill_rect(self._ascii_x - self._glyph_w, y, 1.0, body_h, BORDER)
+            p.fill_rect(self._ascii_x - self._glyph_w, y, 1.0, body_h, _style.BORDER)
 
         preview_size = PREVIEW_TYPES[self.preview_type][2] if self.show_data_preview else 0
         fmt = "{:02X}" if self.upper_case_hex else "{:02x}"
@@ -348,7 +349,7 @@ class MemoryEditor:
                 self._line_h,
                 ALIGN_RIGHT | ALIGN_VCENTER,
                 self._format_address(self.base_address + address),
-                TEXT_DISABLED,
+                _style.TEXT_DISABLED,
             )
             for column, value in enumerate(chunk):
                 here = address + column
@@ -356,15 +357,15 @@ class MemoryEditor:
                 self._draw_background(p, here, column, cell_x, row_y, preview_size)
                 if here == self.editing_address and not self.read_only:
                     p.stroke_rect(cell_x - 1.0, row_y, self._glyph_w * 2.0 + 2.0,
-                                  self._line_h, TEXT, (40, 60, 90))
+                                  self._line_h, _style.TEXT, (40, 60, 90))
                     shown = self._edit_digits or fmt.format(value)
                 else:
                     shown = fmt.format(value)
-                colour = TEXT
+                colour = _style.TEXT
                 if self.show_hex_ii:
                     shown, colour = self._hex_ii(value, fmt)
                 elif value == 0 and self.grey_out_zeroes:
-                    colour = TEXT_DISABLED
+                    colour = _style.TEXT_DISABLED
                 p.text(cell_x, row_y, self._glyph_w * 2.5, self._line_h,
                        ALIGN_LEFT | ALIGN_VCENTER, shown, colour)
 
@@ -378,13 +379,13 @@ class MemoryEditor:
                     "".join(
                         chr(one) if 32 <= one < 127 else "." for one in chunk
                     ),
-                    TEXT,
+                    _style.TEXT,
                 )
 
         if self.show_data_preview:
             self._draw_preview(p, x, y + body_h, w, footer)
         p.pop_clip()
-        p.stroke_rect(x, y, w, h, BORDER)
+        p.stroke_rect(x, y, w, h, _style.BORDER)
 
     def _format_address(self, address: int) -> str:
         """The address column's text for one row."""
@@ -399,12 +400,12 @@ class MemoryEditor:
         of blanks with a few values in it tells you where the data is.
         """
         if 32 <= value < 128:
-            return f".{chr(value)}", TEXT
+            return f".{chr(value)}", _style.TEXT
         if value == 0:
-            return "  ", TEXT_DISABLED
+            return "  ", _style.TEXT_DISABLED
         if value == 0xFF and self.grey_out_zeroes:
-            return "##", TEXT_DISABLED
-        return fmt.format(value), TEXT
+            return "##", _style.TEXT_DISABLED
+        return fmt.format(value), _style.TEXT
 
     def _draw_background(
         self,
@@ -444,7 +445,7 @@ class MemoryEditor:
         for index, text in enumerate(rows):
             p.text(x + self._glyph_w, y + index * self._line_h, w, self._line_h,
                    ALIGN_LEFT | ALIGN_VCENTER, text,
-                   TEXT if index else TEXT_DISABLED)
+                   _style.TEXT if index else _style.TEXT_DISABLED)
 
     def _preview_text(self, code: str, size: int, form: str) -> str:
         """Decode the bytes at :attr:`preview_address` in one representation."""

@@ -40,16 +40,8 @@ from typing import Callable, Iterable, Optional, Protocol, Sequence
 from ..keys import KEY_DOWN, KEY_END, KEY_HOME, KEY_LEFT, KEY_PAGE_DOWN, KEY_PAGE_UP, KEY_RIGHT, KEY_UP
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 from ..router import Capture, Consumed, Event, Pass, Verdict
-from ..style import (
-    Colour,
-    DIM as _DIM,
-    HEADER as _SEL_HOVER,
-    ROW_SEL as _SEL,
-    TABLE_ROW_BG as _ROW_EVEN,
-    TABLE_ROW_BG_ALT as _ROW_ODD,
-    TEXT as _TEXT,
-    fit_text,
-)
+from .. import style as _style
+from ..style import Colour, fit_text
 from .basic import ScrollBar
 from .selection import MultiSelectState
 
@@ -253,27 +245,27 @@ class ListView:
         """Paint one row. Subclasses override this and still get the rest."""
         background = row.background
         if background is None and self.selection.is_selected(index):
-            background = _SEL_HOVER if index == self.hovered else _SEL
+            background = _style.HEADER if index == self.hovered else _style.ROW_SEL
         elif background is None and index == self.hovered:
-            background = _ROW_ODD
+            background = _style.TABLE_ROW_BG_ALT
         elif background is None and self.zebra and index % 2:
-            background = _ROW_ODD
+            background = _style.TABLE_ROW_BG_ALT
         if background is not None:
             p.fill_rect(x, y, w, h, background)
 
         pad = 4.0
         left = x + pad + row.indent * INDENT
         if row.twisty:
-            p.text(left, y, INDENT, h, ALIGN_VCENTER | ALIGN_LEFT, row.twisty, _DIM)
+            p.text(left, y, INDENT, h, ALIGN_VCENTER | ALIGN_LEFT, row.twisty, _style.DIM)
             left += INDENT
 
         right_w = (p.text_width(row.right) + pad) if row.right else 0.0
         text_w = max(x + w - pad - right_w - left, 1.0)
         p.text(left, y, text_w, h, ALIGN_VCENTER | ALIGN_LEFT,
-               fit_text(p, row.text, text_w), row.colour or _TEXT)
+               fit_text(p, row.text, text_w), row.colour or _style.TEXT)
         if row.right:
             p.text(x, y, w - pad, h, ALIGN_VCENTER | ALIGN_RIGHT,
-                   row.right, row.right_colour or _DIM)
+                   row.right, row.right_colour or _style.DIM)
 
     # -- input -------------------------------------------------------------- #
 

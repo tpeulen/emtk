@@ -49,21 +49,8 @@ from __future__ import annotations
 import math
 
 from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER, Colour, Painter
-from ..style import (
-    BORDER,
-    BUTTON,
-    BUTTON_ACTIVE,
-    BUTTON_HOVERED,
-    CHECK_MARK,
-    FRAME_BG,
-    FRAME_BG_ACTIVE,
-    FRAME_BG_HOVERED,
-    TEXT,
-    clamp,
-    disc,
-    fit_text,
-    hit,
-)
+from .. import style as _style
+from ..style import clamp, disc, fit_text, hit
 
 __all__ = [
     "DIR_LEFT",
@@ -311,9 +298,9 @@ class ButtonState:
 
     def background(
         self,
-        base: Colour = BUTTON,
-        hovered: Colour = BUTTON_HOVERED,
-        active: Colour = BUTTON_ACTIVE,
+        base: Colour = _style.BUTTON,
+        hovered: Colour = _style.BUTTON_HOVERED,
+        active: Colour = _style.BUTTON_ACTIVE,
     ) -> Colour:
         """Pick the frame colour for the current state.
 
@@ -389,9 +376,9 @@ class SmallButton:
         """
         frame_h = min(h, p.line_height())
         frame_y = y + (h - frame_h) * 0.5
-        p.stroke_rect(x, frame_y, w, frame_h, BORDER, self.state.background())
+        p.stroke_rect(x, frame_y, w, frame_h, _style.BORDER, self.state.background())
         p.text(x, frame_y, w, frame_h, ALIGN_CENTER,
-               fit_text(p, self.label, w - _FRAME_PAD_X * 2.0), TEXT)
+               fit_text(p, self.label, w - _FRAME_PAD_X * 2.0), _style.TEXT)
 
     def hover(self, x: float, y: float, box_x: float, box_y: float,
               box_w: float, box_h: float) -> bool:
@@ -491,8 +478,8 @@ class ArrowButton:
         x, y, w, h : float
             The box.
         """
-        p.stroke_rect(x, y, w, h, BORDER, self.state.background())
-        _arrow(p, x + w * 0.5, y + h * 0.5, min(w, h), self.direction, TEXT)
+        p.stroke_rect(x, y, w, h, _style.BORDER, self.state.background())
+        _arrow(p, x + w * 0.5, y + h * 0.5, min(w, h), self.direction, _style.TEXT)
 
     def hover(self, x: float, y: float, box_x: float, box_y: float,
               box_w: float, box_h: float) -> bool:
@@ -584,18 +571,18 @@ class CheckboxFlags:
         """
         square = min(h, max(w, 1.0))
         square_y = y + (h - square) * 0.5
-        p.stroke_rect(x, square_y, square, square, BORDER,
-                      self.state.background(FRAME_BG, FRAME_BG_HOVERED, FRAME_BG_ACTIVE))
+        p.stroke_rect(x, square_y, square, square, _style.BORDER,
+                      self.state.background(_style.FRAME_BG, _style.FRAME_BG_HOVERED, _style.FRAME_BG_ACTIVE))
         if self.mixed:
             pad = max(1.0, math.trunc(square / 3.6))
-            p.fill_rect(x + pad, square_y + pad, square - pad * 2.0, square - pad * 2.0, CHECK_MARK)
+            p.fill_rect(x + pad, square_y + pad, square - pad * 2.0, square - pad * 2.0, _style.CHECK_MARK)
         elif self.all_on:
             pad = max(1.0, math.trunc(square / 6.0))
-            _check_mark(p, x + pad, square_y + pad, square - pad * 2.0, CHECK_MARK)
+            _check_mark(p, x + pad, square_y + pad, square - pad * 2.0, _style.CHECK_MARK)
         if self.label:
             left = x + square + _INNER_SPACING
             p.text(left, y, max(x + w - left, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, max(x + w - left, 1.0)), TEXT)
+                   fit_text(p, self.label, max(x + w - left, 1.0)), _style.TEXT)
 
     def hover(self, x: float, y: float, box_x: float, box_y: float,
               box_w: float, box_h: float) -> bool:
@@ -678,14 +665,14 @@ class RadioButton:
         cx = x + square * 0.5
         cy = y + h * 0.5
         _disc(p, cx, cy, radius,
-              self.state.background(FRAME_BG, FRAME_BG_HOVERED, FRAME_BG_ACTIVE))
+              self.state.background(_style.FRAME_BG, _style.FRAME_BG_HOVERED, _style.FRAME_BG_ACTIVE))
         if self.active:
             pad = max(1.0, math.trunc(square / 6.0))
-            _disc(p, cx, cy, radius - pad, CHECK_MARK)
+            _disc(p, cx, cy, radius - pad, _style.CHECK_MARK)
         if self.label:
             left = x + square + _INNER_SPACING
             p.text(left, y, max(x + w - left, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, max(x + w - left, 1.0)), TEXT)
+                   fit_text(p, self.label, max(x + w - left, 1.0)), _style.TEXT)
 
     def hover(self, x: float, y: float, box_x: float, box_y: float,
               box_w: float, box_h: float) -> bool:

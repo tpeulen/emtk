@@ -98,6 +98,32 @@ __all__ = [
     "CHECK_ON",
     "BTN_BG",
     "BTN_HELD",
+    "SCROLL_TRACK",
+    "SCROLL_THUMB",
+    "SCROLL_THUMB_HOT",
+    "PLOT_BG",
+    "PLOT_FRAME_BG",
+    "PLOT_GRID",
+    "PLOT_MINOR_GRID",
+    "PLOT_TICK_TEXT",
+    "PLOT_LABEL_TEXT",
+    "PLOT_AXIS_LINE",
+    "PLOT_LEGEND_BG",
+    "CODE_BG",
+    "CODE_INLINE_BG",
+    "HEADING_1",
+    "HEADING_2",
+    "HEADING_3",
+    "HEADING_4",
+    "TEXT_NOTE",
+    "TEXT_TIP",
+    "TEXT_WARNING",
+    "TEXT_DANGER",
+    "TEXT_QUOTE",
+    "CARD_BG",
+    "WORKSPACE_BG",
+    "WATERMARK",
+    "FRAME_BORDER_SIZE",
     "hit",
     "clamp",
     "lerp",
@@ -249,6 +275,53 @@ CHECK_ON = (90, 230, 120)
 BTN_BG = (50, 64, 82, 230)
 #: The pressed state of :data:`BTN_BG`.
 BTN_HELD = (75, 100, 135, 255)
+
+
+# --------------------------------------------------------------------------
+# Surfaces the reference has no role for
+# --------------------------------------------------------------------------
+# Each of these was a literal in the module that draws it. A literal does not follow a
+# theme (:mod:`emtk.theme`), so a light window kept dark plots, code blocks and scroll
+# thumbs; as palette names they switch with the rest.
+
+#: A child region's scroll track, its thumb, and the thumb under the pointer or held.
+SCROLL_TRACK = (25, 28, 35, 120)
+SCROLL_THUMB = (95, 105, 125, 170)
+SCROLL_THUMB_HOT = (160, 175, 205, 230)
+#: A plot's data area when the plot does not choose one, its frame wash, grid lines,
+#: tick numbers, axis captions, axis lines and legend box.
+PLOT_BG = (30, 32, 38, 255)
+PLOT_FRAME_BG = (0, 0, 0, 60)
+PLOT_GRID = (255, 255, 255, 20)
+PLOT_MINOR_GRID = (255, 255, 255, 9)
+PLOT_TICK_TEXT = (160, 165, 175)
+PLOT_LABEL_TEXT = (196, 201, 212)
+PLOT_AXIS_LINE = (110, 115, 125)
+PLOT_LEGEND_BG = (20, 22, 26, 200)
+#: A code block's or a chat message's field.
+CODE_BG = (20, 24, 30, 255)
+#: The wash behind inline ``code`` in running text.
+CODE_INLINE_BG = (255, 255, 255, 28)
+#: Document text roles (markdown headings, admonitions, quotes, table captions).
+HEADING_1 = (125, 205, 255, 255)
+HEADING_2 = (145, 225, 160, 255)
+HEADING_3 = (245, 205, 115, 255)
+HEADING_4 = (220, 225, 235, 255)
+TEXT_NOTE = (110, 190, 255, 255)
+TEXT_TIP = (130, 220, 140, 255)
+TEXT_WARNING = (235, 185, 95, 255)
+TEXT_DANGER = (245, 110, 110, 255)
+TEXT_QUOTE = (160, 175, 195, 255)
+#: A panel drawn over the window (a tour card, a dialog body).
+CARD_BG = (26, 28, 36, 250)
+#: A host-drawn workspace behind the docked windows, and a watermark drawn on it.
+WORKSPACE_BG = (12, 12, 14, 255)
+WATERMARK = (255, 255, 255, 18)
+
+#: The outline around fields and buttons, in pixels (``Style.frame_border_size``): none on
+#: the dark theme; a light theme needs it, since a white field on a pale window has no edge.
+#: Not a colour, so :func:`use_palette` leaves it alone; :func:`emtk.theme.apply_theme` sets it.
+FRAME_BORDER_SIZE = 0.0
 
 
 # --------------------------------------------------------------------------

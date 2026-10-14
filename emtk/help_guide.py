@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from emtk import im
+from emtk import style as _style
 from emtk.dialog_window import DialogWindow
 from emtk.i18n import mark, tr
 from emtk.im_core import Col
@@ -210,7 +211,7 @@ class EmTkHelpWindow:
 
         # Header controls
         im.align_text_to_frame_padding()
-        im.text_colored(_tr(self.title, self.domain), ACCENT_BLUE)
+        im.text_colored(_tr(self.title, self.domain), _style.HEADING_1)
 
         if callable(self.on_start_guide):
             im.same_line()
@@ -518,7 +519,7 @@ class EmTkGuidedTour:
         ctx.draw.add_rect_filled(
             (cx, cy),
             (cx + card_w, cy + card_h),
-            (26, 28, 36, 250),
+            _style.CARD_BG,
             rounding=8.0,
         )
         ctx.draw.add_rect(
@@ -530,7 +531,7 @@ class EmTkGuidedTour:
         )
 
         ctx.draw.add_rect_filled((cx + 1.0, cy + 1.0), (cx + card_w - 1.0, cy + 7.0), (60, 90, 160, 200), rounding=3.0)
-        ctx.draw.add_text((cx + card_w - 128.0, cy + 8.0), (120, 130, 150, 255), tr("drag here to move", domain="emtk"))
+        ctx.draw.add_text((cx + card_w - 128.0, cy + 8.0), _style.DIM, tr("drag here to move", domain="emtk"))
 
         # 4. Content Area with Native Word Wrapping
         content_margin = 14.0
@@ -539,7 +540,7 @@ class EmTkGuidedTour:
              card_w - 2 * content_margin, card_h - header_height - 48.0),
             clip=True,
         )
-        im.push_style_color(Col.TEXT, ACCENT_BLUE)
+        im.push_style_color(Col.TEXT, _style.HEADING_1)
         im.text_wrapped(title_text)
         im.pop_style_color()
         im.spacing()

@@ -64,18 +64,8 @@ import re
 from collections.abc import Sequence
 
 from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER, Painter
-from ..style import (
-    BORDER,
-    FRAME_BG,
-    FRAME_BG_ACTIVE,
-    GOLD,
-    TEXT,
-    TEXT_DISABLED,
-    clamp,
-    fit_text,
-    format_value,
-    hit,
-)
+from .. import style as _style
+from ..style import clamp, fit_text, format_value, hit
 
 __all__ = [
     "DRAG_SPEED_DEFAULT_RATIO",
@@ -818,24 +808,24 @@ class _DragScalar:
         """
         self._label_w = (p.text_width(self.label) + _INNER_SPACING) if self.label else 0.0
         frame_w = max(w - self._label_w, 1.0)
-        frame = FRAME_BG_ACTIVE if (self._held or self._editing) else FRAME_BG
-        p.stroke_rect(x, y, frame_w, h, BORDER, frame)
+        frame = _style.FRAME_BG_ACTIVE if (self._held or self._editing) else _style.FRAME_BG
+        p.stroke_rect(x, y, frame_w, h, _style.BORDER, frame)
 
         p.push_clip(x, y, frame_w, h)
         if self._editing:
             p.text(x + 4.0, y, max(frame_w - 8.0, 1.0), h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self._buffer, TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self._buffer, _style.TEXT)
             caret_x = x + 4.0 + p.text_width(self._buffer)
-            p.fill_rect(caret_x, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, GOLD)
+            p.fill_rect(caret_x, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
         else:
-            colour = TEXT_DISABLED if self.read_only else TEXT
+            colour = _style.TEXT_DISABLED if self.read_only else _style.TEXT
             p.text(x, y, frame_w, h, ALIGN_CENTER,
                    fit_text(p, self.display_text(), frame_w - 6.0), colour)
         p.pop_clip()
 
         if self.label:
             p.text(x + frame_w + _INNER_SPACING, y, self._label_w, h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.label, TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
 
 class DragFloat(_DragScalar):
@@ -1017,7 +1007,7 @@ class _DragScalarN:
             component.draw(p, x + index * (cell + _INNER_SPACING), y, cell, h)
         if self.label:
             p.text(x + body + _INNER_SPACING, y, self._label_w, h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.label, TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
     def _cell_box(
         self, index: int, box_x: float, box_w: float, box_h: float
@@ -1266,7 +1256,7 @@ class _DragRange2:
         self.high_drag.draw(p, x + cell + _INNER_SPACING, y, cell, h)
         if self.label:
             p.text(x + body + _INNER_SPACING, y, self._label_w, h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self.label, TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self.label, _style.TEXT)
 
     def _cell_box(
         self, index: int, box_x: float, box_w: float, box_h: float

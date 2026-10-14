@@ -3281,25 +3281,41 @@
      "text": "field="
     }
    },
+   "CARD_BG": "value",
    "CHECK_MARK": "value",
    "CHECK_ON": "value",
+   "CODE_BG": "value",
+   "CODE_INLINE_BG": "value",
    "Colour": "value",
    "DIM": "value",
    "DRAG_DROP_TARGET": "value",
    "FRAME_BG": "value",
    "FRAME_BG_ACTIVE": "value",
    "FRAME_BG_HOVERED": "value",
+   "FRAME_BORDER_SIZE": "value",
    "GOLD": "value",
    "HEADER": "value",
    "HEADER_ACTIVE": "value",
    "HEADER_BG": "value",
    "HEADER_HOVERED": "value",
+   "HEADING_1": "value",
+   "HEADING_2": "value",
+   "HEADING_3": "value",
+   "HEADING_4": "value",
    "LINKED": "value",
    "MENU_BAR_BG": "value",
    "MODAL_DIM_BG": "value",
    "NAV_CURSOR": "value",
+   "PLOT_AXIS_LINE": "value",
+   "PLOT_BG": "value",
+   "PLOT_FRAME_BG": "value",
+   "PLOT_GRID": "value",
    "PLOT_HISTOGRAM": "value",
+   "PLOT_LABEL_TEXT": "value",
+   "PLOT_LEGEND_BG": "value",
    "PLOT_LINES": "value",
+   "PLOT_MINOR_GRID": "value",
+   "PLOT_TICK_TEXT": "value",
    "POPUP_BG": "value",
    "ROLE_ALIASES": "value",
    "ROW_SEL": "value",
@@ -3307,6 +3323,9 @@
    "SCROLLBAR_GRAB": "value",
    "SCROLLBAR_GRAB_ACTIVE": "value",
    "SCROLLBAR_GRAB_HOVERED": "value",
+   "SCROLL_THUMB": "value",
+   "SCROLL_THUMB_HOT": "value",
+   "SCROLL_TRACK": "value",
    "SEPARATOR": "value",
    "SEPARATOR_ACTIVE": "value",
    "SEPARATOR_HOVERED": "value",
@@ -3321,9 +3340,14 @@
    "TAB_HOVERED": "value",
    "TAB_SELECTED": "value",
    "TEXT": "value",
+   "TEXT_DANGER": "value",
    "TEXT_DISABLED": "value",
    "TEXT_LINK": "value",
+   "TEXT_NOTE": "value",
+   "TEXT_QUOTE": "value",
    "TEXT_SELECTED_BG": "value",
+   "TEXT_TIP": "value",
+   "TEXT_WARNING": "value",
    "THUMB": "value",
    "THUMB_HELD": "value",
    "TITLE_BG": "value",
@@ -3351,7 +3375,9 @@
      "resolve": "def(self, background)"
     }
    },
+   "WATERMARK": "value",
    "WINDOW_BG": "value",
+   "WORKSPACE_BG": "value",
    "ambient_colours": "@contextmanager def(colours)",
    "button_role": "def(role, background)",
    "clamp": "def(value, low, high)",
@@ -3653,6 +3679,15 @@
     }
    },
    "get_texture": "def(source, filter='linear', cache=None)"
+  },
+  "emtk.theme": {
+   "TEXT_SURFACES": "value",
+   "THEMES": "value",
+   "apply_theme": "def(name, styles=())",
+   "current_theme": "def()",
+   "is_light": "def()",
+   "on_change": "def(callback)",
+   "palette_names": "def()"
   },
   "emtk.tk_host": {
    "TkHost": {
@@ -4130,7 +4165,7 @@
     "decorators": [],
     "members": {
      "__init__": "def(self)",
-     "background": "def(self, base=BUTTON, hovered=BUTTON_HOVERED, active=BUTTON_ACTIVE)",
+     "background": "def(self, base=_style.BUTTON, hovered=_style.BUTTON_HOVERED, active=_style.BUTTON_ACTIVE)",
      "hover": "def(self, x, y, box_x, box_y, box_w, box_h)",
      "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
      "release": "def(self)"
@@ -5920,6 +5955,8 @@
      "move_right": "def(self, select=False, word=False)",
      "move_up": "def(self, select=False, lines=1)",
      "newline": "def(self)",
+     "palette": "@property def(self)",
+     "palette.setter": "@palette.setter def(self, value)",
      "paste": "def(self, text=None)",
      "position_at": "def(self, px, py)",
      "press": "def(self, px, py, x, y, w, h, modifiers=0, clicks=1)",
@@ -6063,6 +6100,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "0c567691aeaf753486ba963ef76b689989aafca4b6e3b0caef99ab90b972566a",
- "version": "0.1.17"
+ "sha256": "7e10df6a0f5c6837eeb568ff816f2773e6b1442ecee59445ad5cd97ffff7fd9e",
+ "version": "0.1.18"
 }

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from .. import im
+from .. import style as _style
 from ..i18n import tr
 from ..im_core import Col
 from ..type_scale import math_args, pop_text_style, push_text_style
@@ -609,7 +610,7 @@ def draw_inline(
                 if pressed and on_link:
                     on_link(run.target)
             if run.code:
-                ctx.draw.add_rect_filled((x0, y + 1), (x0 + rw, y + line_h - 1), (255, 255, 255, 28), 3.0)
+                ctx.draw.add_rect_filled((x0, y + 1), (x0 + rw, y + line_h - 1), _style.CODE_INLINE_BG, 3.0)
             fr, fb = font_for(run)
             push_text_style(fr, bold=fb, zoom=zoom)
             if run.target:
@@ -696,7 +697,7 @@ def render_markdown(
         if block.kind == "h1":
             im.dummy(0.0, 12.0)
             push_text_style("h1")
-            im.text_colored((125, 205, 255, 255), block.text)
+            im.text_colored(_style.HEADING_1, block.text)
             pop_text_style()
             im.dummy(0.0, 2.0)
             im.separator()
@@ -705,21 +706,21 @@ def render_markdown(
         elif block.kind == "h2":
             im.dummy(0.0, 10.0)
             push_text_style("h2")
-            im.text_colored((145, 225, 160, 255), block.text)
+            im.text_colored(_style.HEADING_2, block.text)
             pop_text_style()
             im.dummy(0.0, 4.0)
 
         elif block.kind == "h3":
             im.dummy(0.0, 8.0)
             push_text_style("h3")
-            im.text_colored((245, 205, 115, 255), block.text)
+            im.text_colored(_style.HEADING_3, block.text)
             pop_text_style()
             im.dummy(0.0, 3.0)
 
         elif block.kind == "h4":
             im.dummy(0.0, 6.0)
             push_text_style("h4")
-            im.text_colored((220, 225, 235, 255), block.text)
+            im.text_colored(_style.HEADING_4, block.text)
             pop_text_style()
             im.dummy(0.0, 2.0)
 
@@ -731,7 +732,7 @@ def render_markdown(
             im.dummy(0.0, 4.0)
             im.math(
                 block.text,
-                colour=(216, 222, 233, 255),
+                colour=_style.TEXT,
                 **math_args("body"),
                 align_center=True,
                 max_width=max(50.0, avail_w - 28.0),
@@ -756,7 +757,7 @@ def render_markdown(
                 im.dummy(0.0, 2.0)
                 caption, _ = _format_inline_text(block.text)
                 push_text_style("caption")
-                im.push_style_color(Col.TEXT, (175, 185, 200, 255))
+                im.push_style_color(Col.TEXT, _style.TEXT_QUOTE)
                 im.text_wrapped(tr("Figure: {caption}", domain="emtk").format(caption=caption))
                 im.pop_style_color()
                 pop_text_style()
@@ -776,7 +777,7 @@ def render_markdown(
                     pass
 
             push_text_style("code")
-            im.push_style_color(Col.FRAME_BG, (20, 24, 30, 255))
+            im.push_style_color(Col.FRAME_BG, _style.CODE_BG)
             im.text_wrapped(block.text)
             im.pop_style_color()
             pop_text_style()
@@ -784,17 +785,17 @@ def render_markdown(
 
         elif block.kind in ("admonition", "quote"):
             adm_colors = {
-                "note": (110, 190, 255, 255),
-                "tip": (130, 220, 140, 255),
-                "hint": (130, 220, 140, 255),
-                "seealso": (110, 190, 255, 255),
-                "warning": (235, 185, 95, 255),
-                "caution": (235, 185, 95, 255),
-                "danger": (245, 110, 110, 255),
-                "error": (245, 110, 110, 255),
-                "quote": (160, 175, 195, 255),
+                "note": _style.TEXT_NOTE,
+                "tip": _style.TEXT_TIP,
+                "hint": _style.TEXT_TIP,
+                "seealso": _style.TEXT_NOTE,
+                "warning": _style.TEXT_WARNING,
+                "caution": _style.TEXT_WARNING,
+                "danger": _style.TEXT_DANGER,
+                "error": _style.TEXT_DANGER,
+                "quote": _style.TEXT_QUOTE,
             }
-            adm_color = adm_colors.get(block.arg, (110, 190, 255, 255))
+            adm_color = adm_colors.get(block.arg, _style.TEXT_NOTE)
             adm_title = block.items[0] if block.items else block.arg.capitalize()
             im.dummy(0.0, 2.0)
             push_text_style("body", bold=True)
@@ -819,14 +820,14 @@ def render_markdown(
                         if align == "l":
                             draw_inline(
                                 cell_text, on_link, f"c{idx}_{r_idx}_{c_idx}",
-                                colour=(140, 205, 255, 255) if r_idx == 0 else None,
+                                colour=_style.HEADING_1 if r_idx == 0 else None,
                                 bold=r_idx == 0,
                             )
                             continue
                         clean_cell, _ = _format_inline_text(cell_text)
                         if r_idx == 0:
                             push_text_style("body", bold=True)
-                            _aligned_cell(clean_cell, align, (140, 205, 255, 255))
+                            _aligned_cell(clean_cell, align, _style.HEADING_1)
                             pop_text_style()
                         else:
                             push_text_style("body")

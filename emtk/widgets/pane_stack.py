@@ -20,7 +20,7 @@ from typing import Any, Sequence
 from ..control import Control
 from ..flags import Axis
 from ..painter import Painter
-from ..style import SEPARATOR, SEPARATOR_ACTIVE, SEPARATOR_HOVERED
+from .. import style as _style
 
 __all__ = ["PaneStack"]
 
@@ -137,8 +137,8 @@ class PaneStack(Control):
                     if callable(pop):
                         p.pop_clip()
         for i, (bx, by, bw, bh) in enumerate(self._bar_boxes):
-            colour = (SEPARATOR_ACTIVE if self._held_bar == i
-                      else SEPARATOR_HOVERED if self.hovered_bar == i else SEPARATOR)
+            colour = (_style.SEPARATOR_ACTIVE if self._held_bar == i
+                      else _style.SEPARATOR_HOVERED if self.hovered_bar == i else _style.SEPARATOR)
             if self.axis:
                 p.fill_rect(bx, by + bh * 0.5 - 1.0, bw, 2.0, colour)
             else:

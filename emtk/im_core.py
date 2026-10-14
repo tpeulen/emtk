@@ -291,6 +291,12 @@ class Col:
     COUNT = 30
 
 
+def _default_frame_border() -> float:
+    from . import style as _style
+
+    return float(_style.FRAME_BORDER_SIZE)
+
+
 def _default_colors() -> dict[int, tuple]:
     from . import style as _style
 
@@ -392,8 +398,9 @@ class Style:
     frame_rounding: float = 0.0
     #: ``FrameBorderSize``: an outline in ``Col.BORDER`` around buttons, check
     #: boxes and fields. Zero (the dark theme) draws none; a light desktop
-    #: theme needs it, since a white field on a pale window has no edge.
-    frame_border_size: float = 0.0
+    #: theme needs it, since a white field on a pale window has no edge. A style made
+    #: without one takes the theme's (``emtk.style.FRAME_BORDER_SIZE``, :mod:`emtk.theme`).
+    frame_border_size: float = field(default_factory=lambda: _default_frame_border())
     #: ``WindowBorderSize``: the outline of a window's box (1, as the reference).
     window_border_size: float = 1.5
     #: Offset of the shadow rectangle, in logical pixels.
@@ -1551,13 +1558,15 @@ class Context:
             thumb_y = bar_y + (travel * (curr_s / max_s) if max_s > 0 else 0.0)
 
             # Draw track background
-            self.p.fill_rect(bar_x, bar_y, 8.0, bar_h, (25, 28, 35, 120))
+            from . import style as _style  # noqa: PLC0415
+
+            self.p.fill_rect(bar_x, bar_y, 8.0, bar_h, _style.SCROLL_TRACK)
 
             # Draw thumb
             mx, my = self.io.mouse_pos
             is_drag = state.get("dragging", False)
             is_hover = (bar_x - 3.0 <= mx <= bar_x + 12.0 and thumb_y <= my <= thumb_y + thumb_h)
-            thumb_col = (160, 175, 205, 230) if (is_drag or is_hover) else (95, 105, 125, 170)
+            thumb_col = _style.SCROLL_THUMB_HOT if (is_drag or is_hover) else _style.SCROLL_THUMB
             self.p.fill_rect(bar_x + 1.0, thumb_y, 6.0, thumb_h, thumb_col)
 
         self.layout = layout

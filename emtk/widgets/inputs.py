@@ -36,19 +36,8 @@ import re
 from collections.abc import Callable, Sequence
 
 from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_VCENTER, Painter
-from ..style import (
-    BORDER,
-    BUTTON,
-    FRAME_BG,
-    FRAME_BG_ACTIVE,
-    GOLD,
-    TEXT,
-    TEXT_DISABLED,
-    clamp,
-    fit_text,
-    format_value,
-    hit,
-)
+from .. import style as _style
+from ..style import clamp, fit_text, format_value, hit
 from .text_field import TextField, paint as paint_field
 
 __all__ = [
@@ -507,28 +496,28 @@ class InputScalar:
         if self.label:
             label_w = min(p.text_width(self.label) + 8.0, w * 0.5)
             p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, label_w), TEXT)
+                   fit_text(p, self.label, label_w), _style.TEXT)
             left = x + label_w
             box_w = max(w - label_w, 1.0)
         field_w = max(box_w - button * 2.0, 1.0)
         self._box = (left, field_w, button)
 
-        p.stroke_rect(left, y, field_w, h, BORDER,
-                      FRAME_BG_ACTIVE if self.editing else FRAME_BG)
+        p.stroke_rect(left, y, field_w, h, _style.BORDER,
+                      _style.FRAME_BG_ACTIVE if self.editing else _style.FRAME_BG)
         p.push_clip(left, y, field_w, h)
         if self.editing:
-            paint_field(p, self.field, left, y, field_w, h, TEXT, GOLD)
+            paint_field(p, self.field, left, y, field_w, h, _style.TEXT, _style.GOLD)
         else:
             p.text(left + 4.0, y, max(field_w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
-                   self.display_text(), GOLD)
+                   self.display_text(), _style.GOLD)
         p.pop_clip()
 
         if button:
             minus_x = left + field_w
-            p.stroke_rect(minus_x, y, button, h, BORDER, BUTTON)
-            p.text(minus_x, y, button, h, ALIGN_CENTER, "-", TEXT)
-            p.stroke_rect(minus_x + button, y, button, h, BORDER, BUTTON)
-            p.text(minus_x + button, y, button, h, ALIGN_CENTER, "+", TEXT)
+            p.stroke_rect(minus_x, y, button, h, _style.BORDER, _style.BUTTON)
+            p.text(minus_x, y, button, h, ALIGN_CENTER, "-", _style.TEXT)
+            p.stroke_rect(minus_x + button, y, button, h, _style.BORDER, _style.BUTTON)
+            p.text(minus_x + button, y, button, h, ALIGN_CENTER, "+", _style.TEXT)
 
     def _geometry(self, box_x: float, box_w: float, box_h: float) -> tuple[float, float, float]:
         """``(field_x, field_w, button)`` -- from the last draw when there is one."""
@@ -763,7 +752,7 @@ class InputScalarN:
         if self.label:
             label_w = min(p.text_width(self.label) + 8.0, w * 0.5)
             p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, label_w), TEXT)
+                   fit_text(p, self.label, label_w), _style.TEXT)
         left, cell = self._layout(p, x, w)
         self._cells = []
         for index, one in enumerate(self.inputs):
@@ -1008,17 +997,17 @@ class InputTextWithHint:
         if self.label:
             label_w = min(p.text_width(self.label) + 8.0, w * 0.5)
             p.text(x, y, label_w, h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, label_w), TEXT)
+                   fit_text(p, self.label, label_w), _style.TEXT)
             left = x + label_w
             box_w = max(w - label_w, 1.0)
-        p.stroke_rect(left, y, box_w, h, BORDER, FRAME_BG)
+        p.stroke_rect(left, y, box_w, h, _style.BORDER, _style.FRAME_BG)
         p.push_clip(left, y, box_w, h)
         showing = self.showing_hint
         p.text(left + 4.0, y, max(box_w - 8.0, 1.0), h, ALIGN_VCENTER | ALIGN_LEFT,
                self.hint if showing else self.field.text,
-               TEXT_DISABLED if showing else TEXT)
+               _style.TEXT_DISABLED if showing else _style.TEXT)
         caret_x = left + 4.0 + p.text_width(self.field.text[: self.field.cursor])
-        p.fill_rect(caret_x, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, GOLD)
+        p.fill_rect(caret_x, y + h * 0.15, max(1.0, h * 0.08), h * 0.7, _style.GOLD)
         p.pop_clip()
 
     def press(self, x: float, y: float, box_x: float, box_y: float,
@@ -1381,7 +1370,7 @@ class InputTextMultiline:
         top_y = y
         if self.label:
             p.text(x, y, w, line_h, ALIGN_VCENTER | ALIGN_LEFT,
-                   fit_text(p, self.label, w), TEXT)
+                   fit_text(p, self.label, w), _style.TEXT)
             top_y = y + line_h
         body_h = max(y + h - top_y, line_h)
         rows = max(int(body_h / max(line_h, 1e-6)), 1)
@@ -1390,20 +1379,20 @@ class InputTextMultiline:
         self._geometry = (x, top_y, w, body_h, line_h)
         self._measure = p.text_width
 
-        p.stroke_rect(x, top_y, w, body_h, BORDER, FRAME_BG)
+        p.stroke_rect(x, top_y, w, body_h, _style.BORDER, _style.FRAME_BG)
         p.push_clip(x, top_y, w, body_h)
         for offset in range(rows):
             index = self.top + offset
             if index >= len(self._lines):
                 break
             p.text(x + 4.0, top_y + offset * line_h, max(w - 8.0, 1.0), line_h,
-                   ALIGN_VCENTER | ALIGN_LEFT, self._lines[index].text, TEXT)
+                   ALIGN_VCENTER | ALIGN_LEFT, self._lines[index].text, _style.TEXT)
         if self.top <= self.row < self.top + rows:
             line = self._lines[self.row]
             caret_x = x + 4.0 + p.text_width(line.text[: line.cursor])
             caret_y = top_y + (self.row - self.top) * line_h
             p.fill_rect(caret_x, caret_y + line_h * 0.15,
-                        max(1.0, line_h * 0.08), line_h * 0.7, GOLD)
+                        max(1.0, line_h * 0.08), line_h * 0.7, _style.GOLD)
         p.pop_clip()
 
     def _column_at(self, line: str, offset: float) -> int:
