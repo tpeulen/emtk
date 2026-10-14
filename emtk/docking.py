@@ -790,7 +790,7 @@ class DockManager:
         self.drop_target: Optional[str] = None
         self._hint_edges: Tuple[str, ...] = ()
         self._hint_keys: set = set()
-        self._title_h = 20.0
+        self._title_h = 16.0
         #: The layout changed since it was last written; flushed by :meth:`draw`.
         self._dirty = False
         #: A viewport-specific declaration is chosen once, before any saved,
@@ -2322,7 +2322,7 @@ class DockManager:
                 draw.add_rect_filled((x, y), (x + w, y + h), colour)
 
     #: The narrowest a tab is squeezed to before the strip scrolls instead.
-    MIN_TAB_W = 48.0
+    MIN_TAB_W = 32.0
 
     def _draw_region(self, ctx, region: str, rect: Rect) -> None:
         io = ctx.io
@@ -2348,7 +2348,7 @@ class DockManager:
         from .i18n import tr
 
         tab_widths = [
-            ctx.p.text_width(tr(self.windows[k].title)) + pad_x * 2.0 + 2.0 for k in shown
+            ctx.p.text_width(tr(self.windows[k].title)) + pad_x * 2.0 for k in shown
         ]
         available_w = max(right - x, 0.0)
         # Tabs too wide for the strip first give way: the longest titles end in an ellipsis, down to a
@@ -2388,13 +2388,13 @@ class DockManager:
             win = self.windows[key]
 
             title = tr(win.title)
-            tw = ctx.p.text_width(title) + pad_x * 2.0 + 2.0
+            tw = ctx.p.text_width(title) + pad_x * 2.0
             shown_title = title
             if wanted < tw:
                 tw = wanted
                 from .widgets.menus import _ellipsize  # noqa: PLC0415
 
-                shown_title = _ellipsize(ctx.p, title, tw - pad_x * 2.0 - 2.0)
+                shown_title = _ellipsize(ctx.p, title, tw - pad_x * 2.0)
             tab = (cursor, y + 1.0, tw, th - 1.0)
             rects.append((key, tab))
             item = self._id("tab", key)
@@ -2422,9 +2422,9 @@ class DockManager:
                 draw.add_rect_filled((tab[0], tab[1]), (tab[0] + tab[2], tab[1] + ACCENT_STRIPE),
                                      accent.fill)
             text_h = ctx.p.line_height()
-            draw.add_text((tab[0] + pad_x + 3.0, tab[1] + (tab[3] - text_h) / 2.0), ink,
+            draw.add_text((tab[0] + pad_x, tab[1] + (tab[3] - text_h) / 2.0), ink,
                           shown_title)
-            cursor += tw + 2.0
+            cursor += tw + 1.0
         ctx.p.pop_clip()
         self._tab_rects[region] = rects
         # The rest of the strip drags the tab on top, as its title bar would.
@@ -2484,8 +2484,8 @@ class DockManager:
             arrow = th * 0.6 if action is None else 0.0
             bw = ctx.p.text_width(label) + pad_x * 2.0 + arrow
             right -= bw
-            button = (right, y + 2.0, bw, th - 4.0)
-            right -= 3.0
+            button = (right, y + 1.0, bw, th - 2.0)
+            right -= 2.0
             self._workspace_buttons[key] = button
             enabled = bool(children)
             draw.add_rect_filled((button[0], button[1]),

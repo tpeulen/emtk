@@ -481,9 +481,9 @@ class DataTable:
 
     WHEEL_ROWS = 3
     #: Horizontal padding inside each cell.
-    CELL_PAD_X = 4.0
+    CELL_PAD_X = 3.0
     #: Indent per tree level, and the room of the disclosure triangle.
-    TREE_INDENT = 14.0
+    TREE_INDENT = 12.0
 
     def __init__(
         self,
@@ -916,7 +916,7 @@ class DataTable:
         return None
 
     #: The least a column without a declared width is given, before any shrinking to fit.
-    FLEX_MIN = 50.0
+    FLEX_MIN = 40.0
 
     def _column_widths(self, total: float) -> list[float]:
         """Widths of every visible column, filling *total*.
