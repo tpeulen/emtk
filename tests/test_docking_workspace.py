@@ -404,6 +404,10 @@ def test_the_workspace_background_is_drawn_in_its_body_under_the_floating_window
     order = [t[5] for t in painter.texts]
     assert "WATERMARK" in order and "content of a" in order
     assert order.index("WATERMARK") < order.index("content of a"), "drawn before the window"
+    # A tab filling the body is drawn after (over) it too.
+    docks.add_window("doc", "Doc", _content("doc"), dock="center", workspace=True)
+    order = [t[5] for t in host.frame().texts]
+    assert order.index("WATERMARK") < order.index("content of doc")
 
     def broken(rect):
         raise RuntimeError("boom")

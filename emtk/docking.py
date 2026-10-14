@@ -807,7 +807,7 @@ class DockManager:
         self._inner_boxes: Dict[str, Rect] = {}
         self._last_bounds: Optional[Rect] = None
         #: ``workspace_background(rect)``, drawn into the workspace's body each frame, under
-        #: the floating windows and over a tab that fills the body: a host's watermark (the
+        #: the body's tab content and the floating windows: a host's watermark (the
         #: machine, the versions). Draw-list only -- it takes no input -- and a failure is
         #: logged, never raised into the frame.
         self.workspace_background: Optional[Callable[[Rect], Any]] = None
@@ -2533,6 +2533,17 @@ class DockManager:
         strip_h = self._strip_height(bool(minimized))
         inner = (x, y + th, w, max(h - th - strip_h, th))
         self._inner_boxes[region] = inner
+        if self.workspace_background is not None:
+            # Before the body's tab: a tab's content draws no fill of its own, so the background
+            # shows through an empty part of it (the Start text) and under what fills it (a
+            # plot), and every floating window is drawn later, over it.
+            ctx.p.push_clip(*inner)
+            try:
+                self.workspace_background(inner)
+            except Exception:  # noqa: BLE001 - a watermark must not take the frame down
+                logger.exception("the workspace background failed to draw")
+            finally:
+                ctx.p.pop_clip()
         top = self.active_tab(region)
         if top is not None:
             self._draw_region(ctx, region, inner)
@@ -2545,16 +2556,6 @@ class DockManager:
             item = self._id("workspace", "body")
             if ctx.item_add(body, item) and io.mouse_clicked[1]:
                 self._open_context(ctx, "workspace", None)
-        if self.workspace_background is not None:
-            # A tab on top drew its own window: the background goes into the region's, so it
-            # shows over the tab's body but stays under every floating window.
-            ctx.p.push_clip(*inner)
-            try:
-                self.workspace_background(inner)
-            except Exception:  # noqa: BLE001 - a watermark must not take the frame down
-                logger.exception("the workspace background failed to draw")
-            finally:
-                ctx.p.pop_clip()
         if not minimized:
             return
         sy = y + h - strip_h
