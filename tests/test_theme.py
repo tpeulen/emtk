@@ -157,3 +157,17 @@ def test_a_surface_without_a_background_is_cleared_in_the_theme():
     assert surface.background == theme.LIGHT["HOST_BG"]
     pinned = ControlSurface(Nothing(), background=(1, 2, 3))
     assert pinned.background == (1, 2, 3), "a background given is kept"
+
+
+def test_a_node_editor_takes_the_theme_unless_a_palette_was_chosen():
+    from emtk import nodes
+
+    style = nodes.Style()
+    assert style.colors[nodes.Col.GRID_BACKGROUND] == nodes._DARK[nodes.Col.GRID_BACKGROUND]
+    theme.apply_theme("light")
+    nodes.sync_theme(style)
+    assert style.colors[nodes.Col.GRID_BACKGROUND] == nodes._LIGHT[nodes.Col.GRID_BACKGROUND]
+    chosen = nodes.Style()
+    nodes.style_colors_dark(chosen)
+    nodes.sync_theme(chosen)
+    assert chosen.colors[nodes.Col.GRID_BACKGROUND] == nodes._DARK[nodes.Col.GRID_BACKGROUND]

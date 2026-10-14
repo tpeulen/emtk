@@ -225,8 +225,12 @@ def _reset_implot() -> None:
     import sys  # noqa: PLC0415
 
     implot = sys.modules.get("emtk.implot")
-    if implot is None:
-        return
-    gp = getattr(implot, "gp", None)
+    gp = getattr(implot, "gp", None) if implot is not None else None
     if gp is not None and getattr(gp, "style", None) is not None:
         implot.style_colors_auto(gp.style)
+    implot3d = sys.modules.get("emtk.implot3d")
+    if implot3d is not None:
+        try:
+            implot3d.style_colors_auto()
+        except Exception:  # noqa: BLE001 - no 3-D plot context yet: nothing to reset
+            pass

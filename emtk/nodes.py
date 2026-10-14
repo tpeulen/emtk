@@ -440,11 +440,29 @@ class Style:
         self.mini_map_padding: tuple = (8.0, 8.0)
         self.mini_map_offset: tuple = (4.0, 4.0)
         self.flags: int = StyleFlags.NODE_OUTLINE | StyleFlags.GRID_LINES
+        #: Take the dark or the light palette from the window theme (:mod:`emtk.theme`)
+        #: as the editor begins; :func:`style_colors_dark` / :func:`style_colors_light`
+        #: choose one for good and turn this off.
+        self.follow_theme: bool = True
+        self._theme_dark: bool | None = None
         self.colors: dict = dict(_DARK)
+        sync_theme(self)
+
+
+def sync_theme(style: "Style") -> None:
+    """Give *style* the palette of the window theme, if it follows the theme and it changed."""
+    if not getattr(style, "follow_theme", False):
+        return
+    from . import style as _emtk_style  # noqa: PLC0415
+
+    dark = _emtk_style.is_dark(_emtk_style.WINDOW_BG)
+    if dark != style._theme_dark:
+        style.colors = dict(_DARK if dark else _LIGHT)
+        style._theme_dark = dark
 
 
 def style_colors_dark(style: "Style") -> None:
-    """Load the dark palette into `style`.
+    """Load the dark palette into `style` (for good: it no longer follows the theme).
 
     Parameters
     ----------
@@ -452,10 +470,11 @@ def style_colors_dark(style: "Style") -> None:
         The style to overwrite. Its non-colour metrics are left alone.
     """
     style.colors = dict(_DARK)
+    style.follow_theme = False
 
 
 def style_colors_light(style: "Style") -> None:
-    """Load the light palette into `style`.
+    """Load the light palette into `style` (for good: it no longer follows the theme).
 
     Parameters
     ----------
@@ -463,6 +482,7 @@ def style_colors_light(style: "Style") -> None:
         The style to overwrite. Its non-colour metrics are left alone.
     """
     style.colors = dict(_LIGHT)
+    style.follow_theme = False
 
 
 class Canvas:
@@ -1145,6 +1165,7 @@ def begin_node_editor(ctx: EditorContext, box: typing.Optional[tuple] = None) ->
         raise RuntimeError(f"begin_node_editor() called inside {_scope!r} scope")
 
     _current, _scope, _node, _pin = ctx, "editor", None, None
+    sync_theme(ctx.style)
     _color_stack.clear()
     _style_stack.clear()
 

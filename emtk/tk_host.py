@@ -168,6 +168,26 @@ def modifiers_from_tk(state: int, platform: str | None = None) -> int:
     return mask
 
 
+def tk_wheel_unit(platform: str | None = None, tk_version: float | None = None) -> float:
+    """The raw ``<MouseWheel>`` delta of one notch on this Tk.
+
+    Tk reports a notch as 120 on Windows and X11 but in *lines* on macOS before Tk 9
+    (TIP 684 made macOS report multiples of 120 too). The unit is a property of the
+    platform *and* the Tk version, so it is computed here rather than guessed from the
+    platform alone -- a host that assumed 120 everywhere scrolled 120 notches per notch
+    on a Mac, and a test that fed 120 on a Mac failed the same way.
+    """
+    platform = sys.platform if platform is None else platform
+    if tk_version is None:
+        try:
+            import tkinter  # noqa: PLC0415
+
+            tk_version = float(tkinter.TkVersion)
+        except Exception:  # noqa: BLE001 - no Tk: the common unit
+            tk_version = 9.0
+    return 1.0 if platform == "darwin" and tk_version < 9.0 else 120.0
+
+
 def qt_application_exists() -> bool:
     """Whether this process already has a ``QApplication``.
 
@@ -202,7 +222,8 @@ class TkHost:
     size : tuple of int, optional
         Initial ``(width, height)``.
     background : tuple, optional
-        Filled before the control draws.
+        Filled before the control draws; by default the theme's ``HOST_BG`` when the host
+        is made.
     interval_ms : int, optional
         Repaint period. The control is immediate-mode and may change without
         input (a worker thread reporting, a caret blinking), so the host
@@ -225,7 +246,7 @@ class TkHost:
     """
 
     def __init__(self, control, title: str = "emtk", size: tuple = (800, 600),
-                 background: tuple = (30, 32, 38, 255), interval_ms: int = 50,
+                 background: tuple | None = None, interval_ms: int = 50,
                  on_close: Callable[[], None] | None = None, root=None,
                  font_pt: float | None = None) -> None:
         if root is None and qt_application_exists():
@@ -236,6 +257,10 @@ class TkHost:
 
         self._tk = tk
         self.control = control
+        if background is None:
+            from . import style as _style  # noqa: PLC0415
+
+            background = _style.HOST_BG       # the theme's, as the other hosts
         self.background = tuple(background)
         from .type_scale import ui_font_pt  # noqa: PLC0415
 
@@ -452,16 +477,13 @@ class TkHost:
         self._soon()
 
     def _on_wheel(self, event) -> None:
-        # Whole notches in proportion (a trackpad sends many small deltas); Tk's notch is
-        # 120 units except on macOS, where it reports lines.
+        # Whole notches in proportion (a trackpad sends many small deltas); the notch's raw
+        # size depends on the platform and the Tk version (tk_wheel_unit).
         accumulator = getattr(self, "_wheel_accumulator", None)
         if accumulator is None:
-            import sys  # noqa: PLC0415
-
             from .events import WheelAccumulator  # noqa: PLC0415
 
-            accumulator = self._wheel_accumulator = WheelAccumulator(
-                1.0 if sys.platform == "darwin" else 120.0)
+            accumulator = self._wheel_accumulator = WheelAccumulator(tk_wheel_unit())
         steps = accumulator.feed(event.delta)
         if steps:
             self._scroll(-3 * steps)

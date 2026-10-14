@@ -125,8 +125,11 @@ def test_a_painted_frame_is_presented(host):
 
 
 def test_events_reach_the_control_translated(host):
+    from emtk.tk_host import tk_wheel_unit
+
     rec = host.control
-    ev = SimpleNamespace(x=12, y=7, state=0x1, keysym="a", char="A", delta=120,
+    # one notch, as this platform's Tk reports it (lines on macOS before Tk 9, else 120)
+    ev = SimpleNamespace(x=12, y=7, state=0x1, keysym="a", char="A", delta=tk_wheel_unit(),
                          width=160, height=40)
     host._on_press(ev, 1)
     host._on_motion(ev)
@@ -199,3 +202,12 @@ def test_an_idle_app_gets_one_paint_when_its_tooltip_is_due():
         assert first not in root.tk.call("after", "info"), "the older one was cancelled"
     finally:
         host.close()
+
+
+def test_the_wheel_notch_follows_platform_and_tk_version():
+    from emtk.tk_host import tk_wheel_unit
+
+    assert tk_wheel_unit("win32", 8.6) == 120.0
+    assert tk_wheel_unit("linux", 8.6) == 120.0
+    assert tk_wheel_unit("darwin", 8.6) == 1.0, "Tk 8.6 on macOS reports lines"
+    assert tk_wheel_unit("darwin", 9.0) == 120.0, "Tk 9 reports 120 a notch everywhere (TIP 684)"

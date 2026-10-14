@@ -3697,7 +3697,7 @@
     "bases": [],
     "decorators": [],
     "members": {
-     "__init__": "def(self, control, title='emtk', size=(800, 600), background=(30, 32, 38, 255), interval_ms=50, on_close=None, root=None, font_pt=None)",
+     "__init__": "def(self, control, title='emtk', size=(800, 600), background=None, interval_ms=50, on_close=None, root=None, font_pt=None)",
      "clipboard_get": "def(self)",
      "clipboard_set": "def(self, text)",
      "close": "def(self)",
@@ -6103,6 +6103,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "9ecec08f5c6c29c379b4c2a957efeecdf921bf7c24be9231340d67cb79dd94cc",
- "version": "0.1.19"
+ "sha256": "2b6f48c2d44727af37e46ffc2987402d33a0ec23f381d49347e60dd9509f6860",
+ "version": "0.1.20"
 }
