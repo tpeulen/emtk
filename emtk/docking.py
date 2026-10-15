@@ -2330,7 +2330,7 @@ class DockManager:
         style = ctx.style
         x, y, w, h = rect
         th = self._title_h
-        pad_x = style.frame_padding[0]
+        pad_x = style.frame_padding[0] + 2.0
         draw.add_rect_filled((x, y), (x + w, y + th), style.color(_core.Col.TITLE_BG))
         shown = [k for k in self.tabs[region] if self.windows[k].visible]
         top = self.active_tab(region)
@@ -2424,7 +2424,7 @@ class DockManager:
             text_h = ctx.p.line_height()
             draw.add_text((tab[0] + pad_x, tab[1] + (tab[3] - text_h) / 2.0), ink,
                           shown_title)
-            cursor += tw + 1.0
+            cursor += tw + 2.0
         ctx.p.pop_clip()
         self._tab_rects[region] = rects
         # The rest of the strip drags the tab on top, as its title bar would.
