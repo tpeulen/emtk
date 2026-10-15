@@ -85,4 +85,6 @@ def test_a_dialog_can_drop_its_title_bar_close_for_one_in_the_content():
 
     assert "×" in shown(DialogWindow("t", key="a"))
     assert "×" not in shown(DialogWindow("t", key="b", close_button=False))
-    assert EmTkHelpWindow("Help", "# x\ntext").dlg.close_button is False
+    assert EmTkHelpWindow("Help", "# x\ntext").dlg.close_button is True
+
+

@@ -47,10 +47,12 @@ def test_tour_waits_for_the_awaited_control():
     assert not t.active
 
 
-def test_help_has_one_labelled_close_and_no_footer():
-    """One close control: the header's "× Close" (the dialog's own × aside); no "Close Help" footer."""
+def test_help_has_border_close_and_no_content_close():
+    """One close control: the window border's "×"; no content close button or footer."""
     h = EmTkHelpWindow(title="Help", text=HELP)
     h.show()
     painter = _frames(lambda: h.draw((0.0, 0.0, 900.0, 700.0)))
+    assert "×" in painter.strings
     closes = [s for s in painter.strings if "Close" in s]
-    assert closes == ["×  Close"], closes
+    assert not closes, closes
+
