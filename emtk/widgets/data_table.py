@@ -208,6 +208,23 @@ __all__ = [
     "parse_number",
 ]
 
+_ENTER_KEYS = (KEY_RETURN, KEY_ENTER, 10, 13)
+_TAB_KEYS = (KEY_TAB, 9)
+_ESCAPE_KEYS = (KEY_ESCAPE, 27)
+
+
+def _is_enter(key: int, text: str = "") -> bool:
+    return key in _ENTER_KEYS or text in ("\r", "\n")
+
+
+def _is_tab(key: int, text: str = "") -> bool:
+    return key in _TAB_KEYS or text == "\t"
+
+
+def _is_escape(key: int, text: str = "") -> bool:
+    return key in _ESCAPE_KEYS or text == "\x1b"
+
+
 #: A bar whose range does not span zero.
 BAR_COLOUR = (90, 150, 220, 255)
 #: A diverging bar right of zero, and left of it (Orange3's correlation colours).
@@ -602,6 +619,7 @@ class DataTable:
         self.descending = False
         self.filter = TextInput("", "", placeholder="filter")
         self.filter_focused = False
+        self.focused = False
         self.selected_key: Any = None
         self.selected_column: Optional[str] = None
         #: Keys of rows selected *besides* :attr:`selected_key` (Select All);
@@ -1433,10 +1451,20 @@ class DataTable:
         value: Any = text
         if isinstance(old, (int, float)) and not isinstance(old, bool) or _is_number(old):
             try:
-                value = int(text) if isinstance(old, int) and not isinstance(old, bool) \
-                    else parse_number(text)
+                if isinstance(old, int) and not isinstance(old, bool):
+                    try:
+                        value = int(text)
+                    except ValueError:
+                        value = parse_number(text)
+                else:
+                    value = parse_number(text)
             except ValueError:
                 return  # a typo leaves the cell as it was
+        elif old is None and text:
+            try:
+                value = parse_number(text)
+            except ValueError:
+                value = text
         if value != old or (isinstance(value, float) and isinstance(old, float) and math.isnan(old)):
             self._write(index, key, value)
 
@@ -1473,28 +1501,26 @@ class DataTable:
             return
         curr_col = self.selected_column or editable_cols[0]
         col_idx = editable_cols.index(curr_col) if curr_col in editable_cols else 0
-        if not backward:
-            if col_idx + 1 < len(editable_cols):
-                next_col = editable_cols[col_idx + 1]
-                next_pos = pos
-            elif pos + 1 < len(order):
-                next_col = editable_cols[0]
-                next_pos = pos + 1
-            else:
+        step = -1 if backward else 1
+        n_rows = len(order)
+        n_cols = len(editable_cols)
+        p, c = pos, col_idx
+        for _ in range(n_rows * n_cols):
+            c += step
+            if c >= n_cols:
+                c = 0
+                p += 1
+            elif c < 0:
+                c = n_cols - 1
+                p -= 1
+            if not (0 <= p < n_rows):
                 return
-        else:
-            if col_idx > 0:
-                next_col = editable_cols[col_idx - 1]
-                next_pos = pos
-            elif pos > 0:
-                next_col = editable_cols[-1]
-                next_pos = pos - 1
-            else:
+            idx = order[p]
+            col = editable_cols[c]
+            if self.can_edit(idx, col):
+                self._select_position(p)
+                self.begin_edit(idx, col)
                 return
-        self._select_position(next_pos)
-        idx = order[next_pos]
-        if self.can_edit(idx, next_col):
-            self.begin_edit(idx, next_col)
 
     def _write(self, index: int, key: str, value: Any) -> None:
         if self.arrays is None and 0 <= index < len(self.records):
@@ -1569,10 +1595,8 @@ class DataTable:
             if isinstance(value, (bool, _np_bool())):
                 self._write(index, column.key, not bool(value))
                 return True
-            already_selected = (prev_key == self.key_of(index) and prev_col == column.key)
-            if clicks > 1 or already_selected:
-                self.begin_edit(index, column.key)
-                return True
+            self.begin_edit(index, column.key)
+            return True
         if clicks > 1 and self.is_parent(index):
             self.toggle(index)
         if clicks > 1 and self.on_activate is not None:
@@ -1725,29 +1749,38 @@ class DataTable:
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
         """Type into a cell or the filter, delete a row, or move the selection."""
+        order = self.order()
         if self.editing is not None:
-            if key in (KEY_RETURN, KEY_ENTER):
+            if _is_enter(key, text):
                 # Text typed in the same frame as Enter came first.
                 if text and text not in ("\r", "\n"):
                     self.editor.field.key(0, text, modifiers)
                 self.commit_edit()
                 return True
-            if key == KEY_ESCAPE:
+            if _is_escape(key, text):
                 self.cancel_edit()
                 return True
-            if key == KEY_TAB:
+            if _is_tab(key, text):
                 shift = bool(modifiers & SHIFT_MODIFIER)
                 self.commit_edit()
                 self._move_edit(shift)
                 return True
+            if key in (KEY_UP, KEY_DOWN) and order:
+                self.commit_edit()
+                moves = {KEY_UP: -1, KEY_DOWN: 1}
+                current = next((pos for pos, i in enumerate(order)
+                                if self.key_of(i) == self.selected_key), None)
+                if current is not None:
+                    target = min(max(current + moves[key], 0), len(order) - 1)
+                    self._select_position(target)
+                return True
             self.editor.field.key(key, text, modifiers)
             return True
         if self.filter_focused:
-            if key == KEY_ESCAPE:
+            if _is_escape(key, text):
                 self.filter_focused = False
                 return True
             return self.filter.field.key(key, text, modifiers)
-        order = self.order()
         if not order:
             return False
         primary = bool(modifiers & CONTROL_MODIFIER)
@@ -1757,24 +1790,28 @@ class DataTable:
         if letter == "c":
             self.copy_selection()
             return True
-        if key in (KEY_RETURN, KEY_ENTER, KEY_F2) and self.selected_key is not None:
+        if (_is_enter(key, text) or key == KEY_F2) and self.selected_key is not None:
             pos = next((p for p, i in enumerate(order) if self.key_of(i) == self.selected_key), None)
             if pos is not None:
                 idx = order[pos]
                 col_key = self.selected_column
                 if col_key is None or not self.can_edit(idx, col_key):
                     col_key = next((c.key for c in self.columns if self.can_edit(idx, c.key) and c.display not in ("bool", "check")), None)
-                if col_key is not None:
+                if col_key is not None and self.can_edit(idx, col_key):
                     self.begin_edit(idx, col_key)
                     return True
+        if _is_tab(key, text) and self.selected_key is not None:
+            shift = bool(modifiers & SHIFT_MODIFIER)
+            self._move_edit(shift)
+            return True
         if not (modifiers & (CONTROL_MODIFIER | META_MODIFIER | ALT_MODIFIER)) and text and text >= " " and self.selected_key is not None:
             pos = next((p for p, i in enumerate(order) if self.key_of(i) == self.selected_key), None)
             if pos is not None:
                 idx = order[pos]
                 col_key = self.selected_column
-                if col_key is None or not self.can_edit(idx, col_key):
+                if col_key is None:
                     col_key = next((c.key for c in self.columns if self.can_edit(idx, c.key) and c.display not in ("bool", "check")), None)
-                if col_key is not None:
+                if col_key is not None and self.can_edit(idx, col_key):
                     self.begin_edit(idx, col_key)
                     self.editor.field.insert(text, typing=True)
                     return True
@@ -2170,6 +2207,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     if hovered:
         control.hover(px, py)
         if io.mouse_clicked[0]:
+            control.focused = True
             modifiers = (
                 (SHIFT_MODIFIER if io.key_shift else 0)
                 | (CONTROL_MODIFIER if io.key_ctrl else 0)
@@ -2177,6 +2215,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
             )
             control.press(px, py, *box, modifiers, 2 if io.mouse_double_clicked[0] else 1)
         if io.mouse_clicked[1]:
+            control.focused = True
             control.context(px, py)
         wheel_h = getattr(io, "mouse_wheel_h", 0.0) or (io.mouse_wheel if io.key_shift else 0.0)
         if wheel_h and control._hbar_box is not None:
@@ -2191,6 +2230,7 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     else:
         control.hovered = None
         if io.mouse_clicked[0]:
+            control.focused = False
             control.filter_focused = False
         # A click anywhere else ends the typing and keeps what was typed, as
         # Enter does; without it the cell stayed open, and uncommitted.
@@ -2201,12 +2241,21 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         control.drag(px, py)
     if io.mouse_released[0]:
         control.release()
+    if control.editing is not None or control.filter_focused:
+        ctx.io.want_capture_keyboard = True
+        ctx.io.want_text_input = True
+        widgets.set_next_frame_want_capture_keyboard(True)
     events = list(io.key_events)
     if not events and (io.key or io.text):
         events = [(io.key, io.text, widgets._current_modifiers(io))]
-    if events and (hovered or control.filter_focused or control.editing is not None):
+    if events and (control.editing is not None or control.filter_focused or control.focused):
+        consumed = False
         for k, txt, mods in events:
-            control.key(int(k), txt, mods)
+            if control.key(int(k), txt, mods):
+                consumed = True
+        if consumed:
+            io.key_events.clear()
+            io.key, io.text = 0, ""
     _column_picker(control, name)
     from . import table_menu
     table_menu.draw(binding, name, hovered)

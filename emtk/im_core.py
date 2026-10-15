@@ -695,7 +695,8 @@ class Context:
                 and not any(self.io.mouse_down)):
             self.clear_active_id()
         overlay_open = bool(self.storage.get("__overlays_open__"))
-        self.io.want_capture_keyboard = self.nav_id is not None or overlay_open
+        captured_kbd = bool(self.state(("capture",)).get("keyboard"))
+        self.io.want_capture_keyboard = self.nav_id is not None or overlay_open or captured_kbd
         self.io.want_text_input = bool(getattr(self, "_want_text_input", False))
         self._want_text_input = False
         self.io.want_capture_mouse = self.hovered_window is not None or overlay_open
