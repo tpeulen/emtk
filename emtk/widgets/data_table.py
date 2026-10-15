@@ -168,7 +168,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from .. import style as _style
-from ..events import CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
+from ..events import ALT_MODIFIER, CONTROL_MODIFIER, META_MODIFIER, SHIFT_MODIFIER
 from ..keys import (
     KEY_BACKSPACE,
     KEY_DELETE,
@@ -176,13 +176,17 @@ from ..keys import (
     KEY_END,
     KEY_ENTER,
     KEY_ESCAPE,
+    KEY_F2,
     KEY_HOME,
     KEY_LEFT,
     KEY_PAGE_DOWN,
     KEY_PAGE_UP,
     KEY_RETURN,
     KEY_RIGHT,
+    KEY_TAB,
     KEY_UP,
+    letter_of,
+    mac_behaviors,
 )
 from ..layout import Fill
 from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
@@ -432,6 +436,8 @@ def parse_number(text: str) -> float:
     :func:`float` reads. Raises :class:`ValueError` for anything else.
     """
     cleaned = str(text).strip().replace("\u2212", "-").replace("\u221e", "inf")
+    if cleaned.count(",") == 1 and "." not in cleaned:
+        cleaned = cleaned.replace(",", ".")
     cleaned = "".join(cleaned.split())  # a thin space between digit groups
     return float(cleaned)
 
@@ -597,6 +603,7 @@ class DataTable:
         self.filter = TextInput("", "", placeholder="filter")
         self.filter_focused = False
         self.selected_key: Any = None
+        self.selected_column: Optional[str] = None
         #: Keys of rows selected *besides* :attr:`selected_key` (Select All);
         #: a click on a row or a move of the selection clears them.
         self.also_selected: set = set()
@@ -1408,9 +1415,11 @@ class DataTable:
         """Open cell ``(index, key)`` for typing, filled with its text."""
         column = next(c for c in self.columns if c.key == key)
         self.editing = (index, key)
+        self.selected_column = key
         value = self.value(index, key)
         self.editor.set_text("" if value is None else (
             repr(float(value)) if isinstance(value, float) and not column.fmt else column.text(value)))
+        self.editor.field.select_all()
 
     def commit_edit(self) -> None:
         """Parse what was typed like the value it replaces, and report it."""
@@ -1428,12 +1437,64 @@ class DataTable:
                     else parse_number(text)
             except ValueError:
                 return  # a typo leaves the cell as it was
-        if value != old:
+        if value != old or (isinstance(value, float) and isinstance(old, float) and math.isnan(old)):
             self._write(index, key, value)
 
     def cancel_edit(self) -> None:
         self.editing = None
         self._editor_box = None
+
+    def copy_selection(self) -> str:
+        """Copy the selected rows as TSV to the system clipboard."""
+        from .. import clipboard  # noqa: PLC0415
+
+        indices = self.selected_indices()
+        if not indices:
+            return ""
+        cols = [c for c in self.columns if c.visible and c.key not in self.hidden]
+        header = "\t".join(c.shown_title() or c.key for c in cols)
+        lines = [header]
+        for idx in indices:
+            lines.append("\t".join(str(cols[i].text(self.value(idx, cols[i].key))) for i in range(len(cols))))
+        text = "\n".join(lines)
+        clipboard.copy(text)
+        return text
+
+    def _move_edit(self, backward: bool = False) -> None:
+        """Move the cell editor to the next (or previous) editable cell."""
+        order = self.order()
+        if not order or self.selected_key is None:
+            return
+        pos = next((p for p, i in enumerate(order) if self.key_of(i) == self.selected_key), None)
+        if pos is None:
+            return
+        editable_cols = [c.key for c in self.columns if c.visible and c.editable and c.display not in ("bool", "check")]
+        if not editable_cols:
+            return
+        curr_col = self.selected_column or editable_cols[0]
+        col_idx = editable_cols.index(curr_col) if curr_col in editable_cols else 0
+        if not backward:
+            if col_idx + 1 < len(editable_cols):
+                next_col = editable_cols[col_idx + 1]
+                next_pos = pos
+            elif pos + 1 < len(order):
+                next_col = editable_cols[0]
+                next_pos = pos + 1
+            else:
+                return
+        else:
+            if col_idx > 0:
+                next_col = editable_cols[col_idx - 1]
+                next_pos = pos
+            elif pos > 0:
+                next_col = editable_cols[-1]
+                next_pos = pos - 1
+            else:
+                return
+        self._select_position(next_pos)
+        idx = order[next_pos]
+        if self.can_edit(idx, next_col):
+            self.begin_edit(idx, next_col)
 
     def _write(self, index: int, key: str, value: Any) -> None:
         if self.arrays is None and 0 <= index < len(self.records):
@@ -1491,11 +1552,15 @@ class DataTable:
         if (shift or toggle) and self.editing is None and not self.is_parent(self.order()[position]):
             self._extend_selection(position, shift)
             return True
+        prev_key = self.selected_key
+        prev_col = self.selected_column
         self._select_position(position)
         index = self.order()[position]
         if self.on_row_drag is not None and clicks == 1:
             self._row_press, self.row_dragging = (index, x, y), False
         column = self.column_at(x)
+        if column is not None:
+            self.selected_column = column.key
         if self.is_parent(index) and self._on_disclosure(index, x):
             self.toggle(index)
             return True
@@ -1504,7 +1569,8 @@ class DataTable:
             if isinstance(value, (bool, _np_bool())):
                 self._write(index, column.key, not bool(value))
                 return True
-            if clicks > 1:
+            already_selected = (prev_key == self.key_of(index) and prev_col == column.key)
+            if clicks > 1 or already_selected:
                 self.begin_edit(index, column.key)
                 return True
         if clicks > 1 and self.is_parent(index):
@@ -1643,6 +1709,8 @@ class DataTable:
             if self.key_of(index) not in self.also_selected:
                 self._select_position(position)
         column = self.column_at(x)
+        if column is not None:
+            self.selected_column = column.key
         if self.on_context is not None:
             self.on_context(index, column.key if column is not None else None, x, y)
         return True
@@ -1660,13 +1728,19 @@ class DataTable:
         if self.editing is not None:
             if key in (KEY_RETURN, KEY_ENTER):
                 # Text typed in the same frame as Enter came first.
-                if text:
+                if text and text not in ("\r", "\n"):
                     self.editor.field.key(0, text, modifiers)
                 self.commit_edit()
-            elif key == KEY_ESCAPE:
+                return True
+            if key == KEY_ESCAPE:
                 self.cancel_edit()
-            else:
-                self.editor.field.key(key, text, modifiers)
+                return True
+            if key == KEY_TAB:
+                shift = bool(modifiers & SHIFT_MODIFIER)
+                self.commit_edit()
+                self._move_edit(shift)
+                return True
+            self.editor.field.key(key, text, modifiers)
             return True
         if self.filter_focused:
             if key == KEY_ESCAPE:
@@ -1676,6 +1750,34 @@ class DataTable:
         order = self.order()
         if not order:
             return False
+        primary = bool(modifiers & CONTROL_MODIFIER)
+        mac = mac_behaviors()
+        chord = (primary and not (primary and bool(modifiers & ALT_MODIFIER))) or (mac and bool(modifiers & META_MODIFIER))
+        letter = letter_of(key, text) if chord else ""
+        if letter == "c":
+            self.copy_selection()
+            return True
+        if key in (KEY_RETURN, KEY_ENTER, KEY_F2) and self.selected_key is not None:
+            pos = next((p for p, i in enumerate(order) if self.key_of(i) == self.selected_key), None)
+            if pos is not None:
+                idx = order[pos]
+                col_key = self.selected_column
+                if col_key is None or not self.can_edit(idx, col_key):
+                    col_key = next((c.key for c in self.columns if self.can_edit(idx, c.key) and c.display not in ("bool", "check")), None)
+                if col_key is not None:
+                    self.begin_edit(idx, col_key)
+                    return True
+        if not (modifiers & (CONTROL_MODIFIER | META_MODIFIER | ALT_MODIFIER)) and text and text >= " " and self.selected_key is not None:
+            pos = next((p for p, i in enumerate(order) if self.key_of(i) == self.selected_key), None)
+            if pos is not None:
+                idx = order[pos]
+                col_key = self.selected_column
+                if col_key is None or not self.can_edit(idx, col_key):
+                    col_key = next((c.key for c in self.columns if self.can_edit(idx, c.key) and c.display not in ("bool", "check")), None)
+                if col_key is not None:
+                    self.begin_edit(idx, col_key)
+                    self.editor.field.insert(text, typing=True)
+                    return True
         if key in (KEY_DELETE, KEY_BACKSPACE):
             indices = self.selected_indices()
             if not indices or self.on_delete is None:
@@ -2099,9 +2201,12 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
         control.drag(px, py)
     if io.mouse_released[0]:
         control.release()
-    if io.key or io.text:
-        if hovered or control.filter_focused or control.editing is not None:
-            control.key(int(io.key), io.text, widgets._current_modifiers(io))
+    events = list(io.key_events)
+    if not events and (io.key or io.text):
+        events = [(io.key, io.text, widgets._current_modifiers(io))]
+    if events and (hovered or control.filter_focused or control.editing is not None):
+        for k, txt, mods in events:
+            control.key(int(k), txt, mods)
     _column_picker(control, name)
     from . import table_menu
     table_menu.draw(binding, name, hovered)

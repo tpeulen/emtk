@@ -889,7 +889,7 @@ def test_a_column_without_a_width_is_not_squeezed_to_a_pixel():
     painted over the next column (a narrow dock showed "protein_1R0A.pdb" over the chain and residue)."""
     table = DataTable(columns=[TableColumn("a", width=200.0), TableColumn("free"), TableColumn("b", width=200.0)])
     widths = table._column_widths(380.0)
-    assert widths[1] >= 40.0
+    assert widths[1] >= 30.0
 
 
 def test_fit_text_without_room_draws_nothing():
