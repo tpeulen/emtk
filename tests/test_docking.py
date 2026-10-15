@@ -334,6 +334,31 @@ def test_fold_resize_and_raise_on_a_floating_window():
     assert docks.floating()[-1] == "log"
 
 
+def test_title_buttons_on_floating_and_tabbed_window():
+    clicked = []
+    docks = DockManager(Region("center", workspace=True))
+    docks.add_window(
+        "fit", "Fit 1", lambda _b: None,
+        workspace=True,
+        title_buttons=[("Code", lambda: clicked.append(True), "Toggle code")],
+        box=(100.0, 100.0, 300.0, 200.0),
+    )
+    host = Driver(docks)
+    win = docks.window("fit")
+    assert 0 in win.title_button_rects
+    btn_rect = win.title_button_rects[0]
+    th = docks._title_h
+    # Button is to the left of close/minimize
+    close_x = win.frame[0] + win.frame[2] - th
+    assert btn_rect[0] + btn_rect[2] <= close_x
+    # Click button
+    bx = btn_rect[0] + btn_rect[2] / 2.0
+    by = btn_rect[1] + btn_rect[3] / 2.0
+    host.press(bx, by)
+    host.release(bx, by)
+    assert clicked == [True]
+
+
 def test_show_hide_toggle_and_focus():
     docks, _log = make()
     Driver(docks)

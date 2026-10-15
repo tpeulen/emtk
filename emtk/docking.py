@@ -703,6 +703,8 @@ class DockWindow:
     workspace: bool = False
     frame: Optional[Rect] = None
     content: Optional[Rect] = None
+    title_buttons: Sequence[Any] = ()
+    title_button_rects: Dict[int, Rect] = field(default_factory=dict)
 
 
 #: The bar between two regions, logical pixels.
@@ -2338,6 +2340,38 @@ class DockManager:
 
         right = x + w - 2.0
 
+        if top_win is not None:
+            top_win.title_button_rects.clear()
+            pad_x_btn = style.frame_padding[0] + 4.0
+            for idx, btn in enumerate(top_win.title_buttons or ()):
+                if isinstance(btn, dict):
+                    label_val = btn.get("label", "")
+                    action_val = btn.get("action")
+                    tip_val = btn.get("tooltip", "")
+                elif isinstance(btn, (tuple, list)):
+                    label_val = btn[0]
+                    action_val = btn[1]
+                    tip_val = btn[2] if len(btn) > 2 else ""
+                else:
+                    label_val = getattr(btn, "label", "")
+                    action_val = getattr(btn, "action", None)
+                    tip_val = getattr(btn, "tooltip", "")
+
+                label_str = label_val() if callable(label_val) else str(label_val)
+                tip_str = tip_val() if callable(tip_val) else (str(tip_val) if tip_val else "")
+
+                bw = ctx.p.text_width(label_str) + pad_x_btn * 2.0
+                btn_rect = (right - bw, y + 1.0, bw, th - 2.0)
+                right = btn_rect[0] - 2.0
+                top_win.title_button_rects[idx] = btn_rect
+                draw.add_rect_filled((btn_rect[0], btn_rect[1]),
+                                     (btn_rect[0] + btn_rect[2], btn_rect[1] + btn_rect[3]),
+                                     style.color(_core.Col.BUTTON), 2.0)
+                if self._button(ctx, btn_rect, self._id("title_btn", top_win.key, idx), label_str, tooltip=tip_str):
+                    if callable(action_val):
+                        action_val()
+                    self._changed()
+
         from .i18n import tr
 
         close_size = th
@@ -2636,6 +2670,38 @@ class DockManager:
                                        domain="emtk")):
                 self.minimize(win.key)
                 self._changed()
+
+        win.title_button_rects.clear()
+        pad_x_btn = style.frame_padding[0] + 4.0
+        for idx, btn in enumerate(win.title_buttons or ()):
+            if isinstance(btn, dict):
+                label_val = btn.get("label", "")
+                action_val = btn.get("action")
+                tip_val = btn.get("tooltip", "")
+            elif isinstance(btn, (tuple, list)):
+                label_val = btn[0]
+                action_val = btn[1]
+                tip_val = btn[2] if len(btn) > 2 else ""
+            else:
+                label_val = getattr(btn, "label", "")
+                action_val = getattr(btn, "action", None)
+                tip_val = getattr(btn, "tooltip", "")
+
+            label_str = label_val() if callable(label_val) else str(label_val)
+            tip_str = tip_val() if callable(tip_val) else (str(tip_val) if tip_val else "")
+
+            bw = ctx.p.text_width(label_str) + pad_x_btn * 2.0
+            btn_rect = (right - bw, y + 1.0, bw, th - 2.0)
+            right = btn_rect[0] - 2.0
+            win.title_button_rects[idx] = btn_rect
+            draw.add_rect_filled((btn_rect[0], btn_rect[1]),
+                                 (btn_rect[0] + btn_rect[2], btn_rect[1] + btn_rect[3]),
+                                 style.color(_core.Col.BUTTON), 2.0)
+            if self._button(ctx, btn_rect, self._id("title_btn", win.key, idx), label_str, tooltip=tip_str):
+                if callable(action_val):
+                    action_val()
+                self._changed()
+
         title_rect = (x + th, y, max(right - x - th, 0.0), th)
         item = self._id("title", win.key)
         hovered = ctx.item_add(title_rect, item)

@@ -413,6 +413,8 @@
      "resizable": "field=",
      "scrollable": "field=",
      "title": "field=",
+     "title_button_rects": "field=",
+     "title_buttons": "field=",
      "tooltip": "field=",
      "visible": "field=",
      "workspace": "field="
@@ -6104,6 +6106,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "399ed67449745a162466e0a8a6e0065178d98382f073f5e64388aa4067000d3e",
- "version": "0.1.21"
+ "sha256": "d5566f1a207c6654676bf8b03b4b926e499d92652b35040e69ce40a5b80b6c97",
+ "version": "0.1.22"
 }
