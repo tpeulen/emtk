@@ -45,7 +45,7 @@ def test_centred_with_title_content_and_header_buttons():
     assert host.window.box == (200.0, 150.0, 400.0, 300.0)
     for text in ("GMM Settings", "content", "Help", "×"):
         assert text in host.painter.strings, text
-    cx, cy, cw, ch = host.window.content_box
+    cx, cy, _cw, _ch = host.window.content_box
     assert cy > 150.0 + DialogWindow.HEADER_H - 1 and cx > 200.0
 
 
@@ -106,7 +106,7 @@ def test_fit_height_sizes_the_window_to_its_content():
     host.frame()
     short = host.window.size[1]
     assert short < 150.0, short
-    _, cy, _, ch = host.window.content_box
+    _cx, _cy, _cw, _ch = host.window.content_box
     lines["n"] = 12
     host.frame()
     host.frame()
@@ -115,3 +115,15 @@ def test_fit_height_sizes_the_window_to_its_content():
     fixed.frame()
     fixed.frame()
     assert fixed.window.size[1] == 500.0
+
+
+def test_saved_position_is_fully_clamped_after_a_viewport_shrinks():
+    """A formerly valid large-frame position cannot strand dialog controls off-screen."""
+    window = DialogWindow("Setup", size=(760, 560), pos=(220, 120))
+    x, y, width, height = window.place(FRAME)
+    fx, fy, frame_width, frame_height = FRAME
+
+    assert fx <= x
+    assert fy <= y
+    assert x + width <= fx + frame_width
+    assert y + height <= fy + frame_height

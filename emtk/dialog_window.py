@@ -26,7 +26,7 @@ a screenshot of just the dialog.
 """
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple
+from collections.abc import Sequence
 
 from . import im_core as _core
 from . import im_widgets as _w
@@ -35,7 +35,7 @@ from .keys import KEY_ESCAPE
 
 __all__ = ["DialogWindow"]
 
-Rect = Tuple[float, float, float, float]
+Rect = tuple[float, float, float, float]
 
 
 class DialogWindow:
@@ -62,11 +62,11 @@ class DialogWindow:
         The window and its content region, last frame.
     """
 
-    HEADER_H = 26.0
+    HEADER_H = 16.0
     PADDING = 8.0
 
     def __init__(self, title: str, size: Sequence[float] = (420.0, 300.0),
-                 pos: Optional[Sequence[float]] = None, key: str = "",
+                 pos: Sequence[float] | None = None, key: str = "",
                  escape_closes: bool = True, fit_height: bool = False,
                  close_button: bool = True) -> None:
         self.title = str(title)
@@ -83,9 +83,9 @@ class DialogWindow:
         #: denser style, never leaves the window half empty or cut short.
         self.fit_height = bool(fit_height)
         self.open = False
-        self.box: Optional[Rect] = None
-        self.content_box: Optional[Rect] = None
-        self._drag: Optional[Tuple[float, float]] = None
+        self.box: Rect | None = None
+        self.content_box: Rect | None = None
+        self._drag: tuple[float, float] | None = None
 
     # ---------------------------------------------------------------- state
     def show(self) -> None:
@@ -108,8 +108,11 @@ class DialogWindow:
         h = min(self.size[1], max(fh - 20.0, self.HEADER_H + 20.0))
         if self.pos is None:
             self.pos = (fx + (fw - w) / 2.0, fy + (fh - h) / 2.0)
-        x = min(max(self.pos[0], fx), fx + fw - min(w, 60.0))
-        y = min(max(self.pos[1], fy), fy + fh - self.HEADER_H)
+        # Clamp the complete window, not merely a visible title/header strip. A
+        # dialog can outlive a host resize (or a host can be recreated smaller),
+        # so the saved position must never leave Apply/Close controls unreachable.
+        x = min(max(self.pos[0], fx), max(fx, fx + fw - w))
+        y = min(max(self.pos[1], fy), max(fy, fy + fh - h))
         self.box = (x, y, w, h)
         return self.box
 
@@ -120,7 +123,7 @@ class DialogWindow:
         return bx <= x < bx + bw and by <= y < by + bh
 
     # ---------------------------------------------------------------- frame
-    def begin(self, frame: Rect, buttons: Sequence[str] = ()) -> Optional[str]:
+    def begin(self, frame: Rect, buttons: Sequence[str] = ()) -> str | None:
         """Draw the window and open its content region.
 
         Returns the label of the header button pressed (``"close"`` for × or

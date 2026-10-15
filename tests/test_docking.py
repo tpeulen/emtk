@@ -305,11 +305,11 @@ def test_the_splitter_drags_the_ratio_and_close_hides_a_window():
     host.drag((bx, by), (bx + 100.0, by))
     assert docks.region_boxes["left"][2] == pytest.approx(300.0 + 100.0, abs=2.0)
     assert split.ratio > 0.3
-    # The × on the left strip closes the tab on top.
-    x, y, w, _h = docks.region_boxes["left"]
+    # The × on the tab closes the window.
+    tab_rect = next(r for k, r in docks._tab_rects["left"] if k == "form")
     th = docks._title_h
-    host.press(x + w - th / 2.0, y + th / 2.0)
-    host.release(x + w - th / 2.0, y + th / 2.0)
+    host.press(tab_rect[0] + tab_rect[2] - th / 2.0, tab_rect[1] + th / 2.0)
+    host.release(tab_rect[0] + tab_rect[2] - th / 2.0, tab_rect[1] + th / 2.0)
     assert not docks.is_visible("form")
     assert docks.active_tab("left") == "table"
 

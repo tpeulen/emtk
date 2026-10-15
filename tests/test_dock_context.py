@@ -29,9 +29,11 @@ def test_closed_panel_can_be_reopened_from_empty_header():
     manager.add_window("files", "Project", dock="main")
     storage = {}
     render(manager, storage)
-    render(manager, storage, IO(mouse_pos=(489, 8),
+    tab_rect = next(r for k, r in manager._tab_rects["main"] if k == "files")
+    close_pos = (tab_rect[0] + tab_rect[2] - 8, tab_rect[1] + 8)
+    render(manager, storage, IO(mouse_pos=close_pos,
         mouse_clicked=[True, False, False], mouse_down=[True, False, False]))
-    render(manager, storage, IO(mouse_pos=(489, 8),
+    render(manager, storage, IO(mouse_pos=close_pos,
         mouse_released=[True, False, False]))
     assert not manager.window("files").visible
     render(manager, storage)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import emtk
-from emtk import im, im_widgets
+from emtk import im_widgets
 from emtk.dialog_window import DialogWindow
 from emtk.testing import RecordingPainter
 

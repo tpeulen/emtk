@@ -2336,39 +2336,38 @@ class DockManager:
         top = self.active_tab(region)
         top_win = self.windows.get(top) if top else None
 
-        # The close box first: the first item to claim the pointer keeps it.
-        close_rect = None
-        if top_win is not None and top_win.closable:
-            close_rect = (x + w - th, y, th, th)
-            if self._button(ctx, close_rect, self._id("close", region), "×"):
-                top_win.visible = False
-                self._changed()
-        right = (close_rect[0] if close_rect else x + w) - 2.0
+        right = x + w - 2.0
 
         from .i18n import tr
 
+        close_size = th
         tab_widths = [
-            ctx.p.text_width(tr(self.windows[k].title)) + pad_x * 2.0 for k in shown
+            ctx.p.text_width(tr(self.windows[k].title))
+            + pad_x * 2.0
+            + (close_size if self.windows[k].closable else 0.0)
+            for k in shown
         ]
-        available_w = max(right - x, 0.0)
+        tab_spacing = 1.0 + max(len(shown) - 1, 0) * 2.0
+        available_w = max(right - x - tab_spacing, 0.0)
         # Tabs too wide for the strip first give way: the longest titles end in an ellipsis, down to a
         # floor, and only what still does not fit scrolls. A tab cut mid-letter at the strip's edge looks
         # like a label that is lost.
         tab_cap = _style.tab_cap(tab_widths, available_w, self.MIN_TAB_W)
         tab_widths = [min(w, tab_cap) for w in tab_widths]
-        total_tw = sum(tab_widths)
+        total_tw = sum(tab_widths) + tab_spacing
 
         if region not in self._tab_scroll:
             self._tab_scroll[region] = 0.0
 
-        if total_tw > available_w and len(shown) > 1:
+        strip_room = max(right - x, 0.0)
+        if total_tw > strip_room and len(shown) > 1:
             arrow_w = th
             buttons_w = arrow_w * 2.0
             scroll_right_rect = (right - arrow_w, y, arrow_w, th)
             scroll_left_rect = (right - buttons_w, y, arrow_w, th)
             right -= buttons_w + 2.0
-            available_w = max(right - x, 0.0)
-            max_scroll = max(total_tw - available_w, 0.0)
+            strip_room = max(right - x, 0.0)
+            max_scroll = max(total_tw - strip_room, 0.0)
 
             if self._button(ctx, scroll_left_rect, self._id("scroll_left", region), "◀"):
                 self._tab_scroll[region] = max(0.0, self._tab_scroll[region] - 60.0)
@@ -2388,17 +2387,22 @@ class DockManager:
             win = self.windows[key]
 
             title = tr(win.title)
-            tw = ctx.p.text_width(title) + pad_x * 2.0
+            extra_w = pad_x * 2.0 + (close_size if win.closable else 0.0)
+            full_tw = ctx.p.text_width(title) + extra_w
+            tw = wanted
             shown_title = title
-            if wanted < tw:
-                tw = wanted
+            if wanted < full_tw:
                 from .widgets.menus import _ellipsize  # noqa: PLC0415
 
-                shown_title = _ellipsize(ctx.p, title, tw - pad_x * 2.0)
+                avail_text_w = max(wanted - extra_w, 0.0)
+                shown_title = _ellipsize(ctx.p, title, avail_text_w)
             tab = (cursor, y + 1.0, tw, th - 1.0)
             rects.append((key, tab))
+
+            tab_hit_w = tab[2] - (close_size if win.closable else 0.0)
+            tab_hit_rect = (tab[0], tab[1], max(tab_hit_w, 0.0), tab[3])
             item = self._id("tab", key)
-            hovered = ctx.item_add(tab, item)
+            hovered = ctx.item_add(tab_hit_rect, item)
             if hovered:
                 ctx.set_tooltip(f"{tr(win.tooltip) if win.tooltip else title}\n"
                                 + tr("Drag to move this panel; right-click for panel actions.",
@@ -2424,6 +2428,11 @@ class DockManager:
             text_h = ctx.p.line_height()
             draw.add_text((tab[0] + pad_x, tab[1] + (tab[3] - text_h) / 2.0), ink,
                           shown_title)
+            if win.closable:
+                cb_rect = (tab[0] + tab[2] - close_size, y, close_size, th)
+                if self._button(ctx, cb_rect, self._id("close_tab", key), "×"):
+                    win.visible = False
+                    self._changed()
             cursor += tw + 2.0
         ctx.p.pop_clip()
         self._tab_rects[region] = rects
@@ -2448,7 +2457,7 @@ class DockManager:
         for key in self.tabs[region]:
             if key != top:
                 self.windows[key].frame = self.windows[key].content = None
-        if top_win is None:
+        if top_win is None or not top_win.visible:
             return
         top_win.frame = rect
         self._draw_content(ctx, top_win, (x, y + th, w, h - th))
