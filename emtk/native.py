@@ -495,6 +495,7 @@ class CanvasEvents:
         add(self._on_pointer_down, "pointer_down")
         add(self._on_double_click, "double_click")
         add(self._on_pointer_move, "pointer_move")
+        add(self._on_pointer_leave, "pointer_leave")
         add(self._on_pointer_up, "pointer_up")
         add(self._on_wheel, "wheel")
         add(self._on_key_down, "key_down")
@@ -913,6 +914,9 @@ class CanvasEvents:
         self._deliver("on_pointer_move", float(event["x"]), float(event["y"]),
                       self.buttons_mask(event),
                       modifiers_from_canvas(event.get("modifiers")))
+
+    def _on_pointer_leave(self, event: dict) -> None:
+        self._deliver("on_pointer_move", -1.0, -1.0, NO_BUTTON, 0)
 
     def _on_pointer_up(self, event: dict) -> None:
         self._deliver("on_pointer_release", *self.pointer_position(event),

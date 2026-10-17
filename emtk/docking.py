@@ -2002,7 +2002,7 @@ class DockManager:
         h = min(max(h, mh, self._title_h), max(bh, self._title_h))
         fh = self._title_h if win.collapsed else h
         x = min(max(x, bx), max(bx + bw - w, bx))
-        y = min(max(y, by), max(by + bh - fh, by))
+        y = min(max(y, by), max(by + bh - self._title_h, by))
         return (x, y, w, fh)
 
     def _follow_box(self, box: Rect) -> None:
@@ -2987,26 +2987,27 @@ class DockManager:
                 draw.add_rect_filled((px, py), (px + pw, py + ph),
                                      _style.BUTTON_HOVERED if lit else _style.BUTTON, 4.0)
                 draw.add_rect((px, py), (px + pw, py + ph), accent, 4.0)
+                text_dim = _style.with_alpha(_style.TEXT, 200)
                 if ":" not in target_id or target_id.endswith(":center"):
                     inset = pw * 0.22
                     draw.add_rect((px + inset, py + inset), (px + pw - inset, py + ph - inset),
-                                  _style.TEXT + (200,), 2.0)
+                                  text_dim, 2.0)
                 elif target_id.endswith(":left"):
                     draw.add_rect_filled((px + 3.0, py + 3.0),
                                          (px + pw * 0.45, py + ph - 3.0),
-                                         accent if lit else (_style.TEXT + (200,)))
+                                         accent if lit else text_dim)
                 elif target_id.endswith(":right"):
                     draw.add_rect_filled((px + pw * 0.55, py + 3.0),
                                          (px + pw - 3.0, py + ph - 3.0),
-                                         accent if lit else (_style.TEXT + (200,)))
+                                         accent if lit else text_dim)
                 elif target_id.endswith(":top"):
                     draw.add_rect_filled((px + 3.0, py + 3.0),
                                          (px + pw - 3.0, py + ph * 0.45),
-                                         accent if lit else (_style.TEXT + (200,)))
+                                         accent if lit else text_dim)
                 elif target_id.endswith(":bottom"):
                     draw.add_rect_filled((px + 3.0, py + ph * 0.55),
                                          (px + pw - 3.0, py + ph - 3.0),
-                                         accent if lit else (_style.TEXT + (200,)))
+                                         accent if lit else text_dim)
 
         if self.drop_target is not None:
             return
