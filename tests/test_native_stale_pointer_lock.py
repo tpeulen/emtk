@@ -48,3 +48,12 @@ def test_a_press_off_the_window_keeps_the_lock(fake_glfw):
     events = _events(lock=True, inside=False)
     events._button_arrived("window", 0, fake_glfw.PRESS, 0)
     assert events.canvas._pointer_lock is True
+
+
+def test_the_first_click_into_the_window_is_not_swallowed(fake_glfw):
+    """The backend thought the pointer outside (missed enter): the press still lands."""
+    events = _events(lock=False, inside=False)
+    events._button_arrived("window", 0, fake_glfw.PRESS, 0)
+    assert events.sync_pointer_inside("window") is True
+    assert events.canvas._pointer_inside is True
+    assert events.canvas._pointer_lock is False

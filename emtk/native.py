@@ -726,13 +726,18 @@ class CanvasEvents:
             self._presence_callbacks = {}
 
     def _button_arrived(self, window, button=0, action=0, *_rest) -> None:
-        """A raw glfw button event, before the backend sees it.
+        """A raw glfw button event, before the backend sees it: a press over the window lands.
 
-        The backend's lock pairs a swallowed press with its release: while locked it
-        drops every move, and it ends the lock on the next release. A *press* while
-        locked means that release never came (released over another window, during a
-        window switch) -- the lock is stale, and this press would be eaten as the
-        missing release: one click lost, at random. Cleared here.
+        rendercanvas' glfw backend swallows a press it believes happens outside the window
+        as "the click that focuses the window", locks the pointer, drops every move and
+        unlocks on the next release. Both halves of that belief went wrong in practice,
+        each losing clicks: the inside flag missed its enter event after a resize (see
+        :meth:`sync_pointer_inside`), and a lock whose release never reached the window
+        stayed, so the next real press was eaten as that release -- a click that did not
+        land, at random. emtk decides instead: a press over the window (glfw's live
+        ``HOVERED``) is a click on what is under the pointer, the first click into an
+        inactive window included, as a native control takes it. The lock is cleared, and
+        :meth:`sync_pointer_inside` then delivers the enter the backend missed.
         """
         canvas = self.canvas
         try:
@@ -749,7 +754,7 @@ class CanvasEvents:
             input_trace.debug("glfw %s button=%s cursor=(%.1f, %.1f) hovered=%s inside=%s lock=%s",
                               "press" if pressed else "release", button, cursor[0], cursor[1],
                               hovered, inside, locked)
-        if pressed and locked and hovered:
+        if pressed and hovered and locked:
             canvas._pointer_lock = False
             input_trace.debug("cleared a stale pointer lock: this press is delivered")
 
