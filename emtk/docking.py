@@ -2024,7 +2024,13 @@ class DockManager:
                 x, y = anchored_position(win.anchor, x, y, fw, fh, bx + bw, by + bh,
                                          top=by, left=bx)
                 win.box = (x, y, w, h)
-            fx, fy = self._floating_frame(win)[:2]
+            fx, fy, _fw, fh = self._floating_frame(win)
+            if moved:
+                # A drag may leave a window hanging below the edge by its title bar; when
+                # the bounds themselves change (the host shrank, a dock grew) the whole
+                # frame is pulled back inside, so no window ends up with only its title
+                # showing because of a resize the user did not aim at it.
+                fy = min(fy, max(by + bh - fh, by))
             win.box = (fx, fy, w, h)
 
     def _frames(self, keys: Iterable[str]) -> Dict[str, Rect]:

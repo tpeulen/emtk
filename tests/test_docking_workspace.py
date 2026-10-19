@@ -122,6 +122,18 @@ def test_a_shrinking_window_clamps_the_children_back_into_the_workspace():
         assert _inside(docks.window(key).frame, bounds), key
 
 
+
+def test_a_window_placed_below_the_edge_keeps_its_title_bar_reachable():
+    docks = make()
+    host = Host(docks)
+    bounds = docks.floating_bounds()
+    bottom = bounds[1] + bounds[3]
+    docks.window("a").box = (500.0, bottom + 300.0, 420.0, 300.0)
+    host.frame()
+    _x, y, _w, h = docks.window("a").frame
+    assert y + h > bottom, "a placed window may hang below the workspace"
+    assert abs(y + docks._title_h - bottom) <= 0.5, "but never below its title bar"
+
 def test_the_workspace_is_always_there_even_empty_and_survives_close_all_panels():
     docks = make(windows=())
     host = Host(docks)
