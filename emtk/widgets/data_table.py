@@ -32,7 +32,8 @@ table needs them and neither dialect had them:
 ``tooltip_key``
     the record field holding a row's longer description: the tooltip of the
     row under the pointer, as in the Qt table, and the selected row's shown
-    under the rows;
+    under the rows -- unless ``selection_note: false``, for a form that shows
+    the selected row's detail itself;
 ``row_key``
     the record field that identifies a row, so a selection survives rows
     streaming in above it. Without one, a row is its position in the source;
@@ -60,6 +61,10 @@ table needs them and neither dialect had them:
 ``fit_rows``
     the table is as tall as its header and rows, no scrolling (``height``
     then caps it);
+``display: "button"`` and ``call`` on a column
+    the cell is a small button labelled with the cell text; a click on it
+    selects the row and calls ``call(record)`` on the model. An empty cell
+    has no button -- a row says ``"Approve"`` only while it can be approved;
 ``display: "script"`` on a column
     ``_{…}`` / ``^{…}`` in the cell text are drawn as sub- and superscripts
     (``w_{z} [nm]``), see :mod:`emtk.script_text`;
@@ -189,7 +194,7 @@ from ..keys import (
     mac_behaviors,
 )
 from ..layout import Fill
-from ..painter import ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
+from ..painter import ALIGN_CENTER, ALIGN_LEFT, ALIGN_RIGHT, ALIGN_VCENTER, Painter
 from ..script_text import draw_script_text, script_width
 from ..style import fit_text
 from .basic import ScrollBar, TextInput
@@ -261,7 +266,7 @@ class TableColumn:
     fmt : str
         printf spec for numbers; empty uses :data:`DEFAULT_FORMAT`.
     display : str
-        ``"text"``, ``"bar"``, ``"link"``, or ``"script"``: text whose ``_{…}`` /
+        ``"text"``, ``"bar"``, ``"link"``, ``"button"`` (see :attr:`call`), or ``"script"``: text whose ``_{…}`` /
         ``^{…}`` runs are drawn as sub- and superscripts (:mod:`emtk.script_text`),
         for labels such as ``w_{z} [nm]``.
     range : tuple or None
@@ -297,6 +302,8 @@ class TableColumn:
     #: When the table is short of width, columns with ``collapse_order`` 1 are
     #: dropped first, then 2, ...; ``0`` is never dropped (see the module notes).
     collapse_order: int = 0
+    #: For ``display: "button"``: the model method a click on the cell calls with the record.
+    call: str = ""
 
     def shown_title(self) -> str:
         """The title in the active language: measured and drawn, never :attr:`title`.
@@ -338,6 +345,7 @@ class TableColumn:
             shade=bool(spec.get("shade", True)),
             background=_backgrounds(spec.get("background")),
             collapse_order=max(int(spec.get("collapse_order", 0) or 0), 0),
+            call=str(spec.get("call", "") or ""),
         )
 
     def text(self, value: Any) -> str:
@@ -528,8 +536,11 @@ class DataTable:
         column_picker: bool = False,
         tree_key: str = "",
         linked: Optional[Callable[[int], str]] = None,
+        on_button: Optional[Callable[[int, str], None]] = None,
     ) -> None:
         self.columns: list[TableColumn] = list(columns)
+        #: ``on_button(index, key)``: a ``display: "button"`` cell was clicked.
+        self.on_button = on_button
         #: ``linked(index)``: the master a row borrows its value from (``""``: none); the row is
         #: drawn in the linked ink and its tooltip names the master.
         self.linked = linked
@@ -546,6 +557,8 @@ class DataTable:
         self.cell_editable = cell_editable
         #: ``muted(index)``: whether the row's text is drawn dimmed.
         self.muted = muted
+        #: Show the selected row's ``tooltip_key`` text under the rows.
+        self.selection_note = True
         #: Draw the row/column count under the rows.
         self.show_status = bool(status)
         #: A right click on the header asks for the column list.
@@ -1189,7 +1202,7 @@ class DataTable:
 
         note = ""
         index = self.selected_index()
-        if self.tooltip_key and index is not None:
+        if self.tooltip_key and self.selection_note and index is not None:
             note = str(self.value(index, self.tooltip_key) or "")
         note_lines = 2 if note else 0
         note_h = note_lines * line + (6.0 if note_lines else 0.0)
@@ -1346,6 +1359,11 @@ class DataTable:
                             max((end - start) * inner, 1.0), bar_h, colour)
             right = self._right_aligned(column, order) and not indent
             text = column.text(value)
+            if column.display == "button":
+                if text:
+                    self._draw_button(p, col_x, y, width, h, text)
+                col_x += width
+                continue
             if column.display == "script":
                 # Scripts are not elided: a label cut inside "w_{z}" would show its markup.
                 draw_script_text(p, col_x + self.CELL_PAD_X + indent, y + 1.0, max(width - self.CELL_PAD_X * 2.0 - indent, 1.0),
@@ -1385,6 +1403,13 @@ class DataTable:
         count = len(self.visible_columns())
         fraction = min(max((x - bx) / max(bw, 1e-6), 0.0), 1.0)
         self.first_column = int(round(fraction * max(count - 1, 0)))
+
+    def _draw_button(self, p: Painter, x: float, y: float, w: float, h: float,
+                     text: str) -> None:
+        """A ``display: "button"`` cell: a filled button inset in the cell, its label centred."""
+        bx, by, bw, bh = x + 2.0, y + 2.0, max(w - 4.0, 1.0), max(h - 4.0, 1.0)
+        p.fill_rect(bx, by, bw, bh, _style.BUTTON)
+        p.text(bx, by, bw, bh, ALIGN_CENTER, fit_text(p, text, bw - 4.0), _style.TEXT)
 
     def _draw_disclosure(self, p: Painter, x: float, y: float, h: float, open_: bool) -> None:
         """The ▸ / ▾ of a parent row, drawn as a triangle (no glyph needed)."""
@@ -1589,6 +1614,10 @@ class DataTable:
             self.selected_column = column.key
         if self.is_parent(index) and self._on_disclosure(index, x):
             self.toggle(index)
+            return True
+        if column is not None and column.display == "button":
+            if self.on_button is not None and column.text(self.value(index, column.key)):
+                self.on_button(index, column.key)
             return True
         if column is not None and self.can_edit(index, column.key):
             value = self.value(index, column.key)
@@ -1944,8 +1973,10 @@ class TableBinding:
             row_key=str(merged.get("row_key", "") or ""),
             on_context=self._on_context,
             min_column_width=float(merged.get("min_column_width", 0) or 0),
+            on_button=self._on_button,
         )
         self.control.auto_fit = bool(merged.get("fit_columns", False))
+        self.control.selection_note = bool(merged.get("selection_note", True))
         #: ``drag_call(record, x, y, dropped)`` on the model: rows can be dragged out.
         self.drag_call = str(merged.get("drag_call", "") or "")
         if self.drag_call:
@@ -2158,6 +2189,12 @@ class TableBinding:
             fn = self._lookup(self.context_call)
             if callable(fn):
                 fn(self.record(index), key, (x, y))
+
+    def _on_button(self, index: int, key: str) -> None:
+        column = next((c for c in self.control.columns if c.key == key), None)
+        fn = self._lookup(column.call) if column is not None and column.call else None
+        if callable(fn):
+            fn(self.record(index))
 
     def _on_activate(self, index: int) -> None:
         if self.activated_call:
