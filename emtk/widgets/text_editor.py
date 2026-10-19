@@ -397,6 +397,17 @@ class Language:
     punctuation : frozenset of str
     identifier_pattern, number_pattern : re.Pattern or None
         Anchored at the scan position with ``match``.
+    prefix_classes : tuple of (str, Token)
+        A word not in the three sets above that *starts* with one of these
+        prefixes takes that token -- for a vocabulary that is open-ended but
+        recognisable by its prefix (mmCIF tags ``_category.item``).
+    other_string_line_start : bool
+        The ``other_string`` delimiters count only in the first column (mmCIF's
+        ``;`` text fields); elsewhere they are ordinary characters.
+    strings_at_token_start : bool
+        A quote opens a string only at the start of a word and closes it only
+        before whitespace or the end of the line (mmCIF: ``5'-end`` is a word,
+        not the start of a string).
     comment_prefix : str
         What :meth:`TextEditor.toggle_comments` inserts. Defaults to
         ``single_line_comment``.
@@ -424,6 +435,9 @@ class Language:
     identifier_pattern: re.Pattern | None = _C_IDENTIFIER
     number_pattern: re.Pattern | None = _C_NUMBER
     comment_prefix: str = ""
+    prefix_classes: tuple = ()
+    other_string_line_start: bool = False
+    strings_at_token_start: bool = False
 
     def __post_init__(self) -> None:
         """Default the comment prefix to the single-line comment sequence."""
@@ -514,6 +528,35 @@ class Language:
             string_escape="\\", indentation_for_blocks=True,
             keywords=frozenset({"true", "false", "null", "yes", "no", "on", "off"}),
             punctuation=frozenset("{}[],:&*!|>%-~"))
+
+    @staticmethod
+    def mmcif() -> Language:
+        """mmCIF / CIF (wwPDB, IHM, flrCIF): tags, blocks, loops and text fields.
+
+        A word is anything between whitespace, so the identifier pattern is
+        "no whitespace". Tags (``_category.item``) colour as known identifiers,
+        ``data_``/``save_`` block headers as declarations, ``loop_``/``stop_``/
+        ``global_`` as keywords. A text field runs from a ``;`` in column 0 to
+        the next one; quotes delimit a value only at a word's edges.
+        """
+        return Language(
+            name="mmCIF",
+            case_sensitive=False,
+            single_line_comment="#",
+            has_single_quoted_strings=True,
+            has_double_quoted_strings=True,
+            other_string_start=";",
+            other_string_end=";",
+            other_string_line_start=True,
+            strings_at_token_start=True,
+            keywords=frozenset({"loop_", "stop_", "global_"}),
+            prefix_classes=(("_", Token.KNOWN_IDENTIFIER), ("data_", Token.DECLARATION),
+                            ("save_", Token.DECLARATION)),
+            identifier_pattern=re.compile(r"[^\s'\"#]+"),
+            number_pattern=None,
+            punctuation=frozenset(),
+            comment_prefix="# ",
+        )
 
     @staticmethod
     def glsl() -> Language:
@@ -1140,7 +1183,9 @@ class Colorizer:
                 return end, state
         # The triple quotes must be tested before the single character ones,
         # or Python's ``"""`` opens and immediately closes an empty string.
-        if language.other_string_start and text.startswith(language.other_string_start, index):
+        if language.other_string_start and text.startswith(
+            language.other_string_start, index
+        ) and (index == 0 or not language.other_string_line_start):
             size = len(language.other_string_start)
             line.paint(index, index + size, Token.STRING)
             return index + size, LineState.IN_OTHER_STRING
@@ -1150,10 +1195,12 @@ class Colorizer:
             size = len(language.other_string_alt_start)
             line.paint(index, index + size, Token.STRING)
             return index + size, LineState.IN_OTHER_STRING_ALT
-        if language.has_single_quoted_strings and char == "'":
+        at_word_start = not language.strings_at_token_start or index == 0 or text[
+            index - 1].isspace()
+        if language.has_single_quoted_strings and char == "'" and at_word_start:
             line.paint(index, index + 1, Token.STRING)
             return index + 1, LineState.IN_SINGLE_QUOTED_STRING
-        if language.has_double_quoted_strings and char == '"':
+        if language.has_double_quoted_strings and char == '"' and at_word_start:
             line.paint(index, index + 1, Token.STRING)
             return index + 1, LineState.IN_DOUBLE_QUOTED_STRING
         if language.preprocess and char == language.preprocess and not _has_code_before(
@@ -1182,7 +1229,8 @@ class Colorizer:
                 elif key in language.identifiers:
                     token = Token.KNOWN_IDENTIFIER
                 else:
-                    token = Token.IDENTIFIER
+                    token = next((tok for prefix, tok in language.prefix_classes
+                                  if key.startswith(prefix)), Token.IDENTIFIER)
                 line.paint(index, found.end(), token)
                 return found.end()
 
@@ -1217,11 +1265,21 @@ class Colorizer:
         if escape and text[index] == escape:
             line.paint(index, min(index + 2, end), Token.STRING)
             return min(index + 2, end), state
-        if closer and text.startswith(closer, index):
+        if closer and text.startswith(closer, index) and self._closes(text, index, closer, state):
             line.paint(index, index + len(closer), Token.STRING)
             return index + len(closer), LineState.IN_TEXT
         line.paint(index, index + 1, Token.STRING)
         return index + 1, state
+
+    def _closes(self, text: str, index: int, closer: str, state: LineState) -> bool:
+        """Whether *closer* at *index* ends the string, under the language's rules."""
+        language = self._language
+        if state in (LineState.IN_OTHER_STRING, LineState.IN_OTHER_STRING_ALT):
+            return index == 0 or not language.other_string_line_start
+        if language.strings_at_token_start:
+            after = index + len(closer)
+            return after >= len(text) or text[after].isspace()
+        return True
 
 
 #: Columns a colour pictogram occupies: the East-Asian-wide two, in layout, caret,
