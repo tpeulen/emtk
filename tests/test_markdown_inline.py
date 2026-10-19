@@ -90,3 +90,50 @@ def test_a_word_wider_than_the_line_is_broken_not_overflowed():
     painter, _ = _draw("x" * 80 + " tail", width=120.0)
     assert max(t[0] + t[2] for t in painter.texts) <= 120.0 + 1.0
     assert len({round(t[1]) for t in painter.texts}) > 1
+
+
+def test_a_link_target_may_hold_parentheses():
+    """A DOI with ``(79)`` inside must stay one link, not end the target at its first ``)``."""
+    from emtk.widgets.markdown import parse_inline
+
+    runs = parse_inline("[Dale et al. (1979)](https://doi.org/10.1016/S0006-3495(79)85271-6) -- R. E. Dale")
+    assert runs[0].text == "Dale et al. (1979)"
+    assert runs[0].target == "https://doi.org/10.1016/S0006-3495(79)85271-6"
+    assert "".join(r.text for r in runs[1:]) == " -- R. E. Dale"
+
+
+def test_a_long_page_lays_each_paragraph_out_once():
+    """Wrapping is kept across frames: an unchanged paragraph is not measured again."""
+    from emtk import im
+    from emtk.testing import Driver
+    from emtk.widgets import markdown
+
+    calls = []
+    real = markdown._layout_inline
+
+    def counting(*args, **kwargs):
+        calls.append(args[1])
+        return real(*args, **kwargs)
+
+    markdown._LAYOUTS.clear()
+    paragraphs = [f"Paragraph {i} with **bold** words and a [link](https://x.org/a(1)b)." for i in range(40)]
+
+    def draw():
+        im.begin("page")
+        for i, text in enumerate(paragraphs):
+            markdown.draw_inline(text, tag=f"p{i}")
+        im.end()
+
+    import pytest
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(markdown, "_layout_inline", counting)
+    try:
+        drv = Driver(draw, (600, 400))
+        drv.frame(3)
+        first = len(calls)
+        drv.frame(5)
+    finally:
+        mp.undo()
+    assert 0 < first <= 2 * len(paragraphs)
+    assert len(calls) == first

@@ -16,7 +16,7 @@ from .. import im
 from .. import style as _style
 from ..i18n import tr
 from ..im_core import Col
-from ..type_scale import math_args, pop_text_style, push_text_style
+from ..type_scale import math_args, pop_text_style, push_text_style, text_font
 
 __all__ = ["InlineRun", "MarkdownBlock", "draw_inline", "parse_inline", "parse_markdown", "render_markdown"]
 
@@ -357,7 +357,7 @@ def _format_inline_text(text: str) -> tuple[str, list[tuple[str, str]]]:
         links.append((lbl, target))
         return lbl
 
-    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", link_sub, text)
+    s = re.sub(r"\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)", link_sub, text)
 
     # Inline math: $expr$
     try:
@@ -382,7 +382,8 @@ def _format_inline_text(text: str) -> tuple[str, list[tuple[str, str]]]:
 
 
 _INLINE = re.compile(
-    r"\[([^\]]+)\]\(([^)]+)\)"            # 1,2 link
+    # 1,2 link; the target may hold one level of parentheses (a DOI such as 10.1016/S0006-3495(79)85271-6)
+    r"\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)"
     r"|`([^`]+)`"                            # 3 code
     r"|\*\*(.+?)\*\*"                       # 4 bold
     r"|__(.+?)__"                            # 5 bold
@@ -474,50 +475,64 @@ def _code_face_available() -> bool:
         return False
 
 
-def draw_inline(
-    text: str,
-    on_link: Callable[[str], None] | None = None,
-    tag: str = "inl",
-    role: str = "body",
-    colour=None,
-    bold: bool = False,
-    prefix: str = "",
-    zoom: float = 1.0,
-) -> None:
-    """Draw one wrapped paragraph of inline Markdown as rich-text runs.
+def _frame_face(ctx, role: str, bold: bool, zoom: float) -> dict:
+    """``text_font(role, bold, zoom)``, resolved once per frame (it validates the face each call).
 
-    Links are drawn where they sit in the text (coloured, underlined, clickable);
-    bold uses the bold face, code the monospace face on a subtle background. A
-    word is never split, even when it spans several runs (``**a**,``).
+    The font settings cannot change inside a frame, so a page of paragraphs shares the answer.
     """
-    from ..im_core import get_current_context
-    from ..im_widgets import _col
+    store = ctx.state(("markdown_faces",))
+    frame = ctx.io.frame_count
+    if store.get("frame") != frame:
+        store.clear()
+        store["frame"] = frame
+    key = (role, bool(bold), float(zoom))
+    if key not in store:
+        store[key] = text_font(role, bold=bold, zoom=zoom)
+    return store[key]
 
-    ctx = get_current_context()
+
+#: Wrapped paragraph layouts of :func:`draw_inline`, least recently used first.
+_LAYOUTS: dict = {}
+_LAYOUT_CAP = 4096
+
+
+def _layout_inline(ctx, text, prefix, avail, code_face, font_for, face):
+    """Wrap one paragraph: ``(lines, line_h, max_w)``, or ``None`` when it has no runs.
+
+    Each line is a list of ``(x, run, width)``. Words of one face are measured under one
+    font push, not one push per word.
+    """
+    from ..im_widgets import pop_font, push_font
+
     runs = parse_inline(text)
     if prefix:
         runs.insert(0, InlineRun(prefix))
     if not runs:
-        return
+        return None
     cache: dict = {}
 
-    code_face = _code_face_available()
-
-    def font_for(run: InlineRun):
-        if run.code and code_face:
-            return "code", False
-        return role, bool(bold or run.bold)
+    def warm(pieces) -> None:
+        """Measure every not-yet-measured piece, one font push per face."""
+        todo: dict = {}
+        for run in pieces:
+            k = (run.text, run.bold, run.code)
+            if k not in cache:
+                todo.setdefault(font_for(run), {})[k] = run.text
+        for fk, items in todo.items():
+            push_font(face(fk))
+            try:
+                h = ctx.p.line_height()
+                for k, t in items.items():
+                    cache[k] = (ctx.p.text_width(t), h)
+            finally:
+                pop_font()
 
     def measure(run: InlineRun) -> tuple[float, float]:
-        key = (run.text, run.bold, run.code)
-        if key not in cache:
-            r, b = font_for(run)
-            push_text_style(r, bold=b, zoom=zoom)
-            cache[key] = (ctx.p.text_width(run.text), ctx.p.line_height())
-            pop_text_style()
-        return cache[key]
+        k = (run.text, run.bold, run.code)
+        if k not in cache:
+            warm([run])
+        return cache[k]
 
-    avail = max(1.0, float(ctx.layout.avail()[0]))
     pad = 2.0  # horizontal padding of a code span
     lines: list[list[tuple[float, InlineRun, float]]] = [[]]
     x = 0.0
@@ -543,7 +558,9 @@ def draw_inline(
         return out
 
     atoms: list[list[InlineRun]] = []
-    for atom in _atoms(runs):
+    words = _atoms(runs)
+    warm([r for atom in words for r in atom])
+    for atom in words:
         probe = sum(measure(r)[0] + (2 * pad if r.code and r.text != " " else 0.0) for r in atom)
         if probe > avail and not (len(atom) == 1 and atom[0].text == " "):
             chunks = _hard_break(atom)
@@ -579,10 +596,70 @@ def draw_inline(
         for r, rw in zip(atom, widths):
             lines[-1].append((x, r, rw))
             x += rw
+    return lines, line_h, max((seg[0] + seg[2] for ln in lines for seg in ln), default=0.0)
+
+
+def draw_inline(
+    text: str,
+    on_link: Callable[[str], None] | None = None,
+    tag: str = "inl",
+    role: str = "body",
+    colour=None,
+    bold: bool = False,
+    prefix: str = "",
+    zoom: float = 1.0,
+) -> None:
+    """Draw one wrapped paragraph of inline Markdown as rich-text runs.
+
+    Links are drawn where they sit in the text (coloured, underlined, clickable);
+    bold uses the bold face, code the monospace face on a subtle background. A
+    word is never split, even when it spans several runs (``**a**,``).
+    """
+    from ..im_core import get_current_context
+    from ..im_widgets import _col, pop_font, push_font
+
+    ctx = get_current_context()
+    code_face = _code_face_available()
+    avail = max(1.0, float(ctx.layout.avail()[0]))
+    faces: dict[tuple[str, bool], dict] = {}
+
+    def font_for(run: InlineRun):
+        if run.code and code_face:
+            return "code", False
+        return role, bool(bold or run.bold)
+
+    def face(key: tuple[str, bool]) -> dict:
+        if key not in faces:
+            faces[key] = _frame_face(ctx, key[0], key[1], zoom)
+        return faces[key]
+
+    # The wrapped layout depends only on the text, the width and the faces, so it is kept across
+    # frames: a long page re-measured every word in every frame (a 340-paragraph bibliography
+    # took seconds per frame). The faces in the key carry every font setting and the zoom.
+    scale = ctx.state(("font_scale",)).get("current", 1.0)
+    key = (
+        text, prefix, role, bool(bold), float(zoom), round(avail, 1), code_face, float(scale),
+        type(ctx.p).__name__,
+        repr([face((role, b)) for b in (bool(bold), True)]),
+        repr(face(("code", False))) if code_face else None,
+    )
+    layout = _LAYOUTS.get(key)
+    if layout is None:
+        layout = _layout_inline(ctx, text, prefix, avail, code_face, font_for, face)
+        if len(_LAYOUTS) >= _LAYOUT_CAP:
+            _LAYOUTS.pop(next(iter(_LAYOUTS)))
+        _LAYOUTS[key] = layout
+    else:
+        _LAYOUTS[key] = _LAYOUTS.pop(key)  # most recently used last
+    if layout is None:
+        return
+    lines, line_h, max_w = layout
     line_h = max(line_h, ctx.p.line_height())
-    max_w = max((seg[0] + seg[2] for ln in lines for seg in ln), default=0.0)
+    pad = 2.0  # horizontal padding of a code span
     box = ctx.layout.row(height=len(lines) * line_h, width=min(avail, max(max_w, 1.0)))
     ctx.item_add(box)
+    if not ctx._overlaps_clip(box):
+        return  # scrolled out of view: the box holds its place, nothing to paint or click
     base = colour if colour is not None else _col(Col.TEXT)
     link_col = _col(Col.CHECK_MARK)
     for li, raw in enumerate(lines):
@@ -612,7 +689,7 @@ def draw_inline(
             if run.code:
                 ctx.draw.add_rect_filled((x0, y + 1), (x0 + rw, y + line_h - 1), _style.CODE_INLINE_BG, 3.0)
             fr, fb = font_for(run)
-            push_text_style(fr, bold=fb, zoom=zoom)
+            push_font(face((fr, fb)))
             if run.target:
                 col = tuple(min(255, int(c) + 40) for c in link_col[:3]) + tuple(link_col[3:]) if hovered else link_col
             elif run.italic:
@@ -620,7 +697,7 @@ def draw_inline(
             else:
                 col = base
             ctx.draw.add_text((x0 + (pad if run.code else 0.0), y), col, run.text, bold=fb)
-            pop_text_style()
+            pop_font()
             if run.target:
                 ctx.draw.add_line((x0, y + line_h - 1.0), (x0 + rw, y + line_h - 1.0), col, 1.0)
 
