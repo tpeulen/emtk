@@ -165,7 +165,9 @@ def test_imapp_runs_the_gui_and_feeds_it_a_click():
         app.pointer_move(30, y)
         app.pointer_press(30, y, LEFT_BUTTON)
         app.pointer_release(30, y, LEFT_BUTTON)
-        _frame(app)
+        _frame(app)  # sees the press, the button held
+        assert app.animating() is True, "the release held back for the next frame needs one"
+        _frame(app)  # sees the release: the button fires
         if clicks:
             break
     assert clicks, "a press and release between two frames never clicked the button"
@@ -181,6 +183,9 @@ def test_imapp_is_also_a_classic_control():
     app.press(5, 6, 0, 0, 10, 10, 0, 2)
     assert app.io.mouse_down[0] and app.io.mouse_double_clicked[0]
     app.release()
+    # No frame saw the press yet: the release waits for the frame after it.
+    assert app.io.mouse_down[0] and not app.io.mouse_released[0]
+    app.io.end_event()
     assert not app.io.mouse_down[0] and app.io.mouse_released[0]
     app.scroll(-3)
     assert app.io.mouse_wheel == 1.0

@@ -119,6 +119,8 @@ class IO:
     mouse_released: list[bool] = field(default_factory=lambda: [False, False, False])
     mouse_double_clicked: list[bool] = field(default_factory=lambda: [False, False, False])
     mouse_clicked_pos: list[tuple[float, float]] = field(default_factory=lambda: [(-1.0, -1.0)] * 3)
+    #: Releases held back one frame (:meth:`_release`): the press they end has not been seen yet.
+    _release_deferred: list[bool] = field(default_factory=lambda: [False, False, False])
     #: ``io.MousePos`` last frame -- what makes ``MouseDelta`` a delta.
     mouse_pos_prev: tuple[float, float] = (-1.0, -1.0)
     #: Where the pointer was when this frame began; becomes
@@ -233,11 +235,35 @@ class IO:
         self.mouse_clicked = [False, False, False]
         self.mouse_released = [False, False, False]
         self.mouse_double_clicked = [False, False, False]
+        for i, deferred in enumerate(self._release_deferred):
+            if deferred:
+                # The frame that just ended saw the press with the button held; the next one
+                # sees the release.
+                self._release_deferred[i] = False
+                self.mouse_down[i] = False
+                self.mouse_released[i] = True
         self.mouse_wheel = 0.0
         self.mouse_wheel_h = 0.0
         self.key = 0
         self.text = ""
         self.key_events = []
+
+    def _release(self, button: int) -> bool:
+        """The host saw *button* come up; returns whether the release waits for a frame.
+
+        A press and its release that arrive between two frames (a trackpad tap, a fast
+        click, a busy frame) must not reach the same frame: it would see the press with
+        the button already up, and every widget that acts on the *held* button -- a
+        slider set by a click, a drag, a text field taking focus -- did nothing. ImGui's
+        input queue trickles them over two frames for the same reason; here the release
+        is held back until the frame that saw the press has ended (:meth:`end_event`).
+        """
+        if self.mouse_clicked[button]:
+            self._release_deferred[button] = True
+            return True
+        self.mouse_down[button] = False
+        self.mouse_released[button] = True
+        return False
 
     def one_shot_state(self) -> tuple:
         """The one-shot inputs as a comparable tuple (all spent equals ``IO().one_shot_state()``)."""

@@ -126,11 +126,13 @@ def test_an_im_app_gets_every_button_and_the_wheel(qt_app):
     mouse(QtCore.QEvent.MouseButtonPress, QtCore.Qt.RightButton, QtCore.Qt.RightButton)
     assert app.io.mouse_clicked[1] and not app.io.mouse_clicked[0]
     mouse(QtCore.QEvent.MouseButtonRelease, QtCore.Qt.RightButton, QtCore.Qt.NoButton)
+    app.io.end_event()  # the release lands in the frame after the press's
     assert app.io.mouse_released[1]
 
     mouse(QtCore.QEvent.MouseButtonPress, QtCore.Qt.MiddleButton, QtCore.Qt.MiddleButton)
     assert app.io.mouse_down[2]
     mouse(QtCore.QEvent.MouseButtonRelease, QtCore.Qt.MiddleButton, QtCore.Qt.NoButton)
+    app.io.end_event()
     assert not app.io.mouse_down[2]
 
     wheel = QtGui.QWheelEvent(QtCore.QPointF(30.0, 40.0), QtCore.QPointF(30.0, 40.0),

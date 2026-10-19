@@ -700,6 +700,7 @@ class ImApp:
         if i < 0:
             return
         self.io.mouse_down[i] = True
+        self.io._release_deferred[i] = False  # down again before the held-back release
         self.io.mouse_clicked[i] = True
         self.io.mouse_double_clicked[i] = int(clicks) >= 2
         self.io.mouse_clicked_pos[i] = (float(x), float(y))
@@ -714,8 +715,8 @@ class ImApp:
         self._modifiers(int(modifiers))
         if i < 0:
             return
-        self.io.mouse_down[i] = False
-        self.io.mouse_released[i] = True
+        if self.io._release(i):
+            self.request_frame()  # the release lands in the frame after the press's
 
     def wheel(self, x, y, steps, modifiers=0) -> None:
         self.io.mouse_pos = (float(x), float(y))
