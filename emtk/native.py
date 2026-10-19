@@ -70,6 +70,26 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+#: ``EMTK_TRACE_INPUT=1``: every raw button event, the backend's inside/lock flags and
+#: what was delivered, to ``~/.cache/emtk/input-trace.log`` -- the evidence for "a click
+#: did not land", which no headless driver reproduces (it never goes through glfw).
+input_trace = logging.getLogger("emtk.input")
+
+
+def _start_input_trace() -> None:
+    import os  # noqa: PLC0415
+
+    if not os.environ.get("EMTK_TRACE_INPUT") or input_trace.handlers:
+        return
+    import pathlib  # noqa: PLC0415
+
+    folder = pathlib.Path(os.environ.get("XDG_CACHE_HOME", pathlib.Path.home() / ".cache")) / "emtk"
+    folder.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(folder / "input-trace.log", mode="w")
+    handler.setFormatter(logging.Formatter("%(asctime)s.%(msecs)03d %(message)s", "%H:%M:%S"))
+    input_trace.addHandler(handler)
+    input_trace.setLevel(logging.DEBUG)
+    input_trace.propagate = False
 
 #: The window opened when nothing says otherwise, in logical pixels.
 DEFAULT_WINDOW_SIZE = (1280, 860)
@@ -489,6 +509,7 @@ class CanvasEvents:
     # -- wiring ---------------------------------------------------------- #
     def connect(self) -> None:
         """Register a handler for every event the surface acts on."""
+        _start_input_trace()
         add = getattr(self.canvas, "add_event_handler", None)
         if add is None:  # pragma: no cover - a canvas with no event system
             return
@@ -692,7 +713,9 @@ class CanvasEvents:
                 if previous is None:
                     continue
 
-                def chained(native_window, *args, _previous=previous) -> None:
+                def chained(native_window, *args, _previous=previous, _name=name) -> None:
+                    if _name == "set_mouse_button_callback":
+                        self._button_arrived(native_window, *args)
                     self.sync_pointer_inside(native_window)
                     _previous(native_window, *args)
 
@@ -701,6 +724,34 @@ class CanvasEvents:
                 setter(window, chained)
         except Exception:  # noqa: BLE001 - not a glfw window after all
             self._presence_callbacks = {}
+
+    def _button_arrived(self, window, button=0, action=0, *_rest) -> None:
+        """A raw glfw button event, before the backend sees it.
+
+        The backend's lock pairs a swallowed press with its release: while locked it
+        drops every move, and it ends the lock on the next release. A *press* while
+        locked means that release never came (released over another window, during a
+        window switch) -- the lock is stale, and this press would be eaten as the
+        missing release: one click lost, at random. Cleared here.
+        """
+        canvas = self.canvas
+        try:
+            import glfw  # noqa: PLC0415
+
+            pressed = action == glfw.PRESS
+            hovered = bool(glfw.get_window_attrib(window, glfw.HOVERED))
+            cursor = glfw.get_cursor_pos(window)
+        except Exception:  # noqa: BLE001 - not a glfw window after all
+            return
+        locked = bool(getattr(canvas, "_pointer_lock", False))
+        inside = getattr(canvas, "_pointer_inside", None)
+        if input_trace.isEnabledFor(logging.DEBUG):
+            input_trace.debug("glfw %s button=%s cursor=(%.1f, %.1f) hovered=%s inside=%s lock=%s",
+                              "press" if pressed else "release", button, cursor[0], cursor[1],
+                              hovered, inside, locked)
+        if pressed and locked and hovered:
+            canvas._pointer_lock = False
+            input_trace.debug("cleared a stale pointer lock: this press is delivered")
 
     def sync_pointer_inside(self, window=None) -> bool:
         """Deliver an enter glfw missed; return whether one was delivered."""
@@ -849,6 +900,8 @@ class CanvasEvents:
         return self.drop_callback is not None
 
     def _deliver(self, name: str, *args, **kwargs):
+        if name != "on_pointer_move" and input_trace.isEnabledFor(logging.DEBUG):
+            input_trace.debug("deliver %s %s %s", name, args, kwargs or "")
         handler = getattr(self.sink, name, None)
         if not callable(handler):
             return False
