@@ -120,6 +120,12 @@ Testing: ``emtk.testing``
 .. automodule:: emtk.testing
    :noindex:
 
+Modal backdrop: ``emtk.backdrop``
+-----------------------------------
+
+.. automodule:: emtk.backdrop
+   :noindex:
+
 Qt painter: ``emtk.qt_painter``
 ----------------------------------
 

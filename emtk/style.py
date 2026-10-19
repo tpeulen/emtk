@@ -236,6 +236,12 @@ NAV_CURSOR = (66, 150, 250, 255)
 #: The wash a modal popup lays over everything behind it. The reference calls
 #: this ``ModalWindowDimBg``.
 MODAL_DIM_BG = (204, 204, 204, 89)
+#: Blur what lies behind a modal window (a question, a modal menu) as well as washing it
+#: with :data:`MODAL_DIM_BG`: the window in front is the only thing in focus. A user
+#: preference, not part of a theme (:func:`emtk.backdrop.set_modal_blur`).
+MODAL_BLUR = True
+#: How far the blur reaches, in logical pixels (the Gaussian's sigma).
+MODAL_BLUR_RADIUS = 6.0
 
 
 # --------------------------------------------------------------------------

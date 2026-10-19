@@ -208,6 +208,10 @@ class QuadPainter:
         #: one per primitive -- and they put the two streams back in order in
         #: :meth:`vertices`.
         self._runs: list[list[int]] = []
+        #: ``(vertex index, (x, y, w, h), radius)`` in device pixels, per
+        #: :meth:`backdrop`: where the renderer splits the frame to blur what
+        #: was drawn before.
+        self._backdrops: list = []
         self._clips: list[tuple[float, float, float, float]] = []
         #: Device pixels per logical pixel.
         #:
@@ -389,9 +393,34 @@ class QuadPainter:
         self._runs.clear()
         self._image_quads.clear()
         self._image_triangles.clear()
+        self._backdrops.clear()
         del self._clips[:]
         self._clip = _NO_CLIP
         self._scaled_clip = self._scale_clip(_NO_CLIP)
+
+    def backdrop(self, x: float, y: float, w: float, h: float, colour: Colour,
+                 radius: float = 0.0) -> None:
+        """Frost what is drawn so far under *x, y, w, h*, then tint it with *colour*.
+
+        The quads are one draw call, so nothing drawn can be read back here: the
+        backdrop is a *marker*. :meth:`backdrops` lists where it falls in the vertex
+        array, and :meth:`~emtk.wgpu_host.WgpuRenderer.render` splits the frame there,
+        renders the part before it offscreen, blurs it by *radius* (logical pixels)
+        and draws the rest over it. The tint is an ordinary quad right after the
+        marker, so a renderer that does not split (a pass of someone else's) still
+        dims as before.
+        """
+        if radius > 0.0 and w > 0.0 and h > 0.0:
+            scale = self._scale
+            self._backdrops.append(
+                (self.vertex_count, (x * scale, y * scale, w * scale, h * scale),
+                 float(radius) * scale)
+            )
+        self.fill_rect(x, y, w, h, colour)
+
+    def backdrops(self) -> list:
+        """The :meth:`backdrop` markers of this frame, in draw order."""
+        return list(self._backdrops)
 
     # -- internals ---------------------------------------------------------
 

@@ -347,6 +347,26 @@ def save_png(path, width: int, height: int, rgba) -> None:
     path.write_bytes(png_encode(width, height, rgba))
 
 
+def _box_blur(np, image, half: int, axis: int):
+    """Mean over ``2 * half + 1`` pixels along *axis*, the edge pixel repeated beyond it."""
+    pad = [(0, 0)] * image.ndim
+    pad[axis] = (half + 1, half)
+    padded = np.pad(image, pad, mode="edge")
+    total = np.cumsum(padded, axis=axis)
+    n = image.shape[axis]
+    upper = np.take(total, np.arange(2 * half + 1, 2 * half + 1 + n), axis=axis)
+    lower = np.take(total, np.arange(0, n), axis=axis)
+    return (upper - lower) / float(2 * half + 1)
+
+
+def _paste(np, buffer, region, x0: int, y0: int):
+    """*buffer* with *region* (float, RGBA) written back at ``x0, y0``."""
+    out = buffer.copy()
+    h, w = region.shape[:2]
+    out[y0:y0 + h, x0:x0 + w] = np.clip(region + 0.5, 0, 255).astype(np.uint8)
+    return out
+
+
 class PixelPainter:
     """The painter contract, rasterised onto an RGBA buffer.
 
@@ -453,6 +473,31 @@ class PixelPainter:
     # -- the six required operations --------------------------------------- #
 
     def fill_rect(self, x, y, w, h, colour) -> None:
+        self._fill(x, y, w, h, colour)
+
+    def backdrop(self, x, y, w, h, colour, radius=0.0) -> None:
+        """Blur what is drawn under *x, y, w, h* by *radius* (sigma, px), then tint it.
+
+        The screenshot twin of the GPU painter's frosted backdrop
+        (:meth:`emtk.quad_painter.QuadPainter.backdrop`): three box blurs, which make a
+        Gaussian of that sigma. Needs numpy; without it the backdrop is the tint alone.
+        """
+        cx, cy, cw, ch = self._clip()
+        x0, y0 = max(int(x), cx), max(int(y), cy)
+        x1, y1 = min(int(x + w), cx + cw), min(int(y + h), cy + ch)
+        sigma = float(radius)
+        if x1 > x0 and y1 > y0 and sigma > 0.0:
+            try:
+                import numpy as np  # noqa: PLC0415
+            except ImportError:  # pragma: no cover - numpy ships wherever emtk draws
+                np = None
+            if np is not None:
+                buffer = np.frombuffer(self.px, np.uint8).reshape(self.height, self.width, 4)
+                region = buffer[y0:y1, x0:x1].astype(np.float32)
+                half = max(1, int(round((np.sqrt(4.0 * sigma * sigma + 1.0) - 1.0) / 2.0)))
+                for axis in (0, 1, 0, 1, 0, 1):
+                    region = _box_blur(np, region, half, axis)
+                self.px[:] = _paste(np, buffer, region, x0, y0).tobytes()
         self._fill(x, y, w, h, colour)
 
     def stroke_rect(self, x, y, w, h, edge, fill=None, *, width=1.0) -> None:

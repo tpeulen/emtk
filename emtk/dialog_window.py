@@ -53,6 +53,9 @@ class DialogWindow:
         Distinguishes two windows with one title.
     escape_closes : bool
         Escape (while the pointer is over the window) returns ``"close"``.
+    modal : bool
+        Wash and blur what is behind the window (:func:`emtk.backdrop.draw_modal_backdrop`);
+        ``False`` for a tool window beside the work.
 
     Attributes
     ----------
@@ -68,8 +71,12 @@ class DialogWindow:
     def __init__(self, title: str, size: Sequence[float] = (420.0, 300.0),
                  pos: Sequence[float] | None = None, key: str = "",
                  escape_closes: bool = True, fit_height: bool = False,
-                 close_button: bool = True) -> None:
+                 close_button: bool = True, modal: bool = True) -> None:
         self.title = str(title)
+        #: A dialog: what lies behind it, in the frame it is drawn over, is washed and
+        #: (``emtk.style.MODAL_BLUR``) blurred, so the window in front is the one in
+        #: focus. A tool window that sits beside the work passes ``False``.
+        self.modal = bool(modal)
         #: Draw the title bar's ``×``. A window whose content already carries a
         #: labelled Close (the help window) turns it off: one close control, and
         #: Escape still closes.
@@ -130,6 +137,10 @@ class DialogWindow:
         Escape), or ``None``. Always pair with :meth:`end`.
         """
         x, y, w, h = self.place(frame)
+        if self.modal:
+            from .backdrop import draw_modal_backdrop  # noqa: PLC0415
+
+            draw_modal_backdrop(_core.get_current_context().p, *frame)
         _w.begin(f"{self.title}##dialog-{self.key}", (x, y, w, h))
         style = _core.get_style()
         draw = _core.get_window_draw_list()

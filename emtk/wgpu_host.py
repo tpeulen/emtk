@@ -101,6 +101,9 @@ from .gpu_atlas import (
 )
 from .wgsl import UI_SHADER, load_wgsl
 
+#: The frosted-backdrop shader (:meth:`WgpuRenderer._render_frosted`).
+BACKDROP_SHADER = "backdrop.wgsl"
+
 __all__ = [
     "WgpuRenderer",
     "WgpuControlHost",
@@ -341,6 +344,12 @@ class WgpuRenderer:
         self._uniform_buffer = None
         self._bind_group = None
         self._bind_key = None
+        #: The frosted-backdrop pass (:meth:`_render_frosted`): its pipelines per
+        #: format, its layout, and the offscreen textures by ``(name, size, format)``.
+        self._blur_pipelines: dict = {}
+        self._blur_layout = None
+        self._blur_sampler = None
+        self._blur_textures: dict = {}
 
     # -- lifecycle ------------------------------------------------------- #
     @property
@@ -700,6 +709,159 @@ class WgpuRenderer:
         self.draw_calls = 1
         return 1
 
+    def _ui_range(self, render_pass, bind, buffer, first: int, count: int,
+                  format: str | None) -> None:
+        """Draw vertices ``[first, first + count)`` of the uploaded frame into *render_pass*."""
+        if count <= 0:
+            return
+        render_pass.set_pipeline(self.pipeline(format))
+        render_pass.set_bind_group(0, self._empty_group)
+        render_pass.set_bind_group(1, bind)
+        render_pass.set_vertex_buffer(0, buffer)
+        render_pass.draw(count, 1, first, 0)
+
+    def _blur_pipeline(self, format: str):
+        """The fullscreen copy/blur pipeline of ``backdrop.wgsl`` for *format*."""
+        got = self._blur_pipelines.get(format)
+        if got is not None:
+            return got
+        wgpu = _wgpu()
+        device = self.device
+        if self._blur_layout is None:
+            self._blur_layout = device.create_bind_group_layout(
+                label="emtk.backdrop.group0",
+                entries=[
+                    {"binding": 0, "visibility": wgpu.ShaderStage.FRAGMENT,
+                     "texture": {"sample_type": wgpu.TextureSampleType.float}},
+                    {"binding": 1, "visibility": wgpu.ShaderStage.FRAGMENT,
+                     "sampler": {"type": wgpu.SamplerBindingType.filtering}},
+                    {"binding": 2, "visibility": wgpu.ShaderStage.FRAGMENT,
+                     "buffer": {"type": wgpu.BufferBindingType.uniform}},
+                ],
+            )
+            self._blur_sampler = device.create_sampler(
+                label="emtk.backdrop.sampler",
+                # WebGPU's default address mode clamps to the edge, as a blur wants.
+                mag_filter=wgpu.FilterMode.linear, min_filter=wgpu.FilterMode.linear,
+            )
+        module = device.create_shader_module(label="emtk.backdrop",
+                                             code=load_wgsl(BACKDROP_SHADER))
+        pipeline = device.create_render_pipeline(
+            label=f"emtk.backdrop[{format}]",
+            layout=device.create_pipeline_layout(bind_group_layouts=[self._blur_layout]),
+            vertex={"module": module, "entry_point": "vs_fullscreen", "buffers": []},
+            fragment={"module": module, "entry_point": "fs_blur",
+                      "targets": [{"format": format}]},
+            primitive={"topology": wgpu.PrimitiveTopology.triangle_list},
+        )
+        self._blur_pipelines[format] = pipeline
+        return pipeline
+
+    def _blur_texture(self, name: str, width: int, height: int, format: str):
+        """An offscreen target of the backdrop pass, kept while its size and format hold."""
+        key = (name, width, height, format)
+        texture = self._blur_textures.get(key)
+        if texture is None:
+            wgpu = _wgpu()
+            for stale in [k for k in self._blur_textures if k[0] == name]:
+                self._blur_textures.pop(stale)
+            texture = self.device.create_texture(
+                label=f"emtk.backdrop.{name}",
+                size=(width, height, 1),
+                format=format,
+                usage=(wgpu.TextureUsage.RENDER_ATTACHMENT
+                       | wgpu.TextureUsage.TEXTURE_BINDING),
+            )
+            self._blur_textures[key] = texture
+        return texture
+
+    def _blur_pass(self, encoder, source, target, format, step=(0.0, 0.0), sigma=1.0,
+                   scissor=None, load=False) -> None:
+        """Copy (*step* zero) or blur *source* into the view *target*."""
+        np = _numpy()
+        wgpu = _wgpu()
+        device = self.device
+        uniforms = np.array([step[0], step[1], sigma, 0.0], dtype=np.float32)
+        buffer = device.create_buffer_with_data(
+            data=uniforms, usage=wgpu.BufferUsage.UNIFORM)
+        pipeline = self._blur_pipeline(format)
+        group = device.create_bind_group(
+            layout=self._blur_layout,
+            entries=[
+                {"binding": 0, "resource": source.create_view()},
+                {"binding": 1, "resource": self._blur_sampler},
+                {"binding": 2, "resource": {"buffer": buffer, "offset": 0,
+                                            "size": uniforms.nbytes}},
+            ],
+        )
+        attachment = {"view": target, "resolve_target": None,
+                      "load_op": "load" if load else "clear", "store_op": "store",
+                      "clear_value": (0.0, 0.0, 0.0, 0.0)}
+        render_pass = encoder.begin_render_pass(color_attachments=[attachment])
+        if scissor is not None:
+            render_pass.set_scissor_rect(*scissor)
+        render_pass.set_pipeline(pipeline)
+        render_pass.set_bind_group(0, group)
+        render_pass.draw(3, 1, 0, 0)
+        render_pass.end()
+
+    def _render_frosted(self, painter, width, height, view, background, format, mark) -> int:
+        """:meth:`render` for a frame with a :meth:`~.quad_painter.QuadPainter.backdrop`.
+
+        What was drawn before the marker is rendered into a texture, blurred into a
+        half-size one (horizontal, then vertical) and drawn back: sharp everywhere,
+        blurred inside the backdrop's rectangle. Then the rest of the frame -- the
+        tint, the modal window and whatever comes after -- is drawn over it. Five
+        passes on a frame that has a modal window open, one on every other frame.
+        """
+        np = _numpy()
+        format = str(format or self.format)
+        data = np.ascontiguousarray(painter.vertices(), dtype=np.float32)
+        count = int(data.shape[0])
+        split, (bx, by, bw, bh), radius = mark
+        split = max(0, min(int(split), count))
+        self._upload_atlas()
+        self._upload_images()
+        bind = self._bind(width, height)
+        buffer = self._upload_vertices(data)
+        w, h = max(1, int(width)), max(1, int(height))
+        hw, hh = max(1, w // 2), max(1, h // 2)
+        scene = self._blur_texture("scene", w, h, format)
+        half_a = self._blur_texture("half_a", hw, hh, format)
+        half_b = self._blur_texture("half_b", hw, hh, format)
+        device = self.device
+        encoder = device.create_command_encoder(label="emtk.ui.frosted")
+
+        attachment = {"view": scene.create_view(), "resolve_target": None,
+                      "load_op": "clear", "store_op": "store",
+                      "clear_value": _clear_value(background if background is not None
+                                                  else (0, 0, 0, 0))}
+        under = encoder.begin_render_pass(color_attachments=[attachment])
+        self._ui_range(under, bind, buffer, 0, split, format)
+        under.end()
+
+        # sigma in taps = TAPS / 3 in backdrop.wgsl, so the tap spacing makes it *radius*.
+        sigma_taps = 4.0
+        spacing = max(float(radius), 0.5) / sigma_taps
+        self._blur_pass(encoder, scene, half_a.create_view(), format,
+                        step=(spacing / w, 0.0), sigma=sigma_taps)
+        self._blur_pass(encoder, half_a, half_b.create_view(), format,
+                        step=(0.0, spacing / h), sigma=sigma_taps)
+
+        x0, y0 = max(0, int(bx)), max(0, int(by))
+        x1, y1 = min(w, int(round(bx + bw))), min(h, int(round(by + bh)))
+        self._blur_pass(encoder, scene, view, format)
+        if x1 > x0 and y1 > y0:
+            self._blur_pass(encoder, half_b, view, format, scissor=(x0, y0, x1 - x0, y1 - y0),
+                            load=True)
+        over = encoder.begin_render_pass(color_attachments=[
+            {"view": view, "resolve_target": None, "load_op": "load", "store_op": "store"}])
+        self._ui_range(over, bind, buffer, split, count - split, format)
+        over.end()
+        device.queue.submit([encoder.finish()])
+        self.draw_calls = int(split > 0) + int(count > split)
+        return self.draw_calls
+
     def render(self, vertices, width: float, height: float, view,
                background=None, format: str | None = None) -> int:
         """Draw into *view* in a pass of this renderer's own.
@@ -722,6 +884,12 @@ class WgpuRenderer:
         int
             :attr:`draw_calls`.
         """
+        marks = vertices.backdrops() if hasattr(vertices, "backdrops") else []
+        if marks:
+            # The first backdrop frosts; any later one (a question over a question) is
+            # its tint only.
+            return self._render_frosted(vertices, width, height, view, background,
+                                        format, marks[0])
         device = self.device
         encoder = device.create_command_encoder(label="emtk.ui")
         attachment = {

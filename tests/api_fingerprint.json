@@ -156,6 +156,11 @@
    "find_player": "def(which=shutil.which)",
    "write_wav": "def(path, pcm, rate)"
   },
+  "emtk.backdrop": {
+   "draw_modal_backdrop": "def(painter, x, y, w, h)",
+   "modal_blur": "def()",
+   "set_modal_blur": "def(enabled, radius=None)"
+  },
   "emtk.clipboard": {
    "commands": "def()",
    "copy": "def(text)",
@@ -315,7 +320,7 @@
     "members": {
      "HEADER_H": "attribute",
      "PADDING": "attribute",
-     "__init__": "def(self, title, size=(420.0, 300.0), pos=None, key='', escape_closes=True, fit_height=False, close_button=True)",
+     "__init__": "def(self, title, size=(420.0, 300.0), pos=None, key='', escape_closes=True, fit_height=False, close_button=True, modal=True)",
      "begin": "def(self, frame, buttons=())",
      "contains": "def(self, x, y)",
      "end": "def(self)",
@@ -3025,6 +3030,8 @@
     "decorators": [],
     "members": {
      "__init__": "def(self, atlas=None, scale=1.0, font_scale=1.0)",
+     "backdrop": "def(self, x, y, w, h, colour, radius=0.0)",
+     "backdrops": "def(self)",
      "clear": "def(self)",
      "fill_convex": "def(self, points, colour)",
      "fill_rect": "def(self, x, y, w, h, colour)",
@@ -3231,6 +3238,7 @@
     "decorators": [],
     "members": {
      "__init__": "def(self, painter, k)",
+     "backdrop": "def(self, x, y, w, h, colour, radius=0.0)",
      "line_height": "def(self)",
      "set_font_scale": "def(self, scale)",
      "stroke_rect": "def(self, x, y, w, h, edge, fill=None, *, width=1.0)",
@@ -3485,6 +3493,7 @@
     "decorators": [],
     "members": {
      "__init__": "def(self, width, height, background=(0, 0, 0, 255), scale=1.0)",
+     "backdrop": "def(self, x, y, w, h, colour, radius=0.0)",
      "box_has_colour": "def(self, x, y, w, h, colour)",
      "fill_convex": "def(self, points, colour)",
      "fill_rect": "def(self, x, y, w, h, colour)",
@@ -4508,7 +4517,7 @@
      "FLEX_MIN": "attribute",
      "TREE_INDENT": "attribute",
      "WHEEL_ROWS": "attribute",
-     "__init__": "def(self, columns=(), *, on_select=None, on_activate=None, filter_box=False, tooltip_key='', row_key='', row_scale=1.25, on_edit=None, on_delete=None, on_context=None, min_column_width=0.0, cell_editable=None, muted=None, status=False, column_picker=False, tree_key='', linked=None)",
+     "__init__": "def(self, columns=(), *, on_select=None, on_activate=None, filter_box=False, tooltip_key='', row_key='', row_scale=1.25, on_edit=None, on_delete=None, on_context=None, min_column_width=0.0, cell_editable=None, muted=None, status=False, column_picker=False, tree_key='', linked=None, on_button=None)",
      "begin_edit": "def(self, index, key)",
      "can_edit": "def(self, index, key)",
      "cancel_edit": "def(self)",
@@ -4521,6 +4530,7 @@
      "column_editable": "def(self, key)",
      "commit_edit": "def(self)",
      "context": "def(self, x, y)",
+     "copy_selection": "def(self)",
      "depth_of": "def(self, index)",
      "drag": "def(self, x, y, *_box)",
      "draw": "def(self, p, x, y, w, h)",
@@ -4575,6 +4585,7 @@
      "align_right": "field=",
      "background": "field=",
      "bar": "def(self, value)",
+     "call": "field=",
      "collapse_order": "field=",
      "display": "field=",
      "editable": "field=",
@@ -5876,12 +5887,15 @@
      "keywords": "field=",
      "lua": "@staticmethod def()",
      "markdown": "@staticmethod def()",
+     "mmcif": "@staticmethod def()",
      "name": "field=",
      "number_pattern": "field=",
      "other_string_alt_end": "field=",
      "other_string_alt_start": "field=",
      "other_string_end": "field=",
+     "other_string_line_start": "field=",
      "other_string_start": "field=",
+     "prefix_classes": "field=",
      "preprocess": "field=",
      "punctuation": "field=",
      "python": "@staticmethod def()",
@@ -5889,6 +5903,7 @@
      "single_line_comment_alt": "field=",
      "sql": "@staticmethod def()",
      "string_escape": "field=",
+     "strings_at_token_start": "field=",
      "yaml": "@staticmethod def()"
     }
    },
@@ -6106,6 +6121,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "d5566f1a207c6654676bf8b03b4b926e499d92652b35040e69ce40a5b80b6c97",
- "version": "0.1.22"
+ "sha256": "fb359286a11954e483d6026e1a559d1decc8d97bc53ded4b4677370f0667a399",
+ "version": "0.1.23"
 }

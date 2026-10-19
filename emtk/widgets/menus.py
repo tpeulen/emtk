@@ -1592,7 +1592,9 @@ class Popup:
         if not self.open:
             return
         if self.modal:
-            p.fill_rect(x, y, w, h, style.MODAL_DIM_BG)
+            from ..backdrop import draw_modal_backdrop  # noqa: PLC0415
+
+            draw_modal_backdrop(p, x, y, w, h)
 
         pos_x, pos_y, width, height = self.place(p, x, y, w, h)
         shown = self.shown()

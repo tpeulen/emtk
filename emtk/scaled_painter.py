@@ -56,6 +56,14 @@ class ScaledPainter:
         return self.painter.stroke_rect(x * self.k, y * self.k, w * self.k, h * self.k,
                                         edge, fill, width=width * self.k)
 
+    def backdrop(self, x, y, w, h, colour, radius=0.0):
+        """Scale the blur's reach along with its rectangle; a painter without one tints."""
+        operation = getattr(self.painter, "backdrop", None)
+        k = self.k
+        if not callable(operation):
+            return self.painter.fill_rect(x * k, y * k, w * k, h * k, colour)
+        return operation(x * k, y * k, w * k, h * k, colour, radius * k)
+
     def __getattr__(self, name):
         operation = getattr(self.painter, name)
         k = self.k
