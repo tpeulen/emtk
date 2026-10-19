@@ -149,9 +149,9 @@ def test_a_long_clipped_dock_tab_does_not_overlap_its_overflow_arrows():
     titles = ["Coefficients", "Intensity scatter", "PCC vs intensity", "Object distances"]
     for title in titles:
         docks.add_window(title, title, lambda box: None, dock="main", closable=False)
-    app = ImApp(lambda: docks.draw((0, 0, 150, 100)))
+    app = ImApp(lambda: docks.draw((0, 0, 120, 100)))
     painter = RecordingPainter()
-    app.draw(painter, 0, 0, 150, 100)
+    app.draw(painter, 0, 0, 120, 100)
     arrows = [record for record in painter.visible_texts if record[5] in {"◀", "▶"}]
 
     def is_title(record):

@@ -11,9 +11,9 @@ def test_closing_a_panel_requests_the_idle_hosts_next_frame():
     docks.add_window("panel", "Panel", lambda box: im.text("Panel content"), dock="main")
     app = ImApp(lambda: docks.draw((0, 0, 400, 300)))
     app.draw(RecordingPainter(), 0, 0, 400, 300)
-    app.pointer_press(390, 8, LEFT_BUTTON)
+    app.pointer_press(55, 8, LEFT_BUTTON)
     app.draw(RecordingPainter(), 0, 0, 400, 300)
-    app.pointer_release(390, 8, LEFT_BUTTON)
+    app.pointer_release(55, 8, LEFT_BUTTON)
     app.draw(RecordingPainter(), 0, 0, 400, 300)
     assert not docks.window("panel").visible
     assert app.animating()
