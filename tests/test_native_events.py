@@ -447,5 +447,25 @@ def test_a_click_lands_where_the_pointer_is_not_where_it_last_moved(monkeypatch)
     canvas._screen_size_is_logical = True
     monkeypatch.setitem(sys.modules, "glfw",
                         types.SimpleNamespace(get_cursor_pos=lambda _w: (40.0, 50.0)))
+    ev._on_resize({})          # the window changed under the still pointer
+    sink.calls.clear()
     _click(canvas, 3, 4)
     assert [a[:2] for _n, a, _k in sink.calls] == [(40.0, 50.0), (40.0, 50.0)]
+
+
+def test_a_release_processed_late_lands_where_the_button_went_up(monkeypatch):
+    """glfw runs button callbacks when it drains its queue: after a slow frame the
+    live cursor is where the hand already moved on (290 px in a traced session), and
+    a release read there missed the button pressed -- the click did not land."""
+    import sys
+    import types
+
+    ev, canvas, sink, _loop = _events()
+    canvas._window = object()
+    canvas._screen_size_is_logical = True
+    monkeypatch.setitem(sys.modules, "glfw",
+                        types.SimpleNamespace(get_cursor_pos=lambda _w: (400.0, 300.0)))
+    ev._on_pointer_move({"x": 3.0, "y": 4.0, "buttons": (), "modifiers": ()})
+    sink.calls.clear()
+    _click(canvas, 3, 4)
+    assert [a[:2] for _n, a, _k in sink.calls] == [(3.0, 4.0), (3.0, 4.0)]

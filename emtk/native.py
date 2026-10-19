@@ -640,6 +640,7 @@ class CanvasEvents:
             previous = glfw.set_window_pos_callback(window, None)
 
             def moved(native_window, x, y) -> None:
+                self._pointer_stale = True
                 hook = getattr(control, "window_moved", None)
                 if callable(hook):
                     hook(int(x), int(y))
@@ -952,11 +953,20 @@ class CanvasEvents:
         the last *move* it saw. A window that a window manager moves or
         resizes under a still pointer (Magnet, macOS tiling) sees no move, so
         the first click after it landed where the pointer had been relative to
-        the old frame -- on another control. Asked of glfw instead where the
-        canvas has a glfw window.
+        the old frame -- on another control. Only then (a resize or move since the
+        last pointer move) is glfw asked where the cursor is *now*.
+
+        Not always: glfw runs the button callbacks when it drains its queue, and
+        a release processed after a slow frame read the cursor where the hand had
+        already moved on -- 290 px from the button in a traced session -- so the
+        button under the press never saw its release and the click did not land.
+        The event's own position is where the button went up.
         """
-        live = self._live_cursor()
-        return live if live is not None else (float(event["x"]), float(event["y"]))
+        if getattr(self, "_pointer_stale", False):
+            live = self._live_cursor()
+            if live is not None:
+                return live
+        return float(event["x"]), float(event["y"])
 
     def _on_double_click(self, _event: dict) -> None:
         """Ignored: the second press already said double (:meth:`_on_pointer_down`).
@@ -969,6 +979,7 @@ class CanvasEvents:
         """
 
     def _on_pointer_move(self, event: dict) -> None:
+        self._pointer_stale = False
         self._deliver("on_pointer_move", float(event["x"]), float(event["y"]),
                       self.buttons_mask(event),
                       modifiers_from_canvas(event.get("modifiers")))
@@ -1110,6 +1121,9 @@ class CanvasEvents:
 
     # -- size ------------------------------------------------------------ #
     def _on_resize(self, _event: dict) -> None:
+        # The window changed under a pointer that may not move: the next button
+        # event asks glfw where the cursor is (pointer_position).
+        self._pointer_stale = True
         try:
             width, height = self.canvas.get_physical_size()
             ratio = float(self.canvas.get_pixel_ratio())
