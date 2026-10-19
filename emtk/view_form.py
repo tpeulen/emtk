@@ -126,7 +126,7 @@ SECTION_KEYS: dict[str, frozenset[str]] = {
     **{name: _CONTAINER_KEYS for name in _CONTAINERS},
     "value": _VALUE_KEYS,
     "choice": frozenset({"options", "choices", "options_source", "labels", "descriptions",
-                         "style", "filter", "call"}),
+                         "style", "filter", "call", "editable", "placeholder"}),
     "toggle": frozenset({"call"}),
     "toggle_row": frozenset({"items"}),
     "button_row": frozenset({"buttons"}),
@@ -760,6 +760,9 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
         return
     ctx = _core.get_current_context()
     key = (ctx.get_id(f"##choice-{name}"), id(state))
+    if section.get("editable"):
+        _draw_editable_choice(section, model, state, width, key, values, labels, current)
+        return
     picked = _overlays.take_choice(key)
     if picked is not None and 0 <= picked < len(values) and picked != index:
         _commit(model, section, values[picked], state)
@@ -772,6 +775,41 @@ def _draw_choice(section: dict, model: Any, state: FormState, width: float) -> N
     _remember(state, name)
     _tooltip(section)
 
+
+
+def _draw_editable_choice(section: dict, model: Any, state: FormState, width: float, key: Any,
+                          values: Sequence, labels: Sequence[str], current: Any) -> None:
+    """A ``choice`` with ``editable: true``: a text field with the options under an arrow.
+
+    Qt's editable QComboBox: the options are suggestions, not a fence -- a
+    licence identifier the list lacks is typed in. The text commits as a
+    ``value`` does (Enter or a click elsewhere); a row picked from the list
+    commits at once and replaces what was being typed.
+    """
+    name = section_name(section)
+    picked = _overlays.take_choice(key)
+    if picked is not None and 0 <= picked < len(values):
+        state.buffers.pop(name, None)
+        if str(values[picked]) != str(current):
+            _commit(model, section, values[picked], state)
+    arrow_w = _core.get_frame_height()
+    field = dict(section, type="value", kind="str")
+    field.pop("editable", None)
+    _draw_value(field, model, state, max(width - arrow_w, 16.0))
+    text_rect = state.rects.get(name)
+    _w.same_line(spacing=0.0)
+    clicked = _combo_field(f"##choice-{name}.arrow", "", arrow_w)
+    _remember(state, f"{name}.arrow")
+    _tooltip(section)
+    below = None
+    if clicked:
+        arrow = tuple(ctx_rect) if (ctx_rect := _core.get_current_context().get_item_rect()) else None
+        if text_rect and arrow:
+            below = (text_rect[0], text_rect[1], arrow[0] + arrow[2] - text_rect[0], text_rect[3])
+        else:
+            below = arrow
+    index = next((i for i, v in enumerate(values) if str(v) == str(current)), -1)
+    _overlays.combo_list(key, list(labels), index, below=below, filter=section.get("filter"))
 
 def _fit_text(text: str, room: float) -> str:
     """*text*, or its longest prefix plus "…" that fits in *room* logical px.
@@ -810,12 +848,14 @@ def _combo_field(item_id: str, caption: str, width: float) -> bool:
     # room ends a padding short of the arrow: a glyph cut flush against it
     # reads as part of the arrow ("rati▾")
     room = max(ax - 2.0 - (x + style.frame_padding[0]), 1.0)
-    shown = _fit_text(caption, room)
-    th = _w.calc_text_size(shown)[1]
-    draw.push_clip_rect((x, y), (ax, y + h))
-    draw.add_text((x + style.frame_padding[0], y + (h - th) / 2.0), _w._col(_core.Col.TEXT),
-                  shown)
-    draw.pop_clip_rect()
+    # no caption (an editable choice's arrow): nothing to fit, so no lone "…"
+    shown = _fit_text(caption, room) if caption else ""
+    if shown:
+        th = _w.calc_text_size(shown)[1]
+        draw.push_clip_rect((x, y), (ax, y + h))
+        draw.add_text((x + style.frame_padding[0], y + (h - th) / 2.0),
+                      _w._col(_core.Col.TEXT), shown)
+        draw.pop_clip_rect()
     if hovered and shown != caption:
         _w.set_tooltip(caption)
     cy = y + h / 2.0
