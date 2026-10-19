@@ -3269,7 +3269,9 @@ def end_table() -> None:
         return
     table = stack.pop()
     if table.started:
-        _measure_cell(table)
+        # The last cell's height counts like any other's: measuring only its width left a
+        # table whose tallest last-row cell was the final column ending above that cell.
+        _close_cell(table)
         table.row_top += table.row_height + table.cell_padding[1] * 2.0
     # This frame's widest content per column sizes the fixed columns next frame.
     _table_shared(table.name)["fit"] = dict(table.fit_next)
