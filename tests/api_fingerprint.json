@@ -4239,6 +4239,26 @@
     }
    }
   },
+  "emtk.widgets.calendar": {
+   "CALENDAR_PARTS": "value",
+   "STYLESHEET_SELECTORS": "value",
+   "add_months": "def(day, months)",
+   "calendar": "def(label, value, min_date=None, max_date=None, first_weekday=0, show_week_numbers=False, today=None)",
+   "calendar_size": "def(show_week_numbers=False)",
+   "clamp_date": "def(day, min_date=None, max_date=None)",
+   "date_input": "def(label, value, min_date=None, max_date=None, fmt=None, first_weekday=0, show_week_numbers=False, today=None)",
+   "datetime_input": "def(label, value, min_value=None, max_value=None, seconds=True, fmt=None, first_weekday=0, today=None)",
+   "format_date": "def(day, fmt=None)",
+   "format_time": "def(value, seconds=True)",
+   "month_grid": "def(year, month, first_weekday=0)",
+   "month_name": "def(month)",
+   "parse_date": "def(text, fmt=None)",
+   "parse_time": "def(text)",
+   "stylesheet_part": "def(selector, prop)",
+   "time_input": "def(label, value, seconds=True, min_time=None, max_time=None)",
+   "use_stylesheet": "def(theme, colours)",
+   "weekday_name": "def(weekday)"
+  },
   "emtk.widgets.chat": {
    "ChatHistory": {
     "bases": [],
@@ -4750,6 +4770,17 @@
    },
    "STATIONARY_DELAY": "value"
   },
+  "emtk.widgets.form_controls": {
+   "begin_tool_box": "def(str_id, current=None)",
+   "checkbox_tristate": "def(label, value, user_tristate=False)",
+   "chord_from_event": "def(key, modifiers)",
+   "chord_name": "def(chord)",
+   "completions": "def(text, candidates, limit=8)",
+   "end_tool_box": "def()",
+   "input_text_completer": "def(label, value, candidates, hint='', max_items=8)",
+   "key_sequence_input": "def(label, chord)",
+   "tool_box_item": "def(label)"
+  },
   "emtk.widgets.icons": {
    "CLOSED_EYE": "value",
    "OPEN_EYE": "value",
@@ -4864,6 +4895,12 @@
    "apply_from_text": "def(text, current, fmt='%f', when_empty=None)",
    "format_precision": "def(fmt, default=3)",
    "trim_decorations": "def(fmt)"
+  },
+  "emtk.widgets.instruments": {
+   "SEGMENTS": "value",
+   "dial": "def(label, value, v_min, v_max, step=None, fmt=None, size=None, wrapping=False, notches=0)",
+   "lcd_number": "def(value, digits=5, fmt=None, size=None, colour=None, label='')",
+   "lcd_segments": "def(text)"
   },
   "emtk.widgets.list_view": {
    "ListRows": {
@@ -6121,6 +6158,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "fb359286a11954e483d6026e1a559d1decc8d97bc53ded4b4677370f0667a399",
- "version": "0.1.23"
+ "sha256": "a79492573185bcc80269ea836dc264ceb46075995070376220ea84f8eedfa7e3",
+ "version": "0.1.24"
 }

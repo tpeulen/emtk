@@ -416,6 +416,67 @@ jumps between the two limits as the window resizes:
     >>> pane1[2] + bar[2] + pane2[2]
     150.0
 
+Dates and times
+---------------
+
+``widgets.calendar`` is ``QCalendarWidget``, ``QDateEdit``, ``QTimeEdit`` and
+``QDateTimeEdit`` spelled the ``im`` way: :func:`~emtk.widgets.calendar.calendar`
+(a month grid with today outlined, ``min_date`` / ``max_date`` bounds, ISO week
+numbers and the keyboard -- arrows move the cursor, Page Up / Down a month,
+Shift a year, Home / End, Enter selects),
+:func:`~emtk.widgets.calendar.date_input` (a field with a popup calendar),
+:func:`~emtk.widgets.calendar.time_input` (``HH:MM:SS`` segments) and
+:func:`~emtk.widgets.calendar.datetime_input`. Values are the standard
+library's :mod:`datetime` objects; month and weekday names go through
+:func:`emtk.i18n.tr`.
+
+.. image:: _screenshots/calendar.png
+   :alt: A month calendar with week numbers, a date field and a time field
+
+.. doctest::
+
+    >>> import datetime as dt
+    >>> painter = RecordingPainter()
+    >>> with im.frame(painter, (0, 0, 320, 300)):
+    ...     _ = im.begin("Dates")
+    ...     changed, day = im.calendar("##day", dt.date(2026, 10, 19),
+    ...                                min_date=dt.date(2026, 10, 1))
+    ...     changed, at = im.time_input("start", dt.time(14, 30))
+    ...     im.end()
+    >>> "October 2026" in painter.strings, changed, day
+    (True, False, datetime.date(2026, 10, 19))
+
+In a form, a ``value`` of ``kind`` ``"date"``, ``"time"`` or ``"datetime"``
+draws these (:mod:`emtk.view_form`); the model may hold the object or its ISO
+string.
+
+Instruments and form controls
+-----------------------------
+
+``widgets.instruments`` has the knob and the readout of an instrument panel,
+:func:`~emtk.widgets.instruments.dial` (``QDial``) and
+:func:`~emtk.widgets.instruments.lcd_number` (``QLCDNumber``, drawn as
+segments). ``widgets.form_controls`` has the tristate checkbox, the text field
+with completions (``QCompleter``), the shortcut recorder
+(``QKeySequenceEdit``) and the tool box (``QToolBox``). Which Qt widget maps to
+which emtk control, and which ones are deliberately absent, is in
+:doc:`qt_widgets`.
+
+.. image:: _screenshots/instruments.png
+   :alt: A dial, a seven-segment readout, a partial checkbox and a shortcut field
+
+.. doctest::
+
+    >>> painter = RecordingPainter()
+    >>> with im.frame(painter, (0, 0, 320, 300)):
+    ...     _ = im.begin("Panel")
+    ...     changed, gain = im.dial("gain", 6.5, 0.0, 10.0)
+    ...     overflow = im.lcd_number(1234.5, digits=6, fmt="%.1f")
+    ...     changed, all_rows = im.checkbox_tristate("all rows", None)
+    ...     im.end()
+    >>> gain, overflow, all_rows
+    (6.5, False, None)
+
 Control
 --------
 

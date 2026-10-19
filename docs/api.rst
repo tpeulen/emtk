@@ -288,6 +288,15 @@ Widget families
 .. automodule:: emtk.widgets.pane_stack
    :noindex:
 
+.. automodule:: emtk.widgets.calendar
+   :noindex:
+
+.. automodule:: emtk.widgets.instruments
+   :noindex:
+
+.. automodule:: emtk.widgets.form_controls
+   :noindex:
+
 .. automodule:: emtk.widgets.tables
    :noindex:
 

@@ -18,6 +18,7 @@ window at all.
    porting
    localization
    widgets
+   qt_widgets
    backends
    testing
    api

@@ -5770,6 +5770,31 @@ def show_demo_window(open_: bool = True) -> None:
         tree_pop()
     separator_text("Plots")
     plot_lines("##lines", [0.0, 0.6, 0.2, 0.9, 0.4], size=(180.0, 40.0))
+    # The controls a Qt port expects beyond the reference's set (their own family modules,
+    # imported here so this module does not depend on them at import time).
+    import datetime as _dt  # noqa: PLC0415
+
+    from .widgets import calendar as _cal, form_controls as _fc, instruments as _ins  # noqa: PLC0415
+
+    separator_text("Dates and times")
+    _c, store["day"] = _cal.calendar("##calendar", store.get("day", _dt.date.today()),
+                                     show_week_numbers=True)
+    _c, store["day"] = _cal.date_input("date", store["day"])
+    _c, store["time"] = _cal.time_input("time", store.get("time", _dt.time(12, 0, 0)))
+    separator_text("Instruments")
+    _c, store["dial"] = _ins.dial("dial", store.get("dial", 4.0), 0.0, 10.0, notches=11)
+    same_line()
+    _ins.lcd_number(store["dial"] * 100.0, digits=6, fmt="%.1f")
+    separator_text("More controls")
+    _c, store["tri"] = _fc.checkbox_tristate("tristate", store.get("tri"), user_tristate=True)
+    _c, store["dye"] = _fc.input_text_completer(
+        "completer", store.get("dye", ""), ["Alexa 488", "Alexa 647", "Atto 532", "Cy3", "Cy5"])
+    _c, store["chord"] = _fc.key_sequence_input("shortcut", store.get("chord", 0))
+    _fc.begin_tool_box("##demo_toolbox")
+    for page in ("First page", "Second page"):
+        if _fc.tool_box_item(page):
+            text("the body of the " + page.lower())
+    _fc.end_tool_box()
 
 
 def markdown(

@@ -54,6 +54,14 @@ container says ``"wrap_indent": false`` (a toolbar). A ``value`` with ``elide: "
 :attr:`FormState.custom` is drawn by the host's callback, full width, in its
 place in the form -- a plot between two rows of fields.
 
+A ``value`` of ``kind: "date"``, ``"time"`` or ``"datetime"`` is a date field with a popup
+calendar, an ``HH:MM:SS`` time field, or both on one row (:mod:`emtk.widgets.calendar`).
+The model's attribute may hold a :mod:`datetime` object or its ISO 8601 string -- what it
+held is what is written back -- and ``minimum`` / ``maximum`` are ISO strings in the spec
+(``"2026-01-01"``, ``"08:00"``). ``seconds: false`` edits ``HH:MM`` only, ``first_weekday``
+(0 = Monday) and ``week_numbers`` set up the calendar, ``date_format`` (a ``strftime``
+format) is what the date field shows.
+
 Two more of AutoForm's field types are drawn without the host's help: a
 ``value`` of ``kind: "color"`` (a ``"#rrggbb"`` string: a swatch that opens a
 picker under the field, and the hex text beside it), and the ``custom``
@@ -114,6 +122,8 @@ _CONTAINER_KEYS = frozenset({"sections", "n_col", "collapsible", "collapsed"})
 _VALUE_KEYS = frozenset({
     "kind", "minimum", "maximum", "decimals", "step", "special_text", "suffix",
     "style", "read_only", "field", "spin", "placeholder", "lines", "call", "enter_call", "live",
+    # kind date / time / datetime
+    "seconds", "first_weekday", "week_numbers", "date_format",
 })
 TABLE_KEYS = frozenset({
     "source", "target", "columns_source", "columns", "selected_call", "selected_attr",
@@ -266,6 +276,13 @@ def format_value(value: Any, section: dict) -> str:
     kind = str(section.get("kind", "str")).lower()
     if value is None:
         return ""
+    if kind in _TEMPORAL_KINDS:
+        parsed = _temporal(value, kind)
+        if parsed is None:
+            return ""
+        if kind == "date":
+            return parsed.isoformat()
+        return parsed.isoformat(timespec="seconds" if section.get("seconds", True) else "minutes")
     special = section.get("special_text")
     if special and kind in ("int", "float") and section.get("minimum") is not None:
         try:
@@ -318,6 +335,17 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
     kind = str(section.get("kind", "str")).lower()
     if kind in ("color", "colour"):
         return parse_colour_text(text)
+    if kind in _TEMPORAL_KINDS:
+        parsed = _temporal(text, kind)
+        if parsed is None:
+            return None
+        lo, hi = bounds if bounds is not None else (section.get("minimum"), section.get("maximum"))
+        lo, hi = _temporal(lo, kind), _temporal(hi, kind)
+        if lo is not None and parsed < lo:
+            parsed = lo
+        if hi is not None and parsed > hi:
+            parsed = hi
+        return parsed
     if kind not in ("int", "float"):
         return text
     text = str(text).strip()
@@ -342,6 +370,40 @@ def parse_value(text: str, section: dict, bounds: tuple | None = None) -> Any:
     if hi is not None:
         number = min(number, float(hi))
     return int(round(number)) if kind == "int" else number
+
+
+#: ``value`` kinds drawn by :mod:`emtk.widgets.calendar`.
+_TEMPORAL_KINDS = ("date", "time", "datetime")
+
+
+def _temporal(value: Any, kind: str):
+    """*value* (an object or its ISO 8601 text) as the ``datetime`` type *kind* names; ``None`` if not one."""
+    import datetime as _dt  # noqa: PLC0415
+
+    if value is None or value == "":
+        return None
+    try:
+        if kind == "date":
+            if isinstance(value, _dt.datetime):
+                return value.date()
+            if isinstance(value, _dt.date):
+                return value
+            from .widgets.calendar import parse_date  # noqa: PLC0415
+
+            return parse_date(str(value))
+        if kind == "time":
+            if isinstance(value, _dt.datetime):
+                return value.time()
+            if isinstance(value, _dt.time):
+                return value
+            return _dt.time.fromisoformat(str(value).strip())
+        if isinstance(value, _dt.datetime):
+            return value
+        if isinstance(value, _dt.date):
+            return _dt.datetime.combine(value, _dt.time())
+        return _dt.datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
 
 
 def parse_colour_text(text: Any) -> str | None:
@@ -492,6 +554,9 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     if kind == "text":
         _draw_text_block(section, model, state, width, shown_value, read_only)
         return
+    if kind in _TEMPORAL_KINDS:
+        _draw_temporal(section, model, state, width, value, bounds, read_only, kind)
+        return
     colour = kind in ("color", "colour")
     field_w = width
     if slider:
@@ -588,6 +653,41 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         _tooltip(section)
         if changed and new != current and not read_only:
             _commit(model, section, new, state)
+
+
+def _draw_temporal(section: dict, model: Any, state: FormState, width: float, value: Any,
+                   bounds: tuple, read_only: bool, kind: str) -> None:
+    """A ``value`` of ``kind`` date / time / datetime: :mod:`emtk.widgets.calendar`'s fields.
+
+    What the model holds decides what is written back: an ISO string stays a
+    string (a model loaded from JSON), a :mod:`datetime` object stays one.
+    """
+    from .widgets import calendar as _calendar  # noqa: PLC0415
+
+    name = section_name(section)
+    current = _temporal(value, kind)
+    lo, hi = (_temporal(bound, kind) for bound in bounds)
+    seconds = bool(section.get("seconds", True))
+    first = int(section.get("first_weekday", 0) or 0)
+    if read_only:
+        _w.begin_disabled(True)
+    _w.set_next_item_width(width)
+    if kind == "date":
+        changed, new = _calendar.date_input(f"##{name}", current, lo, hi, section.get("date_format"),
+                                            first, bool(section.get("week_numbers")))
+    elif kind == "time":
+        changed, new = _calendar.time_input(f"##{name}", current, seconds, lo, hi)
+    else:
+        changed, new = _calendar.datetime_input(f"##{name}", current, lo, hi, seconds,
+                                                section.get("date_format"), first)
+    if read_only:
+        _w.end_disabled()
+    _remember(state, name)
+    _tooltip(section)
+    if changed and not read_only and new is not None:
+        if isinstance(value, str):
+            new = format_value(new, section)
+        _commit(model, section, new, state)
 
 
 def _draw_text_block(section: dict, model: Any, state: FormState, width: float,

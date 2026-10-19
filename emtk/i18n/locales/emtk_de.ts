@@ -876,5 +876,121 @@
             <source>Bring this window to the front.</source>
             <translation>Dieses Fenster nach vorn holen.</translation>
         </message>
+        <message>
+            <source>January</source>
+            <translation>Januar</translation>
+        </message>
+        <message>
+            <source>February</source>
+            <translation>Februar</translation>
+        </message>
+        <message>
+            <source>March</source>
+            <translation>März</translation>
+        </message>
+        <message>
+            <source>April</source>
+            <translation>April</translation>
+        </message>
+        <message>
+            <source>May</source>
+            <translation>Mai</translation>
+        </message>
+        <message>
+            <source>June</source>
+            <translation>Juni</translation>
+        </message>
+        <message>
+            <source>July</source>
+            <translation>Juli</translation>
+        </message>
+        <message>
+            <source>August</source>
+            <translation>August</translation>
+        </message>
+        <message>
+            <source>September</source>
+            <translation>September</translation>
+        </message>
+        <message>
+            <source>October</source>
+            <translation>Oktober</translation>
+        </message>
+        <message>
+            <source>November</source>
+            <translation>November</translation>
+        </message>
+        <message>
+            <source>December</source>
+            <translation>Dezember</translation>
+        </message>
+        <message>
+            <source>Mon</source>
+            <translation>Mo</translation>
+        </message>
+        <message>
+            <source>Tue</source>
+            <translation>Di</translation>
+        </message>
+        <message>
+            <source>Wed</source>
+            <translation>Mi</translation>
+        </message>
+        <message>
+            <source>Thu</source>
+            <translation>Do</translation>
+        </message>
+        <message>
+            <source>Fri</source>
+            <translation>Fr</translation>
+        </message>
+        <message>
+            <source>Sat</source>
+            <translation>Sa</translation>
+        </message>
+        <message>
+            <source>Sun</source>
+            <translation>So</translation>
+        </message>
+        <message>
+            <source>Wk</source>
+            <translation>KW</translation>
+        </message>
+        <message>
+            <source>Previous year</source>
+            <translation>Vorheriges Jahr</translation>
+        </message>
+        <message>
+            <source>Previous month</source>
+            <translation>Vorheriger Monat</translation>
+        </message>
+        <message>
+            <source>Next month</source>
+            <translation>Nächster Monat</translation>
+        </message>
+        <message>
+            <source>Next year</source>
+            <translation>Nächstes Jahr</translation>
+        </message>
+        <message>
+            <source>{month} {year}</source>
+            <translation>{month} {year}</translation>
+        </message>
+        <message>
+            <source>{weekday}, {day} {month} {year}</source>
+            <translation>{weekday}, {day}. {month} {year}</translation>
+        </message>
+        <message>
+            <source>Choose a date</source>
+            <translation>Datum wählen</translation>
+        </message>
+        <message>
+            <source>Press a shortcut…</source>
+            <translation>Tastenkürzel drücken …</translation>
+        </message>
+        <message>
+            <source>None</source>
+            <translation>Keines</translation>
+        </message>
     </context>
 </TS>

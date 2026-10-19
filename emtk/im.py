@@ -82,6 +82,27 @@ from .widgets.color import floats_to_rgba, rgba_to_floats  # noqa: E402,F401
 
 __all__ += ["floats_to_rgba", "rgba_to_floats"]
 
+# Widgets Dear ImGui does not have and a desktop port from Qt does reach for: a
+# month calendar and date / time fields (`QCalendarWidget`, `QDateEdit`,
+# `QTimeEdit`, `QDateTimeEdit`). They live in their own family module, written
+# against the context like everything here, and are spelled the `im` way.
+from .widgets.calendar import (calendar, date_input, datetime_input,  # noqa: E402,F401
+                               time_input)
+
+__all__ += ["calendar", "date_input", "time_input", "datetime_input"]
+
+# ...and the other Qt controls a port expects: a dial and a seven-segment
+# readout (`QDial`, `QLCDNumber`), a tristate checkbox, a field with
+# completions (`QCompleter`), a shortcut recorder (`QKeySequenceEdit`) and a
+# tool box (`QToolBox`).
+from .widgets.instruments import dial, lcd_number  # noqa: E402,F401
+from .widgets.form_controls import (begin_tool_box, checkbox_tristate,  # noqa: E402,F401
+                                    end_tool_box, input_text_completer,
+                                    key_sequence_input, tool_box_item)
+
+__all__ += ["dial", "lcd_number", "checkbox_tristate", "input_text_completer",
+            "key_sequence_input", "begin_tool_box", "tool_box_item", "end_tool_box"]
+
 _ALIASED = _compat.install(_sys.modules[__name__], _published_names())
 
 #: The spellings a purely mechanical port produces for the handful of names the

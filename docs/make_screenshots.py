@@ -300,6 +300,27 @@ def plot3d(painter, box):
 
 #: ``(name, title, gui, size, clicks, hover)``. The clicks are what open a
 #: menu or a header before the shutter; see :func:`shot`.
+def calendar(_painter, box):
+    import datetime as dt
+
+    im.begin("Dates", box)
+    im.calendar("##calendar", dt.date(2026, 10, 19), today=dt.date(2026, 10, 21),
+                show_week_numbers=True)
+    im.date_input("acquired", dt.date(2026, 10, 19))
+    im.time_input("start", dt.time(14, 30, 5))
+    im.end()
+
+
+def instruments(_painter, box):
+    im.begin("Instruments", box)
+    im.dial("gain", 6.5, 0.0, 10.0, notches=11)
+    im.same_line()
+    im.lcd_number(1234.5, digits=6, fmt="%.1f", label="count rate##lcd")
+    im.checkbox_tristate("select all", None)
+    im.key_sequence_input("shortcut", emtk.keys.MOD_CTRL | emtk.keys.KEY_R)
+    im.end()
+
+
 SHOTS = [
     ("hello_world", "Hello, world!", hello_world, (320, 200), (), None),
     ("text", "Text", text, (320, 200), (), None),
@@ -312,6 +333,8 @@ SHOTS = [
     ("plot", "Plot", plot, (360, 240), (), None),
     ("implot", "ImPlot", implot2d, (420, 300), (), None),
     ("plot3d", "Plot3D", plot3d, (360, 340), (), None),
+    ("calendar", "Dates", calendar, (330, 255), (), None),
+    ("instruments", "Instruments", instruments, (360, 200), (), None),
 ]
 
 
