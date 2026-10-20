@@ -1591,6 +1591,7 @@ def end_plot() -> None:
         _replay_queue(plot)
         _end_plot_render(plot, ctx, io, style, dl)
         _render_auto_range(plot)
+        _submit_save_dialog(plot)
     finally:
         for axis in plot.axes:
             axis.push_links()
@@ -2291,8 +2292,7 @@ def save_plot_png(plot, path: str | None = None) -> str:
     """Save the plot as a PNG image file. Returns the written file path."""
     import pathlib
     if path is None:
-        title = (plot.title or "plot").replace(" ", "_").lower()
-        path = f"{title}.png"
+        path = plot_export_name(plot, "png")
     data = export_plot_png(plot)
     p = pathlib.Path(path)
     p.write_bytes(data)
@@ -2304,8 +2304,7 @@ def save_plot_svg(plot, path: str | None = None) -> str:
     """Save the plot as an SVG vector file. Returns the written file path."""
     import pathlib
     if path is None:
-        title = (plot.title or "plot").replace(" ", "_").lower()
-        path = f"{title}.svg"
+        path = plot_export_name(plot, "svg")
     svg_str = export_plot_svg(plot)
     p = pathlib.Path(path)
     p.write_text(svg_str, encoding="utf-8")
@@ -2317,13 +2316,92 @@ def save_plot_csv(plot, path: str | None = None) -> str:
     """Save the plot series data as a CSV file. Returns the written file path."""
     import pathlib
     if path is None:
-        title = (plot.title or "plot").replace(" ", "_").lower()
-        path = f"{title}.csv"
+        path = plot_export_name(plot, "csv")
     csv_str = export_plot_csv(plot)
     p = pathlib.Path(path)
     p.write_text(csv_str, encoding="utf-8")
     plot.last_exported_file = str(p.resolve())
     return str(p.resolve())
+
+
+def plot_export_name(plot, extension: str) -> str:
+    """The file name a plot is saved under by default: ``<title>.<extension>``.
+
+    The title is lower-cased, with every run of characters that are not letters, digits,
+    ``.``, ``-`` or ``_`` (spaces, a ``/`` in "Decay / IRF") made one ``_``; an untitled
+    plot is ``plot``.
+    """
+    import re
+
+    stem = re.sub(r"[^\w.-]+", "_", plot.title or "").strip("_.").lower() or "plot"
+    return f"{stem}.{extension}"
+
+
+#: The plot menu's save entries: extension -> (dialog title, filter label, writer).
+_SAVE_FORMATS = {
+    "png": (mark("Save Image (PNG)", domain="emtk"), mark("PNG image", domain="emtk"), save_plot_png),
+    "svg": (mark("Save Vector (SVG)", domain="emtk"), mark("SVG image", domain="emtk"), save_plot_svg),
+    "csv": (mark("Save Data (CSV)", domain="emtk"), mark("CSV data", domain="emtk"), save_plot_csv),
+}
+
+
+def open_plot_save_dialog(plot, extension: str, directory: str | None = None):
+    """Ask where to save *plot* as *extension* (``"png"``, ``"svg"`` or ``"csv"``).
+
+    What the plot menu's "Save …" entries do: an emtk :class:`~emtk.file_dialog.FileDialog`
+    in save mode, filtered to the format, the name field holding :func:`plot_export_name`,
+    in a :class:`~emtk.dialog_window.DialogWindow`. :func:`end_plot` draws it over the frame
+    until it is answered: *Save* writes the file (an existing one is confirmed first, a
+    failed write is shown in the dialog and keeps it open), *Cancel*, × or Escape leave
+    everything as it was.
+
+    Returns
+    -------
+    FileDialog
+        The dialog, for a host or a test that wants to steer it.
+    """
+    from .dialog_window import DialogWindow  # noqa: PLC0415
+    from .file_dialog import FileDialog  # noqa: PLC0415
+
+    title, label, _writer = _SAVE_FORMATS[extension]
+    dialog = FileDialog(title, mode="save", filters=[(label, [f"*.{extension}"])],
+                        directory=directory, filename=plot_export_name(plot, extension),
+                        action=mark("Save", domain="emtk"))
+    window = DialogWindow(title, size=(560.0, 440.0), key=f"implot-save-{id(plot)}",
+                          fit_height=True)
+    window.show()
+    plot.save_dialog = {"extension": extension, "dialog": dialog, "window": window}
+    return dialog
+
+
+def _submit_save_dialog(plot) -> None:
+    """Keep the plot's open save dialog up this frame, over everything (an overlay)."""
+    pending = getattr(plot, "save_dialog", None)
+    if not pending:
+        return
+
+    def draw(ctx) -> bool:
+        if getattr(plot, "save_dialog", None) is not pending:
+            return False
+        window, dialog = pending["window"], pending["dialog"]
+        pressed = window.begin(ctx.box)
+        result = dialog.draw()
+        window.end()
+        if pressed == "close" or result is False:
+            plot.save_dialog = None
+            return False
+        if result:
+            writer = _SAVE_FORMATS[pending["extension"]][2]
+            try:
+                writer(plot, result[0])
+            except OSError as exc:
+                dialog.error = str(exc)
+                return True
+            plot.save_dialog = None
+            return False
+        return True
+
+    _ctx().add_overlay(("implot-save", id(plot)), draw)
 
 
 def show_plot_context_menu(plot, subplot=None) -> bool:
@@ -2429,13 +2507,13 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
     # 7. Save / Export (ALWAYS present!)
     if _w.begin_menu(mark("Save / Export", domain="emtk")):
         if _w.menu_item(mark("Save Image (PNG)...", domain="emtk")):
-            save_plot_png(plot)
+            open_plot_save_dialog(plot, "png")
             close = True
         if _w.menu_item(mark("Save Vector (SVG)...", domain="emtk")):
-            save_plot_svg(plot)
+            open_plot_save_dialog(plot, "svg")
             close = True
         if _w.menu_item(mark("Save Data (CSV)...", domain="emtk")):
-            save_plot_csv(plot)
+            open_plot_save_dialog(plot, "csv")
             close = True
         _w.separator()
         if _w.menu_item(mark("Copy Image to Clipboard", domain="emtk")):
@@ -3819,6 +3897,7 @@ __all__ += [
     "set_next_marker_style", "set_next_error_bar_style", "show_plot_context_menu",
     "show_axis_context_menu", "show_legend_context_menu", "show_subplots_context_menu",
     "export_plot_csv", "export_plot_svg", "export_plot_png", "copy_plot_data",
+    "open_plot_save_dialog", "plot_export_name",
     "copy_plot_image", "save_plot_png", "save_plot_svg", "save_plot_csv",
 ]
 

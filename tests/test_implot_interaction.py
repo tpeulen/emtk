@@ -767,26 +767,81 @@ def test_plot_export_csv_svg_png(tmp_path):
     assert clipboard.last_copied_image()[1] == png_bytes
 
 
-def test_plot_context_menu_save_export_menu_items(tmp_path, monkeypatch):
-    from pathlib import Path
-    monkeypatch.chdir(tmp_path)
-    d = Driver(_plot_with_legend)
-    d.move(-10, -10)
+def _open_save_entry(d, entry):
+    """Right-click the plot, open Save / Export and pick *entry*; return the next frame."""
     cx, cy = _centre(d.out)
-
-    # Test Save Image (PNG)... via context menu
     d.press(cx, cy, button=1)
     d.release(cx, cy, button=1)
     p = d.frame()
     p = d.press(*_text_at(p, "Save / Export"))
     p = d.release(*_text_at(p, "Save / Export"))
     p = d.frame()
-    x, y = _text_at(p, "Save Image (PNG)...")
+    x, y = _text_at(p, entry)
     d.press(x, y)
     d.release(x, y)
+    return d.frame()
+
+
+def test_plot_context_menu_save_asks_where_before_writing(tmp_path, monkeypatch):
+    """"Save Image (PNG)..." opens emtk's save dialog; nothing is written until Save is pressed."""
+    from pathlib import Path
+    monkeypatch.chdir(tmp_path)
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    p = _open_save_entry(d, "Save Image (PNG)...")
     plot = d.out["plot"]
     assert plot.context_menu is None
-    assert plot.last_exported_file and plot.last_exported_file.endswith(".png")
-    assert Path(plot.last_exported_file).exists()
+    assert list(tmp_path.iterdir()) == [], "the menu wrote into the working folder"
+    dialog = plot.save_dialog["dialog"]
+    assert dialog.mode == "save"
+    assert dialog.filename == "plot.png"
+    assert dialog.filters == [("PNG image", ["*.png"])]
+    assert "Save Image (PNG)" in p.strings and "Save" in p.strings
+    target = tmp_path / "figures"
+    target.mkdir()
+    dialog.directory = str(target)
+    p = d.frame()
+    p = d.press(*_text_at(p, "Save"))
+    d.release(*_text_at(p, "Save"))
+    d.frame()
+    assert plot.save_dialog is None
+    assert plot.last_exported_file == str((target / "plot.png").resolve())
+    assert Path(plot.last_exported_file).read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+@pytest.mark.parametrize(("entry", "extension", "label"), [
+    ("Save Vector (SVG)...", "svg", "SVG image"),
+    ("Save Data (CSV)...", "csv", "CSV data"),
+])
+def test_each_save_entry_filters_to_its_format_and_names_the_file(tmp_path, monkeypatch,
+                                                                    entry, extension, label):
+    monkeypatch.chdir(tmp_path)
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    _open_save_entry(d, entry)
+    plot = d.out["plot"]
+    dialog = plot.save_dialog["dialog"]
+    assert dialog.filename == f"plot.{extension}"
+    assert dialog.filters == [(label, [f"*.{extension}"])]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_cancelling_the_save_dialog_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    p = _open_save_entry(d, "Save Data (CSV)...")
+    plot = d.out["plot"]
+    p = d.press(*_text_at(p, "Cancel"))
+    d.release(*_text_at(p, "Cancel"))
+    d.frame()
+    assert plot.save_dialog is None
+    assert getattr(plot, "last_exported_file", None) is None
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_default_export_name_is_the_title_made_a_file_name():
+    from types import SimpleNamespace
+    assert implot.plot_export_name(SimpleNamespace(title="Decay / IRF"), "png") == "decay_irf.png"
+    assert implot.plot_export_name(SimpleNamespace(title=None), "csv") == "plot.csv"
+    assert implot.plot_export_name(SimpleNamespace(title="FCS curve"), "svg") == "fcs_curve.svg"

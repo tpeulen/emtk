@@ -933,6 +933,30 @@
             <translation>Daten speichern (CSV)...</translation>
         </message>
         <message>
+            <source>Save Image (PNG)</source>
+            <translation>Bild speichern (PNG)</translation>
+        </message>
+        <message>
+            <source>Save Vector (SVG)</source>
+            <translation>Vektorgrafik speichern (SVG)</translation>
+        </message>
+        <message>
+            <source>Save Data (CSV)</source>
+            <translation>Daten speichern (CSV)</translation>
+        </message>
+        <message>
+            <source>PNG image</source>
+            <translation>PNG-Bild</translation>
+        </message>
+        <message>
+            <source>SVG image</source>
+            <translation>SVG-Bild</translation>
+        </message>
+        <message>
+            <source>CSV data</source>
+            <translation>CSV-Daten</translation>
+        </message>
+        <message>
             <source>Copy Image to Clipboard</source>
             <translation>Bild in die Zwischenablage kopieren</translation>
         </message>
