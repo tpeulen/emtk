@@ -11,6 +11,14 @@ def __getattr__(name: str):
     for its own names. The same map answers for this package's.
     """
     import importlib
+    import importlib.util
+
+    # A submodule of this package wins over a control of the same name
+    # (``calendar`` is both): ``from emtk.widgets import calendar`` asks this hook
+    # before the import system looks for the submodule, so answering with the
+    # function here would shadow the module for every later importer.
+    if importlib.util.find_spec(f"{__name__}.{name}") is not None:
+        return importlib.import_module(f".{name}", __name__)
 
     from .. import _NAME_TO_MODULE
 
