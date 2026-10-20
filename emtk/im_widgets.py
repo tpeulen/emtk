@@ -227,7 +227,8 @@ def separator() -> None:
     if ctx._context_popup_stack:
         # Inside a menu (a menu-bar menu, a context popup) the rule is a row of
         # the popup panel, not of the window that opened it.
-        ctx._context_popup_builds[ctx._context_popup_stack[-1]].append(None)
+        target = ctx._menu_entry_stack[-1] if getattr(ctx, "_menu_entry_stack", None) else ctx._context_popup_builds[ctx._context_popup_stack[-1]]
+        target.append(None)
         return
     box = ctx.layout.separator()
     x, y, w, h = box
@@ -1786,7 +1787,7 @@ def separator_text(label: str) -> None:
     if ctx._context_popup_stack:
         from .widgets.menus import MenuItem
 
-        entries = ctx._context_popup_builds[ctx._context_popup_stack[-1]]
+        entries = ctx._menu_entry_stack[-1] if getattr(ctx, "_menu_entry_stack", None) else ctx._context_popup_builds[ctx._context_popup_stack[-1]]
         if entries:
             entries.append(None)
         entries.append(MenuItem(label, enabled=False))
@@ -2689,6 +2690,14 @@ def begin_menu_bar() -> bool:
     ctx = _ctx()
     ctx.push_id("##menubar")
     cursor = ctx.layout.cursor
+    avail_w, _ = ctx.layout.avail()
+    h = _frame_height(ctx)
+    ctx.draw.add_rect_filled(
+        (cursor[0], cursor[1]),
+        (cursor[0] + avail_w, cursor[1] + h),
+        _col(Col.MENU_BAR_BG),
+        0.0,
+    )
     ctx._menu_bar_rect = [cursor[0], cursor[1], 0.0]
     ctx._menu_bar_first = True
     #: Where this frame's menu titles sit, by popup name: the overlay closing
@@ -2721,7 +2730,20 @@ def end_main_menu_bar() -> None:
     end_menu_bar()
 
 
-def begin_menu(label: str, enabled: bool = True) -> bool:
+def _find_menu(entries, label: str):
+    from .widgets.menus import Menu
+
+    for entry in entries:
+        if isinstance(entry, Menu):
+            if entry.label == label:
+                return entry
+            sub = _find_menu(entry.entries, label)
+            if sub is not None:
+                return sub
+    return None
+
+
+def begin_menu(label: str, enabled: bool = True, icon: str | None = None) -> bool:
     """``BeginMenu``: the title; True while its items should be submitted.
 
     Inside a menu bar the titles sit side by side on the bar's row, and an
@@ -2729,6 +2751,33 @@ def begin_menu(label: str, enabled: bool = True) -> bool:
     the same shape as the reference's menu bars.
     """
     ctx = _ctx()
+    if ctx._context_popup_stack:
+        name = ctx._context_popup_stack[-1]
+        popup_state = ctx.state(("context_popup", name))
+        popup = popup_state.get("popup")
+
+        existing_menu = None
+        if popup is not None and getattr(popup, "entries", None):
+            existing_menu = _find_menu(popup.entries, label)
+
+        was_open = bool(existing_menu.open) if existing_menu is not None else False
+        last_dir = existing_menu.last_dir if existing_menu is not None else None
+        prev_row = getattr(existing_menu, "_row", None) if existing_menu is not None else None
+
+        sub_entries: list = []
+        ctx._submenu_stack.append({
+            "label": label,
+            "enabled": enabled,
+            "icon": icon,
+            "sub_entries": sub_entries,
+            "was_open": was_open,
+            "last_dir": last_dir,
+            "prev_row": prev_row,
+            "popup_name": name,
+        })
+        ctx._menu_entry_stack.append(sub_entries)
+        return True
+
     in_bar = getattr(ctx, "_menu_bar_first", None) is not None
     if in_bar and not ctx._menu_bar_first:
         same_line()
@@ -2793,17 +2842,50 @@ def begin_menu(label: str, enabled: bool = True) -> bool:
         ctx._popups[popup_name] = True
         if begin_popup(popup_name):
             ctx._menu_popup_open = True
+        ctx._menu_title_stack.append(box)
         ctx.push_id(label)
         indent()
     return is_open
 
 
 def end_menu() -> None:
-    if getattr(_ctx(), "_menu_popup_open", False):
-        _ctx()._menu_popup_open = False
+    ctx = _ctx()
+    if getattr(ctx, "_submenu_stack", None):
+        info = ctx._submenu_stack.pop()
+        sub_entries = ctx._menu_entry_stack.pop()
+        from .widgets.menus import Menu
+
+        menu = Menu(info["label"], sub_entries, enabled=info["enabled"], icon=info["icon"])
+        menu.open = info["was_open"]
+        menu.last_dir = info["last_dir"]
+        if info["prev_row"] is not None:
+            menu._row = info["prev_row"]
+            ctx._last_item = info["prev_row"]
+        else:
+            pos = ctx.state(("context_popup", info["popup_name"])).get("position", (0.0, 0.0))
+            row_h = _frame_height(ctx)
+            parent_entries = (ctx._menu_entry_stack[-1]
+                              if ctx._menu_entry_stack
+                              else ctx._context_popup_builds.get(info["popup_name"], []))
+            row_idx = len(parent_entries)
+            w = ctx.draw.calc_text_size(info["label"])[0] + 40.0
+            box = (pos[0], pos[1] + row_idx * row_h, w, row_h)
+            menu._row = box
+            ctx._last_item = box
+
+        target = (ctx._menu_entry_stack[-1]
+                  if ctx._menu_entry_stack
+                  else ctx._context_popup_builds[info["popup_name"]])
+        target.append(menu)
+        return
+
+    if getattr(ctx, "_menu_popup_open", False):
+        ctx._menu_popup_open = False
         end_popup()
     unindent()
-    _ctx().pop_id()
+    ctx.pop_id()
+    if ctx._menu_title_stack:
+        ctx._last_item = ctx._menu_title_stack.pop()
 
 
 def menu_item(label: str, shortcut: str = "", selected: bool = False,

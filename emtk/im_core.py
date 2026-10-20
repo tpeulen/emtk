@@ -583,6 +583,12 @@ class Context:
         self._popups: dict = self.storage.setdefault("__popups__", {})
         self._context_popup_stack: list[str] = []
         self._context_popup_builds: dict[str, list] = {}
+        self._submenu_stack: list[dict] = []
+        self._menu_entry_stack: list[list] = []
+        #: The title box of each open menu, innermost last: ``end_menu`` makes
+        #: it the last item again, as ``EndMenu`` does, so ``get_item_rect``
+        #: after a menu names its title, not the last row inside it.
+        self._menu_title_stack: list[tuple] = []
         self._context_popup_last_item = None
         self.tooltip: Optional[str] = None
         #: The item :attr:`tooltip` belongs to: what "the pointer rests on
@@ -1410,7 +1416,8 @@ class Context:
             # Dear ImGui's window: an opaque background and a border, so what
             # is drawn under a window (a plot, another window) does not show
             # through its contents. NoBackground is the way out.
-            bg = self.style.color(Col.WINDOW_BG)
+            bg_role = Col.MENU_BAR_BG if (flags & _WF.MENU_BAR) else Col.WINDOW_BG
+            bg = self.style.color(bg_role)
             self.p.fill_rect(*window.box, (*tuple(bg)[:3], 255))
             if self.style.window_border_size > 0.0:
                 self.p.stroke_rect(*window.box, self.style.color(Col.BORDER),
@@ -1767,7 +1774,9 @@ class Context:
         state = self.state(("context_popup", name))
         if state.get("open") or state.get("selected") is not None:
             self._context_popup_stack.append(name)
-            self._context_popup_builds[name] = []
+            entries = []
+            self._context_popup_builds[name] = entries
+            self._menu_entry_stack.append(entries)
             self._context_popup_last_item = None
             return True
         return self.is_popup_open(name)
@@ -1777,6 +1786,8 @@ class Context:
             return
         name = self._context_popup_stack.pop()
         entries = self._context_popup_builds.pop(name, [])
+        if self._menu_entry_stack:
+            self._menu_entry_stack.pop()
         state = self.state(("context_popup", name))
         if state.pop("dispatched", False):
             state["open"] = False
@@ -1888,6 +1899,22 @@ class Context:
 
         self.add_overlay(("context-popup", name), draw_overlay)
 
+    @staticmethod
+    def _find_menu_entry(entries, label: str):
+        from .widgets.menus import Menu, MenuItem
+
+        for entry in entries:
+            if isinstance(entry, MenuItem):
+                if entry.label == label or getattr(entry, "display_label", None) == label:
+                    return entry
+            elif isinstance(entry, Menu):
+                if entry.label == label or getattr(entry, "display_label", None) == label:
+                    return entry
+                sub = Context._find_menu_entry(entry.entries, label)
+                if sub is not None:
+                    return sub
+        return None
+
     def context_menu_item(self, label: str, shortcut: str = "", selected: bool = False,
                           enabled: bool = True, icon: str | None = None) -> bool:
         """Record a context-popup menu row (with an optional *icon*) and return its deferred selection."""
@@ -1897,11 +1924,18 @@ class Context:
         from .i18n import tr
 
         name = self._context_popup_stack[-1]
-        entries = self._context_popup_builds[name]
+        entries = self._menu_entry_stack[-1] if self._menu_entry_stack else self._context_popup_builds[name]
         item = MenuItem(tr(label), shortcut=shortcut, checked=selected, enabled=enabled, icon=icon)
         entries.append(item)
         state = self.state(("context_popup", name))
         self._context_popup_last_item = item
+
+        popup = state.get("popup")
+        if popup is not None and getattr(popup, "entries", None):
+            existing_item = self._find_menu_entry(popup.entries, item.label)
+            if existing_item is not None and getattr(existing_item, "_row", None) is not None:
+                item._row = existing_item._row
+                self._last_item = existing_item._row
         # The pending pick is a label (see the overlay): a menu whose items
         # changed between the press and this frame dispatches the row it
         # named, not whatever now sits at its old position.

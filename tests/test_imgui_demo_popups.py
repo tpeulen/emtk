@@ -163,6 +163,44 @@ def test_a_nested_menu_only_yields_while_its_parent_is_open():
     assert any("Enabled" in s for s in frames.strings)
 
 
+def test_submenu_in_context_popup_dispatches_selection():
+    state = {"chosen": None, "sub_rect": None}
+
+    def gui():
+        if emtk.begin_main_menu_bar():
+            if emtk.begin_menu("Settings"):
+                if emtk.begin_menu("Styles", icon="🎨"):
+                    if emtk.menu_item("Dark Blue"):
+                        state["chosen"] = "dark_blue"
+                    if emtk.menu_item("Light"):
+                        state["chosen"] = "light"
+                    emtk.end_menu()
+                state["sub_rect"] = emtk.get_item_rect()
+                emtk.end_menu()
+            state["bar_rect"] = emtk.get_item_rect()
+            emtk.end_main_menu_bar()
+
+    frames = Frames(gui)
+    frames.draw()
+    assert "Styles" not in frames.strings
+
+    # 1. Click "Settings" on menu bar to open it
+    frames.click(state["bar_rect"])
+    assert any("Styles" in s for s in frames.strings)
+    assert not any("Dark Blue" in s for s in frames.strings)
+
+    # 2. Click "Styles" submenu to open it
+    frames.click(state["sub_rect"])
+    assert any("Dark Blue" in s for s in frames.strings)
+
+    # 3. Click "Dark Blue" inside the submenu
+    popup = frames.storage[("__state__", ("context_popup", "##menu_items_Settings"))]["popup"]
+    styles_menu = popup.entries[0]
+    dark_blue_rect = styles_menu._rows[0][1]
+    frames.click(dark_blue_rect)
+    assert state["chosen"] == "dark_blue"
+
+
 def test_a_disabled_menu_item_does_not_report_a_click():
     state = {"fired": False}
 

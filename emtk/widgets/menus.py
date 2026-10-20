@@ -508,6 +508,7 @@ def _lay_rows(
         if isinstance(entry, Menu):
             entry.horizontal = False
             entry.viewport = viewport
+        entry._row = (x, row_y, w, row_h)
         rows.append((entry, (x, row_y, w, row_h)))
         row_y += row_h
     return rows
