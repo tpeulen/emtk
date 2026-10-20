@@ -231,6 +231,27 @@ def test_key_up_reaches_the_surface_and_stops_only_its_repeat():
     assert sum(call[0] == "on_key_press" for call in sink.calls) == press_count
 
 
+def test_a_printable_key_typed_via_char_is_released_as_its_text():
+    """With a ``char`` backend (glfw) the key_down of "w" carries no key and no text --
+    the char event types it. Its release used to arrive as ``(0, "", 0)`` too, so a game
+    holding "w" could not tell it went up and Pong's left paddle never stopped. The
+    release carries the text the char event typed; so does a focus-loss release.
+    """
+    events, canvas, sink, _loop = _events("rendercanvas.glfw")
+    assert events.typed_via_char
+    canvas.emit("key_down", {"key": "w", "modifiers": ()})
+    canvas.emit("char", {"data": "w", "modifiers": ()})
+    canvas.emit("char", {"data": "w", "modifiers": ()})  # the OS repeating it while held
+    canvas.emit("key_up", {"key": "w", "modifiers": ()})
+    releases = [args for name, args, _kwargs in sink.calls if name == "on_key_release"]
+    assert releases == [(0, "w", 0)]
+    canvas.emit("key_down", {"key": "s", "modifiers": ()})
+    canvas.emit("char", {"data": "s", "modifiers": ()})
+    events.release_keys()
+    releases = [args for name, args, _kwargs in sink.calls if name == "on_key_release"]
+    assert releases[-1] == (0, "s", 0)
+
+
 def test_focus_loss_releases_all_held_keys():
     events, canvas, sink, loop = _events("rendercanvas.offscreen")
     canvas.emit("key_down", {"key": "ArrowLeft", "modifiers": ()})

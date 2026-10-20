@@ -535,6 +535,8 @@ class CanvasEvents:
         self._last_down = None
         self._closed = False
         self._pressed_keys = {}
+        #: The physical key whose ``char`` has not arrived yet: its text is the release's text.
+        self._awaiting_char: str | None = None
         self.focus_callback = None
         self._previous_focus_callback = None
         self.position_supported = False
@@ -1097,6 +1099,9 @@ class CanvasEvents:
             key = ord(letter_of(0, name))
         if name:
             self._pressed_keys.setdefault(name, (key, text, modifiers))
+        # A printable key types through the char event that follows; until it does, the
+        # press carries neither a key nor a text, and nor would its release (below).
+        self._awaiting_char = name if name and not key and not text else None
         self._deliver("on_key_press", key, text, modifiers)
         # Only keys that *do* something repeated: a held Escape must not fire
         # a hundred times, and nor may Cmd+V -- macOS sends no key-up for a
@@ -1118,6 +1123,13 @@ class CanvasEvents:
         text = committed_text(event.get("data") or event.get("char_str") or "")
         if not text:
             return
+        # The key the OS typed this for comes up as that text: a printable key's key_up
+        # carries no text of its own (the key_down typed none), so a game holding "w"
+        # could never tell it was released and its paddle never stopped.
+        name, self._awaiting_char = self._awaiting_char, None
+        held = self._pressed_keys.get(name) if name else None
+        if held is not None and not held[0] and not held[1]:
+            self._pressed_keys[name] = (held[0], text, held[2])
         self._deliver("on_key_press", 0, text,
                       modifiers_from_canvas(event.get("modifiers")))
 
