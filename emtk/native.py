@@ -94,12 +94,51 @@ def _start_input_trace() -> None:
 #: The window opened when nothing says otherwise, in logical pixels.
 DEFAULT_WINDOW_SIZE = (1280, 860)
 
-#: Frame-rate ceiling for a window. A **guard**, not a target: presentation is
-#: vsynced, so the display paces the frames. A ceiling at or below the refresh
-#: rate beats against the vsync grid and *halves* the rate -- rendercanvas'
-#: own default of 30 gave a hard 15 fps; 60 gave a hard 30 on a 120 Hz screen
-#: -- so it is set well above any refresh rate a screen has.
-DEFAULT_MAX_FPS = 240.0
+#: Frame-rate ceiling for a window whose screen's refresh rate is unknown (see
+#: :func:`_frame_ceiling` for the one used when it is known): about 60 frames a second,
+#: however fast input arrives.
+#: A window draws on demand, and every pointer move is an input event, so a 120-1000 Hz
+#: mouse or trackpad drew a frame per event -- 240 a second under the old ceiling, the
+#: fps readout leaping whenever the mouse moved, for no visible gain.
+#:
+#: Not exactly 60: presentation is vsynced, and a ceiling *at* a refresh rate beats
+#: against the vsync grid and halves the rate (rendercanvas' default 30 gave a hard 15;
+#: 60 gave a hard 30 on a 120 Hz screen). 64 Hz is a 15.6 ms minimum interval, so on a
+#: 120 Hz screen each frame takes the vsync slot at 16.7 ms (a steady 60) and on a 60 Hz
+#: screen vsync paces it at 60 anyway.
+DEFAULT_MAX_FPS = 64.0
+
+
+def _frame_ceiling(refresh_hz: float) -> float:
+    """The frame-rate ceiling for a screen refreshing at *refresh_hz*: never under 60 fps.
+
+    Presentation is vsynced, so a window shows a whole fraction of the refresh rate:
+    refresh/1, /2, /3 ... The ceiling picks the slowest of those that is still at least
+    60 frames a second (60 at 60 and 120 Hz, 72 at 144 Hz, 90 at 90 Hz, 60 at 240 Hz),
+    with a 5 % margin so the interval falls just inside the vsync slot instead of beating
+    against it (a ceiling exactly at a fraction halves the rate).
+    """
+    refresh = float(refresh_hz)
+    if not refresh > 0.0:
+        return DEFAULT_MAX_FPS
+    divisor = max(1, int(refresh / 60.0 + 1e-9))
+    return refresh / divisor * 1.05
+
+
+def _screen_refresh_rate(module) -> float | None:
+    """The primary screen's refresh rate (Hz) where the backend is glfw, else ``None``."""
+    if getattr(module, "__name__", "").rsplit(".", 1)[-1] != "glfw":
+        return None
+    try:
+        import glfw  # noqa: PLC0415
+
+        glfw.init()
+        monitor = glfw.get_primary_monitor()
+        mode = glfw.get_video_mode(monitor) if monitor else None
+        rate = float(getattr(mode, "refresh_rate", 0) or 0)
+    except Exception:  # noqa: BLE001 - no screen to ask: the default ceiling
+        return None
+    return rate or None
 
 #: Backends that put a real window on a real screen without a GUI toolkit,
 #: most preferred first. ``glfw`` needs the ``glfw`` package, a small ctypes
@@ -208,8 +247,9 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
         Logical size.
     title : str, optional
     max_fps : float, optional
-        See :data:`DEFAULT_MAX_FPS`; given explicitly because rendercanvas'
-        default of 30 halves the rate on any display.
+        The frame-rate ceiling; by default :func:`_frame_ceiling` of the screen's refresh
+        rate, or :data:`DEFAULT_MAX_FPS` where it cannot be read. Always given, because
+        rendercanvas' own default of 30 halves the rate on any display.
     present_method : str, optional
         ``"auto"`` (the library's choice), ``"screen"`` or ``"bitmap"``. A
         backend that cannot honour an explicit choice falls back to the
@@ -229,6 +269,9 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
     rendercanvas.BaseRenderCanvas
     """
     options = {} if present_method in (None, "", "auto") else {"present_method": present_method}
+    if max_fps == DEFAULT_MAX_FPS:  # not chosen by the caller: fit the screen
+        refresh = _screen_refresh_rate(module)
+        max_fps = _frame_ceiling(refresh) if refresh else DEFAULT_MAX_FPS
     launch_qt_first()
     workarea = screen_workarea(module)
     size = fit_to_screen(size, workarea)
