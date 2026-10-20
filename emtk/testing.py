@@ -257,6 +257,92 @@ def _atlas_pixels():
 _CACHE_PIXELS: dict = {}
 
 
+#: Per-glyph summed-area tables of the atlas alpha, keyed on where the glyph's
+#: texels come from. See :func:`_glyph_integral`.
+_GLYPH_INTEGRALS: dict = {}
+
+
+def _glyph_integral(key, src, src_w, u, v, gw, gh):
+    """The summed-area table of one glyph cell's alpha: ``(gw + 1) * (gh + 1)`` ints.
+
+    ``table[j * (gw + 1) + i]`` is the alpha summed over the cell's first ``j`` rows and
+    ``i`` columns, so the box a destination pixel covers costs four lookups instead of a
+    loop over every texel under it. The sums are the integers that loop added, so the
+    pixels are bit-identical.
+    """
+    table = _GLYPH_INTEGRALS.get(key)
+    if table is not None:
+        return table
+    if len(_GLYPH_INTEGRALS) > 8192:
+        _GLYPH_INTEGRALS.clear()
+    row_len = gw + 1
+    table = [0] * (row_len * (gh + 1))
+    for j in range(gh):
+        base = (v + j) * src_w * 4 + u * 4 + 3
+        alphas = src[base:base + gw * 4:4]
+        above = j * row_len
+        here = above + row_len
+        run = 0
+        for i in range(gw):
+            run += alphas[i]
+            table[here + i + 1] = table[above + i + 1] + run
+    _GLYPH_INTEGRALS[key] = table
+    return table
+
+
+#: Where one placed glyph covers the canvas. See :func:`_glyph_coverage`.
+_GLYPH_COVERAGE: dict = {}
+
+
+def _glyph_coverage(key, src, src_w, u, v, gw, gh, x0, top, shrink, texels):
+    """``[(x, y, alpha), ...]``: the pixels a glyph placed at ``(x0, top)`` covers, unclipped.
+
+    Each destination pixel averages the texels it covers (four lookups in the
+    summed-area table) and a pixel under half coverage is dropped. The result depends
+    only on the glyph, the scale and the exact placement, so it is memoised on them: a
+    frame redrawn with the same layout -- every frame a test draws between two clicks --
+    blits from the cache instead of resampling the atlas.
+
+    Both exist because the per-texel downsample loop was nearly all of a frame: an
+    800x600 tool frame took 3.7 s, so a test that clicks through a few PixelPainter
+    frames cost tens of seconds, and the chisurf burst plugin family alone spent minutes
+    in it.
+    """
+    ckey = (key, x0, top, shrink)
+    got = _GLYPH_COVERAGE.get(ckey)
+    if got is not None:
+        return got
+    if len(_GLYPH_COVERAGE) > 65536:
+        _GLYPH_COVERAGE.clear()
+    table = _glyph_integral(key, src, src_w, u, v, gw, gh)
+    row_len = gw + 1
+    got = []
+    gx0, gx1 = int(x0), int(x0 + gw * shrink) + 1
+    for yy in range(int(top), int(top + gh * shrink) + 1):
+        # Cell-relative texel rows [sy0, sy1) under this pixel row.
+        fy = (yy - top) * texels
+        sy0 = int(fy) if fy > 0.0 else 0
+        fy += texels
+        sy1 = gh if fy >= gh else int(fy) + 1
+        if sy1 <= sy0:
+            continue
+        top_row, bottom_row = sy0 * row_len, sy1 * row_len
+        for xx in range(gx0, gx1):
+            fx = (xx - x0) * texels
+            sx0 = int(fx) if fx > 0.0 else 0
+            fx += texels
+            sx1 = gw if fx >= gw else int(fx) + 1
+            if sx1 <= sx0:
+                continue
+            total = (table[bottom_row + sx1] - table[top_row + sx1]
+                     - table[bottom_row + sx0] + table[top_row + sx0])
+            alpha = total / ((sy1 - sy0) * (sx1 - sx0))
+            if alpha >= 0.5:
+                got.append((xx, yy, alpha))
+    _GLYPH_COVERAGE[ckey] = got
+    return got
+
+
 def _cache_pixels(cache):
     """``(rgba, width)`` for the runtime glyph cache, or ``None``.
 
@@ -776,6 +862,8 @@ class PixelPainter:
         stride = self.width * 4
         sa = a / 255.0
         texels = 1.0 / shrink          # baked texels covered by one pixel
+        px = self.px
+        x_end, y_end = cx + cw, cy + ch
         for index, char in enumerate(string):
             cell = atlas.cell_of(char, bold=bold)
             if cell is None:
@@ -790,46 +878,25 @@ class PixelPainter:
             # buffer, and silently the wrong glyph where it did not.
             if v < atlas.baked_height:
                 src, src_w = baked, baked_w
+                key = ("baked", u, v, gw, gh)
             else:
                 half = _cache_pixels(atlas.cache)
                 if half is None:
                     continue
                 src, src_w = half
                 v -= atlas.baked_height
+                key = ("cache", id(atlas.cache), atlas.cache.version, u, v, gw, gh)
             x0 = left + index * advance
-            gx0 = max(int(x0), cx)
-            gy0 = max(int(top), cy)
-            gx1 = min(int(x0 + gw * shrink) + 1, cx + cw)
-            gy1 = min(int(top + gh * shrink) + 1, cy + ch)
-            for yy in range(gy0, gy1):
-                fy = (yy - top) * texels
-                sy0 = v + (int(fy) if fy > 0.0 else 0)
-                fy += texels
-                sy1 = v + (gh if fy >= gh else int(fy) + 1)
-                if sy1 <= sy0:
+            coverage = _glyph_coverage(key, src, src_w, u, v, gw, gh, x0, top, shrink, texels)
+            for xx, yy, alpha in coverage:
+                if xx < cx or xx >= x_end or yy < cy or yy >= y_end:
                     continue
-                row = yy * stride
-                for xx in range(gx0, gx1):
-                    fx = (xx - x0) * texels
-                    sx0 = u + (int(fx) if fx > 0.0 else 0)
-                    fx += texels
-                    sx1 = u + (gw if fx >= gw else int(fx) + 1)
-                    if sx1 <= sx0:
-                        continue
-                    total = 0
-                    for ty in range(sy0, sy1):
-                        base = ty * src_w * 4 + 3
-                        for tx in range(sx0, sx1):
-                            total += src[base + tx * 4]
-                    alpha = total / ((sy1 - sy0) * (sx1 - sx0))
-                    if alpha < 0.5:
-                        continue
-                    o = row + xx * 4
-                    s = sa * alpha / 255.0
-                    self.px[o] = int(r * s + self.px[o] * (1 - s))
-                    self.px[o + 1] = int(g * s + self.px[o + 1] * (1 - s))
-                    self.px[o + 2] = int(b * s + self.px[o + 2] * (1 - s))
-                    self.px[o + 3] = max(self.px[o + 3], int(a * alpha / 255))
+                o = yy * stride + xx * 4
+                s = sa * alpha / 255.0
+                px[o] = int(r * s + px[o] * (1 - s))
+                px[o + 1] = int(g * s + px[o + 1] * (1 - s))
+                px[o + 2] = int(b * s + px[o + 2] * (1 - s))
+                px[o + 3] = max(px[o + 3], int(a * alpha / 255))
 
     def text_width(self, string) -> float:
         """Advance width of *string*; a colour pictogram counts one small icon box."""
