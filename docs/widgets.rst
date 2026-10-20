@@ -169,6 +169,27 @@ Mac Control-A/E/B/F/D/H/K keep their Emacs meaning, as in a Cocoa field --
 so Control-A is line start there, not select all. The command line is a
 readline prompt and keeps Ctrl/Cmd+A as line start on every platform.
 
+Filtered lists
+--------------
+
+A filter above a list stays in sight while the list scrolls:
+``im.begin_filtered_list(id, text, hint)`` draws the field in the parent and
+opens the list as a ``begin_child`` in the height left (or ``height=``), so
+the rows scroll -- and are clipped -- under it; close it with
+``im.end_filtered_list()``. Anything drawn before it (a toolbar) is fixed
+too. Escape clears the field (a second Escape lets go of the keyboard), Down
+moves into the list, Up/Down walk its entries with the focused one scrolled
+into view, Enter activates it and Up on the first entry returns to the
+field. ``im.filter_field`` is the field alone. A ``DataTable`` keeps its
+filter and header above its rows, and pins them to the top of a scrolled
+parent (a ``fit_rows`` table in a long form)::
+
+    changed, query = im.begin_filtered_list("tools", query, "Filter tools")
+    for name in names:
+        if query.casefold() in name.casefold():
+            im.selectable(name)
+    im.end_filtered_list()
+
 The clipboard is :mod:`emtk.clipboard` (``copy`` / ``paste``): Qt hosts use
 ``QClipboard``, the Tk host its root, a glfw window glfw's clipboard, other
 native windows ``pbcopy``/``pbpaste``, ``wl-copy``/``xclip`` or ``clip``/

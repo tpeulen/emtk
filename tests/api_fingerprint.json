@@ -733,6 +733,11 @@
    },
    "parse_filters": "def(spec)"
   },
+  "emtk.filtered_list": {
+   "begin_filtered_list": "def(str_id, value, hint='', *, height=None, stretch=False, min_height=40.0, tooltip='')",
+   "end_filtered_list": "def()",
+   "filter_field": "def(label, value, hint='', *, list_id=None, tooltip='')"
+  },
   "emtk.flags": {
    "Axis": "value",
    "ChildFlags": "value",
@@ -6158,6 +6163,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "a79492573185bcc80269ea836dc264ceb46075995070376220ea84f8eedfa7e3",
- "version": "0.1.24"
+ "sha256": "2aa45853afdece7ef2c18011b49618574e871b6ac0931e157b4588387f73fbea",
+ "version": "0.1.25"
 }

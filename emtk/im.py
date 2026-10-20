@@ -35,6 +35,12 @@ from .im_widgets import __all__ as _WIDGETS
 
 __all__ = list(_CORE) + list(_WIDGETS)
 
+# A filter field fixed above the list it narrows (emtk's own; Dear ImGui has none).
+from .filtered_list import *  # noqa: F401,F403,E402
+from .filtered_list import __all__ as _FILTERED_LIST  # noqa: E402
+
+__all__ += list(_FILTERED_LIST)
+
 # ...and the spellings a purely mechanical port produces, for the handful of
 # names where `CamelCase` -> `snake_case` and a readable Python name disagree
 # (`ColorConvertHSVtoRGB`) or where C needed a second `va_list` entry point

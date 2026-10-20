@@ -462,8 +462,13 @@ class ViewSpecPanel:
         im.begin("##view-spec-panel", box, flags=flags)
         scope = use_domain(self.domain)
         scope.__enter__()
+        body = False
         try:
             self._toolbar()
+            # The group selector and filter stay put; the settings they narrow scroll under them.
+            if self.settings.settings:
+                im.begin_child("##view-spec-body")
+                body = True
             draw_sections(self._sections(self.spec.get("sections")), self.model,
                           self.form_state, n_col=int(self.spec.get("n_col") or 1))
             stretch = [table for table in self.tables if table.expand] or self.tables[-1:]
@@ -478,6 +483,8 @@ class ViewSpecPanel:
                 draw_table(binding, name, height=height)
                 self.form_state.rects[name] = tuple(im.get_item_rect())
         finally:
+            if body:
+                im.end_child()
             scope.__exit__()
             im.end()
 

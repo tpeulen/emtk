@@ -594,6 +594,9 @@ class Context:
         self.nav_ring: list = []
         self._nav_windows: dict = {}
         self.nav_request = 0          # -1 back, +1 forward, 0 none
+        #: Where the focused item was drawn this frame (``None`` until it is submitted): what a
+        #: list that moves the focus with the arrow keys scrolls into view.
+        self.nav_rect: Optional[Rect] = None
         self.nav_focus_next = False   # `SetKeyboardFocusHere`
         self.nav_visible = True
         self._style_stack: list = []
@@ -746,6 +749,8 @@ class Context:
             self.nav_focus_next = False
             self.nav_id = item_id
             self.storage["__nav_id__"] = item_id
+        if item_id == self.nav_id:
+            self.nav_rect = self._last_item
 
     def nav_move(self, direction: int) -> None:
         """Ask for the focus to move. ``Tab`` / ``Shift+Tab``."""

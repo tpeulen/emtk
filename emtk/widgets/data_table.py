@@ -654,6 +654,12 @@ class DataTable:
         self._filter_box: Optional[tuple] = None
         self._header_box: Optional[tuple] = None
         self._body_box: Optional[tuple] = None
+        #: Where row 0 of the window sits: the top of the body as laid out, which is below
+        #: :attr:`_body_box` while the filter and header are pinned over the first rows.
+        self._rows_top: Optional[float] = None
+        #: The top of what can be seen of the table (the clip of a scrolled parent), set by
+        #: whoever draws it; ``None`` is "all of it". See :meth:`draw`.
+        self.visible_top: Optional[float] = None
         self._widths: list[float] = []
         self._row_h = 20.0
         self._visible = 1
@@ -912,7 +918,8 @@ class DataTable:
         bx, by, bw, bh = self._body_box
         if not (bx <= x <= bx + bw and by <= y <= by + bh):
             return None
-        position = self.bar.top + int((y - by) // max(self._row_h, 1e-6))
+        top = by if self._rows_top is None else self._rows_top
+        position = self.bar.top + int((y - top) // max(self._row_h, 1e-6))
         return position if 0 <= position < len(self.order()) else None
 
     def tooltip_at(self, x: float, y: float) -> tuple[str, Any]:
@@ -1196,18 +1203,18 @@ class DataTable:
     # -- drawing ------------------------------------------------------------------- #
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
-        """Paint the filter box, the header, the visible rows and the note."""
+        """Paint the filter box, the header, the visible rows and the note.
+
+        The filter and the header stay above the rows: the rows scroll under them inside the box.
+        When the box is taller than what can be seen of it -- a table that shows every row
+        (``fit_rows``) in a form the user scrolls -- they are *sticky* as well: once the top of
+        the table has scrolled out of :attr:`visible_top`, they are drawn at that line, over the
+        rows that went under it, until the table's last row reaches them.
+        """
         line = p.line_height()
         self._row_h = row_h = line * self.row_scale
-        cursor = y
-        if self.show_filter:
-            box_h = line * 1.5
-            self._filter_box = (x, cursor, w, box_h)
-            self._draw_filter(p, x, cursor, w, box_h)
-            cursor += box_h + 4.0
-        else:
-            self._filter_box = None
-
+        filter_h = line * 1.5 + 4.0 if self.show_filter else 0.0
+        header_h = line * 1.25
         note = ""
         index = self.selected_index()
         if self.tooltip_key and self.selection_note and index is not None:
@@ -1216,10 +1223,21 @@ class DataTable:
         note_h = note_lines * line + (6.0 if note_lines else 0.0)
         status_h = line * 1.2 if self.show_status else 0.0
         note_h += status_h
-        header_h = line * 1.25
         order = self.order()
-        body_top = cursor + header_h
+        body_top = y + filter_h + header_h
         body_h = max(y + h - note_h - body_top, row_h)
+        # How far the filter and header are pushed down to stay in sight: never past the last row.
+        pin = 0.0
+        if self.visible_top is not None and self.visible_top > y:
+            pin = max(min(self.visible_top - y, body_h - row_h), 0.0)
+        cursor = y + pin
+        if self.show_filter:
+            box_h = line * 1.5
+            self._filter_box = (x, cursor, w, box_h)
+            self._draw_filter(p, x, cursor, w, box_h)
+            cursor += box_h + 4.0
+        else:
+            self._filter_box = None
         self._visible = max(int(body_h // row_h), 1)
         self.bar.clamp(len(order), self._visible)
         bar_w = self.bar.width if self.bar.needed() else 0.0
@@ -1245,7 +1263,9 @@ class DataTable:
         self._shown = columns
         self._widths = widths[self.first_column:]
         self._header_box = (x, cursor, list_w, header_h)
-        self._body_box = (x, body_top, list_w, body_h)
+        self._rows_top = body_top
+        shown_top = body_top + pin                 # below the pinned filter and header
+        self._body_box = (x, shown_top, list_w, max(body_h - pin, 0.0))
 
         p.stroke_rect(x, cursor, list_w, header_h, _style.BORDER, _style.HEADER_BG)
         p.push_clip(x, cursor, list_w, header_h)
@@ -1265,8 +1285,8 @@ class DataTable:
             col_x += width
         p.pop_clip()
 
-        p.stroke_rect(x, body_top, list_w, body_h, _style.BORDER, _style.TABLE_ROW_BG)
-        p.push_clip(x, body_top, list_w, body_h)
+        p.stroke_rect(x, shown_top, list_w, max(body_h - pin, 1.0), _style.BORDER, _style.TABLE_ROW_BG)
+        p.push_clip(x, shown_top, list_w, max(body_h - pin, 0.0))
         self._elided = {}
         top = self.bar.top
         row_y = body_top
@@ -1275,7 +1295,7 @@ class DataTable:
             row_y += row_h
         p.pop_clip()
         if bar_w:
-            self.bar.draw(p, x + list_w, body_top, body_h)
+            self.bar.draw(p, x + list_w, shown_top, max(body_h - pin, 1.0))
         if self._hbar_box is not None:
             self._draw_hbar(p, widths, list_w)
 
@@ -2310,6 +2330,8 @@ def draw_table(binding: TableBinding, name: str, width: Optional[float] = None,
     _column_picker(control, name)
     from . import table_menu
     table_menu.draw(binding, name, hovered)
+    # What can be seen of the table: a scrolled form keeps its filter and header in sight.
+    control.visible_top = float(ctx.clip_rect[1])
     control.draw(ctx.p, *box)
     if hovered:
         tip, part = control.tooltip_at(px, py)
