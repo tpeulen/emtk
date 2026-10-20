@@ -160,9 +160,12 @@ async function boot() {
       await pyodide.loadPackage(urls);
     }
 
-    status(`fetching ${config.archive}…`);
+    // `config.archive` carries a content hash (`app.zip?v=…`) so a cached
+    // copy never outlives a redeploy; the status line shows the bare name.
+    const archiveName = String(config.archive).split("?")[0];
+    status(`fetching ${archiveName}…`);
     const response = await fetch(config.archive);
-    if (!response.ok) throw new Error(`${config.archive}: ${response.status}`);
+    if (!response.ok) throw new Error(`${archiveName}: ${response.status}`);
     pyodide.unpackArchive(await response.arrayBuffer(), "zip", { extractDir: config.extract_dir });
     pyodide.globals.set("_emtk_extract_dir", config.extract_dir);
     pyodide.runPython(`import sys; sys.path.insert(0, _emtk_extract_dir)`);

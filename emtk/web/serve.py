@@ -53,6 +53,7 @@ import argparse
 import dataclasses
 import functools
 import glob
+import hashlib
 import html
 import http.server
 import importlib.util
@@ -282,11 +283,23 @@ def default_out_dir(bundle: Bundle) -> pathlib.Path:
     return pathlib.Path(base) / "emtk-web" / bundle.name
 
 
-def _config(bundle: Bundle, wheels: Sequence[str]) -> dict:
+def versioned_url(path: pathlib.Path, name: str) -> str:
+    """*name* with a content hash of *path*: ``app.zip?v=<sha256[:12]>``.
+
+    A CDN in front of a build caches ``app.zip`` and ``boot.js`` for hours
+    while ``index.html`` is revalidated, so after a redeploy a browser would
+    run the new page against the old bundle. Naming the bytes in the URL makes
+    every change a new URL, and an unchanged file stays cached.
+    """
+    digest = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()[:12]
+    return f"{name}?v={digest}"
+
+
+def _config(bundle: Bundle, wheels: Sequence[str], archive: str = ARCHIVE_NAME) -> dict:
     return {
         "app": bundle.app,
         "name": bundle.name,
-        "archive": ARCHIVE_NAME,
+        "archive": archive,
         "extract_dir": EXTRACT_DIR,
         "pyodide_packages": list(bundle.pyodide_packages),
         "wheels": list(wheels),
@@ -297,8 +310,13 @@ def _config(bundle: Bundle, wheels: Sequence[str]) -> dict:
     }
 
 
-def render_index(bundle: Bundle, config: dict, pyodide_js: str) -> str:
-    """``index.html`` with the build's title, app and configuration filled in."""
+def render_index(bundle: Bundle, config: dict, pyodide_js: str,
+                 boot_js: str = "boot.js") -> str:
+    """``index.html`` with the build's title, app and configuration filled in.
+
+    *boot_js* is the loader's URL, normally :func:`versioned_url` of the copy
+    the build wrote.
+    """
     template = (WEB_DIR / "index.html").read_text(encoding="utf-8")
     # `</` cannot appear inside a <script> element's text, whatever the type.
     payload = json.dumps(config, indent=1).replace("</", "<\\/")
@@ -306,6 +324,7 @@ def render_index(bundle: Bundle, config: dict, pyodide_js: str) -> str:
             .replace("{{TITLE}}", html.escape(bundle.title or bundle.app))
             .replace("{{APP}}", html.escape(bundle.app, quote=True))
             .replace("{{PYODIDE_JS}}", html.escape(pyodide_js, quote=True))
+            .replace("{{BOOT_JS}}", html.escape(boot_js, quote=True))
             .replace("{{CONFIG}}", payload))
 
 
@@ -345,8 +364,13 @@ def build(bundle: Bundle, out_dir=None, pyodide: pathlib.Path | None = None) -> 
             shutil.rmtree(target)
         shutil.copytree(pathlib.Path(pyodide), target)
         pyodide_js = "pyodide/pyodide.js"
+    # Wheels are named by version already; the archive and the loader are not.
+    # (A local Pyodide copy is left as is: it resolves its own files relative
+    # to its script, and the CDN default is versioned in its path.)
+    config = _config(bundle, wheels, versioned_url(out / ARCHIVE_NAME, ARCHIVE_NAME))
+    boot_js = versioned_url(out / "boot.js", "boot.js")
     (out / "index.html").write_text(
-        render_index(bundle, _config(bundle, wheels), pyodide_js), encoding="utf-8")
+        render_index(bundle, config, pyodide_js, boot_js), encoding="utf-8")
     return out
 
 

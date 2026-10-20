@@ -7,7 +7,12 @@ the wheels, and the configuration ``boot.js`` reads.
 """
 from __future__ import annotations
 
+import functools
+import hashlib
+import http.server
 import json
+import threading
+import urllib.request
 import pathlib
 import re
 import zipfile
@@ -107,12 +112,57 @@ def test_the_site_carries_the_config_boot_js_reads(tmp_path):
     assert config["pyodide_packages"] == ["numpy", "Pillow", "scipy", "pandas"]
     assert config["wheels"] == [f"wheels/{wheel.name}"]
     assert (site / "wheels" / wheel.name).is_file()
-    assert (site / config["archive"]).is_file()
+    assert (site / config["archive"].split("?")[0]).is_file()
     assert (site / "boot.js").read_text() == (WEB / "boot.js").read_text()
     html = (site / "index.html").read_text()
     assert "<title>Demo &lt;/script&gt; app</title>" in html
     assert '<meta name="emtk-app" content="demoapp.main:make_app">' in html
     assert serve.DEFAULT_PYODIDE_URL in html
+
+
+def _digest(path: pathlib.Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+
+
+def test_the_archive_and_loader_urls_name_their_bytes(tmp_path):
+    """A CDN caches ``app.zip`` and ``boot.js`` for hours while ``index.html``
+    is revalidated; without the content in the URL a redeploy runs the new
+    page on the old bundle.
+    """
+    pkg = _app(tmp_path)
+    bundle = Bundle(app="demoapp.main:make_app", packages=[pkg])
+    site = build(bundle, tmp_path / "site")
+    archive = _config(site)["archive"]
+    assert archive == f"app.zip?v={_digest(site / 'app.zip')}"
+    page = (site / "index.html").read_text()
+    assert f'<script src="boot.js?v={_digest(site / "boot.js")}"></script>' in page
+    assert "{{" not in page, "a placeholder was left unfilled"
+
+    (pkg / "main.py").write_text("def make_app():\n    return 1\n")
+    rebuilt = _config(build(bundle, site))["archive"]
+    assert rebuilt != archive, "a changed bundle kept its URL"
+    assert rebuilt == f"app.zip?v={_digest(site / 'app.zip')}"
+
+
+def test_the_dev_server_resolves_a_versioned_url(tmp_path):
+    site = build(Bundle(app="demoapp.main:make_app", packages=[_app(tmp_path)]),
+                 tmp_path / "site")
+    archive = _config(site)["archive"]
+    handler = functools.partial(serve.Handler, directory=str(site))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}/"
+        with urllib.request.urlopen(base + archive, timeout=5) as response:
+            assert response.read() == (site / "app.zip").read_bytes()
+        boot = re.search(r'<script src="(boot\.js\?v=[0-9a-f]{12})"',
+                         (site / "index.html").read_text()).group(1)
+        with urllib.request.urlopen(base + boot, timeout=5) as response:
+            assert response.read() == (site / "boot.js").read_bytes()
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_a_local_pyodide_replaces_the_cdn(tmp_path):
