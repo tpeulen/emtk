@@ -236,6 +236,35 @@ def test_the_windows_menu_lists_the_children_and_picks_one():
     assert docks.floating()[-1] == "a"
 
 
+def test_escape_through_the_key_hook_closes_a_menu_even_when_the_frame_never_sees_it():
+    """A host that hands keys to the focused panel's own app asks handle_key first.
+
+    The menu is drawn in the docks' frame; an Escape delivered to a nested panel's surface
+    never shows up in that frame's input, so the hook must close the menu itself.
+    """
+    docks = make()
+    host = Host(docks)
+    assert not docks.handle_key(KEY_ESCAPE, 0), "no menu open: Escape is not the docks'"
+    host.click(*host.text("Windows"))
+    host.frame()
+    assert any(t[5].strip() == "A" for t in host.painter.texts)
+    assert docks.handle_key(KEY_ESCAPE, 0)
+    host.frame()
+    host.frame()
+    assert not any(t[5].strip() == "Cascade" and t[1] > docks._workspace_buttons["windows"][1] + 1
+                   for t in host.painter.texts), "the list closed"
+    assert not docks.handle_key(KEY_ESCAPE, 0), "closed: the next Escape is not the docks'"
+    # The panel context menu closes the same way.
+    x, y, _w, _h = docks.window("tools").frame
+    host.click(x + 20.0, y + docks._title_h / 2.0, button=RIGHT_BUTTON)
+    host.frame()
+    assert any(t[5].strip() == "Close all panels" for t in host.painter.texts)
+    assert docks.handle_key(KEY_ESCAPE, 0)
+    host.frame()
+    host.frame()
+    assert not any(t[5].strip() == "Close all panels" for t in host.painter.texts)
+
+
 def test_right_click_on_the_workspace_opens_its_menu():
     docks = make(windows=())
     host = Host(docks)

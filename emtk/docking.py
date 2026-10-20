@@ -788,6 +788,10 @@ class DockManager:
         self._context_targets: Dict[str, Optional[str]] = {}
         self._context_positions: Dict[str, Tuple[float, float]] = {}
         self._context_heights: Dict[str, float] = {}
+        #: The context menus drawn last frame (their scopes), and an Escape a host passed in
+        #: through :meth:`handle_key` for them to close on at the next frame.
+        self._menus_shown: set = set()
+        self._escape_pending = False
         #: While a window is dragged: the region under the pointer.
         self.drop_target: Optional[str] = None
         self._hint_edges: Tuple[str, ...] = ()
@@ -1548,14 +1552,20 @@ class DockManager:
         return key
 
     def handle_key(self, key: int, modifiers: int = 0) -> bool:
-        """A host's key hook: Ctrl+Tab and Ctrl+Shift+Tab cycle the workspace's windows.
+        """A host's key hook: Escape closes an open dock or workspace menu; Ctrl+Tab and
+        Ctrl+Shift+Tab cycle the workspace's windows.
 
         Returns whether the key was taken. :meth:`draw` reads the same keys from the frame's
-        input, for a host that passes keys on without asking first.
+        input, for a host that passes keys on without asking first. A host that routes keys to
+        the focused panel's own app (a nested surface) must ask here first: the menu is drawn in
+        the docks' frame, so an Escape delivered only to the panel never reaches it.
         """
         from .events import CONTROL_MODIFIER, SHIFT_MODIFIER
-        from .keys import KEY_TAB
+        from .keys import KEY_ESCAPE, KEY_TAB
 
+        if int(key) == KEY_ESCAPE and self._menus_shown:
+            self._escape_pending = True
+            return True
         if int(key) != KEY_TAB or not int(modifiers) & CONTROL_MODIFIER:
             return False
         if self.workspace is None:
@@ -2271,8 +2281,11 @@ class DockManager:
         submitted.append(overlay)
         self._draw_overlay(ctx)
         ctx.end()
+        shown, self._menus_shown = self._menus_shown, set()
         for scope in list(self._context_targets):
             self._draw_context(ctx, scope)
+        if shown:
+            self._escape_pending = False
         self._sync_order(ctx, submitted, before)
         if self._drag is None:
             self.flush()
@@ -2773,6 +2786,11 @@ class DockManager:
 
         if not ctx.begin_popup(f"##{self.name}.context.{scope}"):
             return
+        if self._escape_pending:
+            ctx.close_current_popup(f"##{self.name}.context.{scope}")
+            ctx.end_popup()
+            return
+        self._menus_shown.add(scope)
         if scope == "workspace":
             self._draw_workspace_menu(ctx, scope)
             return
