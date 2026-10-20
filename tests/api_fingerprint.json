@@ -1510,7 +1510,7 @@
    "Style": {
     "bases": [],
     "decorators": [
-     "dataclass"
+     "dataclass(eq=False)"
     ],
     "members": {
      "color": "def(self, which, default=(200, 200, 200, 255))",
@@ -1735,6 +1735,8 @@
    "colormap_scale": "def(label, scale_min, scale_max, size=(0.0, 0.0), fmt='%g', flags=0, cmap=I.IMPLOT_AUTO)",
    "colormap_slider": "def(label, t, fmt='', cmap=I.IMPLOT_AUTO)",
    "combine_date_time": "value",
+   "copy_plot_data": "def(plot)",
+   "copy_plot_image": "def(plot)",
    "drag_line_x": "def(n_id, x, col=None, thickness=1.0, flags=0)",
    "drag_line_y": "def(n_id, y, col=None, thickness=1.0, flags=0)",
    "drag_point": "def(n_id, x, y, col=None, size=4.0, flags=0)",
@@ -1743,6 +1745,9 @@
    "end_legend_popup": "def()",
    "end_plot": "def()",
    "end_subplots": "def()",
+   "export_plot_csv": "def(plot)",
+   "export_plot_png": "def(plot)",
+   "export_plot_svg": "def(plot)",
    "floor_time": "value",
    "format_date": "value",
    "format_date_time": "value",
@@ -1788,6 +1793,9 @@
    "render_color_bar": "def(colors, rect, vertical, reversed_, continuous)",
    "round_time": "value",
    "sample_colormap": "def(t, cmap=I.IMPLOT_AUTO)",
+   "save_plot_csv": "def(plot, path=None)",
+   "save_plot_png": "def(plot, path=None)",
+   "save_plot_svg": "def(plot, path=None)",
    "set_axes": "def(x_axis, y_axis)",
    "set_axis": "def(axis)",
    "set_next_axes_limits": "def(x_min, x_max, y_min, y_max, cond=I.COND_ONCE)",
@@ -3415,6 +3423,25 @@
    "use_palette": "def(colours)",
    "with_alpha": "def(colour, alpha)"
   },
+  "emtk.styles": {
+   "available_stylesheets": "def()",
+   "get_stylesheet": "def(name)",
+   "get_stylesheet_path": "def(name)"
+  },
+  "emtk.stylesheet": {
+   "StyleSheet": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self, palette, metrics, style, source='', name='custom')",
+     "apply": "def(self, styles=())"
+    }
+   },
+   "apply_stylesheet": "def(source_or_path, name='custom', styles=())",
+   "parse_color": "def(value)",
+   "parse_length": "def(value)",
+   "parse_stylesheet": "def(source, base_theme='dark')"
+  },
   "emtk.svg": {
    "rasterize_svg": "def(data, scale=1.0, background=None)",
    "svg_to_png": "def(data, scale=1.0, background=None)",
@@ -3702,11 +3729,14 @@
   "emtk.theme": {
    "TEXT_SURFACES": "value",
    "THEMES": "value",
+   "apply_stylesheet": "def(source_or_path, name='custom', styles=())",
    "apply_theme": "def(name, styles=())",
+   "available_stylesheets": "def()",
    "current_theme": "def()",
    "is_light": "def()",
    "on_change": "def(callback)",
-   "palette_names": "def()"
+   "palette_names": "def()",
+   "register_theme": "def(name, palette, frame_border=0.0)"
   },
   "emtk.tk_host": {
    "TkHost": {
@@ -5805,6 +5835,21 @@
      "update": "def(self, config, document)"
     }
    },
+   "ColorSwatch": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "colour": "field",
+     "end": "field",
+     "rect": "field=",
+     "start": "field",
+     "text": "field",
+     "text_colour": "field=",
+     "visible": "field="
+    }
+   },
    "Colorizer": {
     "bases": [],
     "decorators": [],
@@ -5896,12 +5941,42 @@
      "overwrite": "field=",
      "read_only": "field=",
      "selection_color": "field=",
+     "show_color_swatches": "field=",
+     "show_folds": "field=",
      "show_line_numbers": "field=",
      "show_matching_brackets": "field=",
      "show_spaces": "field=",
      "show_tabs": "field=",
      "tab_size": "field=",
      "text_margin": "field="
+    }
+   },
+   "Fold": {
+    "bases": [
+     "NamedTuple"
+    ],
+    "decorators": [],
+    "members": {
+     "end": "field",
+     "hides": "def(self, pos)",
+     "start": "field"
+    }
+   },
+   "Folds": {
+    "bases": [],
+    "decorators": [],
+    "members": {
+     "__init__": "def(self)",
+     "display_row": "def(self, line)",
+     "document_line": "def(self, row)",
+     "expand_line": "def(self, line)",
+     "foldable_at": "def(self, line)",
+     "is_collapsed": "def(self, line)",
+     "regions": "def(self)",
+     "reveal": "def(self, pos)",
+     "row_count": "def(self)",
+     "toggle": "def(self, line)",
+     "update": "def(self, config, document)"
     }
    },
    "LIGHT_PALETTE": "value",
@@ -5918,6 +5993,7 @@
      "comment_prefix": "field=",
      "comment_start": "field=",
      "cpp": "@staticmethod def()",
+     "css": "@staticmethod def()",
      "declarations": "field=",
      "glsl": "@staticmethod def()",
      "has_double_quoted_strings": "field=",
@@ -5992,6 +6068,7 @@
      "add_next_occurrence": "def(self)",
      "backspace": "def(self)",
      "clear_markers": "def(self)",
+     "color_swatches": "def(self)",
      "compose": "def(self, text, cursor=None)",
      "copy": "def(self)",
      "cut": "def(self)",
@@ -6163,6 +6240,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "2aa45853afdece7ef2c18011b49618574e871b6ac0931e157b4588387f73fbea",
- "version": "0.1.25"
+ "sha256": "97cd4b4a1d6ef66bc3a63bb818484f5a020eff5a245c448fc5cd9a119a5efc3f",
+ "version": "0.1.26"
 }
