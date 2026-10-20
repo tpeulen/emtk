@@ -206,9 +206,6 @@ from .text_field import TextField, index_at
 from .text_field import paint as paint_field
 
 __all__ = [
-    "BAR_COLOUR",
-    "NEGATIVE_COLOUR",
-    "POSITIVE_COLOUR",
     "TableColumn",
     "DataTable",
     "TableBinding",
@@ -233,12 +230,6 @@ def _is_tab(key: int, text: str = "") -> bool:
 def _is_escape(key: int, text: str = "") -> bool:
     return key in _ESCAPE_KEYS or text == "\x1b"
 
-
-#: A bar whose range does not span zero.
-BAR_COLOUR = (90, 150, 220, 255)
-#: A diverging bar right of zero, and left of it (Orange3's correlation colours).
-POSITIVE_COLOUR = (170, 242, 43, 255)
-NEGATIVE_COLOUR = (70, 190, 250, 255)
 
 #: Number format when a column names none; the Qt table's default.
 DEFAULT_FORMAT = "%.6g"
@@ -392,9 +383,9 @@ class TableColumn:
 
         if lo < 0.0 < hi:
             zero, point = at(0.0), at(number)
-            colour = POSITIVE_COLOUR if number >= 0 else NEGATIVE_COLOUR
+            colour = _style.TABLE_BAR_POSITIVE if number >= 0 else _style.TABLE_BAR_NEGATIVE
             return (min(zero, point), max(zero, point), colour)
-        return (0.0, at(number), BAR_COLOUR)
+        return (0.0, at(number), _style.TABLE_BAR)
 
 
 def _contrasting_ink(fill: Sequence[int]) -> tuple:
@@ -1380,11 +1371,11 @@ class DataTable:
                 p.fill_rect(col_x, y, width, h, shade)
             bar = column.bar(value)
             if bar is not None:
-                start, end, colour = bar
+                start, end, bar_colour = bar
                 bar_h = max(3.0, h * 0.14)
                 inner = width - 8.0
                 p.fill_rect(col_x + 4.0 + start * inner, y + h - bar_h - 2.0,
-                            max((end - start) * inner, 1.0), bar_h, colour)
+                            max((end - start) * inner, 1.0), bar_h, bar_colour)
             right = self._right_aligned(column, order) and not indent
             text = column.text(value)
             if column.display == "button":

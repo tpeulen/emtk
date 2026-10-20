@@ -3360,6 +3360,9 @@
    "SLIDER_GRAB": "value",
    "SLIDER_GRAB_ACTIVE": "value",
    "TAB": "value",
+   "TABLE_BAR": "value",
+   "TABLE_BAR_NEGATIVE": "value",
+   "TABLE_BAR_POSITIVE": "value",
    "TABLE_BORDER_LIGHT": "value",
    "TABLE_BORDER_STRONG": "value",
    "TABLE_HEADER_BG": "value",
@@ -4562,7 +4565,6 @@
    }
   },
   "emtk.widgets.data_table": {
-   "BAR_COLOUR": "value",
    "DataTable": {
     "bases": [],
     "decorators": [],
@@ -4621,8 +4623,6 @@
      "wanted_columns": "def(self)"
     }
    },
-   "NEGATIVE_COLOUR": "value",
-   "POSITIVE_COLOUR": "value",
    "TableBinding": {
     "bases": [],
     "decorators": [],
@@ -6242,6 +6242,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "dc8d14d7d7c9e51e9e325f780bfc3080d5dd3ad85df55cf9b4908f46584c48fd",
- "version": "0.1.27"
+ "sha256": "091608bb638700a10a31de06d032ffd0ca6d6bb2726d2efbf58d7fc675613aa2",
+ "version": "0.1.28"
 }

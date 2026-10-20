@@ -14,10 +14,8 @@ import pytest
 from emtk.keys import KEY_BACKSPACE, KEY_DELETE, KEY_DOWN, KEY_ESCAPE, KEY_RETURN, KEY_UP
 from emtk.testing import PixelPainter, RecordingPainter
 from emtk.view_form import FormState, draw_form
+from emtk import style as st
 from emtk.widgets.data_table import (
-    BAR_COLOUR,
-    NEGATIVE_COLOUR,
-    POSITIVE_COLOUR,
     DataTable,
     TableBinding,
     TableColumn,
@@ -112,12 +110,39 @@ def test_number_formats():
 
 
 def test_a_bar_is_a_fraction_of_its_range_and_diverges_across_zero():
-    assert TableColumn("s", display="bar", range=(0.0, 2.0)).bar(0.5) == (0.0, 0.25, BAR_COLOUR)
+    assert TableColumn("s", display="bar", range=(0.0, 2.0)).bar(0.5) == (0.0, 0.25, st.TABLE_BAR)
     positive = TableColumn("r", display="bar", range=(-1.0, 1.0)).bar(0.5)
     negative = TableColumn("r", display="bar", range=(-1.0, 1.0)).bar(-0.5)
-    assert positive == (0.5, 0.75, POSITIVE_COLOUR)
-    assert negative == (0.25, 0.5, NEGATIVE_COLOUR)
+    assert positive == (0.5, 0.75, st.TABLE_BAR_POSITIVE)
+    assert negative == (0.25, 0.5, st.TABLE_BAR_NEGATIVE)
     assert TableColumn("s").bar(0.5) is None  # not declared a bar
+
+
+@pytest.mark.parametrize("name", ["dark", "light"])
+def test_bar_colours_follow_the_theme_and_read_on_the_rows(name):
+    from emtk import theme
+
+    palette, _border = theme.THEMES[name]
+    positive, negative = palette["TABLE_BAR_POSITIVE"], palette["TABLE_BAR_NEGATIVE"]
+    for bar in (palette["TABLE_BAR"], positive, negative):
+        for row in ("TABLE_ROW_BG", "TABLE_ROW_BG_ALT"):
+            assert st.contrast_ratio(bar, palette[row]) >= 3.0  # WCAG non-text contrast
+    # Blue against orange: the two signs differ in hue on the blue-yellow axis, which
+    # red-green deficiencies keep, and in lightness.
+    assert positive[2] > positive[0] and negative[0] > negative[2]
+    previous = theme.apply_theme(name)
+    try:
+        assert TableColumn("r", display="bar", range=(-1.0, 1.0)).bar(-0.5)[2] == negative
+    finally:
+        theme.apply_theme(previous)
+
+
+def test_a_bar_cell_leaves_the_row_text_in_its_ink():
+    control = DataTable([TableColumn("r", display="bar", range=(-1.0, 1.0)),
+                         TableColumn("x")])
+    control.set_records([{"r": -0.5, "x": "a"}])
+    colours = {t[5]: tuple(t[6]) for t in draw(control).texts}
+    assert colours["-0.5"] == colours["a"] == tuple(st.TEXT)
 
 
 # ---- binding a section to a model ----------------------------------------------------
@@ -295,7 +320,7 @@ def test_the_bar_is_painted_under_the_value():
         offset = (y * painter.width + int(x)) * 4
         return tuple(painter.px[offset:offset + 3])
 
-    assert tuple(BAR_COLOUR[:3]) in {pixel(bx + 4.0 + f * 132.0) for f in (0.2, 0.5, 0.8)}
+    assert tuple(st.TABLE_BAR[:3]) in {pixel(bx + 4.0 + f * 132.0) for f in (0.2, 0.5, 0.8)}
 
 
 # ---- the spec renderers -------------------------------------------------------------

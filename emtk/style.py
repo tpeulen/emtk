@@ -109,6 +109,9 @@ __all__ = [
     "PLOT_LABEL_TEXT",
     "PLOT_AXIS_LINE",
     "PLOT_LEGEND_BG",
+    "TABLE_BAR",
+    "TABLE_BAR_POSITIVE",
+    "TABLE_BAR_NEGATIVE",
     "CODE_BG",
     "CODE_INLINE_BG",
     "HEADING_1",
@@ -305,6 +308,12 @@ PLOT_TICK_TEXT = (160, 165, 175)
 PLOT_LABEL_TEXT = (196, 201, 212)
 PLOT_AXIS_LINE = (110, 115, 125)
 PLOT_LEGEND_BG = (20, 22, 26, 200)
+#: A table cell's in-cell bar: one whose range does not span zero, and a diverging one
+#: right of zero (blue) and left of it (orange). Blue against orange stays apart under every
+#: common colour-vision deficiency, and each keeps 3:1 against both table row colours.
+TABLE_BAR = (90, 150, 220, 255)
+TABLE_BAR_POSITIVE = (66, 150, 250, 255)
+TABLE_BAR_NEGATIVE = (240, 150, 40, 255)
 #: A code block's or a chat message's field.
 CODE_BG = (20, 24, 30, 255)
 #: The wash behind inline ``code`` in running text.
