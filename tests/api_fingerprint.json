@@ -1780,7 +1780,9 @@
    "map_input_reverse": "def(dst=None)",
    "next_colormap_color": "def()",
    "next_marker": "def()",
+   "open_plot_save_dialog": "def(plot, extension, directory=None)",
    "pixels_to_plot": "def(x, y=None, x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
+   "plot_export_name": "def(plot, extension)",
    "plot_to_pixels": "def(x, y=None, x_axis=I.IMPLOT_AUTO, y_axis=I.IMPLOT_AUTO)",
    "pop_colormap": "def(count=1)",
    "pop_plot_clip_rect": "def()",
@@ -6240,6 +6242,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "97cd4b4a1d6ef66bc3a63bb818484f5a020eff5a245c448fc5cd9a119a5efc3f",
- "version": "0.1.26"
+ "sha256": "dc8d14d7d7c9e51e9e325f780bfc3080d5dd3ad85df55cf9b4908f46584c48fd",
+ "version": "0.1.27"
 }
