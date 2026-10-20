@@ -87,7 +87,7 @@ function clipboardShortcut(event, mac) {
   return letter === "c" || letter === "x" || letter === "v" ? letter : null;
 }
 
-function forwardClipboard(target, page, redraw, isFormControl) {
+function forwardClipboard(target, page, redraw, isFormControl, busy = () => false) {
   let pending = null;       // a clipboard keystroke waiting for its DOM event
   const settle = () => { pending = null; };
   target.addEventListener("copy", (event) => onCopy(event, false));
@@ -95,6 +95,9 @@ function forwardClipboard(target, page, redraw, isFormControl) {
   function onCopy(event, cut) {
     if (isFormControl(event.target)) return;
     settle();
+    // Clipboard writes must finish in this event. Do not cut data when a
+    // shared interpreter cannot return the clipboard text synchronously.
+    if (busy()) { event.preventDefault(); return; }
     const text = page.copy(cut);
     if (text !== undefined && text !== null) {
       event.clipboardData.setData("text/plain", String(text));
@@ -132,58 +135,102 @@ async function boot() {
     return;
   }
 
-  status("loading Pyodide…");
-  const pyodide = await loadPyodide({ enableRunUntilComplete: true });
-  globalThis.emtkPyodide = pyodide;
+  // An embedding host may own a persistent interpreter and serialize its
+  // calls. Ordinary pages retain their independent loader and event path.
+  const runtime = typeof globalThis.emtkRuntime === "function"
+    ? await globalThis.emtkRuntime(config, canvas, status) : null;
+  let pyodide;
+  let page;
+  if (runtime) {
+    pyodide = runtime.pyodide;
+    page = await runtime.mount(canvas, config.app);
+  } else {
+    status("loading Pyodide…");
+    pyodide = await loadPyodide({ enableRunUntilComplete: true });
 
-  if (config.pyodide_packages && config.pyodide_packages.length) {
-    status(`loading ${config.pyodide_packages.join(", ")}…`);
-    await pyodide.loadPackage(config.pyodide_packages);
-  }
-  // Local wheels (a compiled extension built for Pyodide, say). By URL:
-  // `loadPackage` installs a wheel it is pointed at, with no index.
-  if (config.wheels && config.wheels.length) {
-    status(`installing ${config.wheels.length} wheel(s)…`);
-    const urls = config.wheels.map((name) => new URL(name, location.href).href);
-    await pyodide.loadPackage(urls);
-  }
+    if (config.pyodide_packages && config.pyodide_packages.length) {
+      status(`loading ${config.pyodide_packages.join(", ")}…`);
+      await pyodide.loadPackage(config.pyodide_packages);
+    }
+    // Local wheels (a compiled extension built for Pyodide, say). By URL:
+    // `loadPackage` installs a wheel it is pointed at, with no index.
+    if (config.wheels && config.wheels.length) {
+      status(`installing ${config.wheels.length} wheel(s)…`);
+      const urls = config.wheels.map((name) => new URL(name, location.href).href);
+      await pyodide.loadPackage(urls);
+    }
 
-  status(`fetching ${config.archive}…`);
-  const response = await fetch(config.archive);
-  if (!response.ok) throw new Error(`${config.archive}: ${response.status}`);
-  pyodide.unpackArchive(await response.arrayBuffer(), "zip", { extractDir: config.extract_dir });
-  pyodide.globals.set("_emtk_extract_dir", config.extract_dir);
-  pyodide.runPython(`import sys; sys.path.insert(0, _emtk_extract_dir)`);
+    status(`fetching ${config.archive}…`);
+    const response = await fetch(config.archive);
+    if (!response.ok) throw new Error(`${config.archive}: ${response.status}`);
+    pyodide.unpackArchive(await response.arrayBuffer(), "zip", { extractDir: config.extract_dir });
+    pyodide.globals.set("_emtk_extract_dir", config.extract_dir);
+    pyodide.runPython(`import sys; sys.path.insert(0, _emtk_extract_dir)`);
 
-  status("requesting a GPU device…");
-  // Both promises resolve here, before any app code runs.
-  await pyodide.runPythonAsync(`
+    status("requesting a GPU device…");
+    // Both promises resolve here, before any app code runs.
+    await pyodide.runPythonAsync(`
 from emtk.gpu import api, browser
 api.use_backend(browser)
 _emtk_adapter = await browser.request_adapter_async()
 await _emtk_adapter.request_device_async()
 `);
 
-  status(`starting ${config.app}…`);
-  globalThis.emtkCanvas = canvas;
-  pyodide.globals.set("_emtk_app_spec", config.app);
-  const page = pyodide.runPython(`
-import js
+    status(`starting ${config.app}…`);
+    pyodide.globals.set("_emtk_canvas", canvas);
+    pyodide.globals.set("_emtk_app_spec", config.app);
+    page = pyodide.runPython(`
 from emtk.web.page import mount
-mount(js.emtkCanvas, _emtk_app_spec)
+mount(_emtk_canvas, _emtk_app_spec)
 `);
+  }
+  globalThis.emtkPyodide = pyodide;
+  globalThis.emtkCanvas = canvas;
   globalThis.emtkPage = page;
-  globalThis.emtkApp = page.app;
+
+  // Attribute access also enters Python. Cache bound handlers through the
+  // shared queue before installing listeners, then dispatch them directly.
+  const describe = () => ({
+    app: page.app,
+    methods: {
+      draw: page.draw, title: page.title, animating: page.animating, wake_in: page.wake_in,
+      press: page.press, release: page.release, move: page.move, wheel: page.wheel,
+      resize: page.resize, key: page.key, key_up: page.key_up, clear_keys: page.clear_keys,
+      copy: page.copy, paste: page.paste, open_path: page.open_path,
+    },
+    dropDir: page.DROP_DIR,
+    mountDir: page.MOUNT_DIR,
+  });
+  const description = runtime && runtime.promising ? await runtime.promising(describe) : describe();
+  const {methods, dropDir, mountDir} = description;
+  globalThis.emtkApp = description.app;
 
   // A call that may *run something* -- a menu entry, a command line's Return,
   // a dropped file -- enters Python on a suspendable stack (JSPI) when the
   // browser has one, so a synchronous renderer can wait for the one thing
   // WebGPU only does asynchronously: mapping a buffer to read it back
-  // (`emtk/gpu/browser.py::_Queue.read_buffer`). Moves and wheels stay plain:
-  // a hover must not queue behind an await.
+  // (`emtk/gpu/browser.py::_Queue.read_buffer`). Independent pages keep moves
+  // synchronous; a shared interpreter queues them while another call awaits.
   const jspi = typeof WebAssembly !== "undefined" && "Suspending" in WebAssembly;
-  const promising = async (fn, ...args) =>
+  let disposed = false;
+  const busy = () => Boolean(runtime && runtime.busy && runtime.busy());
+  const invoke = async (fn, ...args) =>
     jspi && typeof fn.callPromising === "function" ? await fn.callPromising(...args) : fn(...args);
+  const promising = (fn, ...args) => {
+    const task = () => disposed ? undefined : invoke(fn, ...args);
+    return runtime && runtime.promising ? runtime.promising(task) : task();
+  };
+  const call = (fn, ...args) => {
+    const deferred = busy();
+    const task = () => {
+      if (disposed) return undefined;
+      const value = fn(...args);
+      if (deferred) redraw();
+      return value;
+    };
+    return runtime && runtime.call ? runtime.call(task) : task();
+  };
+  globalThis.emtkInvoke = promising;
 
   // Draw on demand, and keep a frame loop only while Python is animating.
   // An idle app can still ask for *one* frame later (a tooltip waiting out
@@ -191,22 +238,22 @@ mount(js.emtkCanvas, _emtk_app_spec)
   let frame = null;
   let wake = null;
   const redraw = () => {
-    if (frame !== null) return;
+    if (disposed || frame !== null) return;
     frame = requestAnimationFrame(() => {
       frame = null;
       if (wake !== null) { clearTimeout(wake); wake = null; }
-      page.draw();
-      const title = page.title();
+      call(methods.draw);
+      const title = call(methods.title);
       if (title && document.title !== title) document.title = title;
-      if (page.animating()) { redraw(); return; }
-      const due = page.wake_in();
+      if (call(methods.animating)) { redraw(); return; }
+      const due = call(methods.wake_in);
       if (due >= 0) wake = setTimeout(() => { wake = null; redraw(); }, due * 1000);
     });
   };
   // The loop above is only ever *started* by an event; an animation can begin
   // without one (a script, a test), so check a few times a second while idle.
-  setInterval(() => {
-    if (frame === null && page.animating()) redraw();
+  const animationTimer = setInterval(() => {
+    if (!disposed && !busy() && frame === null && call(methods.animating)) redraw();
   }, 250);
   globalThis.emtkRedraw = redraw;
 
@@ -221,7 +268,7 @@ mount(js.emtkCanvas, _emtk_app_spec)
     canvas.setPointerCapture(event.pointerId);
     event.preventDefault();
     const [x, y] = at(event);
-    if (await promising(page.press, x, y, event.button, ...mods(event), false)) redraw();
+    if (await promising(methods.press, x, y, event.button, ...mods(event), false)) redraw();
   });
   // The DOM delivers `down, up, down, up, dblclick`: the `dblclick` is a fifth
   // event with no `up` of its own. It says `double` and then releases, or the
@@ -229,18 +276,18 @@ mount(js.emtkCanvas, _emtk_app_spec)
   canvas.addEventListener("dblclick", async (event) => {
     event.preventDefault();
     const [x, y] = at(event);
-    let changed = await promising(page.press, x, y, event.button, ...mods(event), true);
-    changed = (await promising(page.release, x, y, event.button, ...mods(event))) || changed;
+    let changed = await promising(methods.press, x, y, event.button, ...mods(event), true);
+    changed = (await promising(methods.release, x, y, event.button, ...mods(event))) || changed;
     if (changed) redraw();
   });
   canvas.addEventListener("pointermove", (event) => {
     const [x, y] = at(event);
-    if (page.move(x, y, event.buttons, ...mods(event))) redraw();
+    if (call(methods.move, x, y, event.buttons, ...mods(event))) redraw();
   });
   const end = async (event) => {
     const [x, y] = at(event);
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    if (await promising(page.release, x, y, event.button, ...mods(event))) redraw();
+    if (await promising(methods.release, x, y, event.button, ...mods(event))) redraw();
     syncMount();
   };
   canvas.addEventListener("pointerup", end);
@@ -248,14 +295,15 @@ mount(js.emtkCanvas, _emtk_app_spec)
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
     const [x, y] = at(event);
-    if (page.wheel(event.deltaY, x, y, ...mods(event))) redraw();
+    if (call(methods.wheel, event.deltaY, x, y, ...mods(event))) redraw();
   }, { passive: false });
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
   const resize = () => {
-    if (page.resize(canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio || 1)) redraw();
+    if (call(methods.resize, canvas.clientWidth, canvas.clientHeight, window.devicePixelRatio || 1)) redraw();
   };
-  if (typeof ResizeObserver !== "undefined") new ResizeObserver(resize).observe(canvas);
+  const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(resize) : null;
+  if (observer) observer.observe(canvas);
   else window.addEventListener("resize", resize);
 
   // Keys on `window`, so the app takes typing without a click first; real
@@ -267,32 +315,38 @@ mount(js.emtkCanvas, _emtk_app_spec)
     const tag = (el && el.tagName) || "";
     return tag === "INPUT" || tag === "TEXTAREA" || Boolean(el && el.isContentEditable);
   };
-  const divertClipboard = forwardClipboard(document, page, redraw, isFormControl);
+  const clipboardPage = {
+    copy: (cut) => call(methods.copy, cut),
+    paste: (text) => call(methods.paste, text),
+  };
+  const divertClipboard = forwardClipboard(document, clipboardPage, redraw, isFormControl, busy);
   window.addEventListener("keydown", async (event) => {
     if (isFormControl(event.target)) return;
+    if (busy()) event.preventDefault();
     const args = [event.key, event.key.length === 1 ? event.key : "", ...mods(event)];
     // Cmd/Ctrl+C/X/V: the browser's copy/cut/paste event delivers it, with
     // the clipboard's text (see forwardClipboard) -- no preventDefault here.
-    if (divertClipboard(event, () => { if (page.key(...args)) redraw(); })) return;
+    if (divertClipboard(event, () => { if (call(methods.key, ...args)) redraw(); })) return;
     let consumed;
     if (event.key === "Enter") {
       event.preventDefault();
-      consumed = await promising(page.key, ...args);
+      consumed = await promising(methods.key, ...args);
       syncMount();
     } else {
-      consumed = page.key(...args);
+      consumed = call(methods.key, ...args);
     }
     if (consumed) event.preventDefault();
     redraw();
   });
   window.addEventListener("keyup", (event) => {
     if (isFormControl(event.target)) return;
-    const consumed = page.key_up(event.key, ...mods(event));
+    if (busy()) event.preventDefault();
+    const consumed = call(methods.key_up, event.key, ...mods(event));
     if (consumed) event.preventDefault();
     redraw();
   });
   window.addEventListener("blur", () => {
-    if (page.clear_keys()) redraw();
+    if (call(methods.clear_keys)) redraw();
   });
 
   // Local files, both ending as a path on Pyodide's filesystem.
@@ -319,9 +373,9 @@ mount(js.emtkCanvas, _emtk_app_spec)
       for (const item of dropped) {
         status(`opening ${item.name}…`);
         try {
-          const path = await copyDropped(item, page.DROP_DIR, pyodide.FS,
+          const path = await copyDropped(item, dropDir, pyodide.FS,
                                          Number(config.drop_by_reference_above || 0));
-          if (await promising(page.open_path, path)) redraw();
+          if (await promising(methods.open_path, path)) redraw();
         } catch (error) {
           status(`could not open ${item.name}: ${error}`);
           console.error(error);
@@ -336,13 +390,15 @@ mount(js.emtkCanvas, _emtk_app_spec)
   const mountDirectory = async (handle) => {
     if (globalThis.emtkMount) {
       await globalThis.emtkMount.syncfs();
-      pyodide.FS.unmount(page.MOUNT_DIR);
+      pyodide.FS.unmount(mountDir);
       globalThis.emtkMount = null;
     }
-    pyodide.FS.mkdirTree(page.MOUNT_DIR);
-    globalThis.emtkMount = await pyodide.mountNativeFS(page.MOUNT_DIR, handle);
-    status(`${handle.name || "folder"} is mounted at ${page.MOUNT_DIR}`);
-    return page.MOUNT_DIR;
+    pyodide.FS.mkdirTree(mountDir);
+    globalThis.emtkMount = runtime && runtime.mountDirectory
+      ? await runtime.mountDirectory(handle, mountDir)
+      : await pyodide.mountNativeFS(mountDir, handle);
+    status(`${handle.name || "folder"} is mounted at ${mountDir}`);
+    return mountDir;
   };
   globalThis.emtkMountDirectory = mountDirectory;
   const mountButton = document.getElementById("mount");
@@ -369,8 +425,26 @@ mount(js.emtkCanvas, _emtk_app_spec)
   globalThis.emtkSyncMount = syncMount;
   window.addEventListener("beforeunload", syncMount);
 
-  page.draw();
-  if (page.animating()) redraw();
+  call(methods.draw);
+  if (call(methods.animating)) redraw();
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    if (frame !== null) cancelAnimationFrame(frame);
+    if (wake !== null) clearTimeout(wake);
+    clearInterval(animationTimer);
+    if (observer) observer.disconnect();
+    if (runtime && runtime.close) {
+      Promise.resolve(runtime.close(page)).then(() => {
+        for (const method of Object.values(methods)) {
+          if (method && typeof method.destroy === "function") method.destroy();
+        }
+      }).catch((error) => console.error(error));
+    }
+  };
+  globalThis.emtkDispose = dispose;
+  window.addEventListener("pagehide", dispose);
+  window.addEventListener("beforeunload", dispose);
   globalThis.emtkReady = true;
   status(config.ready_message || "ready");
 }
