@@ -128,6 +128,10 @@ dotted names
 ``status: true``
     a line under the rows: how many are shown (of how many, while a filter
     narrows them) and across how many columns;
+``selection: "single"``
+    at most one row is selected: shift- and ctrl-clicks select the clicked
+    row alone and Select All does nothing -- for a table whose selection
+    *is* the one record a form shows (the file whose trace is drawn);
 ``tree_key`` (with ``row_key``)
     rows form a tree: a record's ``tree_key`` field names its parent's
     ``row_key`` (empty for a top-level row). A row with children draws a
@@ -638,6 +642,8 @@ class DataTable:
         #: Keys of rows selected *besides* :attr:`selected_key` (Select All);
         #: a click on a row or a move of the selection clears them.
         self.also_selected: set = set()
+        #: At most one selected row (``selection: "single"``): no shift/ctrl extension, no Select All.
+        self.single_select = False
         #: The row a shift-click extends from (the last row clicked without shift).
         self.anchor_key: Any = None
         self.hovered: Optional[int] = None
@@ -852,7 +858,9 @@ class DataTable:
         return False
 
     def select_all(self) -> None:
-        """Select every row (the rows the filter shows), without notifying."""
+        """Select every row (the rows the filter shows), without notifying; nothing with ``single_select``."""
+        if self.single_select:
+            return
         order = self.order()
         self.also_selected = {self.key_of(i) for i in order}
         if order and self.selected_key not in self.also_selected:
@@ -1600,7 +1608,12 @@ class DataTable:
         position = self.row_at(x, y)
         if position is None:
             return self._inside(self._body_box, x, y)
-        if (shift or toggle) and self.editing is None and not self.is_parent(self.order()[position]):
+        if (
+            (shift or toggle)
+            and not self.single_select
+            and self.editing is None
+            and not self.is_parent(self.order()[position])
+        ):
             self._extend_selection(position, shift)
             return True
         prev_key = self.selected_key
@@ -1976,6 +1989,7 @@ class TableBinding:
             on_button=self._on_button,
         )
         self.control.auto_fit = bool(merged.get("fit_columns", False))
+        self.control.single_select = str(merged.get("selection", "") or "") == "single"
         self.control.selection_note = bool(merged.get("selection_note", True))
         #: ``drag_call(record, x, y, dropped)`` on the model: rows can be dragged out.
         self.drag_call = str(merged.get("drag_call", "") or "")
