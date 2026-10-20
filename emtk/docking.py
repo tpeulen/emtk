@@ -2381,14 +2381,26 @@ class DockManager:
         from .i18n import tr
 
         close_size = th
-        tab_widths = [
-            ctx.p.text_width(tr(self.windows[k].title))
-            + pad_x * 2.0
-            + (close_size if self.windows[k].closable else 0.0)
-            for k in shown
-        ]
         tab_spacing = 1.0 + max(len(shown) - 1, 0) * 2.0
         available_w = max(right - x - tab_spacing, 0.0)
+        # Every closable tab carries its own close box while the strip has room. When it does not,
+        # the covered tabs give theirs up before any title is cut: the shown tab keeps its box, and a
+        # covered panel still closes from its context menu (or once shown). A box per tab is not
+        # worth a strip of "Symbo…" titles.
+        with_close = {k for k in shown if self.windows[k].closable}
+
+        def _widths(closing):
+            return [
+                ctx.p.text_width(tr(self.windows[k].title))
+                + pad_x * 2.0
+                + (close_size if k in closing else 0.0)
+                for k in shown
+            ]
+
+        tab_widths = _widths(with_close)
+        if sum(tab_widths) > available_w:
+            with_close &= {top}
+            tab_widths = _widths(with_close)
         # Tabs too wide for the strip first give way: the longest titles end in an ellipsis, down to a
         # floor, and only what still does not fit scrolls. A tab cut mid-letter at the strip's edge looks
         # like a label that is lost.
@@ -2427,7 +2439,8 @@ class DockManager:
             win = self.windows[key]
 
             title = tr(win.title)
-            extra_w = pad_x * 2.0 + (close_size if win.closable else 0.0)
+            has_close = key in with_close
+            extra_w = pad_x * 2.0 + (close_size if has_close else 0.0)
             full_tw = ctx.p.text_width(title) + extra_w
             tw = wanted
             shown_title = title
@@ -2439,7 +2452,7 @@ class DockManager:
             tab = (cursor, y + 1.0, tw, th - 1.0)
             rects.append((key, tab))
 
-            tab_hit_w = tab[2] - (close_size if win.closable else 0.0)
+            tab_hit_w = tab[2] - (close_size if has_close else 0.0)
             tab_hit_rect = (tab[0], tab[1], max(tab_hit_w, 0.0), tab[3])
             item = self._id("tab", key)
             hovered = ctx.item_add(tab_hit_rect, item)
@@ -2468,7 +2481,7 @@ class DockManager:
             text_h = ctx.p.line_height()
             draw.add_text((tab[0] + pad_x, tab[1] + (tab[3] - text_h) / 2.0), ink,
                           shown_title)
-            if win.closable:
+            if has_close:
                 cb_rect = (tab[0] + tab[2] - close_size, y, close_size, th)
                 if self._button(ctx, cb_rect, self._id("close_tab", key), "×"):
                     win.visible = False

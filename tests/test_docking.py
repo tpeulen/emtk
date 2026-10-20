@@ -861,3 +861,44 @@ def test_dock_overlay_drawing_with_quad_painter_and_rgba_text_color():
         _style.TEXT = orig_text
         host.release(900.0, 650.0)
 
+
+
+def test_a_crowded_tab_strip_drops_covered_close_boxes_before_cutting_titles():
+    """Every closable tab has its ×; when that would cut titles, only the shown tab keeps one."""
+    titles = ("Project", "Assistant", "Python", "Symbols")
+
+    def strip(width):
+        docks = DockManager(Split("h", 0.5, Region("left"), Region("right")))
+        for title in titles:
+            docks.add_window(title.lower(), title, lambda box: None, dock="left")
+        app = ImApp(lambda: docks.draw((0.0, 0.0, width, 400.0)))
+        painter = RecordingPainter()
+        for _ in range(2):
+            painter = RecordingPainter()
+            app.draw(painter, 0.0, 0.0, width, 400.0)
+        left = docks.region_boxes["left"]
+        drawn = [t[5] for t in painter.texts if t[0] < left[0] + left[2] and t[1] < left[1] + 20.0]
+        return docks, drawn
+
+    # Narrowing the window: with room every tab has its ×; before any title is cut there is a width
+    # where the titles still fit whole but only the shown tab keeps its ×.
+    seen = []
+    for width in range(1200, 200, -10):
+        docks, drawn = strip(float(width))
+        whole = all(title in drawn for title in titles)
+        seen.append((width, whole, drawn.count("×")))
+    assert seen[0][1:] == (True, len(titles))
+    crowded = [width for width, whole, boxes in seen if whole and boxes == 1]
+    assert crowded, seen
+    roomy = min(width for width, whole, boxes in seen if whole and boxes == len(titles))
+    assert max(crowded) < roomy
+    # The × left is the shown tab's, and it still closes it.
+    docks, _drawn = strip(float(max(crowded)))
+    assert docks.active_tab("left") == "project"
+    host = Driver(docks, box=(0.0, 0.0, float(max(crowded)), 400.0))
+    tab_rect = next(r for k, r in docks._tab_rects["left"] if k == "project")
+    th = docks._title_h
+    cx, cy = tab_rect[0] + tab_rect[2] - th / 2.0, tab_rect[1] + th / 2.0
+    host.press(cx, cy)
+    host.release(cx, cy)
+    assert not docks.is_visible("project")
