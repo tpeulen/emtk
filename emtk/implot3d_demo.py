@@ -845,7 +845,11 @@ def demo_custom_styles() -> None:
         p3.next_colormap_color()
         p3.plot_scatter("Scatter", xs, ys, dot, 10)
         p3.end_plot()
-    p3._gp().style = backup
+    # ``GetStyle() = backup``: restored in place, as the reference's copy
+    # assignment does. A context made inside a frame shares the fallback
+    # context's Style object, so rebinding the attribute here would leave
+    # the seaborn values on that shared object for every later plot.
+    p3.get_style().__dict__.update(backup.copy().__dict__)
     p3.pop_colormap()
 
 

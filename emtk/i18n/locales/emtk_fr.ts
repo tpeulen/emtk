@@ -877,6 +877,70 @@
             <translation>Amener cette fenêtre au premier plan.</translation>
         </message>
         <message>
+            <source>View All</source>
+            <translation>Tout afficher</translation>
+        </message>
+        <message>
+            <source>Transforms</source>
+            <translation>Transformations</translation>
+        </message>
+        <message>
+            <source>Log X</source>
+            <translation>Log X</translation>
+        </message>
+        <message>
+            <source>Log Y</source>
+            <translation>Log Y</translation>
+        </message>
+        <message>
+            <source>Equal Aspect</source>
+            <translation>Proportions égales</translation>
+        </message>
+        <message>
+            <source>Mouse Mode</source>
+            <translation>Mode souris</translation>
+        </message>
+        <message>
+            <source>Pan / 3-Button</source>
+            <translation>Panoramique / 3 boutons</translation>
+        </message>
+        <message>
+            <source>Box Select / 1-Button</source>
+            <translation>Sélection rectangulaire / 1 bouton</translation>
+        </message>
+        <message>
+            <source>Log Scale</source>
+            <translation>Échelle logarithmique</translation>
+        </message>
+        <message>
+            <source>Reset Position</source>
+            <translation>Réinitialiser la position</translation>
+        </message>
+        <message>
+            <source>Save / Export</source>
+            <translation>Enregistrer / Exporter</translation>
+        </message>
+        <message>
+            <source>Save Image (PNG)...</source>
+            <translation>Enregistrer l'image (PNG)...</translation>
+        </message>
+        <message>
+            <source>Save Vector (SVG)...</source>
+            <translation>Enregistrer le vecteur (SVG)...</translation>
+        </message>
+        <message>
+            <source>Save Data (CSV)...</source>
+            <translation>Enregistrer les données (CSV)...</translation>
+        </message>
+        <message>
+            <source>Copy Image to Clipboard</source>
+            <translation>Copier l'image dans le presse-papiers</translation>
+        </message>
+        <message>
+            <source>Copy Data to Clipboard</source>
+            <translation>Copier les données dans le presse-papiers</translation>
+        </message>
+        <message>
             <source>January</source>
             <translation>janvier</translation>
         </message>

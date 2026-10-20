@@ -524,3 +524,269 @@ def test_the_axis_menu_inverts_the_axis():
     d.release(x - 20, y)
     d.frame()
     assert implot._cur.last_plot.axes[implot.AXIS_X1].is_inverted()
+
+
+# --------------------------------------------------------------------------- #
+# Draggable Legend tests
+# --------------------------------------------------------------------------- #
+def _plot_with_legend(out, location=implot.LOCATION_NORTH_WEST):
+    implot.begin_plot("##p_legend", (500, 300))
+    implot.setup_axes("x", "y")
+    implot.setup_axes_limits(0, 10, 0, 10)
+    implot.setup_legend(location)
+    implot.plot_line("line_a", [0, 10], [0, 10])
+    implot.plot_line("line_b", [0, 10], [10, 0])
+    out["rect"] = implot.get_plot_pos() + implot.get_plot_size()
+    implot.end_plot()
+    out["limits"] = implot.get_plot_limits()
+    out["plot"] = implot._cur.last_plot
+
+
+def test_dragging_the_legend_moves_it_across_frames():
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    d.frame()
+    plot = d.out["plot"]
+    legend = plot.items.legend
+    init_rect = tuple(legend.rect)
+    lx = (init_rect[0] + init_rect[2]) / 2.0
+    ly = (init_rect[1] + init_rect[3]) / 2.0
+
+    # Drag the legend 60px right and 40px down
+    d.press(lx, ly)
+    d.move(lx + 60, ly + 40)
+    d.release(lx + 60, ly + 40)
+    d.frame()
+
+    # Legend rect should have moved by (60, 40)
+    assert legend.rect[0] == pytest.approx(init_rect[0] + 60, abs=1.5)
+    assert legend.rect[1] == pytest.approx(init_rect[1] + 40, abs=1.5)
+
+    # Plot axes limits must NOT have panned
+    lim = d.out["limits"]
+    assert lim.x_min == pytest.approx(0.0)
+    assert lim.x_max == pytest.approx(10.0)
+    assert lim.y_min == pytest.approx(0.0)
+    assert lim.y_max == pytest.approx(10.0)
+
+    # Series items must NOT have had their visibility toggled by the drag
+    item_a = plot.items.get_item_by_index(0)
+    item_b = plot.items.get_item_by_index(1)
+    assert item_a.show is True
+    assert item_b.show is True
+
+
+def test_clicking_legend_item_toggles_visibility_without_drag():
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    d.frame()
+    plot = d.out["plot"]
+    legend = plot.items.legend
+    item_a = plot.items.get_item_by_index(0)
+    assert item_a.show is True
+
+    # Click in place on the legend (over first item entry)
+    ix = (legend.rect[0] + legend.rect[2]) / 2.0
+    iy = legend.rect[1] + 12.0
+    d.press(ix, iy)
+    d.release(ix, iy)
+    d.frame()
+
+    # Now item_a is toggled off
+    assert item_a.show is False
+
+    # Clicking again toggles it back on
+    d.press(ix, iy)
+    d.release(ix, iy)
+    d.frame()
+    assert item_a.show is True
+
+
+def test_double_clicking_legend_resets_position():
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    d.frame()
+    plot = d.out["plot"]
+    legend = plot.items.legend
+    init_rect = tuple(legend.rect)
+    lx = (init_rect[0] + init_rect[2]) / 2.0
+    ly = (init_rect[1] + init_rect[3]) / 2.0
+
+    # Drag away
+    d.press(lx, ly)
+    d.move(lx + 80, ly + 50)
+    d.release(lx + 80, ly + 50)
+    d.frame()
+    assert legend.offset is not None
+
+    # Double-click over the dragged legend
+    new_lx = (legend.rect[0] + legend.rect[2]) / 2.0
+    new_ly = (legend.rect[1] + legend.rect[3]) / 2.0
+    d.press(new_lx, new_ly, double=True)
+    d.release(new_lx, new_ly)
+    d.frame()
+
+    # Offset must be reset to None and position back to initial anchor rect
+    assert legend.offset is None
+    assert legend.rect[0] == pytest.approx(init_rect[0], abs=1.0)
+    assert legend.rect[1] == pytest.approx(init_rect[1], abs=1.0)
+
+
+def test_legend_drag_is_clamped_to_plot_rect():
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    d.frame()
+    plot = d.out["plot"]
+    legend = plot.items.legend
+    lx = (legend.rect[0] + legend.rect[2]) / 2.0
+    ly = (legend.rect[1] + legend.rect[3]) / 2.0
+
+    # Drag far beyond top-left
+    d.press(lx, ly)
+    d.move(lx - 500, ly - 500)
+    d.release(lx - 500, ly - 500)
+    d.frame()
+
+    pr = plot.plot_rect
+    # Legend should be clamped inside plot_rect
+    assert legend.rect[0] >= pr[0]
+    assert legend.rect[1] >= pr[1]
+    assert legend.rect[2] <= pr[2]
+    assert legend.rect[3] <= pr[3]
+
+
+def test_plot_context_menu_has_pyqtgraph_structure():
+    d = Driver(_plot)
+    d.move(-10, -10)
+    cx, cy = _centre(d.out)
+    d.press(cx, cy, button=1)
+    d.release(cx, cy, button=1)
+    p = d.frame()
+    clean = {s.strip("* ") for s in p.strings}
+    expected = {"View All", "x", "y", "Transforms", "Mouse Mode", "Legend", "Settings", "Save / Export"}
+    assert expected <= clean
+
+
+def test_plot_context_menu_view_all():
+    d = Driver(_plot)
+    d.move(-10, -10)
+    cx, cy = _centre(d.out)
+    d.wheel(cx, cy, 1.0)
+    assert d.out["limits"].x_min > 0.0
+    # Right click and click View All
+    d.press(cx, cy, button=1)
+    d.release(cx, cy, button=1)
+    p = d.frame()
+    x, y = _text_at(p, "View All")
+    d.press(x, y)
+    d.release(x, y)
+    d.frame()
+    lim = d.out["limits"]
+    assert (lim.x_min, lim.x_max, lim.y_min, lim.y_max) == pytest.approx((0.0, 10.0, 0.0, 10.0))
+
+
+def test_plot_context_menu_transforms_and_mouse_mode():
+    d = Driver(_plot)
+    d.move(-10, -10)
+    cx, cy = _centre(d.out)
+    d.press(cx, cy, button=1)
+    d.release(cx, cy, button=1)
+    p = d.frame()
+
+    # Open Mouse Mode -> Pan / 3-Button
+    p = d.press(*_text_at(p, "Mouse Mode"))
+    p = d.release(*_text_at(p, "Mouse Mode"))
+    p = d.frame()
+    x, y = _text_at(p, "Pan / 3-Button")
+    d.press(x, y)
+    d.release(x, y)
+    plot = implot._cur.last_plot
+    assert implot.has_flag(plot.flags, implot.FLAGS_NO_BOX_SELECT)
+
+    # Now open context menu again and switch back
+    d.press(cx, cy, button=1)
+    d.release(cx, cy, button=1)
+    p = d.frame()
+    p = d.press(*_text_at(p, "Mouse Mode"))
+    p = d.release(*_text_at(p, "Mouse Mode"))
+    p = d.frame()
+    x, y = _text_at(p, "Box Select / 1-Button")
+    d.press(x, y)
+    d.release(x, y)
+    plot = implot._cur.last_plot
+    assert not implot.has_flag(plot.flags, implot.FLAGS_NO_BOX_SELECT)
+
+
+def test_plot_export_csv_svg_png(tmp_path):
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    d.frame()
+    plot = d.out["plot"]
+
+    # Test export CSV
+    csv_str = implot.export_plot_csv(plot)
+    assert "line_a" in csv_str and "line_b" in csv_str
+
+    # Test save CSV
+    csv_path = tmp_path / "test.csv"
+    implot.save_plot_csv(plot, str(csv_path))
+    assert csv_path.exists()
+    assert csv_path.read_text(encoding="utf-8") == csv_str
+    assert plot.last_exported_file == str(csv_path.resolve())
+
+    # Test copy CSV
+    from emtk import clipboard
+    implot.copy_plot_data(plot)
+    assert clipboard.last_copied()[1] == csv_str
+
+    # Test export SVG
+    svg_str = implot.export_plot_svg(plot)
+    assert svg_str.startswith("<svg")
+    assert svg_str.endswith("</svg>")
+    assert "polyline" in svg_str
+    assert "line_a" in svg_str
+
+    # Test save SVG
+    svg_path = tmp_path / "test.svg"
+    implot.save_plot_svg(plot, str(svg_path))
+    assert svg_path.exists()
+    assert svg_path.read_text(encoding="utf-8") == svg_str
+
+    # Test export PNG
+    png_bytes = implot.export_plot_png(plot)
+    assert png_bytes.startswith(b"\x89PNG\r\n\x1a\n")
+
+    # Test save PNG
+    png_path = tmp_path / "test.png"
+    implot.save_plot_png(plot, str(png_path))
+    assert png_path.exists()
+    assert png_path.read_bytes() == png_bytes
+
+    # Test copy PNG
+    implot.copy_plot_image(plot)
+    assert clipboard.last_copied_image()[1] == png_bytes
+
+
+def test_plot_context_menu_save_export_menu_items(tmp_path, monkeypatch):
+    from pathlib import Path
+    monkeypatch.chdir(tmp_path)
+    d = Driver(_plot_with_legend)
+    d.move(-10, -10)
+    cx, cy = _centre(d.out)
+
+    # Test Save Image (PNG)... via context menu
+    d.press(cx, cy, button=1)
+    d.release(cx, cy, button=1)
+    p = d.frame()
+    p = d.press(*_text_at(p, "Save / Export"))
+    p = d.release(*_text_at(p, "Save / Export"))
+    p = d.frame()
+    x, y = _text_at(p, "Save Image (PNG)...")
+    d.press(x, y)
+    d.release(x, y)
+    plot = d.out["plot"]
+    assert plot.context_menu is None
+    assert plot.last_exported_file and plot.last_exported_file.endswith(".png")
+    assert Path(plot.last_exported_file).exists()
+
+

@@ -647,3 +647,78 @@ def test_a_double_right_click_on_a_plane_snaps_the_view_to_it():
     assert abs(abs(view_z.z) - 1.0) < 1e-9
     ups = [end * v for v in ((1, 0, 0), (0, 1, 0), (-1, 0, 0), (0, -1, 0))]
     assert max(u.y for u in ups) == pytest.approx(1.0)
+
+
+def test_3d_legend_drag_and_reset():
+    host = Host()
+
+    def gui(seen):
+        if p3.begin_plot("##3d_legend", (400, 400), flags=0):
+            p3.setup_axes_limits(-1, 1, -1, 1, -1, 1)
+            p3.plot_scatter("series1", [0], [0], [0])
+            p3.plot_scatter("series2", [1], [1], [1])
+            seen["plot"] = p3._gp().current_plot
+            p3.end_plot()
+
+    host.frame(gui)
+    plot = host.seen["plot"]
+    legend = plot.items.legend
+    init_rect = tuple(legend.rect)
+    lx = (init_rect[0] + init_rect[2]) / 2.0
+    ly = (init_rect[1] + init_rect[3]) / 2.0
+
+    # Drag legend by (50, 30)
+    io = host.io
+    io.mouse_pos = (lx, ly)
+    io.mouse_pos_prev = (lx, ly)
+    io.mouse_down[0] = io.mouse_clicked[0] = True
+    io.mouse_clicked_pos[0] = io.mouse_pos
+    host.frame(gui)
+
+    io.mouse_clicked[0] = False
+    io.mouse_pos_prev = (lx, ly)
+    io.mouse_pos = (lx + 50, ly + 30)
+    host.frame(gui)
+
+    io.mouse_down[0] = False
+    io.mouse_released[0] = True
+    io.mouse_pos_prev = (lx + 50, ly + 30)
+    host.frame(gui)
+
+    io.mouse_released[0] = False
+    host.frame(gui)
+
+    assert legend.rect[0] == pytest.approx(init_rect[0] + 50, abs=1.5)
+    assert legend.rect[1] == pytest.approx(init_rect[1] + 30, abs=1.5)
+
+    # Double-click resets to anchor
+    cur_lx = (legend.rect[0] + legend.rect[2]) / 2.0
+    cur_ly = (legend.rect[1] + legend.rect[3]) / 2.0
+    io.mouse_pos = (cur_lx, cur_ly)
+    io.mouse_pos_prev = (cur_lx, cur_ly)
+    io.mouse_down[0] = io.mouse_clicked[0] = io.mouse_double_clicked[0] = True
+    io.mouse_clicked_pos[0] = io.mouse_pos
+    host.frame(gui)
+    io.mouse_down[0] = io.mouse_clicked[0] = io.mouse_double_clicked[0] = False
+    io.mouse_released[0] = True
+    host.frame(gui)
+    io.mouse_released[0] = False
+    host.frame(gui)
+
+    assert legend.offset is None
+    assert legend.rect[0] == pytest.approx(init_rect[0], abs=1.0)
+    assert legend.rect[1] == pytest.approx(init_rect[1], abs=1.0)
+
+
+
+def test_the_custom_styles_demo_leaves_the_shared_style_as_it_found_it():
+    """A context made inside a frame shares the fallback context's Style; the
+    seaborn demo must restore that object, not rebind its own attribute."""
+    from emtk import implot3d_demo as demo
+
+    shared = p3._gp().style  # outside a frame: the fallback context's style
+    before = {k: list(v) if isinstance(v, list) else v for k, v in shared.__dict__.items()}
+    host = Host(size=(520.0, 900.0))
+    host.frame(lambda seen: demo.demo_custom_styles())
+    assert p3._gp().style is shared
+    assert shared.__dict__ == before

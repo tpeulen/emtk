@@ -357,6 +357,10 @@ def setup_axis_scale(axis: int, scale, inverse=None, data=None) -> None:
     ax = plot.axes[axis]
     if not ax.enabled:
         setup_axis(axis)
+    _apply_axis_scale(ax, scale, inverse, data)
+
+
+def _apply_axis_scale(ax, scale, inverse=None, data=None) -> None:
     if callable(scale):
         ax.scale = I.IMPLOT_AUTO
         ax.transform_forward = lambda v, d=None, f=scale: f(v)
@@ -374,6 +378,10 @@ def setup_axis_scale(axis: int, scale, inverse=None, data=None) -> None:
         ax.transform_inverse = I.transform_inverse_log10
         ax.locator = I.locator_log10
         ax.constraint_range = (I.DBL_MIN, I.INF)
+        if ax.range_min <= 0.0:
+            ax.set_min(1e-3)
+        if ax.range_max <= ax.range_min:
+            ax.set_max(ax.range_min * 10.0)
     elif scale == I.SCALE_SYMLOG:
         ax.transform_forward = I.transform_forward_symlog
         ax.transform_inverse = I.transform_inverse_symlog
@@ -413,9 +421,11 @@ def setup_legend(location: int = I.LOCATION_NORTH_WEST, flags: int = 0) -> None:
     legend = gp.current_items.legend
     if location != legend.previous_location:
         legend.location = location
+        legend.offset = None
     legend.previous_location = location
     if flags != legend.previous_flags:
         legend.flags = flags
+        legend.offset = None
     legend.previous_flags = flags
 
 
@@ -707,9 +717,12 @@ def setup_finish() -> None:
     _layout(plot, first_pass=True)
     if not has_flag(plot.flags, I.FLAGS_NO_INPUTS) and not _auto_range_input(plot):
         _update_input(plot)
+    fit_next = getattr(plot, "fit_next_frame", False)
+    plot.fit_next_frame = False
     for i, axis in enumerate(plot.axes):
-        if gp.next_plot_data.fit[i] or axis.is_auto_fitting():
+        if gp.next_plot_data.fit[i] or axis.is_auto_fitting() or fit_next:
             plot.fit_this_frame = axis.fit_this_frame = True
+            axis.follow = True
     plot.snapshot = [_copy.copy(ax) for ax in plot.axes]
     plot.items.legend.reset()
 
@@ -823,6 +836,13 @@ def _update_input(plot) -> bool:
     imap = gp.input_map
     mods = I.key_mods(io)
     pressed, plot.hovered, plot.held = _plot_button_behavior(plot.plot_rect, plot.id)
+    legend = getattr(getattr(plot, "items", None), "legend", None)
+    if legend is not None and not has_flag(plot.flags, I.FLAGS_NO_LEGEND) and plot.items.get_legend_count() > 0:
+        lrc = legend.rect_clamped
+        if lrc[2] > lrc[0] and lrc[3] > lrc[1]:
+            if I.rect_contains(lrc, io.mouse_pos) or getattr(legend, "drag_active", False):
+                plot.held = False
+                pressed = False
     if pressed:
         if (not has_flag(plot.flags, I.FLAGS_NO_BOX_SELECT) and io.mouse_clicked[imap.select]
                 and has_flag(mods, imap.select_mod)):
@@ -1233,7 +1253,7 @@ def _show_legend_entries(items, legend_bb, hovered: bool, pad, spacing, vertical
         if not has_flag(items.legend.flags, I.LEGEND_FLAGS_NO_BUTTONS):
             ctx.set_next_item_allow_overlap()
             item_hov, item_hld, item_clk = ctx.button_behavior(button, ("##legend", item.id))
-        if item_clk:
+        if item_clk and not getattr(items.legend, "drag_moved", False):
             item.show = not item.show
         can_hover = item_hov and (not has_flag(items.legend.flags, I.LEGEND_FLAGS_NO_HIGHLIGHT_ITEM)
                                   or not has_flag(items.legend.flags, I.LEGEND_FLAGS_NO_HIGHLIGHT_AXIS))
@@ -1266,12 +1286,64 @@ def _render_legend(items, outer, pad, flags_owner_no_legend: bool, menus_allowed
     legend = items.legend
     horz = has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)
     size = I.calc_legend_size(items, style.legend_inner_padding, style.legend_spacing, not horz)
-    pos = I.get_location_pos(outer, size, legend.location, pad)
+
+    min_x = outer[0] + pad[0]
+    max_x = max(min_x, outer[2] - pad[0] - size[0])
+    min_y = outer[1] + pad[1]
+    max_y = max(min_y, outer[3] - pad[1] - size[1])
+
+    if legend.offset is not None:
+        px = max(min_x, min(outer[0] + legend.offset[0], max_x))
+        py = max(min_y, min(outer[1] + legend.offset[1], max_y))
+        pos = (px, py)
+        legend.offset = (px - outer[0], py - outer[1])
+    else:
+        pos = I.get_location_pos(outer, size, legend.location, pad)
+
     legend.rect = (pos[0], pos[1], pos[0] + size[0], pos[1] + size[1])
     legend.rect_clamped, scrollable = I.clamp_legend_rect(legend.rect, outer, pad)
     rc = legend.rect_clamped
     _press, legend.hovered, legend.held = _plot_button_behavior(rc, items.id)
     legend.hovered = legend.hovered or (owner_hovered and I.rect_contains(rc, io.mouse_pos))
+
+    # Double-click resets legend to anchor position:
+    if legend.hovered and io.mouse_double_clicked[0]:
+        legend.offset = None
+        legend.drag_active = False
+        legend.dragging = False
+        legend.drag_moved = False
+        legend.drag_start = None
+        legend.drag_start_offset = None
+        pos = I.get_location_pos(outer, size, legend.location, pad)
+        legend.rect = (pos[0], pos[1], pos[0] + size[0], pos[1] + size[1])
+        legend.rect_clamped, scrollable = I.clamp_legend_rect(legend.rect, outer, pad)
+        rc = legend.rect_clamped
+    elif io.mouse_clicked[0] and legend.hovered:
+        legend.drag_active = True
+        legend.drag_start = tuple(io.mouse_pos)
+        legend.drag_start_offset = legend.offset if legend.offset is not None else (pos[0] - outer[0], pos[1] - outer[1])
+        legend.drag_moved = False
+
+    if legend.drag_active and io.mouse_down[0]:
+        start = legend.drag_start or io.mouse_pos
+        dx = io.mouse_pos[0] - start[0]
+        dy = io.mouse_pos[1] - start[1]
+        if not legend.drag_moved and (dx * dx + dy * dy >= 9.0):
+            legend.drag_moved = True
+            legend.dragging = True
+        if legend.drag_moved:
+            if legend.drag_start_offset is None:
+                legend.drag_start_offset = (pos[0] - outer[0], pos[1] - outer[1])
+            target_x = outer[0] + legend.drag_start_offset[0] + dx
+            target_y = outer[1] + legend.drag_start_offset[1] + dy
+            clamped_x = max(min_x, min(target_x, max_x))
+            clamped_y = max(min_y, min(target_y, max_y))
+            legend.offset = (clamped_x - outer[0], clamped_y - outer[1])
+            pos = (clamped_x, clamped_y)
+            legend.rect = (pos[0], pos[1], pos[0] + size[0], pos[1] + size[1])
+            legend.rect_clamped, scrollable = I.clamp_legend_rect(legend.rect, outer, pad)
+            rc = legend.rect_clamped
+
     if scrollable:
         sx, sy = legend.scroll
         if legend.hovered and io.mouse_wheel != 0.0:
@@ -1296,6 +1368,12 @@ def _render_legend(items, outer, pad, flags_owner_no_legend: bool, menus_allowed
         and not has_flag(legend.flags, I.LEGEND_FLAGS_NO_MENUS)
     _stroke(rc, I.get_style_color_u32(I.COL_LEGEND_BORDER))
     dl.pop_clip_rect()
+    if not io.mouse_down[0]:
+        legend.drag_active = False
+        legend.dragging = False
+        legend.drag_moved = False
+        legend.drag_start = None
+        legend.drag_start_offset = None
     return contextable and menus_allowed
 
 
@@ -1909,6 +1987,9 @@ def show_axis_context_menu(axis, equal_axis=None, time_allowed: bool = False) ->
     _w.separator()
     _changed, axis.flags = _w.checkbox_flags(mark("Invert", domain="emtk"), axis.flags, I.AXIS_FLAGS_INVERT)
     _changed, axis.flags = _w.checkbox_flags(mark("Opposite", domain="emtk"), axis.flags, I.AXIS_FLAGS_OPPOSITE)
+    is_log = (axis.scale == I.SCALE_LOG10)
+    if _w.checkbox(mark("Log Scale", domain="emtk"), is_log)[0]:
+        _apply_axis_scale(axis, I.SCALE_LINEAR if is_log else I.SCALE_LOG10)
     _w.separator()
     _w.begin_disabled(not axis.label)
     if _w.checkbox(mark("Label", domain="emtk"), label)[0]:
@@ -1931,11 +2012,15 @@ def show_legend_context_menu(legend, visible: bool) -> bool:
         ret = True
     if legend.can_go_inside:
         _changed, legend.flags = _w.checkbox_flags(mark("Outside", domain="emtk"), legend.flags, I.LEGEND_FLAGS_OUTSIDE)
+        if _changed:
+            legend.offset = None
     if _w.radio_button(mark("H", domain="emtk"), has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)):
         legend.flags |= I.LEGEND_FLAGS_HORIZONTAL
+        legend.offset = None
     _w.same_line()
     if _w.radio_button(mark("V", domain="emtk"), not has_flag(legend.flags, I.LEGEND_FLAGS_HORIZONTAL)):
         legend.flags &= ~I.LEGEND_FLAGS_HORIZONTAL
+        legend.offset = None
     grid = (("NW", I.LOCATION_NORTH_WEST), ("N", I.LOCATION_NORTH), ("NE", I.LOCATION_NORTH_EAST),
             ("W", I.LOCATION_WEST), ("C", None), ("E", I.LOCATION_EAST),
             ("SW", I.LOCATION_SOUTH_WEST), ("S", I.LOCATION_SOUTH), ("SE", I.LOCATION_SOUTH_EAST))
@@ -1946,6 +2031,11 @@ def show_legend_context_menu(legend, visible: bool) -> bool:
             _w.invisible_button(name, (1.5 * s, s))
         elif _w.button(name, (1.5 * s, s)):
             legend.location = loc
+            legend.offset = None
+    if getattr(legend, "offset", None) is not None:
+        _w.separator()
+        if _w.button(mark("Reset Position", domain="emtk")):
+            legend.offset = None
     return ret
 
 
@@ -1970,10 +2060,289 @@ def show_subplots_context_menu(subplot) -> None:
         _w.end_menu()
 
 
+def export_plot_csv(plot) -> str:
+    """Generate CSV text for all series plotted on *plot*."""
+    lines = []
+    headers = []
+    series_cols = []
+    for idx, r in enumerate(plot.records):
+        raw_label = r.get("label", "") or f"series_{idx + 1}"
+        label = raw_label.split("##")[0] or f"series_{idx + 1}"
+        pts = r.get("pts")
+        if pts is not None:
+            headers.extend([f"{label}_x", f"{label}_y"])
+            xs = [pt[0] for pt in pts]
+            ys = [pt[1] for pt in pts]
+            series_cols.append((xs, ys))
+        elif "pts1" in r:
+            headers.extend([f"{label}_x", f"{label}_y"])
+            xs = [pt[0] for pt in r["pts1"]]
+            ys = [pt[1] for pt in r["pts1"]]
+            series_cols.append((xs, ys))
+    if not series_cols:
+        return ""
+    lines.append(",".join(headers))
+    max_len = max(len(col[0]) for col in series_cols)
+    for i in range(max_len):
+        row = []
+        for xs, ys in series_cols:
+            if i < len(xs):
+                x_val = xs[i]
+                y_val = ys[i]
+                row.append(f"{x_val:.8g}" if math.isfinite(x_val) else "nan")
+                row.append(f"{y_val:.8g}" if math.isfinite(y_val) else "nan")
+            else:
+                row.extend(["", ""])
+        lines.append(",".join(row))
+    return "\n".join(lines)
+
+
+def copy_plot_data(plot) -> bool:
+    """Copy the plot series data as CSV to the clipboard."""
+    from . import clipboard
+    csv_str = export_plot_csv(plot)
+    if csv_str:
+        return clipboard.copy(csv_str)
+    return False
+
+
+def export_plot_svg(plot) -> str:
+    """Generate an SVG vector document string representing the plot."""
+    fr = plot.frame_rect
+    pr = plot.plot_rect
+    w = max(400.0, float(fr[2] - fr[0]) if fr[2] > fr[0] else 600.0)
+    h = max(300.0, float(fr[3] - fr[1]) if fr[3] > fr[1] else 400.0)
+
+    if pr[2] > pr[0] and pr[3] > pr[1]:
+        px = max(0.0, float(pr[0] - fr[0]))
+        py = max(0.0, float(pr[1] - fr[1]))
+        pw = float(pr[2] - pr[0])
+        ph = float(pr[3] - pr[1])
+    else:
+        px, py, pw, ph = 50.0, 30.0, w - 80.0, h - 60.0
+
+    x_ax = plot.axes[I.AXIS_X1]
+    y_ax = plot.axes[I.AXIS_Y1]
+    x_min, x_max = float(x_ax.range_min), float(x_ax.range_max)
+    y_min, y_max = float(y_ax.range_min), float(y_ax.range_max)
+    dx = (x_max - x_min) if x_max != x_min else 1.0
+    dy = (y_max - y_min) if y_max != y_min else 1.0
+
+    clip_id = f"plot_clip_{abs(id(plot))}"
+    svg_parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.1f}" height="{h:.1f}" viewBox="0 0 {w:.1f} {h:.1f}">',
+        '<style>',
+        'text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }',
+        '</style>',
+        '<defs>',
+        f'<clipPath id="{clip_id}">',
+        f'<rect x="{px:.1f}" y="{py:.1f}" width="{pw:.1f}" height="{ph:.1f}" />',
+        '</clipPath>',
+        '</defs>',
+        f'<rect width="{w:.1f}" height="{h:.1f}" fill="#191919" />',
+        f'<rect x="{px:.1f}" y="{py:.1f}" width="{pw:.1f}" height="{ph:.1f}" fill="#111111" stroke="#444444" stroke-width="1" />'
+    ]
+
+    # Grid lines
+    if x_ax.has_grid_lines() and hasattr(x_ax, "ticker") and x_ax.ticker.ticks:
+        for t in x_ax.ticker.ticks:
+            val = t.plot_pos
+            if x_min <= val <= x_max:
+                gx = px + (val - x_min) / dx * pw
+                svg_parts.append(f'<line x1="{gx:.1f}" y1="{py:.1f}" x2="{gx:.1f}" y2="{py + ph:.1f}" stroke="#2a2a2a" stroke-width="1" />')
+    if y_ax.has_grid_lines() and hasattr(y_ax, "ticker") and y_ax.ticker.ticks:
+        for t in y_ax.ticker.ticks:
+            val = t.plot_pos
+            if y_min <= val <= y_max:
+                gy = py + ph - (val - y_min) / dy * ph if not y_ax.is_inverted() else py + (val - y_min) / dy * ph
+                svg_parts.append(f'<line x1="{px:.1f}" y1="{gy:.1f}" x2="{px + pw:.1f}" y2="{gy:.1f}" stroke="#2a2a2a" stroke-width="1" />')
+
+    # Data series
+    svg_parts.append(f'<g clip-path="url(#{clip_id})">')
+    for idx, r in enumerate(plot.records):
+        pts = r.get("pts")
+        if not pts:
+            continue
+        kind = r.get("kind", "line")
+        spec = r.get("spec")
+        col_tuple = getattr(spec, "line_color", None) if spec else None
+        if col_tuple is None and hasattr(spec, "marker_line_color"):
+            col_tuple = spec.marker_line_color
+        if col_tuple and len(col_tuple) >= 3:
+            col_hex = f"#{int(col_tuple[0]):02x}{int(col_tuple[1]):02x}{int(col_tuple[2]):02x}"
+        else:
+            col_hex = "#4a90e2"
+        weight = float(getattr(spec, "line_weight", 1.5)) if spec else 1.5
+
+        screen_pts = []
+        for x, y in pts:
+            if not (math.isfinite(x) and math.isfinite(y)):
+                continue
+            sx = px + (x - x_min) / dx * pw
+            sy = py + ph - (y - y_min) / dy * ph if not y_ax.is_inverted() else py + (y - y_min) / dy * ph
+            screen_pts.append((sx, sy))
+
+        if kind == "line" and screen_pts:
+            pts_str = " ".join(f"{sx:.1f},{sy:.1f}" for sx, sy in screen_pts)
+            svg_parts.append(f'<polyline points="{pts_str}" fill="none" stroke="{col_hex}" stroke-width="{weight:.1f}" />')
+        elif kind == "scatter" and screen_pts:
+            rad = float(getattr(spec, "marker_size", 3.0)) if spec else 3.0
+            for sx, sy in screen_pts:
+                svg_parts.append(f'<circle cx="{sx:.1f}" cy="{sy:.1f}" r="{rad:.1f}" fill="{col_hex}" />')
+        elif screen_pts:
+            pts_str = " ".join(f"{sx:.1f},{sy:.1f}" for sx, sy in screen_pts)
+            svg_parts.append(f'<polyline points="{pts_str}" fill="none" stroke="{col_hex}" stroke-width="{weight:.1f}" />')
+    svg_parts.append('</g>')
+
+    # Axis tick marks and tick numbers
+    if x_ax.has_tick_labels() and hasattr(x_ax, "ticker") and x_ax.ticker.ticks:
+        for t in x_ax.ticker.ticks:
+            val = t.plot_pos
+            if x_min <= val <= x_max:
+                gx = px + (val - x_min) / dx * pw
+                svg_parts.append(f'<line x1="{gx:.1f}" y1="{py + ph:.1f}" x2="{gx:.1f}" y2="{py + ph + 4:.1f}" stroke="#888" stroke-width="1" />')
+                lbl = getattr(t, "label", None) or f"{val:.4g}"
+                svg_parts.append(f'<text x="{gx:.1f}" y="{py + ph + 16:.1f}" fill="#aaa" font-size="11" text-anchor="middle">{lbl}</text>')
+
+    if y_ax.has_tick_labels() and hasattr(y_ax, "ticker") and y_ax.ticker.ticks:
+        for t in y_ax.ticker.ticks:
+            val = t.plot_pos
+            if y_min <= val <= y_max:
+                gy = py + ph - (val - y_min) / dy * ph if not y_ax.is_inverted() else py + (val - y_min) / dy * ph
+                svg_parts.append(f'<line x1="{px - 4:.1f}" y1="{gy:.1f}" x2="{px:.1f}" y2="{gy:.1f}" stroke="#888" stroke-width="1" />')
+                lbl = getattr(t, "label", None) or f"{val:.4g}"
+                svg_parts.append(f'<text x="{px - 6:.1f}" y="{gy + 4:.1f}" fill="#aaa" font-size="11" text-anchor="end">{lbl}</text>')
+
+    # Axis Labels
+    if x_ax.has_label() and x_ax.label:
+        svg_parts.append(f'<text x="{px + pw / 2.0:.1f}" y="{h - 5:.1f}" fill="#ccc" font-size="12" text-anchor="middle">{x_ax.label}</text>')
+    if y_ax.has_label() and y_ax.label:
+        svg_parts.append(f'<text x="14" y="{py + ph / 2.0:.1f}" fill="#ccc" font-size="12" text-anchor="middle" transform="rotate(-90 14 {py + ph / 2.0:.1f})">{y_ax.label}</text>')
+
+    # Title
+    if plot.has_title() and plot.title:
+        svg_parts.append(f'<text x="{px + pw / 2.0:.1f}" y="{max(16.0, py - 8.0):.1f}" fill="#eee" font-size="14" font-weight="bold" text-anchor="middle">{plot.title}</text>')
+
+    # Legend
+    legend = plot.items.legend
+    if not has_flag(plot.flags, I.FLAGS_NO_LEGEND) and plot.items.get_legend_count() > 0:
+        lrc = legend.rect_clamped
+        if lrc[2] > lrc[0] and lrc[3] > lrc[1]:
+            lx = lrc[0] - fr[0] if fr[2] > fr[0] else px + 10.0
+            ly = lrc[1] - fr[1] if fr[3] > fr[1] else py + 10.0
+            lw = lrc[2] - lrc[0]
+            lh = lrc[3] - lrc[1]
+            svg_parts.append(f'<rect x="{lx:.1f}" y="{ly:.1f}" width="{lw:.1f}" height="{lh:.1f}" fill="#252525" stroke="#555" stroke-width="1" rx="3" />')
+            for i in range(plot.items.get_legend_count()):
+                item = plot.items.get_legend_item(i)
+                label = plot.items.get_legend_label(i).split("##")[0]
+                col = item.color
+                c_hex = f"#{int(col[0]):02x}{int(col[1]):02x}{int(col[2]):02x}" if len(col) >= 3 else "#fff"
+                iy = ly + 14.0 + i * 16.0
+                svg_parts.append(f'<rect x="{lx + 6:.1f}" y="{iy - 8:.1f}" width="10" height="10" fill="{c_hex}" />')
+                svg_parts.append(f'<text x="{lx + 20:.1f}" y="{iy:.1f}" fill="#ddd" font-size="11">{label}</text>')
+
+    svg_parts.append('</svg>')
+    return "\n".join(svg_parts)
+
+
+def export_plot_png(plot) -> bytes:
+    """Generate PNG image bytes for *plot*."""
+    ctx = None
+    try:
+        from . import im_core
+        ctx = im_core.get_current_context()
+    except Exception:
+        pass
+    if hasattr(ctx, "draw") and hasattr(ctx.draw, "p") and hasattr(ctx.draw.p, "px") and hasattr(ctx.draw.p, "width"):
+        fr = plot.frame_rect
+        pw = ctx.draw.p.width
+        ph = ctx.draw.p.height
+        x0 = max(0, min(pw, int(round(fr[0]))))
+        y0 = max(0, min(ph, int(round(fr[1]))))
+        x1 = max(0, min(pw, int(round(fr[2]))))
+        y1 = max(0, min(ph, int(round(fr[3]))))
+        cw = x1 - x0
+        ch = y1 - y0
+        if cw > 10 and ch > 10 and len(ctx.draw.p.px) >= pw * ph * 4:
+            from .testing import png_encode
+            stride = pw * 4
+            cropped = bytearray()
+            for r in range(y0, y1):
+                start = r * stride + x0 * 4
+                end = start + cw * 4
+                cropped.extend(ctx.draw.p.px[start:end])
+            return png_encode(cw, ch, bytes(cropped))
+
+    from .svg import svg_to_png
+    return svg_to_png(export_plot_svg(plot))
+
+
+def copy_plot_image(plot) -> bool:
+    """Copy the plot's rendered image as PNG to the clipboard."""
+    from . import clipboard
+    data = export_plot_png(plot)
+    if data:
+        return clipboard.copy_image(data)
+    return False
+
+
+def save_plot_png(plot, path: str | None = None) -> str:
+    """Save the plot as a PNG image file. Returns the written file path."""
+    import pathlib
+    if path is None:
+        title = (plot.title or "plot").replace(" ", "_").lower()
+        path = f"{title}.png"
+    data = export_plot_png(plot)
+    p = pathlib.Path(path)
+    p.write_bytes(data)
+    plot.last_exported_file = str(p.resolve())
+    return str(p.resolve())
+
+
+def save_plot_svg(plot, path: str | None = None) -> str:
+    """Save the plot as an SVG vector file. Returns the written file path."""
+    import pathlib
+    if path is None:
+        title = (plot.title or "plot").replace(" ", "_").lower()
+        path = f"{title}.svg"
+    svg_str = export_plot_svg(plot)
+    p = pathlib.Path(path)
+    p.write_text(svg_str, encoding="utf-8")
+    plot.last_exported_file = str(p.resolve())
+    return str(p.resolve())
+
+
+def save_plot_csv(plot, path: str | None = None) -> str:
+    """Save the plot series data as a CSV file. Returns the written file path."""
+    import pathlib
+    if path is None:
+        title = (plot.title or "plot").replace(" ", "_").lower()
+        path = f"{title}.csv"
+    csv_str = export_plot_csv(plot)
+    p = pathlib.Path(path)
+    p.write_text(csv_str, encoding="utf-8")
+    plot.last_exported_file = str(p.resolve())
+    return str(p.resolve())
+
+
 def show_plot_context_menu(plot, subplot=None) -> bool:
     """``ShowPlotContextMenu``. Returns True when a menu item closed it."""
     close = False
     equal = has_flag(plot.flags, I.FLAGS_EQUAL)
+
+    # 1. Top item: View All (Auto-fit all axes, as PyQtGraph's "View All")
+    if _w.menu_item(mark("View All", domain="emtk")):
+        plot.fit_this_frame = True
+        plot.fit_next_frame = True
+        for ax in plot.axes:
+            ax.fit_this_frame = True
+            ax.follow = True
+        close = True
+
+    _w.separator()
+
+    # 2. X Axes & Y Axes
     for i in range(I.NUM_X_AXES):
         ax = plot.x_axis(i)
         if not ax.enabled or not ax.has_menus():
@@ -1992,7 +2361,40 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
             show_axis_context_menu(ax, ax.ortho_axis if equal else None)
             _w.end_menu()
         _w.pop_id()
+
     _w.separator()
+
+    # 3. Transforms (like PyQtGraph's Transforms)
+    if _w.begin_menu(mark("Transforms", domain="emtk")):
+        x1 = plot.x_axis(I.AXIS_X1)
+        y1 = plot.y_axis(I.AXIS_Y1)
+        x_log = (x1.scale == I.SCALE_LOG10)
+        y_log = (y1.scale == I.SCALE_LOG10)
+        if _w.menu_item(mark("Log X", domain="emtk"), "", x_log):
+            _apply_axis_scale(x1, I.SCALE_LINEAR if x_log else I.SCALE_LOG10)
+            close = True
+        if _w.menu_item(mark("Log Y", domain="emtk"), "", y_log):
+            _apply_axis_scale(y1, I.SCALE_LINEAR if y_log else I.SCALE_LOG10)
+            close = True
+        if _w.menu_item(mark("Equal Aspect", domain="emtk"), "", equal):
+            plot.flags ^= I.FLAGS_EQUAL
+            close = True
+        _w.end_menu()
+
+    # 4. Mouse Mode (like PyQtGraph's Mouse Mode: 3-Button / Pan vs 1-Button / Box Select)
+    if _w.begin_menu(mark("Mouse Mode", domain="emtk")):
+        is_box_select = not has_flag(plot.flags, I.FLAGS_NO_BOX_SELECT)
+        if _w.menu_item(mark("Pan / 3-Button", domain="emtk"), "", not is_box_select):
+            plot.flags |= I.FLAGS_NO_BOX_SELECT
+            close = True
+        if _w.menu_item(mark("Box Select / 1-Button", domain="emtk"), "", is_box_select):
+            plot.flags &= ~I.FLAGS_NO_BOX_SELECT
+            close = True
+        _w.end_menu()
+
+    _w.separator()
+
+    # 5. Legend
     if not has_flag(plot.items.legend.flags, I.LEGEND_FLAGS_NO_MENUS):
         if _w.begin_menu(mark("Legend", domain="emtk")):
             if subplot is not None and has_flag(subplot.flags, I.SUBPLOT_FLAGS_SHARE_ITEMS):
@@ -2002,6 +2404,8 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
             elif show_legend_context_menu(plot.items.legend, not has_flag(plot.flags, I.FLAGS_NO_LEGEND)):
                 plot.flags ^= I.FLAGS_NO_LEGEND
             _w.end_menu()
+
+    # 6. Settings
     if _w.begin_menu(mark("Settings", domain="emtk")):
         for name, flag, on in ((mark("Equal", domain="emtk"), I.FLAGS_EQUAL, True), (mark("Box Select", domain="emtk"), I.FLAGS_NO_BOX_SELECT, False),
                                (mark("Title", domain="emtk"), I.FLAGS_NO_TITLE, False),
@@ -2013,11 +2417,35 @@ def show_plot_context_menu(plot, subplot=None) -> bool:
                 plot.flags ^= flag
                 close = True
         _w.end_menu()
+
     if subplot is not None and not has_flag(subplot.flags, I.SUBPLOT_FLAGS_NO_MENUS):
         _w.separator()
         if _w.begin_menu(mark("Subplots", domain="emtk")):
             show_subplots_context_menu(subplot)
             _w.end_menu()
+
+    _w.separator()
+
+    # 7. Save / Export (ALWAYS present!)
+    if _w.begin_menu(mark("Save / Export", domain="emtk")):
+        if _w.menu_item(mark("Save Image (PNG)...", domain="emtk")):
+            save_plot_png(plot)
+            close = True
+        if _w.menu_item(mark("Save Vector (SVG)...", domain="emtk")):
+            save_plot_svg(plot)
+            close = True
+        if _w.menu_item(mark("Save Data (CSV)...", domain="emtk")):
+            save_plot_csv(plot)
+            close = True
+        _w.separator()
+        if _w.menu_item(mark("Copy Image to Clipboard", domain="emtk")):
+            copy_plot_image(plot)
+            close = True
+        if _w.menu_item(mark("Copy Data to Clipboard", domain="emtk")):
+            copy_plot_data(plot)
+            close = True
+        _w.end_menu()
+
     return close
 
 
@@ -3390,6 +3818,8 @@ __all__ += [
     "push_plot_clip_rect", "pop_plot_clip_rect", "set_next_line_style", "set_next_fill_style",
     "set_next_marker_style", "set_next_error_bar_style", "show_plot_context_menu",
     "show_axis_context_menu", "show_legend_context_menu", "show_subplots_context_menu",
+    "export_plot_csv", "export_plot_svg", "export_plot_png", "copy_plot_data",
+    "copy_plot_image", "save_plot_png", "save_plot_svg", "save_plot_csv",
 ]
 
 # the time utilities a custom plotter reaches for (``ImPlot::RoundTime`` ...)

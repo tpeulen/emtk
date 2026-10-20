@@ -116,3 +116,30 @@ def test_retained_plot_legend_swatch_draws_dash_pattern():
     assert red.any() and green.any()
     assert _runs(red.any(axis=0)) == 1
     assert _runs(green.any(axis=0)) >= 2
+
+
+def test_retained_plot_legend_custom_position():
+    from emtk.widgets.plot import Plot
+
+    painter = PixelPainter(300, 200)
+    plot = Plot(0, 0, 300, 200)
+    plot.line("test", [0, 1], [0, 1])
+
+    # Default position
+    plot.draw(painter)
+    default_rect = plot.legend_rect
+    assert default_rect is not None
+
+    # Custom legend_pos
+    plot.legend_pos = (50.0, 60.0)
+    plot.draw(painter)
+    assert plot.legend_rect[0] == pytest.approx(50.0)
+    assert plot.legend_rect[1] == pytest.approx(60.0)
+
+    # Custom legend_offset
+    plot.legend_pos = None
+    plot.legend_offset = (20.0, 30.0)
+    plot.draw(painter)
+    assert plot.legend_rect[0] == pytest.approx(20.0)
+    assert plot.legend_rect[1] == pytest.approx(30.0)
+

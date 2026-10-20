@@ -976,6 +976,12 @@ class Legend:
         self.rect_clamped = (0.0, 0.0, 0.0, 0.0)
         self.hovered = False
         self.held = False
+        self.offset: tuple[float, float] | None = None
+        self.drag_active = False
+        self.drag_start: tuple[float, float] | None = None
+        self.drag_start_offset: tuple[float, float] | None = None
+        self.drag_moved = False
+        self.dragging = False
 
     def reset(self) -> None:
         self.indices = []
@@ -1677,7 +1683,7 @@ def show_legend_entries(items: ItemGroup, legend_bb, pad, spacing, vertical: boo
         if not im_has_flag(items.legend.flags, LEGEND_FLAGS_NO_BUTTONS):
             item_clk, item_hov, item_hld = _button_behavior(button_bb, ("__legend__", item.id), (0,))
             item_clk = item_clk and _im().io.mouse_clicked[0]
-        if item_clk:
+        if item_clk and not getattr(items.legend, "drag_moved", False):
             item.show = not item.show
         hovering = item_hov and not im_has_flag(items.legend.flags, LEGEND_FLAGS_NO_HIGHLIGHT_ITEM)
         if hovering:
@@ -1712,12 +1718,66 @@ def render_legend() -> None:
     horz = im_has_flag(legend.flags, LEGEND_FLAGS_HORIZONTAL)
     size = calc_legend_size(plot.items, gp.style.legend_inner_padding,
                             gp.style.legend_spacing, not horz)
-    pos = get_location_pos(plot.plot_rect, size, legend.location, gp.style.legend_padding)
+    outer = plot.plot_rect
+    pad = gp.style.legend_padding
+
+    min_x = outer[0] + pad[0]
+    max_x = max(min_x, outer[2] - pad[0] - size[0])
+    min_y = outer[1] + pad[1]
+    max_y = max(min_y, outer[3] - pad[1] - size[1])
+
+    if legend.offset is not None:
+        px = max(min_x, min(outer[0] + legend.offset[0], max_x))
+        py = max(min_y, min(outer[1] + legend.offset[1], max_y))
+        pos = (px, py)
+        legend.offset = (px - outer[0], py - outer[1])
+    else:
+        pos = get_location_pos(outer, size, legend.location, pad)
+
     legend.rect = (pos[0], pos[1], pos[0] + size[0], pos[1] + size[1])
-    scrollable, legend.rect_clamped = clamp_legend_rect(legend.rect, plot.plot_rect,
-                                                        gp.style.legend_padding)
-    _pressed, legend.hovered, legend.held = _button_behavior(legend.rect_clamped, plot.items.id)
-    legend.hovered = legend.hovered or _rect_contains(legend.rect_clamped, io.mouse_pos)
+    scrollable, legend.rect_clamped = clamp_legend_rect(legend.rect, outer, pad)
+    rc = legend.rect_clamped
+    _pressed, legend.hovered, legend.held = _button_behavior(rc, plot.items.id)
+    legend.hovered = legend.hovered or _rect_contains(rc, io.mouse_pos)
+
+    # Double-click resets legend to anchor position:
+    if legend.hovered and io.mouse_double_clicked[0]:
+        legend.offset = None
+        legend.drag_active = False
+        legend.dragging = False
+        legend.drag_moved = False
+        legend.drag_start = None
+        legend.drag_start_offset = None
+        pos = get_location_pos(outer, size, legend.location, pad)
+        legend.rect = (pos[0], pos[1], pos[0] + size[0], pos[1] + size[1])
+        scrollable, legend.rect_clamped = clamp_legend_rect(legend.rect, outer, pad)
+        rc = legend.rect_clamped
+    elif io.mouse_clicked[0] and legend.hovered:
+        legend.drag_active = True
+        legend.drag_start = tuple(io.mouse_pos)
+        legend.drag_start_offset = legend.offset if legend.offset is not None else (pos[0] - outer[0], pos[1] - outer[1])
+        legend.drag_moved = False
+
+    if legend.drag_active and io.mouse_down[0]:
+        start = legend.drag_start or io.mouse_pos
+        dx = io.mouse_pos[0] - start[0]
+        dy = io.mouse_pos[1] - start[1]
+        if not legend.drag_moved and (dx * dx + dy * dy >= 9.0):
+            legend.drag_moved = True
+            legend.dragging = True
+        if legend.drag_moved:
+            if legend.drag_start_offset is None:
+                legend.drag_start_offset = (pos[0] - outer[0], pos[1] - outer[1])
+            target_x = outer[0] + legend.drag_start_offset[0] + dx
+            target_y = outer[1] + legend.drag_start_offset[1] + dy
+            clamped_x = max(min_x, min(target_x, max_x))
+            clamped_y = max(min_y, min(target_y, max_y))
+            legend.offset = (clamped_x - outer[0], clamped_y - outer[1])
+            pos = (clamped_x, clamped_y)
+            legend.rect = (pos[0], pos[1], pos[0] + size[0], pos[1] + size[1])
+            scrollable, legend.rect_clamped = clamp_legend_rect(legend.rect, outer, pad)
+            rc = legend.rect_clamped
+
     if scrollable:
         rc, r = legend.rect_clamped, legend.rect
         sx, sy = legend.scroll
@@ -1743,6 +1803,12 @@ def render_legend() -> None:
                         gp.style.legend_spacing, not horz, draw_list)
     draw_list.add_rect(rc[:2], rc[2:], u32_to_rgba(get_style_color_u32(COL_LEGEND_BORDER)))
     draw_list.pop_clip_rect()
+    if not io.mouse_down[0]:
+        legend.drag_active = False
+        legend.dragging = False
+        legend.drag_moved = False
+        legend.drag_start = None
+        legend.drag_start_offset = None
 
 
 # --------------------------------------------------------------------------- #
@@ -2430,9 +2496,11 @@ def show_legend_context_menu(legend: Legend, visible: bool) -> bool:
         ret = True
     if w.radio_button("H", im_has_flag(legend.flags, LEGEND_FLAGS_HORIZONTAL)):
         legend.flags |= LEGEND_FLAGS_HORIZONTAL
+        legend.offset = None
     w.same_line()
     if w.radio_button("V", not im_has_flag(legend.flags, LEGEND_FLAGS_HORIZONTAL)):
         legend.flags &= ~LEGEND_FLAGS_HORIZONTAL
+        legend.offset = None
     size = (1.5 * s, s)
     rows = ((LOCATION_NORTH_WEST, LOCATION_NORTH, LOCATION_NORTH_EAST),
             (LOCATION_WEST, LOCATION_CENTER, LOCATION_EAST),
@@ -2444,6 +2512,7 @@ def show_legend_context_menu(legend: Legend, visible: bool) -> bool:
                 w.invisible_button(label, size)
             elif w.button(label, size):
                 legend.location = loc
+                legend.offset = None
             if k < 2:
                 w.same_line(0.0, 2.0)
     return ret
@@ -2864,9 +2933,11 @@ def setup_legend(location: int, flags: int = 0) -> None:
     legend = _gp().current_items.legend
     if legend.previous_location != location:
         legend.location = location
+        legend.offset = None
     legend.previous_location = location
     if legend.previous_flags != flags:
         legend.flags = flags
+        legend.offset = None
     legend.previous_flags = flags
 
 
@@ -3057,6 +3128,13 @@ def handle_input(plot: Plot) -> None:
         plot.right_clicked_time = io.now
 
     plot_clicked, plot.hovered, plot.held = _button_behavior(plot.plot_rect, plot.id)
+    legend = getattr(getattr(plot, "items", None), "legend", None)
+    if legend is not None and not im_has_flag(plot.flags, FLAGS_NO_LEGEND) and plot.items.get_legend_count() > 0:
+        lrc = legend.rect_clamped
+        if lrc[2] > lrc[0] and lrc[3] > lrc[1]:
+            if _rect_contains(lrc, io.mouse_pos) or getattr(legend, "drag_active", False):
+                plot.held = False
+                plot_clicked = False
     rx, ry = _mouse_drag_delta(io, 1)
     rotating = rx * rx + ry * ry > MOUSE_CURSOR_DRAG_THRESHOLD
     axis_equal = im_has_flag(plot.flags, FLAGS_EQUAL)

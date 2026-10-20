@@ -124,6 +124,9 @@ class Plot:
         #: inches wide has no room for one, and the key then covers the curves
         #: it is naming. Callers that small turn it off.
         self.show_legend = show_legend
+        self.legend_pos: tuple[float, float] | None = None
+        self.legend_offset: tuple[float, float] | None = None
+        self.legend_rect: tuple[float, float, float, float] | None = None
         #: Run the y-axis downwards: its minimum at the top, as an image's
         #: row index does. Everything placed through the axis follows.
         self.y_inverted = False
@@ -371,8 +374,15 @@ class Plot:
         pad = 3.0
         width = max(p.text_width(label) for label, _c, _k in entries) + swatch + pad * 3.0
         height = row_h * len(entries) + pad * 2.0
-        lx = self.x + self.w - width - pad
-        ly = self.y + pad
+        if self.legend_pos is not None:
+            lx, ly = self.legend_pos
+        elif self.legend_offset is not None:
+            lx = self.x + self.legend_offset[0]
+            ly = self.y + self.legend_offset[1]
+        else:
+            lx = self.x + self.w - width - pad
+            ly = self.y + pad
+        self.legend_rect = (lx, ly, lx + width, ly + height)
         p.fill_rect(lx, ly, width, height, _style.PLOT_LEGEND_BG)
         for i, (label, colour, pen) in enumerate(entries):
             row_y = ly + pad + i * row_h

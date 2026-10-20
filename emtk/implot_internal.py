@@ -1844,6 +1844,12 @@ class Legend:
         self.hovered = False
         self.held = False
         self.can_go_inside = True
+        self.offset: Optional[tuple[float, float]] = None
+        self.drag_active = False
+        self.drag_start: Optional[tuple[float, float]] = None
+        self.drag_start_offset: Optional[tuple[float, float]] = None
+        self.drag_moved = False
+        self.dragging = False
 
     def reset(self) -> None:
         self.indices = []

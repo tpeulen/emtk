@@ -877,6 +877,70 @@
             <translation>Dieses Fenster nach vorn holen.</translation>
         </message>
         <message>
+            <source>View All</source>
+            <translation>Alles anzeigen</translation>
+        </message>
+        <message>
+            <source>Transforms</source>
+            <translation>Transformationen</translation>
+        </message>
+        <message>
+            <source>Log X</source>
+            <translation>Log X</translation>
+        </message>
+        <message>
+            <source>Log Y</source>
+            <translation>Log Y</translation>
+        </message>
+        <message>
+            <source>Equal Aspect</source>
+            <translation>Gleiches Seitenverhältnis</translation>
+        </message>
+        <message>
+            <source>Mouse Mode</source>
+            <translation>Mausmodus</translation>
+        </message>
+        <message>
+            <source>Pan / 3-Button</source>
+            <translation>Verschieben / 3-Tasten</translation>
+        </message>
+        <message>
+            <source>Box Select / 1-Button</source>
+            <translation>Rechteckauswahl / 1-Taste</translation>
+        </message>
+        <message>
+            <source>Log Scale</source>
+            <translation>Logarithmische Skala</translation>
+        </message>
+        <message>
+            <source>Reset Position</source>
+            <translation>Position zurücksetzen</translation>
+        </message>
+        <message>
+            <source>Save / Export</source>
+            <translation>Speichern / Exportieren</translation>
+        </message>
+        <message>
+            <source>Save Image (PNG)...</source>
+            <translation>Bild speichern (PNG)...</translation>
+        </message>
+        <message>
+            <source>Save Vector (SVG)...</source>
+            <translation>Vektorgrafik speichern (SVG)...</translation>
+        </message>
+        <message>
+            <source>Save Data (CSV)...</source>
+            <translation>Daten speichern (CSV)...</translation>
+        </message>
+        <message>
+            <source>Copy Image to Clipboard</source>
+            <translation>Bild in die Zwischenablage kopieren</translation>
+        </message>
+        <message>
+            <source>Copy Data to Clipboard</source>
+            <translation>Daten in die Zwischenablage kopieren</translation>
+        </message>
+        <message>
             <source>January</source>
             <translation>Januar</translation>
         </message>
