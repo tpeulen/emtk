@@ -405,6 +405,42 @@ def _wrap(value):
     return _Js(value)
 
 
+def _kebab(camel: str) -> str:
+    """Return a WebGPU limit name in wgpu-py's spelling.
+
+    ``maxTextureDimension2D`` -> ``max-texture-dimension-2d``,
+    ``maxComputeWorkgroupSizeX`` -> ``max-compute-workgroup-size-x``.
+    """
+    import re
+
+    return re.sub(r"([a-z])([A-Z0-9])", r"\1-\2", camel).lower()
+
+
+def _limits_dict(js_limits) -> dict:
+    """Read a ``GPUSupportedLimits`` into ``{kebab-name: number}``.
+
+    Its fields are getters on the prototype, not own properties, so both the
+    object's own names and its prototype's are read; anything that is not a
+    number (``constructor``) is left out.
+    """
+    import js
+
+    names = []
+    for source in (js_limits, js.Object.getPrototypeOf(js_limits)):
+        if source is None:
+            continue
+        for name in js.Object.getOwnPropertyNames(source):
+            name = str(name)
+            if name not in names:
+                names.append(name)
+    out = {}
+    for name in names:
+        value = getattr(js_limits, name, None)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            out[_kebab(name)] = value
+    return out
+
+
 def _is_device(js_object) -> bool:
     """Whether a JavaScript object looks like a ``GPUDevice``."""
     return hasattr(js_object, "createBuffer") and hasattr(js_object, "queue")
@@ -417,6 +453,26 @@ class _Device(_Js):
     def queue(self):
         """The device's queue, wrapped so ``read_buffer`` exists on it."""
         return _Queue(self.js.queue, self.js)
+
+    @property
+    def limits(self) -> dict:
+        """The device's limits as a ``dict`` in wgpu-py's spelling.
+
+        Returns
+        -------
+        dict
+            ``{"max-texture-dimension-2d": 8192, ...}`` -- the same keys and
+            type ``wgpu-py``'s ``GPUDevice.limits`` has.
+
+        Notes
+        -----
+        Not a property to forward. In the browser ``device.limits`` is a
+        ``GPUSupportedLimits`` *object* whose fields are camelCase getters on its
+        prototype (``maxTextureDimension2D``); wrapped as-is, the engine's
+        ``limits.get("max-texture-dimension-2d")`` became a lookup of a method
+        called ``get`` on it and every frame failed with ``AttributeError: get``.
+        """
+        return _limits_dict(self.js.limits)
 
     def create_buffer_with_data(self, data, usage):
         """Create a buffer already holding *data*.

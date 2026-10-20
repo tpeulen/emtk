@@ -243,3 +243,163 @@ def test_emtk_s_own_renderer_survives_the_translation(fake_js):
     assert not snake, f"these descriptor keys were never camel-cased: {snake}"
     shaders = [args[0]["code"] for name, args, _kw in log if name.endswith("createShaderModule")]
     assert shaders and "fn vs_ui" in shaders[0], "the ui.wgsl source did not arrive"
+
+
+# --------------------------------------------------------------------------- #
+# A whole frame through the browser backend
+# --------------------------------------------------------------------------- #
+class _JsLike:
+    """A JavaScript object as Pyodide shows it: only the members it really has.
+
+    :class:`_Recorder` answers every attribute with a method, so it cannot tell
+    a property from a call, nor a member WebGPU has from one it lacks -- which is
+    exactly how ``device.limits.get(...)`` (wgpu-py's ``dict``; in the browser a
+    ``GPUSupportedLimits`` object with no ``get``) passed every test here and
+    failed the first frame of every page. This one raises ``AttributeError`` for
+    anything not given, as a ``JsProxy`` does.
+    """
+
+    def __init__(self, name, log, **members):
+        self._name = name
+        self._log = log
+        for key, value in members.items():
+            setattr(self, key, value)
+
+    def __repr__(self):
+        return f"<js {self._name}>"
+
+
+def _method(name, log, make=None):
+    """A JavaScript method that logs its call and returns ``make(*args)``."""
+
+    def call(*args):
+        log.append((name, args))
+        return make(*args) if make is not None else _JsLike(f"{name}()", log)
+
+    return call
+
+
+class _GPUSupportedLimits:
+    """Limits are getters on the *prototype*: an instance has no own fields."""
+
+    maxTextureDimension2D = 8192
+    maxBindGroups = 4
+    maxComputeWorkgroupSizeX = 256
+
+
+def _js_device(log):
+    """A ``GPUDevice`` with the members the interface renderer touches."""
+
+    def texture(descriptor):
+        return _JsLike("texture", log, width=descriptor["size"][0],
+                       createView=_method("texture.createView", log),
+                       destroy=_method("texture.destroy", log))
+
+    def buffer(descriptor):
+        return _JsLike("buffer", log, size=int(descriptor["size"]),
+                       getMappedRange=_method("buffer.getMappedRange", log),
+                       unmap=_method("buffer.unmap", log),
+                       destroy=_method("buffer.destroy", log))
+
+    def render_pass(_descriptor):
+        return _JsLike("pass", log, **{
+            name: _method(f"pass.{name}", log)
+            for name in ("setPipeline", "setBindGroup", "setVertexBuffer",
+                         "setScissorRect", "draw", "end")})
+
+    def encoder(*_args):
+        return _JsLike("encoder", log,
+                       beginRenderPass=_method("encoder.beginRenderPass", log, render_pass),
+                       finish=_method("encoder.finish", log))
+
+    queue = _JsLike("queue", log, **{
+        name: _method(f"queue.{name}", log)
+        for name in ("writeBuffer", "writeTexture", "submit")})
+    members = {name: _method(f"device.{name}", log)
+               for name in ("createShaderModule", "createBindGroupLayout",
+                            "createBindGroup", "createPipelineLayout",
+                            "createRenderPipeline", "createSampler")}
+    return _JsLike("device", log, queue=queue, limits=_GPUSupportedLimits(),
+                   createBuffer=_method("device.createBuffer", log, buffer),
+                   createTexture=_method("device.createTexture", log, texture),
+                   createCommandEncoder=_method("device.createCommandEncoder", log, encoder),
+                   **members)
+
+
+@pytest.fixture
+def js_device(fake_js):
+    """A wrapped browser device, with the backend selected while a test runs."""
+    from emtk.gpu import api
+
+    class _Object:
+        @staticmethod
+        def fromEntries(pairs):  # noqa: N802 - JavaScript's spelling
+            return dict(pairs)
+
+        @staticmethod
+        def getPrototypeOf(value):  # noqa: N802
+            return type(value)
+
+        @staticmethod
+        def getOwnPropertyNames(value):  # noqa: N802
+            return [k for k in vars(value) if not k.startswith("_")]
+
+    fake_js.Object = _Object
+    fake_js.Uint8Array = types.SimpleNamespace(
+        new=lambda _range: types.SimpleNamespace(set=lambda _data: None))
+    log: list = []
+    device = browser._wrap(_js_device(log))
+    api.use_backend(browser)
+    try:
+        yield device, log
+    finally:
+        api.use_backend(None)
+
+
+def test_device_limits_are_a_dict_in_wgpu_py_spelling(js_device):
+    """``device.limits`` reads as wgpu-py's ``dict``, from the prototype's getters."""
+    device, _log = js_device
+    limits = device.limits
+    assert isinstance(limits, dict)
+    assert limits["max-texture-dimension-2d"] == 8192
+    assert limits["max-compute-workgroup-size-x"] == 256
+
+
+class _Panel:
+    """A control: a filled box and a word, optionally under a frosted modal."""
+
+    def __init__(self, modal=False):
+        self.modal = modal
+
+    def draw(self, painter, x, y, w, h):
+        painter.fill_rect(x + 4, y + 4, w - 8, h - 8, (200, 40, 40, 255))
+        painter.text(x + 8, y + 8, 40, 16, 0, "ndX", (255, 255, 255, 255))
+        if self.modal:
+            painter.backdrop(x, y, w, h, (0, 0, 0, 120), radius=6.0)
+            painter.fill_rect(x + 16, y + 16, 32, 16, (40, 40, 200, 255))
+
+
+@pytest.mark.parametrize("modal", [False, True], ids=["plain", "frosted"])
+def test_a_surface_renders_a_frame_through_the_browser_backend(js_device, modal, caplog):
+    """``Surface.render`` -- what ``emtk.web.page.WebPage.draw`` calls each frame --
+    completes against a device shaped like the browser's, and submits a draw.
+
+    The plain frame is the one every page draws first; the frosted one is a modal
+    window open (the backdrop blur's offscreen textures and extra passes).
+    """
+    from emtk.app import ControlSurface
+
+    device, log = js_device
+    surface = ControlSurface(_Panel(modal=modal), background=(20, 20, 24))
+    surface.attach(device, "bgra8unorm", 96, 64, 1.0)
+    canvas_view = _JsLike("canvas.getCurrentTexture().createView()", log)
+    surface.render(canvas_view)
+
+    assert "failed to draw" not in caplog.text, caplog.text
+    called = [entry[0] for entry in log]
+    assert "queue.submit" in called
+    assert "pass.draw" in called
+    # Frosted: the scene offscreen, two blur passes, the copy back, the blurred
+    # rectangle over it and the rest of the frame on top.
+    passes = called.count("encoder.beginRenderPass")
+    assert passes == (6 if modal else 1), called
