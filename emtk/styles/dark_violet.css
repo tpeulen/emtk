@@ -1,0 +1,89 @@
+/* EMTK Native Stylesheet — Dark Violet */
+:root {
+    --window-bg: #221e26;
+    --workspace-bg: #18151c;
+    --popup-bg: #292430;
+    --frame-bg: #2f2838;
+    --frame-bg-hovered: #3e3549;
+    --frame-bg-active: #824ad4;
+    --text: #f4f0f8;
+    --text-disabled: #8a7e96;
+    --border: #42374e;
+    --button: #3c3247;
+    --button-hover: #4e405c;
+    --button-active: #824ad4;
+    --tab: #27222e;
+    --tab-selected: #6d3ab8;
+    --tab-hover: #352e3f;
+    --title-bg: #1d1822;
+    --title-bg-active: #38244a;
+    --menu-bar-bg: #211c26;
+    --table-header-bg: #2e2637;
+    --table-row-bg: #26202e;
+    --table-row-bg-alt: #2f2739;
+    --plot-bg: #1f1a24;
+    --frame-rounding: 4px;
+    --frame-border-size: 1px;
+}
+
+window {
+    background-color: var(--window-bg);
+    color: var(--text);
+}
+
+button {
+    background-color: var(--button);
+    border-radius: 4px;
+}
+
+button:hover {
+    background-color: var(--button-hover);
+}
+
+button:active {
+    background-color: var(--button-active);
+}
+
+input, field {
+    background-color: var(--frame-bg);
+    border-color: var(--border);
+}
+
+input:hover, field:hover {
+    background-color: var(--frame-bg-hovered);
+}
+
+input:active, field:active {
+    background-color: var(--frame-bg-active);
+}
+
+menu, popup {
+    background-color: var(--popup-bg);
+    border-color: var(--border);
+}
+
+tab {
+    background-color: var(--tab);
+}
+
+tab:selected {
+    background-color: var(--tab-selected);
+}
+
+tab:hover {
+    background-color: var(--tab-hover);
+}
+
+table {
+    background-color: var(--table-row-bg);
+    alternate-background-color: var(--table-row-bg-alt);
+    border-color: var(--border);
+}
+
+dock_title {
+    background-color: var(--title-bg);
+}
+
+dock_title:active {
+    background-color: var(--title-bg-active);
+}

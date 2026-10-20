@@ -840,3 +840,24 @@ def test_a_removed_window_goes_back_where_the_user_left_it():
     docks.remove_window("tool")
     docks.add_window("tool", "Tool", lambda box: None, dock="right")
     assert docks.region_of("tool") == "left"
+
+
+def test_dock_overlay_drawing_with_quad_painter_and_rgba_text_color():
+    from emtk.quad_painter import QuadPainter
+    from emtk import style as _style
+    docks, _log = make()
+    host = Driver(docks)
+    host.press(*host.title("notes"))
+    host.move(*host.pad("center"))
+    assert docks.drop_target == "center"
+
+    orig_text = _style.TEXT
+    try:
+        # Set _style.TEXT to an RGBA 4-tuple (e.g. from a stylesheet or dark theme)
+        _style.TEXT = (240, 248, 242, 255)
+        qp = QuadPainter()
+        host.app.draw(qp, *host.box)
+    finally:
+        _style.TEXT = orig_text
+        host.release(900.0, 650.0)
+

@@ -135,8 +135,9 @@ SEPARATOR_SCALE = 0.5
 #: a menu as wide as the window, or wider.
 MAX_LABEL_LINES = 26.0
 
-#: A :class:`Popup`'s fill: the style's popup colour, opaque.
-_OPAQUE_POPUP_BG = (*tuple(style.POPUP_BG)[:3], 255)
+def _opaque_popup_bg() -> tuple[int, int, int, int]:
+    """A :class:`Popup`'s fill: the style's popup colour, opaque."""
+    return (*tuple(style.POPUP_BG)[:3], 255)
 
 #: Width of a scrolling popup's scrollbar, in logical pixels.
 SCROLLBAR_W = 10.0
@@ -539,7 +540,7 @@ def _paint_panel(
     title : str
         The caption, or ``""``.
     """
-    p.stroke_rect(x, y, w, h, style.BORDER, style.POPUP_BG)
+    p.stroke_rect(x, y, w, h, style.BORDER, _opaque_popup_bg())
     row_h = p.line_height() * ROW_SCALE
     title_h = row_h if title else 0.0
     if title:
@@ -1627,7 +1628,7 @@ class Popup:
 
         # Opaque, as emtk's windows are: a list over a form must not show the
         # form's text through its rows.
-        p.stroke_rect(pos_x, pos_y, width, height, style.BORDER, _OPAQUE_POPUP_BG)
+        p.stroke_rect(pos_x, pos_y, width, height, style.BORDER, _opaque_popup_bg())
         if self.title:
             p.text(pos_x + PAD, pos_y + PAD, max(width - 2.0 * PAD, 1.0), row_h,
                    ALIGN_VCENTER | ALIGN_LEFT,
@@ -1754,7 +1755,7 @@ class Popup:
         if tip_y + tip_h > y + h:
             tip_y = rect[1] - tip_h - 2.0
         tip_y = style.clamp(tip_y, y, y + h - tip_h)
-        p.stroke_rect(tip_x, tip_y, tip_w, tip_h, style.BORDER, _OPAQUE_POPUP_BG)
+        p.stroke_rect(tip_x, tip_y, tip_w, tip_h, style.BORDER, _opaque_popup_bg())
         for i, line in enumerate(lines):
             p.text(tip_x + PAD, tip_y + PAD * 0.5 + i * line_h, tip_w - 2.0 * PAD, line_h,
                    ALIGN_VCENTER | ALIGN_LEFT, line, style.TEXT)
@@ -2034,3 +2035,10 @@ class PopupModal(Popup):
             Consumed and *not* closed: that is what modal means.
         """
         return PopupPress(None, True, False)
+
+
+def __getattr__(name: str) -> tuple[int, int, int, int]:
+    """``_OPAQUE_POPUP_BG``, read live: the popup fill follows the current theme."""
+    if name == "_OPAQUE_POPUP_BG":
+        return _opaque_popup_bg()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

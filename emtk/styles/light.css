@@ -1,0 +1,89 @@
+/* EMTK Native Stylesheet — Light */
+:root {
+    --window-bg: #f3f4f6;
+    --workspace-bg: #e5e7eb;
+    --popup-bg: #fcfcfd;
+    --frame-bg: #ffffff;
+    --frame-bg-hovered: #e8f0fc;
+    --frame-bg-active: #d6e4fa;
+    --text: #1c1e24;
+    --text-disabled: #80828a;
+    --border: #b8bcc4;
+    --button: #e0e4ea;
+    --button-hover: #ccd8ea;
+    --button-active: #23558c;
+    --tab: #dee1e7;
+    --tab-selected: #ffffff;
+    --tab-hover: #ccd8ea;
+    --title-bg: #e2e4e9;
+    --title-bg-active: #cedaf0;
+    --menu-bar-bg: #eaecee;
+    --table-header-bg: #e4e7ec;
+    --table-row-bg: #ffffff;
+    --table-row-bg-alt: #f6f8fa;
+    --plot-bg: #ffffff;
+    --frame-rounding: 4px;
+    --frame-border-size: 1px;
+}
+
+window {
+    background-color: var(--window-bg);
+    color: var(--text);
+}
+
+button {
+    background-color: var(--button);
+    border-radius: 4px;
+}
+
+button:hover {
+    background-color: var(--button-hover);
+}
+
+button:active {
+    background-color: var(--button-active);
+}
+
+input, field {
+    background-color: var(--frame-bg);
+    border-color: var(--border);
+}
+
+input:hover, field:hover {
+    background-color: var(--frame-bg-hovered);
+}
+
+input:active, field:active {
+    background-color: var(--frame-bg-active);
+}
+
+menu, popup {
+    background-color: var(--popup-bg);
+    border-color: var(--border);
+}
+
+tab {
+    background-color: var(--tab);
+}
+
+tab:selected {
+    background-color: var(--tab-selected);
+}
+
+tab:hover {
+    background-color: var(--tab-hover);
+}
+
+table {
+    background-color: var(--table-row-bg);
+    alternate-background-color: var(--table-row-bg-alt);
+    border-color: var(--border);
+}
+
+dock_title {
+    background-color: var(--title-bg);
+}
+
+dock_title:active {
+    background-color: var(--title-bg-active);
+}

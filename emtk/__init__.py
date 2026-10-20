@@ -130,6 +130,8 @@ NAMESPACED_MODULES = (
     # and a pannable grid. Modelled on Nelarius/imnodes -- ``nodes.py``'s
     # docstring records the five candidates that were measured first.
     "nodes",
+    # Shipped native CSS stylesheets for EMTK
+    "styles",
 )
 
 #: Every lazily-exported name and the family module that owns it. Generated

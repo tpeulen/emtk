@@ -103,7 +103,7 @@ def _rgba(colour: Colour) -> tuple[float, float, float, float]:
         r, g, b = colour
         a = 255
     else:
-        r, g, b, a = colour
+        r, g, b, a = colour[:4]
     return r / 255.0, g / 255.0, b / 255.0, a / 255.0
 
 

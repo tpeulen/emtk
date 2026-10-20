@@ -38,6 +38,9 @@ __all__ = [
     "THEMES",
     "TEXT_SURFACES",
     "apply_theme",
+    "apply_stylesheet",
+    "available_stylesheets",
+    "register_theme",
     "current_theme",
     "is_light",
     "on_change",
@@ -205,10 +208,11 @@ def apply_theme(name: str, styles=()) -> str:
     previous = _current
     _style.use_palette(palette)
     _style.FRAME_BORDER_SIZE = float(border)
-    from .im_core import _default_colors  # noqa: PLC0415
+    from .im_core import _default_colors, _ACTIVE_STYLES  # noqa: PLC0415
 
     colours = _default_colors()
-    for style in styles:
+    all_styles = set(styles or ()) | set(_ACTIVE_STYLES)
+    for style in all_styles:
         if style is None:
             continue
         style.colors.update(colours)
@@ -234,3 +238,29 @@ def _reset_implot() -> None:
             implot3d.style_colors_auto()
         except Exception:  # noqa: BLE001 - no 3-D plot context yet: nothing to reset
             pass
+
+
+def register_theme(name: str, palette: dict[str, tuple], frame_border: float = 0.0) -> None:
+    """Register or replace a theme in :data:`THEMES`."""
+    missing = set(palette_names()) - set(palette)
+    if missing:
+        # Fallback missing values to DARK theme defaults
+        filled = dict(DARK)
+        filled.update(palette)
+        palette = filled
+    THEMES[name] = (palette, float(frame_border))
+
+
+def apply_stylesheet(source_or_path, name: str = "custom", styles=()) -> str:
+    """Parse a CSS or QSS stylesheet and apply it globally to EMTK."""
+    from .stylesheet import apply_stylesheet as _apply_stylesheet  # noqa: PLC0415
+
+    return _apply_stylesheet(source_or_path, name=name, styles=styles)
+
+
+def available_stylesheets() -> list[str]:
+    """Return names of all shipped EMTK native stylesheets (without .css extension)."""
+    from .styles import available_stylesheets as _avail  # noqa: PLC0415
+
+    return _avail()
+

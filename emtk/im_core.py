@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import weakref
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 from typing import Any, Callable, Optional
@@ -407,7 +408,11 @@ class ItemFlags:
     NO_TAB_STOP = 1 << 6
 
 
-@dataclass
+#: All active Style instances across the running process (updated by theme/stylesheet changes).
+_ACTIVE_STYLES: weakref.WeakSet[Style] = weakref.WeakSet()
+
+
+@dataclass(eq=False)
 class Style:
     """``ImGuiStyle``, in pixels and 0-255 colours.
 
@@ -444,6 +449,9 @@ class Style:
     #: Widest a tooltip's text runs before it wraps, in logical pixels.
     tooltip_max_width: float = 360.0
     colors: dict = field(default_factory=_default_colors)
+
+    def __post_init__(self) -> None:
+        _ACTIVE_STYLES.add(self)
 
     def color(self, which, default=(200, 200, 200, 255)):
         from .painter import colour_bytes

@@ -43,8 +43,10 @@ include = ["emtk*"]
 # shader is read from disk at pipeline time, so a wheel without it works in
 # a checkout and fails on an install. `web/*` is the browser host's page and
 # loader, copied into every site `python -m emtk.web.serve` builds.
+# `styles/*.css` are the shipped stylesheets `theme.apply_stylesheet("dark_blue")`
+# reads by name.
 emtk = ["*.json", "*.md", "atlas/*.json", "atlas/*.png", "wgsl/*.wgsl",
-        "web/*.js", "web/*.html", "i18n/locales/*.ts"]
+        "web/*.js", "web/*.html", "i18n/locales/*.ts", "styles/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
