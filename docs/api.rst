@@ -84,6 +84,15 @@ Style: ``emtk.style``
 .. automodule:: emtk.style
    :noindex:
 
+Stylesheets: ``emtk.stylesheet``, ``emtk.styles``
+-------------------------------------------------
+
+.. automodule:: emtk.stylesheet
+   :noindex:
+
+.. automodule:: emtk.styles
+   :noindex:
+
 Events: ``emtk.events``
 ----------------------------
 

@@ -131,6 +131,7 @@ TABLE_KEYS = frozenset({
     "colour_source", "editable", "editable_call", "height", "expand", "stretch", "min_height",
     "expanded_attr", "muted_key", "link_key", "status", "column_picker", "tree_key", "filter",
     "tooltip_key", "selection_note", "row_key", "min_column_width", "fit_columns", "fit_rows", "drag_call", "selection_attr", "sort",
+    "selection",
 })
 SECTION_KEYS: dict[str, frozenset[str]] = {
     **{name: _CONTAINER_KEYS for name in _CONTAINERS},
