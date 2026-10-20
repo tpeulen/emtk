@@ -42,16 +42,17 @@ that drifts from it is the bug :mod:`.style` exists to prevent.
 
 What is deliberately not ported
 -------------------------------
-Word wrap, line folding, the minimap, autocomplete, LSP hover, squiggly
-underlines, line decorators and the Unicode Annex 14 line-breaking rules. Each
-is a feature of the reference's *TypeSetter* -- the layer that separates
-document position from visual position -- and none has a caller here: the
-chrome draws a script in a dock, one document row per screen row. The port
-keeps the single coordinate system (:class:`Pos`, a line and a character index)
-that the reference had before that split, which is why the code below is a
-third of the size and not one that has to be re-read to be trusted. Multilevel
-comments and strings (Lua's ``[==[``) go with them; the languages that ship
-here have none.
+Word wrap, the minimap, autocomplete, LSP hover, squiggly underlines, line
+decorators and the Unicode Annex 14 line-breaking rules. Each is a feature
+of the reference's *TypeSetter* -- the layer that separates document
+position from visual position -- and none has a caller here: the chrome
+draws a script in a dock, one document row per screen row. Folding began in
+that list and came back out of it: the style manager and the JSON settings
+files are both callers, so :class:`Folds` folds brace pairs, with exactly
+the coordinate split the reference's TypeSetter existed for -- document
+lines versus display rows -- implemented over the one that was already
+here. Multilevel comments and strings (Lua's ``[==[``) go with the rest;
+the languages that ship here have none.
 
 Everything draws through :class:`~emtk.painter.Painter`'s six
 operations, holds its own state, and hit-tests with :func:`.style.hit`, like
@@ -88,6 +89,9 @@ __all__ = [
     "Transactions",
     "BracketPair",
     "Bracketeer",
+    "Fold",
+    "Folds",
+    "ColorSwatch",
     "EditorConfig",
     "TextEditor",
 ]
@@ -559,6 +563,36 @@ class Language:
         )
 
     @staticmethod
+    def css() -> Language:
+        """CSS and QSS stylesheets: properties, selectors, strings and comments."""
+        return Language(
+            name="CSS",
+            case_sensitive=False,
+            comment_start="/*",
+            comment_end="*/",
+            has_double_quoted_strings=True,
+            has_single_quoted_strings=True,
+            string_escape="\\",
+            keywords=frozenset(
+                "color background background-color border border-color border-radius "
+                "border-width font font-size font-family font-weight padding margin "
+                "width height min-width min-height max-width max-height opacity "
+                "display position top left right bottom z-index overflow visibility "
+                "align-items justify-content flex flex-direction grid selection-color "
+                "selection-background-color alternate-background-color text-align "
+                "text-decoration outline line-height letter-spacing cursor".split()
+            ),
+            identifiers=frozenset(
+                "none auto inherit initial unset solid dashed dotted transparent "
+                "bold normal italic center left right justify block inline inline-block "
+                "hidden visible flex relative absolute fixed px pt em rem vh vw "
+                "rgb rgba hsl hsla url var calc".split()
+            ),
+            punctuation=frozenset("{}:;,.#()[]@*~>+!"),
+            number_pattern=_PY_NUMBER,
+        )
+
+    @staticmethod
     def glsl() -> Language:
         """GLSL -- and near enough WGSL, which is what emtk's shaders are."""
         return Language(
@@ -709,7 +743,7 @@ class Line:
         The line's characters, without any terminator.
     """
 
-    __slots__ = ("text", "colours", "state", "needs_colorizing", "marker")
+    __slots__ = ("text", "colours", "state", "needs_colorizing", "marker", "collapsed")
 
     def __init__(self, text: str = "") -> None:
         self.text = text
@@ -721,6 +755,10 @@ class Line:
         self.needs_colorizing = True
         #: ``(line_number_colour, text_colour, tooltip)`` or ``None``.
         self.marker: tuple[Colour, Colour, str] | None = None
+        #: The fold this line opens is collapsed (:class:`Folds`). It rides on
+        #: the line, as the marker does, so an insert above carries it with
+        #: the line it belongs to.
+        self.collapsed: bool = False
 
     def __len__(self) -> int:
         """Number of characters."""
@@ -1690,6 +1728,267 @@ def _level_token(level: int) -> Token:
 
 
 # --------------------------------------------------------------------------
+# Folds -- collapsible regions
+# --------------------------------------------------------------------------
+class Fold(NamedTuple):
+    """One collapsible region: from an opening brace to its match."""
+
+    start: Pos
+    end: Pos
+
+    def hides(self, pos: Pos) -> bool:
+        """Whether *pos* is strictly inside the collapsed body."""
+        return self.start.line < pos.line < self.end.line
+
+
+class Folds:
+    """The overlay that maps document lines to display rows.
+
+    The fold map is the brace pairs the :class:`Bracketeer` already found --
+    one rule that serves JSON, CSS/QSS and C-family code alike -- and the
+    *collapsed* flag rides on the :class:`Line` that opens the fold, so an
+    edit above a fold carries the collapse with the line it belongs to and
+    the map can never desynchronise from the text.
+
+    A collapsed fold hides its interior lines and leaves the opening line as
+    a *holder* row, drawn with an ellipsis. Everything that addresses the
+    screen -- scrolling, carets, clicks, swatches -- goes through
+    :meth:`display_row`/:meth:`document_line`, which are the identity when
+    nothing is collapsed.
+    """
+
+    def __init__(self) -> None:
+        self._pairs: list[BracketPair] = []
+        #: (document line -> display row), and the inverse; ``None`` marks a
+        #: hidden line. Rebuilt in :meth:`update` when either input changes.
+        self._display: list[int | None] = []
+        self._document: list[int] = []
+        self._owner: TextEditor | None = None
+        #: Whether :meth:`update` has run against the current document and
+        #: config; cleared by an edit, so a config-only change still rebuilds.
+        self._built = False
+
+    # -- the map --------------------------------------------------------- #
+    def update(self, config: EditorConfig, document: Document) -> None:
+        """Rebuild the fold map from the document's current bracket pairs.
+
+        Runs after the colouriser whenever the document changed (its
+        ``updated`` flag), because the pairs are read off the colouriser's
+        output: a bracket inside a comment or a string is not a fold. The
+        scan is the :class:`Bracketeer`'s pairing rule without its bracket
+        *painting*, which is bound to ``show_matching_brackets`` and would
+        otherwise couple folding to a display setting.
+        """
+        self._owner = self._owner or None
+        if not config.show_folds:
+            self._pairs = []
+            self._display = list(range(len(document.lines)))
+            self._document = list(range(len(document.lines)))
+            self._built = True
+            return
+        # The same candidacy rule as the Bracketeer's: a bracket counts only
+        # where the colouriser said there is code, and by the time this runs
+        # the Bracketeer has already repainted the real pairs to its level
+        # tokens -- so the candidate set is the whole bracket family.
+        candidates = {
+            int(Token.PUNCTUATION),
+            int(Token.BRACKET_LEVEL1),
+            int(Token.BRACKET_LEVEL2),
+            int(Token.BRACKET_LEVEL3),
+            int(Token.BRACKET_ERROR),
+        }
+        match = {")": "(", "]": "[", "}": "{"}
+        stack: list[tuple[str, Pos]] = []
+        pairs: list[BracketPair] = []
+        for number, line in enumerate(document.lines):
+            for index, char in enumerate(line.text):
+                if index >= len(line.colours) or line.colours[index] not in candidates:
+                    continue
+                if char in "([{":
+                    stack.append((char, Pos(number, index)))
+                elif char in ")]}" and stack and stack[-1][0] == match[char]:
+                    open_char, open_pos = stack.pop()
+                    pairs.append(BracketPair(open_char, open_pos, char, Pos(number, index), 0, True))
+        pairs = [p for p in pairs if p.end.line > p.start.line]
+        pairs.sort(key=lambda p: p.start)
+        self._pairs = pairs
+        self._build_map(document)
+        self._built = True
+
+    def _build_map(self, document: Document) -> None:
+        hidden: set[int] = set()
+        count = len(document.lines)
+        for pair in self._pairs:
+            # Between an edit and the next update() the pairs describe the old
+            # text; one past the shortened document is skipped, not indexed.
+            if pair.end.line < count and document.lines[pair.start.line].collapsed:
+                hidden.update(range(pair.start.line + 1, pair.end.line))
+        # A fold inside a collapsed outer fold is hidden either way; the
+        # display map only ever counts the outermost collapse.
+        display: list[int | None] = []
+        document_rows: list[int] = []
+        for number in range(len(document.lines)):
+            if number in hidden:
+                display.append(None)
+            else:
+                display.append(len(document_rows))
+                document_rows.append(number)
+        self._display = display
+        self._document = document_rows
+
+    # -- queries --------------------------------------------------------- #
+    def regions(self) -> list[Fold]:
+        """Every foldable region, innermost-first is not promised; ordered by start."""
+        return sorted(
+            (Fold(p.start, p.end) for p in self._pairs), key=lambda f: f.start
+        )
+
+    def foldable_at(self, line: int) -> bool:
+        """Whether *line* opens a fold (draws the gutter control)."""
+        return any(p.start.line == line for p in self._pairs)
+
+    def is_collapsed(self, line: int) -> bool:
+        """Whether the fold *line* opens is collapsed. False if it opens none."""
+        return (
+            self.foldable_at(line)
+            and self._owner is not None
+            and self._owner.document.lines[line].collapsed
+        )
+
+    def toggle(self, line: int) -> bool:
+        """Collapse or expand the fold *line* opens; returns the new state."""
+        if not self.foldable_at(line) or self._owner is None:
+            return False
+        lines = self._owner.document.lines
+        lines[line].collapsed = not lines[line].collapsed
+        self._build_map(self._owner.document)
+        return lines[line].collapsed
+
+    def display_row(self, line: int) -> int | None:
+        """The row *line* occupies on screen, or ``None`` when hidden by a fold."""
+        if 0 <= line < len(self._display):
+            return self._display[line]
+        return None
+
+    def document_line(self, row: int) -> int:
+        """The document line drawn at *row*; the last line past the end."""
+        if not self._document:
+            return max(row, 0)
+        return self._document[min(row, len(self._document) - 1)]
+
+    def row_count(self) -> int:
+        """How many rows the document draws when folded."""
+        return len(self._document)
+
+    def expand_line(self, line: int) -> None:
+        """Un-collapse the fold *line* opens, if it is collapsed."""
+        if self._owner is not None and self.foldable_at(line):
+            self._owner.document.lines[line].collapsed = False
+            self._build_map(self._owner.document)
+
+    def reveal(self, pos: Pos) -> None:
+        """Expand every fold hiding *pos* -- a caret must never sit on a hidden line."""
+        line = self._owner.document.lines[pos.line] if self._owner else None
+        if line is None:
+            return
+        count = len(self._owner.document.lines)
+        for pair in self._pairs:
+            if pair.start.line < pos.line < pair.end.line < count:
+                if self._owner.document.lines[pair.start.line].collapsed:
+                    self._owner.document.lines[pair.start.line].collapsed = False
+        self._build_map(self._owner.document)
+
+
+# --------------------------------------------------------------------------
+# Hex-colour swatches
+# --------------------------------------------------------------------------
+class ColorSwatch(NamedTuple):
+    """A ``#rgb``/``#rrggbb``/``#rrggbbaa`` literal and where it draws."""
+
+    start: Pos
+    end: Pos
+    text: str
+    colour: Colour
+    #: Filled in at draw time: the chip's screen rect and the colour the
+    #: token's text is drawn in for contrast. ``None`` until then, or when
+    #: the swatch is on a hidden (folded) line.
+    rect: tuple[float, float, float, float] | None = None
+    text_colour: Colour | None = None
+    visible: bool = True
+
+
+#: A hex literal: ``#`` then 3, 4, 6 or 8 hex digits, bounded so the ``#`` of
+#: ``#ifndef`` is not swallowed by a longer run.
+_HEX_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b")
+
+# fmt: off
+_W3C_NAMED: dict[str, Colour] = {
+    "black": (0, 0, 0, 255), "silver": (192, 192, 192, 255), "gray": (128, 128, 128, 255),
+    "white": (255, 255, 255, 255), "maroon": (128, 0, 0, 255), "red": (255, 0, 0, 255),
+    "purple": (128, 0, 128, 255), "fuchsia": (255, 0, 255, 255), "green": (0, 128, 0, 255),
+    "lime": (0, 255, 0, 255), "olive": (128, 128, 0, 255), "yellow": (255, 255, 0, 255),
+    "navy": (0, 0, 128, 255), "blue": (0, 0, 255, 255), "teal": (0, 128, 128, 255),
+    "aqua": (0, 255, 255, 255),
+}
+# fmt: on
+
+
+def _hex_bytes(digits: str) -> Colour | None:
+    """Expand a hex digit run to an RGBA tuple, or ``None`` if its length is not 3/4/6/8."""
+    if len(digits) == 3:
+        digits = "".join(ch * 2 for ch in digits) + "ff"
+    elif len(digits) == 4:
+        digits = "".join(ch * 2 for ch in digits)
+    elif len(digits) == 6:
+        digits += "ff"
+    if len(digits) != 8:
+        return None
+    try:
+        return tuple(int(digits[i: i + 2], 16) for i in (0, 2, 4, 6))  # type: ignore[return-value]
+    except ValueError:
+        return None
+
+
+def find_color_swatches(document: Document) -> list[ColorSwatch]:
+    """Every hex colour literal in the document, in order.
+
+    Only text the colouriser did *not* classify as a comment or a string
+    counts: a ``#`` inside ``/* ... */`` is prose, not a colour.
+    """
+    swatches: list[ColorSwatch] = []
+    for number, line in enumerate(document.lines):
+        for match in _HEX_LITERAL.finditer(line.text):
+            index = match.start()
+            if index < len(line.colours) and line.colours[index] in (
+                int(Token.COMMENT),
+                int(Token.STRING),
+            ):
+                continue
+            colour = _hex_bytes(match.group()[1:])
+            if colour is None:
+                continue
+            swatches.append(
+                ColorSwatch(
+                    Pos(number, index),
+                    Pos(number, match.end()),
+                    match.group(),
+                    colour,
+                )
+            )
+    return swatches
+
+
+def _contrast_text(colour: Colour) -> Colour:
+    """A readable text colour for a chip of *colour* (WCAG luminance rule)."""
+    r, g, b = colour[0] / 255.0, colour[1] / 255.0, colour[2] / 255.0
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+    return (16, 16, 16, 255) if luminance > 0.179 else (240, 240, 240, 255)
+
+
+# --------------------------------------------------------------------------
 # The control
 # --------------------------------------------------------------------------
 @dataclass
@@ -1706,6 +2005,12 @@ class EditorConfig:
     show_tabs: bool = False
     show_line_numbers: bool = True
     show_matching_brackets: bool = True
+    #: Collapsible brace regions: gutter controls, hidden interior lines and
+    #: an ellipsis holder row (:class:`Folds`).
+    show_folds: bool = True
+    #: Hex colour literals (``#rrggbb``) draw a swatch chip behind the token
+    #: and tint the token for contrast.
+    show_color_swatches: bool = True
     complete_paired_glyphs: bool = True
     overwrite: bool = False
     left_margin: int = 1
@@ -1813,6 +2118,10 @@ class TextEditor:
         self.transactions = Transactions()
         self.colorizer = Colorizer()
         self.bracketeer = Bracketeer()
+        self.folds = Folds()
+        self.folds._owner = self  # noqa: SLF001 -- Folds is this module's own type
+        self._swatches: list[ColorSwatch] = []
+        self._swatch_revision = -1
 
         #: First document line drawn, and first column drawn.
         self.first_visible_line = 0
@@ -1825,6 +2134,9 @@ class TextEditor:
         self._text_x = 0.0
         self._body_y = 0.0
         self._dragging = False
+        #: ``(x, y, w, h, line)`` of each gutter fold control drawn this frame;
+        #: filled by :meth:`_draw`, read by :meth:`press`.
+        self._fold_hit: list[tuple[float, float, float, float, int]] = []
         #: The vertical scrollbar, drawn when the file is taller than the box.
         self.vbar = ScrollBar()
         self._bar_drag = False
@@ -1891,6 +2203,28 @@ class TextEditor:
     def mark_saved(self) -> None:
         """The buffer was written out: not modified until the next edit."""
         self._changed = False
+
+    # -- colour swatches ------------------------------------------------ #
+    def color_swatches(self) -> list[ColorSwatch]:
+        """The document's hex colour literals, with their last drawn geometry.
+
+        Recomputed when the document changed or the feature was switched;
+        ``rect``/``text_colour`` are filled in by the draw that put them on
+        screen, and ``visible`` is false while the swatch's line is inside a
+        collapsed fold.
+        """
+        key = (self._revision, self.config.show_color_swatches)
+        if key != self._swatch_revision:
+            self._swatches = (
+                find_color_swatches(self.document) if self.config.show_color_swatches else []
+            )
+            self._swatch_revision = key
+        return [
+            swatch
+            if self.folds.display_row(swatch.start.line) is not None
+            else swatch._replace(visible=False, rect=None)
+            for swatch in self._swatches
+        ]
 
     def set_language(self, language: Language | None) -> None:
         """Change the language; every line is re-colourised on the next draw."""
@@ -2582,12 +2916,21 @@ class TextEditor:
             self.first_visible_line = max(0, line - self.visible_lines // 2)
 
     def _follow_main(self) -> None:
-        """Scroll so the main caret is on screen, vertically and horizontally."""
+        """Scroll so the main caret is on screen, vertically and horizontally.
+
+        Vertical scrolling counts *display rows*: a caret below a collapsed
+        fold is fewer rows from the top than its document line, and clamping
+        to the row count (not the line count) is what keeps the view from
+        scrolling past a document that shrank on screen when it folded.
+        """
+        self.folds.reveal(self.cursors.main.end)
         pos = self.cursors.main.end
-        if pos.line < self.first_visible_line:
-            self.first_visible_line = pos.line
-        elif pos.line >= self.first_visible_line + self.visible_lines:
-            self.first_visible_line = pos.line - self.visible_lines + 1
+        row = self.folds.display_row(pos.line)
+        if row is not None:
+            if row < self.first_visible_line:
+                self.first_visible_line = row
+            elif row >= self.first_visible_line + self.visible_lines:
+                self.first_visible_line = row - self.visible_lines + 1
         column = self._column_of(pos)
         if column < self.first_visible_column:
             self.first_visible_column = column
@@ -2818,7 +3161,9 @@ class TextEditor:
     def position_at(self, px: float, py: float) -> Pos:
         """Which document position a point on screen is over."""
         row = int((py - self._body_y) // max(self._line_h, 1e-6))
-        line = int(clamp(self.first_visible_line + row, 0, len(self.document) - 1))
+        row = int(clamp(row, 0, max(self.folds.row_count() - 1, 0)))
+        line = self.folds.document_line(self.first_visible_line + row)
+        line = int(clamp(line, 0, len(self.document) - 1))
         cells = self.first_visible_column + max(0.0, px - self._text_x) / max(
             self._glyph_w, 1e-6
         )
@@ -2854,6 +3199,11 @@ class TextEditor:
 
         if not hit(px, py, x, y, w, h):
             return None
+        if self.config.show_folds:
+            for fx, fy, fw, fh, line in self._fold_hit:
+                if fx <= px <= fx + fw and fy <= py <= fy + fh:
+                    self.folds.toggle(line)
+                    return self.cursors.current.end
         if self.vbar.press(px, py):
             self.first_visible_line = self.vbar.top
             self._bar_drag = True
@@ -2924,30 +3274,32 @@ class TextEditor:
     def _draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """:meth:`draw` in the font already selected."""
         self.colorizer.update(self.config, self.document)
-        if self.document.updated:
+        if self.document.updated or not self.folds._built:
             self.bracketeer.update(self.config, self.document)
+            self.folds.update(self.config, self.document)
             self.document.updated = False
 
         self._line_h = max(p.line_height() * self.config.line_spacing, 1.0)
         self._glyph_w = max(p.text_width("W"), 1.0)
         self._body_y = y
         digits = len(str(max(len(self.document), 1)))
+        fold_lane = self._glyph_w if self.config.show_folds else 0.0
         gutter = (
             (digits + self.config.left_margin + self.config.text_margin) * self._glyph_w
+            + fold_lane
             if self.config.show_line_numbers
-            else self.config.text_margin * self._glyph_w
+            else self.config.text_margin * self._glyph_w + fold_lane
         )
         self._text_x = x + gutter
         self.visible_lines = max(int(h / self._line_h), 1)
         # A scrollbar down the right when the file is taller than the box --
         # a text editor with no bar shows a file with no bottom.
-        bar_w = self.vbar.width if len(self.document) > self.visible_lines else 0.0
+        rows = self.folds.row_count()
+        bar_w = self.vbar.width if rows > self.visible_lines else 0.0
         self.visible_columns = max(int((w - gutter - bar_w) / self._glyph_w), 1)
-        self.first_visible_line = int(
-            clamp(self.first_visible_line, 0, max(len(self.document) - 1, 0))
-        )
+        self.first_visible_line = int(clamp(self.first_visible_line, 0, max(rows - 1, 0)))
         self.vbar.top = self.first_visible_line
-        self.vbar.clamp(len(self.document), self.visible_lines)
+        self.vbar.clamp(rows, self.visible_lines)
 
         p.fill_rect(x, y, w, h, self.config.background_color or _style.FRAME_BG)
         if self.config.margin_color is not None and self.config.show_line_numbers:
@@ -2958,20 +3310,42 @@ class TextEditor:
         active = self.bracketeer.at(self.cursors.main.end) or self.bracketeer.enclosing(
             self.cursors.main.end
         )
+        self._fold_hit = []
+        # The swatch list must match the document being drawn, and a swatch
+        # on a line hidden by a fold draws nothing this frame.
+        self.color_swatches()
+        swatch_rows: dict[int, list[int]] = {}
+        if self.config.show_color_swatches:
+            for position, swatch in enumerate(self._swatches):
+                if self.folds.display_row(swatch.start.line) is not None:
+                    swatch_rows.setdefault(swatch.start.line, []).append(position)
+                else:
+                    self._swatches[position] = swatch._replace(visible=False, rect=None)
 
         for row in range(self.visible_lines):
-            number = self.first_visible_line + row
-            if number >= len(self.document):
+            absolute = self.first_visible_line + row
+            if absolute >= rows:
                 break
+            number = self.folds.document_line(absolute)
             line = self.document.lines[number]
             row_y = y + row * self._line_h
 
             if self.config.highlight_current_line and number in caret_lines:
                 p.fill_rect(x, row_y, w, self._line_h, self.config.current_line_color or (255, 255, 255, 12))
+            overrides = self._draw_swatches(p, number, row_y, w, x, gutter, swatch_rows)
             self._draw_selections(p, number, row_y, w, x)
             if self.config.show_line_numbers:
                 self._draw_line_number(p, line, number, x, row_y, gutter)
-            self._draw_line(p, line, number, row_y, w, x, gutter, active)
+            if self.config.show_folds:
+                self._draw_fold_control(p, number, row_y, x, gutter)
+            self._draw_line(p, line, number, row_y, w, x, gutter, active, overrides)
+            if self.config.show_folds and self.folds.is_collapsed(number):
+                after = self._column_of(Pos(number, len(line.text)))
+                left = self._text_x + (after - self.first_visible_column) * self._glyph_w
+                if self._text_x <= left < x + w - self._glyph_w:
+                    p.text(left, row_y, self._glyph_w * 2.0, self._line_h,
+                           ALIGN_LEFT | ALIGN_VCENTER, "…",
+                           self.palette[int(Token.PUNCTUATION)])
 
         self._draw_carets(p, x, y, w, h)
         self._draw_preedit(p, x, y, w, h)
@@ -2979,6 +3353,63 @@ class TextEditor:
             self.vbar.draw(p, x + w - bar_w, y, h)
         p.pop_clip()
         p.stroke_rect(x, y, w, h, _style.BORDER)
+
+    def _draw_fold_control(
+        self, p: Painter, number: int, row_y: float, x: float, gutter: float
+    ) -> None:
+        """The gutter's fold marker: ``▾`` on a foldable line, ``▸`` collapsed."""
+        if not self.folds.foldable_at(number):
+            return
+        collapsed = self.folds.is_collapsed(number)
+        box_w = self._glyph_w
+        left = x + gutter - box_w - 2.0
+        p.text(left, row_y, box_w + 2.0, self._line_h, ALIGN_LEFT | ALIGN_VCENTER,
+               "▸" if collapsed else "▾",
+               self.palette[int(Token.PUNCTUATION)])
+        self._fold_hit.append((left, row_y, box_w + 2.0, self._line_h, number))
+
+    def _draw_swatches(
+        self,
+        p: Painter,
+        number: int,
+        row_y: float,
+        w: float,
+        x: float,
+        gutter: float,
+        swatch_rows: dict[int, list[int]],
+    ) -> dict[int, Colour]:
+        """Draw the chips behind this row's hex literals; return text-colour overrides.
+
+        A chip is the token's own cells inset vertically, drawn *before* the
+        text so the characters sit on it, and the token is re-tinted to the
+        chip's contrast colour -- a ``#242424`` chip on a dark editor stays
+        readable because its text goes light.
+        """
+        overrides: dict[int, Colour] = {}
+        for position in swatch_rows.get(number, ()):
+            swatch = self._swatches[position]
+            start_col = self._column_of(swatch.start)
+            end_col = self._column_of(swatch.end)
+            left = self._text_x + (start_col - self.first_visible_column) * self._glyph_w
+            width = max((end_col - start_col) * self._glyph_w, self._glyph_w)
+            if left + width <= x + gutter or left >= x + w:
+                self._swatches[position] = swatch._replace(visible=True, rect=None)
+                continue
+            top = row_y + self._line_h * 0.18
+            height = self._line_h * 0.64
+            draw_left = max(left, x + gutter)
+            draw_w = min(width - (draw_left - left), x + w - draw_left)
+            p.fill_rect(draw_left, top, draw_w, height, swatch.colour)
+            p.stroke_rect(draw_left, top, draw_w, height, _style.BORDER)
+            text_colour = _contrast_text(swatch.colour)
+            self._swatches[position] = swatch._replace(
+                rect=(draw_left, top, draw_w, height),
+                text_colour=text_colour,
+                visible=True,
+            )
+            for index in range(swatch.start.index, swatch.end.index):
+                overrides[index] = text_colour
+        return overrides
 
     def _draw_line_number(
         self, p: Painter, line: Line, number: int, x: float, row_y: float, gutter: float
@@ -3028,6 +3459,7 @@ class TextEditor:
         x: float,
         gutter: float,
         active: BracketPair | None,
+        overrides: dict[int, Colour] | None = None,
     ) -> None:
         """Draw one row's characters, one painter call per run.
 
@@ -3076,6 +3508,8 @@ class TextEditor:
                 column = self._draw_whitespace(p, piece, column, row_y, x, w)
             else:
                 colour = marker_colour or self.palette[min(token, len(self.palette) - 1)]
+                if overrides and index in overrides:
+                    colour = overrides[index]
                 left = self._text_x + (column - self.first_visible_column) * self._glyph_w
                 cells = grapheme.count(piece)       # a cluster is one cell
                 if left + cells * self._glyph_w > x + gutter and left < x + w:
