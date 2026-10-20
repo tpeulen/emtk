@@ -242,10 +242,26 @@ _ATLAS_PIXELS: dict = {}
 
 
 def _atlas_pixels():
-    """The baked atlas, decoded once: ``(width, height, rgba)``."""
+    """The baked atlas, decoded once: ``(width, height, rgba)``.
+
+    Through Pillow when it is installed: :func:`png_decode` unfilters the 640x2795 atlas
+    a byte at a time in Python, which is ~3.4 s -- paid by every fresh process that draws
+    text through this painter (a test run, and every "draws without Qt" subprocess a
+    test spawns). The two decoders give the same bytes; the pure one stays the fallback,
+    so this module still needs nothing outside the standard library.
+    """
     if "px" not in _ATLAS_PIXELS:
         data = _load_atlas().image_path.read_bytes()
-        w, h, px = png_decode(data)
+        try:
+            import io  # noqa: PLC0415
+
+            from PIL import Image  # noqa: PLC0415
+        except ImportError:
+            w, h, px = png_decode(data)
+        else:
+            with Image.open(io.BytesIO(data)) as image:
+                rgba = image.convert("RGBA")
+                w, h, px = rgba.width, rgba.height, rgba.tobytes()
         _ATLAS_PIXELS["px"] = (w, h, px)
     return _ATLAS_PIXELS["px"]
 

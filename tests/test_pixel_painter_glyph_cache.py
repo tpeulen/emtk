@@ -81,3 +81,13 @@ def test_clipping_still_bounds_cached_glyphs():
         row = slice(y * stride, y * stride + 20 * 4)
         assert clipped.px[row] == whole.px[row]
         assert not any(clipped.px[y * stride + 20 * 4: (y + 1) * stride][i] for i in range(0, 100 * 4, 4))
+
+
+def test_the_atlas_decodes_to_the_same_bytes_through_pillow_and_the_pure_decoder():
+    import pytest
+
+    pytest.importorskip("PIL")
+    w, h, fast = et._atlas_pixels()
+    pw, ph, pure = et.png_decode(et._load_atlas().image_path.read_bytes())
+    assert (w, h) == (pw, ph)
+    assert bytes(fast) == bytes(pure)
