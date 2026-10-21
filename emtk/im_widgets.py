@@ -1401,6 +1401,91 @@ def slider_int(label: str, v: int, v_min: int, v_max: int,
     return (changed, int(round(value)))
 
 
+def _drag_typing(ctx, typ, item_id, box, shown, value, v_min, v_max, integral: bool,
+                 hovered: bool):
+    """The keyboard-edit phase of a drag field -- a spinbox is typed into too.
+
+    Entered from :func:`_drag` on Ctrl+click or a double click (the keyboard
+    mode ``ImGui::SliderFlags`` drag widgets have). While on, the keys edit a
+    :class:`~emtk.widgets.text_field.TextField` seeded with the current value:
+    Enter or a click elsewhere commits (parsed, clamped), Escape reverts, and
+    every frame draws the caret and selection the way an ``input_text`` does.
+    Returns ``(changed, value)`` like the drag itself.
+    """
+    from .flags import InputTextFlags as _ITF
+    from .keys import KEY_ESCAPE
+    from .style import TEXT_SELECTED_BG
+
+    seed = str(value) if integral else ("%g" % value)
+    # The TextField input_text keeps in the same per-item bucket. Seeding is
+    # ours, not _field_state's: the model value stands still while the user
+    # types, so the reseed-on-mismatch there would wipe every keystroke.
+    # Reseed only on entry (or when the caller changed the value under us).
+    from .widgets.text_field import TextField
+
+    fst = ctx.state(("input_text_field", item_id))
+    field = fst.get("field")
+    if not isinstance(field, TextField):
+        field = fst["field"] = TextField()
+        fst.update(scroll=0.0, clicks=0, click_t=-1.0, drag=False, seen=None,
+                   had=False, had_before=False, seed_val=None)
+    if fst.get("seed_val") != value:
+        field.set_text(seed)
+        fst["seed_val"] = value
+        field.select_all()      # typing replaces the value, as ImGui's does
+    fst["had_before"], fst["had"] = fst.get("had", False), True
+    esc = (ctx.io.key == KEY_ESCAPE
+           or any(event[0] == KEY_ESCAPE for event in ctx.io.key_events))
+    entered = False
+    if esc:
+        ctx.io.key = 0
+        ctx.io.key_events[:] = [event for event in ctx.io.key_events
+                                if event[0] != KEY_ESCAPE]
+    else:
+        _field_mouse(ctx, field, fst, hovered, box[0] + ctx.style.frame_padding[0],
+                     lambda s_: ctx.draw.calc_text_size(s_)[0], auto_select_all=True)
+        entered = _field_keys(ctx, field, _ITF.CHARS_DECIMAL, False)
+    ctx._want_text_input = True
+    width = lambda s_: ctx.draw.calc_text_size(s_)[0]  # noqa: E731
+
+    committed = False
+    if esc or entered or (ctx.io.mouse_clicked[0] and not hovered):
+        typ["on"] = False
+        if not esc and field.text.strip():
+            try:
+                parsed = float(field.text.strip().replace(",", "."))
+            except ValueError:
+                parsed = None
+            if parsed is not None:
+                if integral:
+                    parsed = int(round(parsed))
+                if v_min is not None:
+                    parsed = max(v_min, parsed)
+                if v_max is not None:
+                    parsed = min(v_max, parsed)
+                committed = parsed != value
+                value = parsed
+
+    ctx.draw.add_rect_filled((box[0], box[1]), (box[0] + box[2], box[1] + box[3]),
+                             _col(Col.FRAME_BG_ACTIVE), ctx.style.frame_rounding)
+    _nav_ring(ctx, box, item_id)
+    origin = box[0] + ctx.style.frame_padding[0] - fst.get("scroll", 0.0)
+    if field.has_selection():
+        lo, hi = field.selection()
+        ctx.draw.add_rect_filled((origin + width(field.text[:lo]), box[1] + 2.0),
+                                 (origin + width(field.text[:hi]), box[1] + box[3] - 2.0),
+                                 TEXT_SELECTED_BG)
+    ctx.draw.add_text((origin, box[1] + ctx.style.frame_padding[1]),
+                      _col(Col.TEXT), field.text)
+    caret = origin + width(field.text[:field.cursor])
+    ctx.draw.add_line((caret, box[1] + 2.0), (caret, box[1] + box[3] - 2.0),
+                      _col(Col.TEXT), 1.0)
+    if shown:
+        ctx.draw.add_text((box[0] + box[2] + ctx.style.item_inner_spacing[0], box[1]),
+                          _col(Col.TEXT), shown)
+    return (committed, value)
+
+
 def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 0.0, step_fast: float = 0.0):
     ctx = get_current_context()
     height = _frame_height(ctx)
@@ -1415,7 +1500,11 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 
                          width=_labelled_item_width(ctx, wanted, label_w))
     field = (box[0], box[1], max(box[2] - label_w, 1.0), box[3])
     item_id = ctx.get_id(label)
-    hovered, held, _pressed = ctx.button_behavior(field, item_id)
+    # NO_NAV_ACTIVATE: Return is the text edit's commit key while the field
+    # holds the keyboard (typing mode), not a synthetic button press --
+    # input_text opts out of the nav activation for the same reason.
+    hovered, held, _pressed = ctx.button_behavior(field, item_id,
+                                                  ButtonFlags.NO_NAV_ACTIVATE)
     if _pressed or (hovered and ctx.io.mouse_clicked[0]):
         # A click focuses the field, so Up/Down step it right away -- the way a
         # click focuses a text field. Dragging still scrubs the value; nav focus
@@ -1423,6 +1512,20 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 
         ctx.nav_id = item_id
         ctx.storage["__nav_id__"] = item_id
     store = ctx.get_storage(item_id)
+
+    # Ctrl+click or a double click turns the field into a text edit: a
+    # spinbox is typed into as well as scrubbed and stepped.
+    typ = ctx.state(("drag_typing", item_id))
+    if hovered and ctx.io.mouse_clicked[0]:
+        dbl = ctx.io.now - store.get("click_t", -10.0) < _MULTI_CLICK_S
+        store["click_t"] = ctx.io.now
+        if (ctx.io.key_ctrl or dbl) and not ctx.item_flags & ItemFlags.DISABLED:
+            typ["on"] = True
+    if typ.get("on") and not ctx.item_flags & ItemFlags.DISABLED:
+        changed, value = _drag_typing(ctx, typ, item_id, field, shown, value,
+                                      v_min, v_max, integral, hovered)
+        return (changed, int(round(value)) if integral else float(value))
+
     if held:
         last = store.get("x", ctx.io.mouse_pos[0])
         value = value + (ctx.io.mouse_pos[0] - last) * speed
@@ -1493,7 +1596,9 @@ def drag_float(label: str, v: float, speed: float = 1.0, v_min=None, v_max=None,
 
 def drag_int(label: str, v: int, speed: float = 1.0, v_min=None, v_max=None,
              fmt: str = "%d", step: int = 1, step_fast: int = 100) -> tuple[bool, int]:
-    return _drag(label, int(v), speed, v_min, v_max, fmt, integral=True, step=float(step), step_fast=float(step_fast))
+    changed, value = _drag(label, int(v), speed, v_min, v_max, fmt, integral=True,
+                           step=float(step), step_fast=float(step_fast))
+    return (changed, int(round(value)))
 
 
 #: Width of the sliding segment of an indeterminate :func:`progress_bar`, as a fraction of the bar.

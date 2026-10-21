@@ -173,3 +173,70 @@ def test_widgets_drag_int_spinbox():
     assert w.value > 10
     w.release()
     assert w.held is False
+
+
+def _ctrl_click_drag_field(driver, app, name):
+    """Ctrl+click a drag field into text-edit mode."""
+    from emtk.events import CONTROL_MODIFIER, LEFT_BUTTON
+
+    x, y = driver._point(name)
+    driver.hover(name)
+    driver.surface.on_pointer_press(x, y, LEFT_BUTTON, CONTROL_MODIFIER)
+    driver.frame()
+    driver.surface.on_pointer_release(x, y, LEFT_BUTTON, CONTROL_MODIFIER)
+    driver.frame()
+    # Context state is the app's shared storage under ("__state__", key).
+    return app.storage.get(("__state__", ("drag_typing", app.ids[name])), {}).get("on") is True
+
+
+def test_im_drag_int_typing():
+    """Ctrl+click turns the drag field into a text edit; Enter commits."""
+    app = IntInputsApp()
+    driver = Driver(app, (400, 300))
+    driver.frame(2)
+
+    _ctrl_click_drag_field(driver, app, "MyDragInt")
+
+    driver.type("7")
+    driver.press(keys.KEY_RETURN)
+    assert app.val_drag_int == 7
+    # typing is off again after the commit
+    assert app.storage.get(
+        ("__state__", ("drag_typing", app.ids["MyDragInt"])), {}).get("on") is not True
+
+
+def test_im_drag_int_typing_escape_reverts():
+    app = IntInputsApp()
+    driver = Driver(app, (400, 300))
+    driver.frame(2)
+
+    _ctrl_click_drag_field(driver, app, "MyDragInt")
+
+    driver.type("99")
+    driver.press(keys.KEY_ESCAPE)
+    assert app.val_drag_int == 50  # reverted
+
+
+def test_im_drag_int_typing_clamps():
+    app = IntInputsApp()
+    driver = Driver(app, (400, 300))
+    driver.frame(2)
+
+    _ctrl_click_drag_field(driver, app, "MyDragInt")
+
+    driver.type("1234")
+    driver.press(keys.KEY_RETURN)
+    assert app.val_drag_int == 100  # clamped to v_max
+
+
+def test_im_drag_int_typing_invalid_reverts():
+    """A field whose text parses to nothing leaves the value alone."""
+    app = IntInputsApp()
+    driver = Driver(app, (400, 300))
+    driver.frame(2)
+
+    _ctrl_click_drag_field(driver, app, "MyDragInt")
+
+    driver.type("abc")  # CHARS_DECIMAL drops the letters -> empty text
+    driver.press(keys.KEY_RETURN)
+    assert app.val_drag_int == 50

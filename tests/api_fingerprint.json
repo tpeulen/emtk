@@ -1557,8 +1557,8 @@
    "collapsing_header": "def(label, open_=None)",
    "columns": "def(count=1, id=None, border=True)",
    "combo": "def(label, current, items, items_count=-1, popup_max_height_in_items=-1)",
-   "drag_float": "def(label, v, speed=1.0, v_min=None, v_max=None, fmt='%.3f')",
-   "drag_int": "def(label, v, speed=1.0, v_min=None, v_max=None, fmt='%d')",
+   "drag_float": "def(label, v, speed=1.0, v_min=None, v_max=None, fmt='%.3f', step=0.0, step_fast=0.0)",
+   "drag_int": "def(label, v, speed=1.0, v_min=None, v_max=None, fmt='%d', step=1, step_fast=100)",
    "dummy": "def(w, h=None)",
    "end": "def()",
    "end_child": "def(clip=True)",
@@ -3023,6 +3023,7 @@
      "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
      "line_height": "def(self)",
      "marker": "def(self, x, y, fill_shape, line_shape, fill, outline, radius, weight)",
+     "markers": "def(self, points, marker, fill_shape, line_shape, fill, outline, radius, weight)",
      "polyline": "def(self, points, width, colour, closed=False)",
      "polylines": "def(self, runs, width, colour)",
      "pop_clip": "def(self)",
@@ -3540,6 +3541,7 @@
      "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
      "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
      "line_height": "def(self)",
+     "markers": "def(self, points, marker, fill_shape, line_shape, fill, outline, radius, weight)",
      "pop_clip": "def(self)",
      "push_clip": "def(self, x, y, w, h)",
      "set_font": "def(self, value=None, size=0.0)",
@@ -3564,6 +3566,7 @@
      "image": "def(self, x, y, w, h, handle, uv0=(0.0, 0.0), uv1=(1.0, 1.0), tint=(255, 255, 255, 255))",
      "image_triangle": "def(self, p0, p1, p2, handle, uv0=(0.0, 0.0), uv1=(1.0, 0.0), uv2=(1.0, 1.0), tint=(255, 255, 255, 255))",
      "line_height": "def(self)",
+     "markers": "def(self, points, marker, fill_shape, line_shape, fill, outline, radius, weight)",
      "pop_clip": "def(self)",
      "push_clip": "def(self, x, y, w, h)",
      "set_font": "def(self, value=None, size=0.0)",
@@ -4043,10 +4046,11 @@
     "bases": [],
     "decorators": [],
     "members": {
-     "__init__": "def(self, label, value=0, v_min=0, v_max=100, step=1)",
-     "decrement": "def(self)",
+     "__init__": "def(self, label, value=0, v_min=0, v_max=100, step=1, step_fast=10)",
+     "decrement": "def(self, fast=False)",
      "draw": "def(self, p, x, y, w, h)",
-     "increment": "def(self)",
+     "increment": "def(self, fast=False)",
+     "key": "def(self, key, text='', modifiers=0)",
      "press": "def(self, x, y, box_x, box_y, box_w, box_h)",
      "set_value": "def(self, value)"
     }
@@ -6242,6 +6246,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "091608bb638700a10a31de06d032ffd0ca6d6bb2726d2efbf58d7fc675613aa2",
- "version": "0.1.28"
+ "sha256": "e08d40b0523a5a11d664034aa380e173418b85a2fd37ffa328661fd86f637eb5",
+ "version": "0.1.29"
 }
