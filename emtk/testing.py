@@ -176,6 +176,21 @@ class RecordingPainter:
         self.triangles.append((p0, p1, p2, colour))
         self.calls.append(("fill_triangle", p0, p1, p2, colour))
 
+    def markers(self, points, marker, fill_shape, line_shape, fill, outline, radius, weight) -> None:
+        """Record dense markers efficiently."""
+        self.calls.append(("markers", len(points), marker, fill, outline, radius, weight))
+        if len(points) <= 500:
+            from .implot_items import _get_marker_triangles
+            f_tris, l_tris = _get_marker_triangles(marker, fill_shape, line_shape, radius, weight)
+            if fill is not None and f_tris:
+                for px, py in points:
+                    for p0, p1, p2 in f_tris:
+                        self.triangles.append(((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]), fill))
+            if outline is not None and l_tris:
+                for px, py in points:
+                    for p0, p1, p2 in l_tris:
+                        self.triangles.append(((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]), outline))
+
     def gradient_triangle(self, p0, p1, p2, c0, c1, c2) -> None:
         """Record a triangle with per-corner colours."""
         self.gradient_triangles.append((p0, p1, p2, c0, c1, c2))
@@ -721,6 +736,73 @@ class PixelPainter:
                     self.px[o + 1] = int(g * sa + self.px[o + 1] * (1 - sa))
                     self.px[o + 2] = int(b * sa + self.px[o + 2] * (1 - sa))
                     self.px[o + 3] = max(self.px[o + 3], a)
+
+    def markers(self, points, marker, fill_shape, line_shape, fill, outline, radius, weight) -> None:
+        """Render dense markers with pre-rasterised sprite stamping or fast triangles."""
+        if not points:
+            return
+        from .implot_items import _get_marker_triangles
+        f_tris, l_tris = _get_marker_triangles(marker, fill_shape, line_shape, radius, weight)
+        if len(points) <= 10:
+            for px, py in points:
+                if fill is not None and f_tris:
+                    for p0, p1, p2 in f_tris:
+                        self.fill_triangle((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]), fill)
+                if outline is not None and l_tris:
+                    for p0, p1, p2 in l_tris:
+                        self.fill_triangle((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]), outline)
+            return
+
+        import math
+        pad = int(math.ceil(radius + weight + 1.0))
+        diam = pad * 2 + 1
+        cache = getattr(self, "_marker_sprite_cache", None)
+        if cache is None:
+            cache = self._marker_sprite_cache = {}
+        key = (marker, fill, outline, radius, weight)
+        sprite_data = cache.get(key)
+        if sprite_data is None:
+            tmp = PixelPainter(diam, diam)
+            cx, cy = float(pad), float(pad)
+            if fill is not None and f_tris:
+                for p0, p1, p2 in f_tris:
+                    tmp.fill_triangle((cx + p0[0], cy + p0[1]), (cx + p1[0], cy + p1[1]), (cx + p2[0], cy + p2[1]), fill)
+            if outline is not None and l_tris:
+                for p0, p1, p2 in l_tris:
+                    tmp.fill_triangle((cx + p0[0], cy + p0[1]), (cx + p1[0], cy + p1[1]), (cx + p2[0], cy + p2[1]), outline)
+            pixels = []
+            for y in range(diam):
+                for x in range(diam):
+                    o = (y * diam + x) * 4
+                    a = tmp.px[o + 3]
+                    if a > 0:
+                        pixels.append((x - pad, y - pad, tmp.px[o], tmp.px[o + 1], tmp.px[o + 2], a))
+            sprite_data = pixels
+            if len(cache) >= 64:
+                cache.clear()
+            cache[key] = sprite_data
+
+        cx, cy, cw, ch = self._clip()
+        stride = self.width * 4
+        px_buf = self.px
+        for px, py in points:
+            ix, iy = int(round(px)), int(round(py))
+            for dx, dy, r, g, b, a in sprite_data:
+                x = ix + dx
+                y = iy + dy
+                if cx <= x < cx + cw and cy <= y < cy + ch and 0 <= x < self.width and 0 <= y < self.height:
+                    o = y * stride + x * 4
+                    if a == 255:
+                        px_buf[o] = r
+                        px_buf[o + 1] = g
+                        px_buf[o + 2] = b
+                        px_buf[o + 3] = 255
+                    else:
+                        sa = a / 255.0
+                        px_buf[o] = int(r * sa + px_buf[o] * (1.0 - sa))
+                        px_buf[o + 1] = int(g * sa + px_buf[o + 1] * (1.0 - sa))
+                        px_buf[o + 2] = int(b * sa + px_buf[o + 2] * (1.0 - sa))
+                        px_buf[o + 3] = max(px_buf[o + 3], a)
 
     def gradient_triangle(self, p0, p1, p2, c0, c1, c2) -> None:
         """Fill a triangle, the colour interpolated from its corners.

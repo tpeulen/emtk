@@ -37,6 +37,10 @@ class OffsetPainter:
                 return operation([[self._point(point) for point in triangle]
                                   for triangle in vertices], *args, **kwargs)
             return triangles
+        if name == "markers":
+            def markers_offset(points, *args, **kwargs):
+                return operation([self._point(point) for point in points], *args, **kwargs)
+            return markers_offset
         return operation
 
     def text_rotated(self, x, y, w, h, align, string, colour, degrees=0.0):

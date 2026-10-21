@@ -97,6 +97,11 @@ class ScaledPainter:
                 return operation([[self._point(p) for p in tri] for tri in vertices],
                                  *args, **kwargs)
             return triangles
+        if name == "markers":
+            def markers_scaled(points, marker, fill_shape, line_shape, fill, outline, radius, weight):
+                return operation([self._point(p) for p in points], marker, fill_shape, line_shape,
+                                 fill, outline, radius * k, weight * k)
+            return markers_scaled
         return operation
 
     def text_rotated(self, x, y, w, h, align, string, colour, degrees=0.0):

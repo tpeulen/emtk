@@ -732,6 +732,62 @@ class QtPainter:
         finally:
             self._p.restore()
 
+    def markers(self, points, marker, fill_shape, line_shape, fill, outline, radius, weight) -> None:
+        """Render dense markers using a pre-rendered sprite or exact marker glyph."""
+        if not points:
+            return
+        from qtpy import QtCore, QtGui
+
+        if len(points) <= 10:
+            for x, y in points:
+                self.marker(x, y, fill_shape, line_shape, fill, outline, radius, weight)
+            return
+
+        import math
+        cache = getattr(self, "_marker_image_cache", None)
+        if cache is None:
+            cache = self._marker_image_cache = {}
+        key = (tuple(fill_shape or ()), tuple(line_shape or ()),
+               tuple(fill) if fill is not None else None,
+               tuple(outline) if outline is not None else None, radius, weight,
+               int(self._p.renderHints()), self._p.opacity(), int(self._p.compositionMode()))
+        sprite_info = cache.get(key)
+        if sprite_info is None:
+            pad = int(math.ceil(radius + weight + 2.0))
+            diam = pad * 2
+            img = QtGui.QImage(diam, diam, QtGui.QImage.Format_ARGB32_Premultiplied)
+            img.fill(QtCore.Qt.transparent)
+            recorder = QtGui.QPainter(img)
+            recorder.setRenderHints(self._p.renderHints())
+            recorder.setOpacity(self._p.opacity())
+            recorder.setCompositionMode(self._p.compositionMode())
+            target = QtPainter(recorder, font_pt=self.font_pt)
+            try:
+                if fill_shape:
+                    pts = [(pad + mx * radius, pad + my * radius) for mx, my in fill_shape]
+                    for index in range(1, len(pts) - 1):
+                        target.fill_triangle(pts[0], pts[index], pts[index + 1], fill)
+                if line_shape:
+                    from .painter import line
+                    for index in range(0, len(line_shape), 2):
+                        a, b = line_shape[index], line_shape[index + 1]
+                        line(target, pad + a[0] * radius, pad + a[1] * radius,
+                             pad + b[0] * radius, pad + b[1] * radius, weight, outline)
+            finally:
+                recorder.end()
+            if len(cache) >= 64:
+                cache.pop(next(iter(cache)))
+            sprite_info = (img, pad)
+            cache[key] = sprite_info
+
+        img, pad = sprite_info
+        pt = QtCore.QPointF(0.0, 0.0)
+        p = self._p
+        for x, y in points:
+            pt.setX(x - pad)
+            pt.setY(y - pad)
+            p.drawImage(pt, img)
+
     def fill_triangle(
         self,
         p0: tuple[float, float],

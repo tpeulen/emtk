@@ -641,6 +641,46 @@ _MARKER_LINE = {
     I.MARKER_HORIZONTAL: [(-1, 0), (1, 0)],
 }
 
+_MARKER_TRIANGLE_CACHE: dict = {}
+
+
+def _get_marker_triangles(marker: int, fill_shape, line_shape, r: float, hw: float):
+    """Pre-tessellate marker fill and line triangles relative to (0, 0)."""
+    key = (marker, fill_shape is not None, line_shape is not None, r, hw)
+    cached = _MARKER_TRIANGLE_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    f_tris = []
+    if fill_shape is not None and len(fill_shape) >= 3:
+        p0 = (fill_shape[0][0] * r, fill_shape[0][1] * r)
+        for k in range(1, len(fill_shape) - 1):
+            f_tris.append((
+                p0,
+                (fill_shape[k][0] * r, fill_shape[k][1] * r),
+                (fill_shape[k + 1][0] * r, fill_shape[k + 1][1] * r),
+            ))
+
+    l_tris = []
+    if line_shape is not None:
+        for k in range(0, len(line_shape), 2):
+            ax, ay = line_shape[k][0] * r, line_shape[k][1] * r
+            bx, by = line_shape[k + 1][0] * r, line_shape[k + 1][1] * r
+            dx = bx - ax
+            dy = by - ay
+            length = math.hypot(dx, dy)
+            if length > 0.0:
+                scale = (hw * 0.5) / length
+                nx = -dy * scale
+                ny = dx * scale
+                l_tris.append(((ax - nx, ay - ny), (bx - nx, by - ny), (bx + nx, by + ny)))
+                l_tris.append(((ax - nx, ay - ny), (bx + nx, by + ny), (ax + nx, ay + ny)))
+
+    if len(_MARKER_TRIANGLE_CACHE) >= 128:
+        _MARKER_TRIANGLE_CACHE.clear()
+    _MARKER_TRIANGLE_CACHE[key] = (f_tris, l_tris)
+    return f_tris, l_tris
+
 
 def render_markers(pts, marker: int, rend_fill: bool, fill, rend_line: bool, line, size,
                    weight: float) -> None:
@@ -657,6 +697,60 @@ def render_markers(pts, marker: int, rend_fill: bool, fill, rend_line: bool, lin
     line_list = isinstance(line, list)
     size_list = isinstance(size, (list, tuple))
     hw = _weight(weight)
+
+    if not (fill_list or line_list or size_list):
+        c0, c1, c2, c3 = cull
+        visible_pts = []
+        for x, y in pts:
+            px, py = t(x, y)
+            if c0 <= px <= c2 and c1 <= py <= c3:
+                visible_pts.append((px, py))
+        if not visible_pts:
+            return
+
+        r = float(size)
+        fc = fill if fill_shape is not None else None
+        lc = line if line_shape is not None else None
+
+        batch = getattr(p, "markers", None)
+        if callable(batch):
+            batch(visible_pts, marker, fill_shape, line_shape, fc, lc, r, hw)
+            return
+
+        glyph = getattr(p, "marker", None) if marker == I.MARKER_CIRCLE else None
+        if callable(glyph) and len(visible_pts) <= 10:
+            for px, py in visible_pts:
+                glyph(px, py, fill_shape, line_shape, fc, lc, r, hw)
+            return
+
+        f_tris, l_tris = _get_marker_triangles(marker, fill_shape, line_shape, r, hw)
+
+        fast_triangles = getattr(p, "fill_triangles", None)
+        if callable(fast_triangles) and (f_tris or l_tris):
+            if f_tris and fc is not None:
+                tris = [((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]))
+                        for px, py in visible_pts for p0, p1, p2 in f_tris]
+                fast_triangles(tris, fc)
+            if l_tris and lc is not None:
+                tris = [((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]))
+                        for px, py in visible_pts for p0, p1, p2 in l_tris]
+                fast_triangles(tris, lc)
+            return
+
+        if callable(glyph):
+            for px, py in visible_pts:
+                glyph(px, py, fill_shape, line_shape, fc, lc, r, hw)
+            return
+
+        for px, py in visible_pts:
+            if f_tris and fc is not None:
+                for p0, p1, p2 in f_tris:
+                    p.fill_triangle((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]), fc)
+            if l_tris and lc is not None:
+                for p0, p1, p2 in l_tris:
+                    p.fill_triangle((px + p0[0], py + p0[1]), (px + p1[0], py + p1[1]), (px + p2[0], py + p2[1]), lc)
+        return
+
     glyph = getattr(p, "marker", None) if marker == I.MARKER_CIRCLE else None
     covered = getattr(p, "box_has_colour", None) if marker == I.MARKER_CIRCLE else None
     for i, (x, y) in enumerate(pts):
@@ -671,8 +765,6 @@ def render_markers(pts, marker: int, rend_fill: bool, fill, rend_line: bool, lin
             solid = None
         if callable(covered) and solid is not None and I.rgba(solid)[3] == 255:
             extent = abs(r) + (hw * 0.5 if line_shape is not None else 0.0)
-            # The backend inspects actual clipped pixels, not rounded centres.
-            # Only a bounding box already painted identically can be skipped.
             if covered(px - extent, py - extent, extent * 2, extent * 2, solid):
                 continue
         if callable(glyph):
