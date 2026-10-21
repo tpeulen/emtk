@@ -101,7 +101,7 @@ from . import im_widgets as _w
 from . import overlays as _overlays
 from .flags import InputTextFlags
 from .i18n import tr
-from .keys import KEY_ESCAPE
+from .keys import KEY_DOWN, KEY_ESCAPE, KEY_UP
 
 __all__ = ["FormState", "draw_form", "draw_sections", "find_section", "section_name",
            "format_value", "parse_value", "parse_colour_text", "spin_step", "icon_caption"]
@@ -594,6 +594,28 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
                                   elide_start=str(section.get("elide", "")).lower() == "start")
     _remember(state, f"{name}.edit" if slider else name)
     _tooltip(section)
+    if kind in ("int", "float") and not read_only and value is not None:
+        # Up/Down steps the focused number field, as the spinbox widgets do: the
+        # value commits at once and the key never reaches the text caret.
+        _ctx = _core.get_current_context()
+        item_id = _ctx.get_id(f"##{name}")
+        has_keyboard = (_ctx.state(("focus",)).get("id") == item_id
+                        or _ctx.is_nav_focused(item_id))
+        if has_keyboard and _ctx.io.key in (KEY_UP, KEY_DOWN):
+            key = _ctx.io.key
+            stepped = parse_value(
+                format_value(float(value) + (1 if key == KEY_UP else -1)
+                             * spin_step(value, section), section),
+                section, bounds,
+            )
+            _ctx.io.key = 0
+            _ctx.io.key_events[:] = [event for event in _ctx.io.key_events
+                                     if event[0] != key]
+            _ctx.request_frame()
+            if stepped is not None and stepped != value:
+                state.buffers.pop(name, None)
+                _commit(model, section, stepped, state)
+            return
     if spin:
         field_hovered = _w.is_item_hovered()
         delta = _stepper(name, stepper_w)

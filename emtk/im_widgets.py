@@ -1416,6 +1416,12 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 
     field = (box[0], box[1], max(box[2] - label_w, 1.0), box[3])
     item_id = ctx.get_id(label)
     hovered, held, _pressed = ctx.button_behavior(field, item_id)
+    if _pressed or (hovered and ctx.io.mouse_clicked[0]):
+        # A click focuses the field, so Up/Down step it right away -- the way a
+        # click focuses a text field. Dragging still scrubs the value; nav focus
+        # only decides which field the arrow keys belong to.
+        ctx.nav_id = item_id
+        ctx.storage["__nav_id__"] = item_id
     store = ctx.get_storage(item_id)
     if held:
         last = store.get("x", ctx.io.mouse_pos[0])
