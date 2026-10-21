@@ -1401,7 +1401,7 @@ def slider_int(label: str, v: int, v_min: int, v_max: int,
     return (changed, int(round(value)))
 
 
-def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
+def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 0.0, step_fast: float = 0.0):
     ctx = get_current_context()
     height = _frame_height(ctx)
     shown = _visible_label(label) if isinstance(label, str) else ""
@@ -1423,6 +1423,29 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
         store["x"] = ctx.io.mouse_pos[0]
     else:
         store.pop("x", None)
+
+    from .keys import KEY_DOWN, KEY_UP  # noqa: PLC0415
+    keyboard_changed = False
+    if (ctx.is_nav_focused(item_id)
+            and ctx.io.config_flags & ConfigFlags.NAV_ENABLE_KEYBOARD
+            and not ctx.item_flags & ItemFlags.DISABLED
+            and ctx.io.key in (KEY_UP, KEY_DOWN)):
+        by = step_fast if (step_fast and ctx.io.key_ctrl) else (step or (1.0 if integral else speed))
+        delta = by if ctx.io.key == KEY_UP else -by
+        new_val = value + delta
+        if v_min is not None:
+            new_val = max(v_min, new_val)
+        if v_max is not None:
+            new_val = min(v_max, new_val)
+        if integral:
+            new_val = int(round(new_val))
+        keyboard_changed = (new_val != value)
+        value = new_val
+        key = ctx.io.key
+        ctx.io.key = 0
+        ctx.io.key_events[:] = [event for event in ctx.io.key_events if event[0] != key]
+        ctx.request_frame()
+
     if v_min is not None:
         value = max(v_min, value)
     if v_max is not None:
@@ -1446,24 +1469,25 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool):
     ctx.draw.add_rect_filled((field[0], field[1]), (field[0] + field[2], field[1] + field[3]),
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
+    _nav_ring(ctx, field, item_id)
     shown_value = fmt % value
     tw, th = ctx.draw.calc_text_size(shown_value)
     ctx.draw.add_text((field[0] + (field[2] - tw) * 0.5, field[1] + (field[3] - th) * 0.5),
-                      _col(Col.TEXT), shown_value)
+                       _col(Col.TEXT), shown_value)
     if shown:
         ctx.draw.add_text((field[0] + field[2] + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), shown)
-    return (bool(held), value)
+    return (bool(held or keyboard_changed), value)
 
 
 def drag_float(label: str, v: float, speed: float = 1.0, v_min=None, v_max=None,
-               fmt: str = "%.3f") -> tuple[bool, float]:
-    return _drag(label, float(v), speed, v_min, v_max, fmt, integral=False)
+               fmt: str = "%.3f", step: float = 0.0, step_fast: float = 0.0) -> tuple[bool, float]:
+    return _drag(label, float(v), speed, v_min, v_max, fmt, integral=False, step=step, step_fast=step_fast)
 
 
 def drag_int(label: str, v: int, speed: float = 1.0, v_min=None, v_max=None,
-             fmt: str = "%d") -> tuple[bool, int]:
-    return _drag(label, int(v), speed, v_min, v_max, fmt, integral=True)
+             fmt: str = "%d", step: int = 1, step_fast: int = 100) -> tuple[bool, int]:
+    return _drag(label, int(v), speed, v_min, v_max, fmt, integral=True, step=float(step), step_fast=float(step_fast))
 
 
 #: Width of the sliding segment of an indeterminate :func:`progress_bar`, as a fraction of the bar.
@@ -1884,7 +1908,7 @@ def input_float(label: str, v: float, step: float = 0.0,
                             "step.", domain="emtk").format(step=f"{by:g}"))
         same_line(0.0, ctx.style.item_inner_spacing[0])
         ctx.pop_id()
-    edited, v = drag_float(label, v, max(step, 0.01) or 0.01, fmt=fmt)
+    edited, v = drag_float(label, v, max(step, 0.01) or 0.01, fmt=fmt, step=step, step_fast=step_fast)
     return (changed or edited, v)
 
 

@@ -320,7 +320,7 @@ class InputScalar:
         integer: bool = False,
     ) -> None:
         self.label = label
-        self.fmt = fmt
+        self.fmt = "%d" if (integer and fmt == "%.3f") else fmt
         self.integer = bool(integer)
         self.step = step
         self.step_fast = step_fast
@@ -435,7 +435,7 @@ class InputScalar:
         return self.field.text
 
     def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
-        """Handle one key press while the box is editable.
+        """Handle one key press while the box is focused or editable.
 
         Parameters
         ----------
@@ -450,12 +450,31 @@ class InputScalar:
         -------
         bool
             Whether the key was consumed. A key arriving at a box that is not
-            editing is *not* consumed -- it belongs to whatever else is on
-            screen.
+            editing is *not* consumed (unless Up/Down arrow) -- it belongs to
+            whatever else is on screen.
         """
+        from ..events import CONTROL_MODIFIER, META_MODIFIER
+        from ..keys import KEY_DOWN, KEY_ENTER, KEY_ESCAPE, KEY_RETURN, KEY_UP, MOD_CTRL
+
+        fast = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER | MOD_CTRL))
+        if key in (KEY_UP, KEY_DOWN):
+            if self.editing:
+                try:
+                    val = float(self.field.text)
+                    self.set_value(val)
+                except (ValueError, TypeError):
+                    pass
+            if key == KEY_UP:
+                self.increment(fast=fast)
+            else:
+                self.decrement(fast=fast)
+            if self.editing:
+                self.field.set_text(self.edit_text())
+                self.select_all = True
+            return True
+
         if not self.editing:
             return False
-        from ..keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN
 
         if key in (KEY_RETURN, KEY_ENTER):
             self.commit()

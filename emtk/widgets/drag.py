@@ -788,6 +788,32 @@ class _DragScalar:
         self._editing = False
         self._buffer = ""
 
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        """Process keyboard press. Up/Down arrows increment/decrement value."""
+        if self.read_only:
+            return False
+        from ..events import CONTROL_MODIFIER, META_MODIFIER
+        from ..keys import KEY_DOWN, KEY_ENTER, KEY_ESCAPE, KEY_RETURN, KEY_UP, MOD_CTRL
+
+        if self._editing:
+            if key in (KEY_RETURN, KEY_ENTER):
+                self.commit_text_edit()
+                return True
+            if key == KEY_ESCAPE:
+                self.cancel_text_edit()
+                return True
+
+        if key in (KEY_UP, KEY_DOWN):
+            if self._editing:
+                self.commit_text_edit()
+            fast = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER | MOD_CTRL))
+            step = (100.0 if not self._is_float else self.effective_speed() * 10.0) if fast else (1.0 if not self._is_float else self.effective_speed())
+            delta = step if key == KEY_UP else -step
+            self.set_value(self.value + delta)
+            return True
+
+        return False
+
     # -- drawing --------------------------------------------------------- #
     def display_text(self) -> str:
         """What the frame reads, value and decorations together."""
@@ -1094,6 +1120,13 @@ class _DragScalarN:
             component.release()
         self._active = None
 
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        """Forward key press to the active component, or first component if none."""
+        target = self._active if self._active is not None else 0
+        if 0 <= target < len(self.components):
+            return self.components[target].key(key, text, modifiers)
+        return False
+
 
 class DragFloatN(_DragScalarN):
     """Two, three or four floats on one row -- a position, a colour, a size."""
@@ -1349,6 +1382,15 @@ class _DragRange2:
         self.high_drag.release()
         self._active = None
         self._rebind()
+
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        """Forward key press to the active half, or low half if none."""
+        self._rebind()
+        half = self.high_drag if self._active == 1 else self.low_drag
+        changed = half.key(key, text, modifiers)
+        if changed:
+            self._rebind()
+        return changed
 
 
 class DragFloatRange2(_DragRange2):

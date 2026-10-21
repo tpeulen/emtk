@@ -807,11 +807,13 @@ class InputInt:
         v_min: int = 0,
         v_max: int = 100,
         step: int = 1,
+        step_fast: int = 10,
     ) -> None:
         self.label = label
         self.v_min = int(v_min)
         self.v_max = int(v_max)
         self.step = int(step)
+        self.step_fast = int(step_fast)
         self.value = int(min(max(int(value), self.v_min), self.v_max))
 
     def set_value(self, value: int) -> int:
@@ -819,13 +821,29 @@ class InputInt:
         self.value = int(min(max(int(value), self.v_min), self.v_max))
         return self.value
 
-    def increment(self) -> int:
+    def increment(self, fast: bool = False) -> int:
         """Step up."""
-        return self.set_value(self.value + self.step)
+        delta = self.step_fast if fast else self.step
+        return self.set_value(self.value + delta)
 
-    def decrement(self) -> int:
+    def decrement(self, fast: bool = False) -> int:
         """Step down."""
-        return self.set_value(self.value - self.step)
+        delta = self.step_fast if fast else self.step
+        return self.set_value(self.value - delta)
+
+    def key(self, key: int, text: str = "", modifiers: int = 0) -> bool:
+        """Process keyboard press. Up/Down arrow increments/decrements value."""
+        from ..events import CONTROL_MODIFIER, META_MODIFIER
+        from ..keys import KEY_DOWN, KEY_UP, MOD_CTRL
+
+        if key not in (KEY_UP, KEY_DOWN):
+            return False
+        fast = bool(modifiers & (CONTROL_MODIFIER | META_MODIFIER | MOD_CTRL))
+        if key == KEY_UP:
+            self.increment(fast=fast)
+        else:
+            self.decrement(fast=fast)
+        return True
 
     def draw(self, p: Painter, x: float, y: float, w: float, h: float) -> None:
         """Paint the caption, the two steppers and the value between them."""
