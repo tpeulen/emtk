@@ -7,6 +7,7 @@ Pillow's existing FreeType support, without Qt or a platform font server.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import sys
@@ -16,6 +17,8 @@ from pathlib import Path
 
 from .font import DEFAULT_FONT_PT, PX_PER_PT
 from .grapheme import display
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -210,18 +213,69 @@ def _face(spec: FontSpec) -> Face:
         (name for name in _faces() if name.casefold() == spec.family.casefold()), None
     )
     if family is None:
-        raise ValueError(f"Font family {spec.family!r} is not available")
+        # A font request is a hint, not a contract. A host with one baked face
+        # (the web page: Pyodide ships no system fonts) must not lose a window
+        # over it -- the fit pages' bold ``sans-serif`` captions killed the
+        # What-if window with ``ValueError: Font family 'sans-serif' is not
+        # available``, caught by the dock as "failed to draw". Draw in the
+        # default family and say so.
+        family = _fallback_family()
+        logger.warning(
+            "font family %r is not available; drawing %r in %r",
+            spec.family, spec, family,
+        )
+    faces = _faces().get(family) or ()
     found = next(
         (
             face
-            for face in _faces()[family]
+            for face in faces
             if face.bold == spec.bold and face.italic == spec.italic
         ),
         None,
     )
     if found is None:
-        raise ValueError(f"Font family {family!r} has no requested bold/italic face")
+        # Same tolerance for the cut: the family exists but not in this
+        # bold/italic combination -- its regular face beats a dead window.
+        found = next(
+            (
+                face
+                for face in faces
+                if not face.bold and not face.italic
+            ),
+            None,
+        )
+        if found is not None:
+            logger.warning(
+                "font family %r has no %s%s face; drawing the regular face",
+                family, "bold " if spec.bold else "", "italic" if spec.italic else "",
+            )
+    if found is None:
+        # Nothing is installed at all (the web page: ``_faces()`` is empty and
+        # the baked atlas is the only face there is) -- the baked face answers,
+        # keeping the requested cut as bookkeeping for the painter.
+        logger.warning(
+            "no installed font faces; drawing %r with the baked atlas face", spec
+        )
+        found = Face(path=":baked-atlas:", index=0, bold=spec.bold,
+                     italic=False, monospaced=True, style="baked")
     return found
+
+
+def _fallback_family() -> str:
+    """The family an unavailable name draws in: the spec default if it exists,
+    else the first real family with a regular face, else the baked default."""
+    default = FontSpec().family
+    names = _faces()
+    if not names or any(name.casefold() == default.casefold() for name in names):
+        return default
+    return next(
+        (
+            name
+            for name, faces in sorted(names.items(), key=lambda kv: str.casefold(kv[0]))
+            if not name.startswith(".") and any(not f.bold and not f.italic for f in faces)
+        ),
+        default,
+    )
 
 
 def font_spec(value=None, size: float | None = 0.0) -> FontSpec:
@@ -273,9 +327,14 @@ def font_spec(value=None, size: float | None = 0.0) -> FontSpec:
     )
     if spec.family.casefold() == "monospace":
         if spec.italic:
-            raise ValueError(
-                "The baked monospace face has no italic style; select an available system family"
+            # The baked face has no italic cut (it bakes regular and bold).
+            # Raising here killed windows that pushed italic on the web page,
+            # where the baked face is the only one: draw it upright and say so,
+            # the same tolerance ``_face`` applies to a missing family.
+            logger.warning(
+                "the baked monospace face has no italic style; drawing upright"
             )
+            spec = FontSpec(spec.family, spec.size, spec.bold, False, spec.fallback)
         return FontSpec("monospace", spec.size, spec.bold, False)
     _face(spec)
     return spec
@@ -323,8 +382,59 @@ def _default_family() -> str:
     return fonts._config.ui.family or "monospace"
 
 
+def family_available(family: object) -> bool:
+    """Whether *family* (a name, generic, or comma chain) has an installed entry.
+
+    The non-raising probe the settings layer needs: ``_face`` now *draws* an
+    unavailable family in the default one (a window must not fail to draw over
+    a font hint), so a ``try: font_spec(...)`` around a configured family no
+    longer detects a missing face. This says it directly, with the same chain
+    semantics ``font_spec`` applies.
+    """
+    if not isinstance(family, str) or not family.strip():
+        return False
+    return any(
+        _resolve_family(part) is not None
+        for part in family.split(",")
+        if part.strip()
+    )
+
+
+class _BakedAtlasFace:
+    """PIL-compatible metrics from the committed atlas.
+
+    The face :func:`_face` hands out when nothing is installed (the web page:
+    Pyodide ships no font files) -- width from the atlas's per-character
+    advance, metrics from its ascent, so measurement works where
+    ``ImageFont.truetype`` has no file to open.
+    """
+
+    __slots__ = ("_atlas", "_scale", "_ascent")
+
+    def __init__(self, pixels: float):
+        from .font import load_atlas  # noqa: PLC0415
+
+        self._atlas = load_atlas()
+        self._scale = pixels / (self._atlas.font_pt * PX_PER_PT)
+        self._ascent = int(self._atlas.ascent * self._scale)
+
+    def getlength(self, text: str) -> float:
+        return self._atlas.advance(text) * self._scale
+
+    def getmetrics(self) -> tuple[int, int]:
+        return self._ascent, int(self._atlas.line_height * self._scale) - self._ascent
+
+    def getbbox(self, text: str) -> tuple[int, int, int, int]:
+        """PIL's ``(x0, y0, x1, y1)`` relative to the pen, as FreeTypeFont gives it."""
+        descent = int(self._atlas.line_height * self._scale) - self._ascent
+        return 0, -self._ascent, int(self.getlength(text)), descent
+
+
 @lru_cache(maxsize=128)
 def _loaded(face: Face, pixels: float):
+    if face.path == ":baked-atlas:":
+        return _BakedAtlasFace(pixels)
+
     from PIL import ImageFont
 
     return ImageFont.truetype(face.path, pixels, index=face.index)

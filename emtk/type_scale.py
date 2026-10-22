@@ -208,11 +208,10 @@ def text_font(role: str = "body", *, bold: bool | None = None,
         bold = configured.bold
     if family is None:
         family = configured.family
-        try:  # a configured face that is not installed must not stop a page drawing
-            from .font_render import font_spec  # noqa: PLC0415
+        # a configured face that is not installed must not stop a page drawing
+        from .font_render import family_available  # noqa: PLC0415
 
-            font_spec({"family": family, "size": size, "bold": bool(bold)})
-        except (ValueError, TypeError):
+        if not family_available(family):
             family = CODE_FAMILY if role == "code" else PROSE_FAMILY
     return {"family": family, "size": size, "bold": bool(bold)}
 

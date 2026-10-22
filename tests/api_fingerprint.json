@@ -824,9 +824,11 @@
    "SUBPIXEL_STEPS": "value",
    "available_fonts": "def(monospaced=False)",
    "draw_text": "def(painter, spec, scale, x, y, w, h, align, string, colour, bold=False, degrees=0.0, require_resolver=False, device=1.0)",
+   "family_available": "def(family)",
    "font_spec": "def(value=None, size=0.0)",
    "glyphs": "def(spec, string, scale, bold=False, device=1.0, origin=None)",
    "line_height": "def(spec, scale)",
+   "logger": "value",
    "text_width": "@lru_cache(maxsize=16384) def(spec, string, scale)"
   },
   "emtk.fonts": {
@@ -6247,6 +6249,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "88a4980b02b1542bdd5e99bf68ecd6035b1d7a360c4a56bec2d7fbeb636ba891",
- "version": "0.1.30"
+ "sha256": "f6899cd959677c46c8fce3a43f42fd1e6fa7690965f5dae623a5a669e39bba7d",
+ "version": "0.1.31"
 }

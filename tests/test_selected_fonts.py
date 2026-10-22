@@ -88,17 +88,29 @@ def test_proportional_family_has_real_variable_metrics():
     assert p.text_width("iiii") != p.text_width("MMMM")
 
 
-def test_unsupported_choice_is_explicit_and_preserves_state(family):
+def test_unsupported_choice_degrades_explicitly_and_preserves_usable_state(family, caplog):
+    """A family the host lacks draws in the fallback instead of raising.
+
+    The old contract -- ``set_font`` raises ``ValueError`` for an unavailable
+    family -- is what killed the What-if window on the web page: the fit pages
+    push a bold ``sans-serif`` caption, the browser has one baked face and no
+    system fonts, and the dock caught the raise as "failed to draw". A font
+    request is a hint now: the painter switches to the fallback family, says
+    so in the log, and the window keeps drawing. Garbage sizes still raise --
+    a layout cannot silently survive a NaN advance.
+    """
+    import logging
+
     for p in painters():
         p.set_font(family, 14)
-        before = p.text_width("Hello")
-        with pytest.raises(ValueError, match="not available"):
-            p.set_font("Definitely not an installed font 12345")
-        assert p.text_width("Hello") == before
-        with pytest.raises(ValueError, match="italic"):
-            p.set_font({"family": "monospace", "italic": True})
+        with caplog.at_level(logging.WARNING, logger="emtk.font_render"):
+            p.set_font("Definitely not an installed font 12345")  # no raise
+        assert p.text_width("Hello") > 0
+        p.set_font({"family": "monospace", "italic": True})  # no raise either
+        assert p.text_width("Hello") > 0
         with pytest.raises(ValueError, match="size"):
             p.set_font(family, float("nan"))
+    assert any("not available" in r.getMessage() for r in caplog.records)
 
 
 def test_baked_size_and_bold_are_supported_without_system_fonts():
