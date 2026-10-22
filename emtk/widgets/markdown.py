@@ -57,6 +57,79 @@ def _split_directive_body(body_lines: list[str]) -> tuple[dict[str, str], str]:
     return options, caption
 
 
+_MERMAID_HEADER = re.compile(r"^(?:graph|flowchart)\s+(TD|TB|LR|RL)\s*$", re.I)
+_MERMAID_NODE = re.compile(r"^([A-Za-z_][\w]*)(?:\[+([^\]]*)\]+|\(\(+([^\)]*)\)\+|\{+([^}]*)\}+)?$")
+def _parse_mermaid(text: str):
+    """Parse the small Mermaid subset the record layouts use: ``graph TD`` with
+    ``A[Label] --> B``, ``A -.label.-> B`` and ``A -->|label| B`` edges.
+
+    Returns ``(nodes, edges)`` -- ``nodes`` is ``[(id, label, shape)]`` in
+    first-seen order, ``edges`` is ``[(src_id, dst_id, style, label)]`` with
+    style ``"solid" | "dotted" | "thick"`` -- or ``None`` when the text uses
+    anything outside that subset (the caller falls back to a code block).
+    """
+    raw = [ln for ln in text.splitlines()]
+    lines: list[str] = []
+    for ln in raw:
+        ln = ln.strip()
+        if not ln:
+            continue
+        # html_to_markdown turns a <br/> inside a quoted node label into a real
+        # line break; re-join the pieces before parsing.
+        if lines and lines[-1].count('"') % 2 == 1 and '["' in lines[-1]:
+            lines[-1] += " " + ln
+        else:
+            lines.append(ln)
+    if not lines or not _MERMAID_HEADER.match(lines[0]):
+        return None
+    nodes: list[tuple[str, str, str]] = []
+    by_id: dict[str, tuple[str, str, str]] = {}
+
+    def seen(nid: str, label: str, shape: str) -> None:
+        if nid not in by_id:
+            by_id[nid] = (nid, label or nid, shape)
+            nodes.append(by_id[nid])
+        elif label:
+            by_id[nid] = (nid, label, shape)
+
+    def node_of(token: str) -> tuple[str, str, str] | None:
+        m = _MERMAID_NODE.match(token.strip())
+        if m is None:
+            return None
+        nid, square, round_, brace = m.group(1), m.group(2), m.group(3), m.group(4)
+        label = (square or round_ or brace or "").strip().strip('"').replace("<br/>", "\n").replace("<br>", "\n")
+        shape = "box" if square else ("round" if round_ else ("diamond" if brace else "box"))
+        return nid, label, shape
+
+    edge_re = re.compile(
+        r"^\s*(?P<a>[A-Za-z_]\w*)\s*(?P<as>\[[^\]]*\]|\([^)]*\))*\s*"
+        r"(?:(?P<arrow>-->|==>)|(?P<darrow>-\.\s*(?P<dlab>.*?)\s*\.->)|(?P<larrow>-{3}))\s*"
+        r"(?:\|(?P<elabel>[^|]*)\|\s*)?"
+        r"(?P<b>[A-Za-z_]\w*)\s*(?P<bs>\[[^\]]*\]|\([^)]*\))*\s*$")
+    edges: list[tuple[str, str, str, str]] = []
+    for ln in lines[1:]:
+        m = edge_re.match(ln)
+        if m is not None:
+            a, b = node_of(m.group("a") + (m.group("as") or "")), node_of(m.group("b") + (m.group("bs") or ""))
+            if a is None or b is None:
+                return None
+            arrow = m.group("arrow") or m.group("darrow") or m.group("larrow")
+            style = ("dotted" if m.group("darrow") else
+                     "thick" if m.group("arrow") == "==>" else "solid")
+            elabel = (m.group("dlab") or m.group("elabel") or "").strip()
+            seen(*a)
+            seen(*b)
+            edges.append((a[0], b[0], style, elabel))
+            continue
+        n = node_of(ln)
+        if n is None:
+            return None
+        seen(*n)
+    if not edges:
+        return None
+    return [by_id[n[0]] for n in nodes], edges
+
+
 def parse_markdown(raw_text: str) -> list[MarkdownBlock]:
     """Parse a Markdown / MyST text stream into structural blocks.
 
@@ -197,7 +270,11 @@ def parse_markdown(raw_text: str) -> list[MarkdownBlock]:
                     break
                 body_lines.append(lines[i])
                 i += 1
-            blocks.append(MarkdownBlock(kind="code", text="\n".join(body_lines), arg=code_lang))
+            body = "\n".join(body_lines)
+            if code_lang.lower() == "mermaid" and _parse_mermaid(body) is not None:
+                blocks.append(MarkdownBlock(kind="mermaid", text=body))
+            else:
+                blocks.append(MarkdownBlock(kind="code", text=body, arg=code_lang))
             continue
 
         # Display math block: $$ ... $$
@@ -746,6 +823,90 @@ def _aligned_cell(text: str, align: str, colour) -> None:
         im.text_wrapped(text)
 
 
+def _wrap_label(label: str, width: float) -> list[str]:
+    """Greedy word wrap for a node label at ``width`` px (uses the live font)."""
+    out: list[str] = []
+    for para in label.split("\n"):
+        line = ""
+        for word in para.split():
+            cand = f"{line} {word}".strip()
+            if line and im.calc_text_size(cand)[0] > width:
+                out.append(line)
+                line = word
+            else:
+                line = cand
+        out.append(line)
+    return out or [""]
+
+
+def _draw_mermaid(block: MarkdownBlock, avail_w: float) -> bool:
+    """Draw a parsed Mermaid ``graph TD`` as boxes and arrows.
+
+    Returns ``False`` when the text is not in the supported subset, so the
+    caller can fall back to rendering the source as a code block.
+    """
+    parsed = _parse_mermaid(block.text)
+    if parsed is None:
+        return False
+    nodes, edges = parsed
+    label_of = {n[0]: n[1] for n in nodes}
+    depth = {n[0]: 0 for n in nodes}
+    for _ in range(len(nodes)):
+        for s, d, _st, _l in edges:
+            depth[d] = max(depth[d], depth[s] + 1)
+    levels: dict[int, list[str]] = {}
+    for n in nodes:
+        levels.setdefault(depth[n[0]], []).append(n[0])
+
+    pad, gap_x, gap_y, line_h = 7.0, 10.0, 30.0, 15.0
+    cols = max(1, int((avail_w + gap_x) / (130.0 + gap_x)))
+    node_w = min(230.0, (avail_w - (cols - 1) * gap_x) / cols)
+    dl = im.get_window_draw_list()
+    ox, oy = im.get_cursor_screen_pos()
+
+    boxes: dict[str, tuple[tuple[float, float], tuple[float, float], list[str]]] = {}
+    y = oy + 2.0
+    for lvl in sorted(levels):
+        row = levels[lvl]
+        for k0 in range(0, len(row), cols):
+            chunk = row[k0:k0 + cols]
+            row_h = 0.0
+            for k, nid in enumerate(chunk):
+                lines = _wrap_label(label_of.get(nid, nid), node_w - 2 * pad)
+                h = 2 * pad + len(lines) * line_h
+                x = ox + k * (node_w + gap_x)
+                boxes[nid] = ((x, y), (x + node_w, y + h), lines)
+                row_h = max(row_h, h)
+            y += row_h + gap_y
+
+    for nid, ((x0, y0), (x1, y1), lines) in boxes.items():
+        dl.add_rect_filled((x0, y0), (x1, y1), _style.CODE_BG, rounding=4.0)
+        dl.add_rect((x0, y0), (x1, y1), _style.FRAME_BG, rounding=4.0)
+        for j, ln in enumerate(lines):
+            dl.add_text((x0 + pad, y0 + pad + j * line_h), _style.TEXT, ln)
+
+    for s, d, st, elabel in edges:
+        if s not in boxes or d not in boxes:
+            continue
+        (sx0, sy0), (sx1, sy1), _ = boxes[s]
+        (dx0, dy0), (dx1, dy1), _ = boxes[d]
+        s_mid, d_mid = ((sx0 + sx1) / 2.0, sy1), ((dx0 + dx1) / 2.0, dy0)
+        col = _style.TEXT_DISABLED if st == "dotted" else (110, 110, 120, 255)
+        dl.add_bezier_cubic(s_mid, (s_mid[0], s_mid[1] + gap_y * 0.5),
+                            (d_mid[0], d_mid[1] - gap_y * 0.5), (d_mid[0], d_mid[1] + 7.0),
+                            col, thickness=1.4 if st != "dotted" else 1.0)
+        dl.add_triangle_filled((d_mid[0] - 4.0, d_mid[1]), (d_mid[0] + 4.0, d_mid[1]),
+                               (d_mid[0], d_mid[1] + 7.0), col)
+        if elabel:
+            lx = (s_mid[0] + d_mid[0]) / 2.0
+            ly = (s_mid[1] + d_mid[1]) / 2.0 - 8.0
+            dl.add_text((lx - im.calc_text_size(elabel)[0] / 2.0, ly), col, elabel)
+
+    total_h = y - oy - gap_y + 8.0
+    im.dummy(0.0, max(total_h, 10.0))
+    return True
+
+
 def render_markdown(
     content: str | list[MarkdownBlock],
     on_link: Callable[[str], None] | None = None,
@@ -840,9 +1001,13 @@ def render_markdown(
                 pop_text_style()
             im.dummy(0.0, 6.0)
 
-        elif block.kind == "code":
+        elif block.kind == "code" or (block.kind == "mermaid"
+                                      and not _draw_mermaid(block, avail_w)):
             im.dummy(0.0, 3.0)
             lang_label = f" [{block.arg}]" if block.arg else ""
+            if block.kind == "mermaid":
+                lang_label = " [mermaid]"
+                block = MarkdownBlock(kind="code", text=block.text, arg="mermaid")
             im.text_disabled(tr("Code", domain="emtk") + lang_label)
             im.same_line()
             if im.small_button(tr("Copy", domain="emtk") + f"##cp_{idx}"):

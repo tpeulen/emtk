@@ -85,3 +85,36 @@ def test_inline_links_wrap_inside_the_window():
     assert shown
     assert max(t[0] + t[2] for t in p.texts) <= 400
     assert len({round(t[1]) for t in shown}) > 1  # more than one row
+
+
+def test_mermaid_block_parses_and_renders():
+    text = """# Layout
+
+```mermaid
+graph TD
+    R[Record] --> M[measurements/]
+    R --> C[calibrations/]
+    M --> M0["2013-12-16_K60-N132C_DA_4.75M_smd<br/>80 raw files"]
+    M0 -.calibrated by.-> C_2013_12_16
+    C --> C_2013_12_16["2013-12-16_singlem13-4<br/>irf · lintable"]
+```
+"""
+    blocks = parse_markdown(text)
+    assert [b.kind for b in blocks] == ["h1", "mermaid"]
+    p = RecordingPainter()
+    with im.frame(p, (0, 0, 760, 900)):
+        im.begin("t")
+        render_markdown(blocks)
+        im.end()
+    labels = " ".join(p.strings)
+    assert "2013-12-16_K60-N132C_DA_4.75M_smd" in labels
+    assert "calibrated by" in labels
+    assert "graph TD" not in labels          # no raw source fallback
+    assert p.fills, "node boxes must be filled"
+
+
+def test_mermaid_unsupported_falls_back_to_code():
+    text = "```mermaid\nsequenceDiagram\n    A->>B: hi\n```"
+    blocks = parse_markdown(text)
+    assert [b.kind for b in blocks] == ["code"]
+    assert blocks[0].arg == "mermaid"
