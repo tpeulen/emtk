@@ -116,3 +116,38 @@ def test_the_baked_atlas_face_measures_like_pil_with_anchors(empty_face_world):
     r0 = font.getbbox("Ag", anchor="rs")
     assert m0[0] < 0 < m0[2]
     assert r0[0] == -font.getlength("Ag")
+
+
+def test_the_baked_atlas_face_rasterises_through_pil(empty_face_world):
+    """The other blank-page face: a theme switch re-fonts the dock titles, the
+    synthetic face answers, and the glyph rasteriser draws each character with
+    PIL's ``ImageDraw.text`` -- which wants ``getmask`` (``getmask2`` first).
+    A face without pixels killed the frame, and the error panel died drawing
+    its own message the same way."""
+    from PIL import Image, ImageDraw
+
+    from emtk.font_render import FontSpec, _face, _loaded
+
+    face = _face(FontSpec(family="nothing-installed"))
+    assert face.path == ":baked-atlas:"
+    font = _loaded(face, 24)
+
+    # the rasteriser's own call, exactly as _glyph makes it
+    image = Image.new("RGBA", (120, 60))
+    draw = ImageDraw.Draw(image)
+    draw.text((10, 30), "Setup", font=font, anchor="ls",
+              fill=(255, 255, 255, 255))
+    alpha = image.getchannel("A")
+    assert alpha.getbbox() is not None, "no glyph ink was rasterised"
+
+    # the mask itself: a box the metrics agree with, ink inside the ascent
+    mask = font.getmask("Ag")
+    assert mask is not None and mask.size[0] > 0 and mask.size[1] > 0
+    from PIL import Image as _Image
+
+    boxed = _Image.new("L", mask.size)
+    boxed.frombytes(bytes(mask))
+    ascent, descent = font.getmetrics()
+    assert mask.size[1] == ascent + descent
+    assert boxed.getbbox() is not None
+    assert font.getmask("") is None

@@ -401,40 +401,113 @@ def family_available(family: object) -> bool:
 
 
 class _BakedAtlasFace:
-    """PIL-compatible metrics from the committed atlas.
+    """PIL-compatible face from the committed atlas: metrics *and* pixels.
 
     The face :func:`_face` hands out when nothing is installed (the web page:
-    Pyodide ships no font files) -- width from the atlas's per-character
-    advance, metrics from its ascent, so measurement works where
-    ``ImageFont.truetype`` has no file to open.
+    Pyodide ships no font files). The atlas is baked at ``scale`` texels per
+    logical pixel, so every metric it records is divided out here; the glyph
+    cells themselves carry ``pad`` texels of margin around a line box whose
+    baseline sits ``pad + ascent`` texels from the cell's top.
+
+    A face is a full PIL stand-in or it is a trap: measurement alone made a
+    theme switch blank the page twice -- first ``getbbox`` rejecting the
+    ``anchor`` keyword, then ``getmask`` missing so the glyph rasteriser could
+    not draw a dock title at all. :meth:`getbbox` honours anchors,
+    :meth:`getmask` renders coverage, and both answer in the same pixels.
     """
 
-    __slots__ = ("_atlas", "_scale", "_ascent")
+    __slots__ = ("_atlas", "_scale", "_ascent", "_descent", "_image")
 
     def __init__(self, pixels: float):
         from .font import load_atlas  # noqa: PLC0415
 
         self._atlas = load_atlas()
         self._scale = pixels / (self._atlas.font_pt * PX_PER_PT)
-        self._ascent = int(self._atlas.ascent * self._scale)
+        self._image = None
+        # The atlas records texels; a logical pixel is ``scale`` texels (the
+        # advance's own 1x value, which does not divide evenly out of the
+        # bake, already comes that way through ``advance()``).
+        per_texel = self._scale / float(self._atlas.scale)
+        # ``ascent`` and the JSON ``line_height`` are texels; the Atlas
+        # property of that name is the 1x-logical line height, which is a
+        # different unit and would not hold the cells the mask blits.
+        self._ascent = int(round(self._atlas.ascent * per_texel))
+        height = int(round(float(self._atlas._meta["line_height"]) * per_texel))
+        self._descent = max(1, height - self._ascent)
 
     def getlength(self, text: str) -> float:
         return self._atlas.advance(text) * self._scale
 
     def getmetrics(self) -> tuple[int, int]:
-        return self._ascent, int(self._atlas.line_height * self._scale) - self._ascent
+        return self._ascent, self._descent
+
+    def _texel(self) -> float:
+        """Face pixels per atlas texel, the bake's own advance ratio kept."""
+        return self._scale * self._atlas.render_scale
+
+    def _atlas_image(self):
+        """The atlas PNG, ``RGBA``, loaded once."""
+        if self._image is None:
+            from PIL import Image  # noqa: PLC0415
+
+            self._image = Image.open(self._atlas.image_path).convert("RGBA")
+        return self._image
+
+    def getmask(self, text: str, mode: str = "", *args, **kwargs):
+        """PIL's mask for *text*: each glyph's coverage, white on black.
+
+        The box is ``(width, ascent + descent)`` at the origin -- the ``la``
+        box :meth:`getbbox` reports -- so PIL's own anchor arithmetic places
+        it. Returns ``None`` for empty text, as PIL's faces do.
+        """
+        from PIL import Image  # noqa: PLC0415
+
+        text = str(text or "")
+        if not text:
+            return None
+        from .grapheme import clusters  # noqa: PLC0415
+
+        width = max(1, int(round(self.getlength(text))))
+        image = Image.new("L", (width, self._ascent + self._descent))
+        atlas = self._atlas_image()
+        pad = float(self._atlas.pad)
+        baseline = pad + float(self._atlas.ascent)  # texels, from the cell's top
+        k = self._texel()
+        pen = 0.0
+        for char in clusters(text):
+            cell = self._atlas.cell_of(char)
+            if cell is None:
+                pen += self._atlas.advance() * self._scale
+                continue
+            cx, cy, cw, ch = (int(v) for v in cell[:4])
+            coverage = atlas.crop((cx, cy, cx + cw, cy + ch)).getchannel("A")
+            box = coverage.getbbox()
+            if box is None:  # a space: advance only
+                pen += self._atlas.advance() * self._scale
+                continue
+            ink = coverage.crop(box)
+            target = (max(1, round(ink.width * k)), max(1, round(ink.height * k)))
+            if target != ink.size:
+                ink = ink.resize(target, Image.Resampling.BILINEAR)
+            # The pen origin inside a cell is the padding's left edge; the
+            # baseline is ``pad + ascent`` texels down from the cell's top.
+            x = int(round(pen + (box[0] - pad) * k))
+            y = int(round(self._ascent - (baseline - box[1]) * k))
+            image.paste(ink, (x, y), ink)
+            pen += self._atlas.advance() * self._scale
+        return image.im
 
     def getbbox(self, text: str, mode: str = "", *args, **kwargs) -> tuple[int, int, int, int]:
         """PIL's ``(x0, y0, x1, y1)`` for *text*, honouring ``anchor``.
 
         The real ``FreeTypeFont.getbbox`` takes ``anchor`` (and friends), and
-        :func:`_glyph` measures single characters with ``anchor="ls"`` --
-        a face that rejects the keyword kills the whole frame, and with it
+        :func:`_glyph` measures single characters with ``anchor="ls"`` -- a
+        face that rejects the keyword kills the whole frame, and with it
         the frame-error panel too, which is how a theme switch once left the
         page a flat colour.
         """
         width = int(self.getlength(text))
-        height = self._ascent + (int(self._atlas.line_height * self._scale) - self._ascent)
+        height = self._ascent + self._descent
         anchor = str(kwargs.get("anchor") or "la")
         horizontal = anchor[0] if len(anchor) > 0 else "l"
         vertical = anchor[1] if len(anchor) > 1 else "a"
