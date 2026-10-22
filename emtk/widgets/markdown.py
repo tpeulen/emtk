@@ -839,23 +839,10 @@ def _wrap_label(label: str, width: float) -> list[str]:
     return out or [""]
 
 
-def _draw_mermaid(block: MarkdownBlock, avail_w: float) -> bool:
-    """Draw a parsed Mermaid ``graph TD`` as an indented tree panel.
-
-    Node-link diagrams are unreadable for the record layouts (many long
-    folder-name nodes in a narrow pane), so children are drawn indented under
-    their parent and cross-links (``-.label.->``) become an inline tag on the
-    row instead of a line across the diagram.
-
-    Returns ``False`` when the text is not in the supported subset, so the
-    caller can fall back to rendering the source as a code block.
-    """
-    parsed = _parse_mermaid(block.text)
-    if parsed is None:
-        return False
-    nodes, edges = parsed
-    label_of = {n[0]: n[1] for n in nodes}
-
+def _mermaid_text(nodes, edges) -> str | None:
+    """A plain-text (CLI-style) rendering of the parsed graph: an indented
+    box-drawing tree, dotted cross-links as ``└─▶ label: target`` sub-lines."""
+    label_of = {n[0]: n[1].replace("\n", " · ") for n in nodes}
     children: dict[str, list[str]] = {}
     parent_of: dict[str, str] = {}
     cross: dict[str, list[tuple[str, str]]] = {}
@@ -868,42 +855,57 @@ def _draw_mermaid(block: MarkdownBlock, avail_w: float) -> bool:
         else:
             cross.setdefault(d, []).append((s, lab))
     roots = [n[0] for n in nodes if n[0] not in parent_of]
-    if not roots:  # cyclic solid edges: no tree to draw
-        return False
+    if not roots:
+        return None
+    out: list[str] = []
 
-    dl = im.get_window_draw_list()
-    ox, oy = im.get_cursor_screen_pos()
-    pad, line_h, indent_step, row_gap = 6.0, 15.0, 16.0, 3.0
-    max_w = max(60.0, avail_w - 2.0)
-
-    # Row heights need wrapped widths; compute rows first, then draw.
-    rows: list[tuple[str, float, list[str]]] = []  # (nid, indent, lines)
-
-    def emit(nid: str, indent: float) -> None:
-        label = label_of.get(nid, nid).replace("\n", " ")
+    def emit(nid: str, my_prefix: str, connector: str, kids_prefix: str) -> None:
+        out.append(my_prefix + connector + label_of.get(nid, nid))
         for dst, lab in cross.get(nid, []):
-            label += f"   \u2192 {lab or 'uses'}: {label_of.get(dst, dst).replace(chr(10), ' ')}"
-        lines = _wrap_label(label, max_w - 2 * pad - indent)
-        rows.append((nid, indent, lines))
-        for child in children.get(nid, []):
-            emit(child, indent + indent_step)
+            tag = (lab or "uses").split(":")[0].strip()
+            target = label_of.get(dst, dst).split(" · ")[0]
+            out.append(kids_prefix + "└─▶ " + tag + ": " + target)
+        kids = children.get(nid, [])
+        for k, child in enumerate(kids):
+            last = k == len(kids) - 1
+            emit(child, kids_prefix, "└── " if last else "├── ",
+                 kids_prefix + ("    " if last else "│   "))
 
-    for r in roots:
-        emit(r, 0.0)
+    for k, r in enumerate(roots):
+        if k:
+            out.append("")
+        emit(r, "", "", "")
+    return "\n".join(out)
 
-    y = oy + 2.0
-    for nid, indent, lines in rows:
-        h = 2 * pad + len(lines) * line_h - 2.0
-        depth = int(indent // indent_step)
-        bg = (36, 40, 48, 255) if depth == 0 else ((28, 32, 38, 255) if depth == 1 else _style.CODE_BG)
-        dl.add_rect_filled((ox + indent, y), (ox + max_w, y + h), bg, rounding=3.0)
-        if depth == 0:
-            dl.add_rect((ox + indent, y), (ox + max_w, y + h), _style.FRAME_BG, rounding=3.0)
-        col = _style.HEADING_4 if depth == 0 else (_style.TEXT if depth == 1 else _style.TEXT_DISABLED)
-        for j, ln in enumerate(lines):
-            dl.add_text((ox + indent + pad, y + pad - 2.0 + j * line_h), col, ln)
-        y += h + row_gap
-    im.dummy(0.0, max(y - oy - row_gap + 6.0, 10.0))
+
+def _draw_mermaid(block: MarkdownBlock, avail_w: float) -> bool:
+    """Render a parsed Mermaid ``graph TD`` as plain text, CLI style.
+
+    Returns ``False`` when the text is not in the supported subset, so the
+    caller can fall back to rendering the source as a code block.
+    """
+    parsed = _parse_mermaid(block.text)
+    if parsed is None:
+        return False
+    text = _mermaid_text(*parsed)
+    if text is None:
+        return False
+    im.dummy(0.0, 3.0)
+    im.text_disabled(tr("Diagram", domain="emtk") + " [mermaid]")
+    im.same_line()
+    if im.small_button(tr("Copy", domain="emtk") + "##mdiag"):
+        try:
+            from ..clipboard import copy
+
+            copy(text)
+        except Exception:
+            pass
+    push_text_style("code")
+    im.push_style_color(Col.FRAME_BG, _style.CODE_BG)
+    im.text_wrapped(text)
+    im.pop_style_color()
+    pop_text_style()
+    im.dummy(0.0, 4.0)
     return True
 
 

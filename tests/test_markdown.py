@@ -106,11 +106,11 @@ graph TD
         im.begin("t")
         render_markdown(blocks)
         im.end()
-    labels = " ".join(p.strings)
-    assert "2013-12-16_K60-N132C_DA_4.75M_smd" in labels
-    assert "calibrated by" in labels
-    assert "graph TD" not in labels          # no raw source fallback
-    assert p.fills, "node boxes must be filled"
+    rendered = "\n".join(p.strings)
+    assert "├── measurements/" in rendered   # CLI-style box-drawing tree
+    assert "2013-12-16_K60-N132C_DA_4.75M_smd" in rendered
+    assert "└─▶ calibrated by: 2013-12-16_singlem13-4" in rendered
+    assert "graph TD" not in rendered        # no raw source fallback
 
 
 def test_mermaid_unsupported_falls_back_to_code():
