@@ -477,6 +477,16 @@ class WebPage:
         return user_files_dir()
 
 
+#: True once :func:`mount` has run: this Python interpreter is a page's
+#: runtime, not a desktop process that merely imports the module.
+ON_PAGE = False
+
+
+def running_on_page() -> bool:
+    """Whether this Python runs as a mounted page's runtime."""
+    return ON_PAGE
+
+
 def mount(canvas, spec: str, **options) -> WebPage:
     """Build the app named by *spec* on *canvas* -- what ``boot.js`` calls.
 
@@ -489,6 +499,8 @@ def mount(canvas, spec: str, **options) -> WebPage:
     **options
         Passed to :class:`WebPage`.
     """
+    global ON_PAGE
+    ON_PAGE = True
     from ..app import load_app  # noqa: PLC0415
 
     return WebPage(canvas, load_app(spec), **options)

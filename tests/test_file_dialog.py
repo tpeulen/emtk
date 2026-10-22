@@ -220,3 +220,47 @@ def test_a_negative_row_width_is_measured_from_the_right_edge():
     layout = Layout(RecordingPainter(), 10.0, 0.0, 200.0, 100.0)
     x, _y, w, _h = layout.row(width=-1.0)
     assert x == 10.0 and w == 199.0
+
+
+def test_a_dialog_on_a_page_opens_where_the_files_are(tmp_path, monkeypatch):
+    """No ``directory`` given: the page's user-files folder wins over cwd.
+
+    A dialog that opened in the virtual home listed an empty filesystem and
+    gave a user who had just dropped a file nowhere to click.
+    """
+    from emtk import file_dialog
+
+    mount = tmp_path / "local" / "my-data"
+    mount.mkdir(parents=True)
+    monkeypatch.setattr(file_dialog, "_default_start_directory", lambda: str(mount))
+    dialog = file_dialog.FileDialog()
+    assert dialog.directory == str(mount)
+
+
+def test_a_dialog_on_a_page_says_how_files_arrive(folder, monkeypatch):
+    """On a page the dialog tells the user how files get into it.
+
+    The hint must be drawn, not just exist: a user staring at an empty
+    virtual filesystem needs the way forward inside the dialog itself.
+    """
+    from emtk import file_dialog
+    from emtk.web import page as web_page
+
+    monkeypatch.setattr(web_page, "ON_PAGE", True)
+    hint = file_dialog._local_files_hint()
+    assert hint and hint.lower().startswith("drop files")
+
+    dialog = FileDialog(directory=str(folder))
+    drive = _Driver(dialog)
+    drive.frame()
+    assert any(hint in text for x, y, w, h, _a, text, *_r in drive.painter.texts), (
+        f"the hint was not drawn: {drive.painter.strings}")
+
+
+def test_a_dialog_on_a_desktop_stays_quiet(monkeypatch):
+    """Not on a page: no hint, no surprise text in the dialog."""
+    from emtk import file_dialog
+    from emtk.web import page as web_page
+
+    monkeypatch.setattr(web_page, "ON_PAGE", False)
+    assert file_dialog._local_files_hint() is None

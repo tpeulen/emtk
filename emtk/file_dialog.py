@@ -47,6 +47,8 @@ __all__ = ["FileDialog", "parse_filters"]
 
 #: The error line's colour, L2D's ``ImColor(1.0f, 0.0f, 0.2f)``.
 ERROR_COLOUR = (255, 0, 51, 255)
+#: A file dialog's local-files hint: present, but quieter than an error.
+HINT_COLOUR = (170, 170, 180, 255)
 
 
 def parse_filters(spec: str) -> list[tuple[str, list[str]]]:
@@ -73,6 +75,34 @@ def parse_filters(spec: str) -> list[tuple[str, list[str]]]:
         if label and patterns:
             sections.append((label, patterns))
     return sections or [(mark("All files", domain="emtk"), ["*"])]
+
+
+def _default_start_directory() -> str:
+    """Where a dialog with no ``directory`` opens: user files first.
+
+    On a page that is the mount, else the drop folder -- the two places a
+    browser can hand the page files -- and only then the process's working
+    folder. A dialog that opened in the virtual home showed an empty
+    listing and no way forward.
+    """
+    try:
+        from emtk.web.page import user_files_dir  # noqa: PLC0415 - page-only path
+        return user_files_dir(os.getcwd())
+    except Exception:  # not on a page, or the page module is absent
+        return os.getcwd()
+
+
+def _local_files_hint() -> str | None:
+    """One line telling a page user how files get into the dialog."""
+    try:
+        from emtk.web.page import running_on_page  # noqa: PLC0415 - page-only path
+    except Exception:
+        return None
+    if not running_on_page():
+        return None
+    return mark(
+        "Drop files onto the window (or use the Mount folder button) "
+        "and they appear here.", domain="emtk")
 
 
 class FileDialog:
@@ -131,7 +161,8 @@ class FileDialog:
                               for label, patterns in filters]) or [
                                   (mark("All files", domain="emtk"), ["*"])]
         self.filter_index = 0
-        start = os.path.abspath(os.path.expanduser(directory or os.getcwd()))
+        start = os.path.abspath(os.path.expanduser(
+            directory if directory is not None else _default_start_directory()))
         self.directory = start if os.path.isdir(start) else os.path.expanduser("~")
         self.filename = filename
         self.multiselect = bool(multiselect) and mode == "open"
@@ -390,6 +421,9 @@ class FileDialog:
         if _w.button(tr("Cancel", domain="emtk"), (90.0, 0.0)):
             result = False
         _w.set_item_tooltip(tr("Close the file chooser without selecting a path.", domain="emtk"))
+        hint = _local_files_hint()
+        if hint:
+            _w.text_colored(HINT_COLOUR, tr(hint, domain="emtk"))
         if self.error:
             _w.text_colored(ERROR_COLOUR, tr(self.error, domain="emtk"))
         if isinstance(result, list) and self.mode == "save" and os.path.isfile(result[0]):
