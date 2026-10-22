@@ -183,6 +183,23 @@ class Atlas:
             return None
         return entry[0], entry[1], entry[2], entry[3]
 
+    def icon_cell_of(self, char: str) -> tuple | None:
+        """Return ``(x, y, w, h)`` of *char*'s baked **colour** cell, or ``None``.
+
+        The colour band is the bake of the pictographs a colour-emoji font
+        draws -- emoji in their own colours, not the text colour -- and
+        :mod:`emtk.icons` crops them out of the atlas PNG for hosts that have
+        no colour font to rasterise with (the web release among them).
+        *char* is a character's base codepoint, the one a cluster is drawn
+        as; membership in this table is the per-cell colour flag the runtime
+        reads -- a cell here draws untinted, a cell in :meth:`cell_of` as the
+        monospace face's mask.
+        """
+        entry = (self._meta.get("icons") or {}).get(char)
+        if entry is None:
+            return None
+        return entry[0], entry[1], entry[2], entry[3]
+
     @property
     def cache(self):
         """The runtime glyph cache, built on first use.

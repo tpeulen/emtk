@@ -43,7 +43,11 @@ def test_an_emoji_icon_is_drawn_in_colour(icon):
         if max(r, g, b) - min(r, g, b) > 40:
             chromatic += 1
             hues.add((r // 64, g // 64, b // 64))
-    assert chromatic > 20, f"{icon} drew grey"
+    # The source is the atlas's baked band now (pinned Noto), whose art is
+    # less saturated at 32 px than the machine's own face was -- ⏱ carries
+    # twelve chromatic texels where Apple's carried hundreds. The regression
+    # this guards is the grey silhouette: chromatic ~0 and one hue.
+    assert chromatic > 8, f"{icon} drew grey"
     assert len(hues) > 1, f"{icon} drew in one colour"
 
 

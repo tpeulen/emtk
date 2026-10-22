@@ -32,6 +32,27 @@ atlas means baking on a machine that has the ratio you are baking for -- which
 CI does not. The cost is one image, and text metrics still come from the atlas
 so layout does not depend on the scale.
 
+Colour pictographs
+------------------
+The monochrome band above is a *mask*: right for letters and symbols, wrong for
+an emoji, which drew -- tinted with the text colour -- as a grey silhouette on
+the web page. So the pictographs that have a colour form are baked again into a
+**colour band** below the monospace rows: RGBA cells at :data:`ICON_CELL_PX`,
+rasterised from a **pinned Noto Color Emoji** (:data:`EMOJI_FONT_URL`,
+:data:`EMOJI_FONT_SHA256`, cached under the user's cache directory and verified
+on every bake). A pinned bitmap font, not the machine's own, because the atlas
+is committed: a bake that depends on the macOS of the week rewrites every cell
+of it, and Noto's CBDT table has exactly one strike (:data:`ICON_CELL_PX`) --
+no sbix strike-walking, no vector strikes FreeType cannot put in a PNG. The
+cells are cropped to their ink and centred, which is what the runtime's own
+icon path does with whatever it rasterises, so a baked cell and a cached one
+fit their box identically.
+
+Which pictographs land in the colour band is decided by the font: one that
+rasterises only as monochrome ink (⌾, ►, a mathematical arrow) has no colour
+cell and keeps its monochrome one -- the colour band replaces the grey bake
+only where a colour form exists.
+
 Use
 ---
     QT_QPA_PLATFORM=offscreen python tools/bake_chrome_atlas.py
@@ -148,6 +169,49 @@ CHARSET: str = "".join(
 #: Where the atlas lands, inside the package so it ships.
 OUT_DIR = pathlib.Path(__file__).resolve().parents[1] / "emtk" / "atlas"
 
+#: The colour source for the pictograph band: one pinned Noto Color Emoji
+#: release, fetched once and verified by hash. Pinned rather than "whatever
+#: colour font this machine has" because the atlas is a committed artifact --
+#: two bakes that differ only in whose emoji font they found are two atlases
+#: dressed as one -- and Noto's CBDT table has exactly one bitmap strike, so
+#: the bake needs none of the strike-walking a machine's ``sbix`` face asks
+#: for (the previous attempt rendered Apple's at 40 px and hit the gaps
+#: between its strikes).
+EMOJI_FONT_URL = (
+    "https://github.com/googlefonts/noto-emoji/raw/v2.047/fonts/NotoColorEmoji.ttf"
+)
+
+#: SHA-256 of :data:`EMOJI_FONT_URL`. A download that does not match is a
+#: different font; baking it would silently change every icon on the page.
+EMOJI_FONT_SHA256 = (
+    "39ee3c587e10e89669b9ff32703261d10d5f9c4dd5ad147b6b5a1c5200591817"
+)
+
+#: Where the pinned font is cached. Outside the checkout, so a 10 MB font
+#: never lands in the commit by accident.
+EMOJI_FONT_CACHE = (
+    pathlib.Path.home() / ".cache" / "emtk" / "bake" / "NotoColorEmoji-v2.047.ttf"
+)
+
+#: Environment variable that overrides the pinned font -- for baking from a
+#: machine's own colour face (``Apple Color Emoji``) by explicit choice. An
+#: override is *not* deterministic across machines and says so in the record.
+EMOJI_FONT_OVERRIDE = "EMTK_BAKE_EMOJI_FONT"
+
+#: Side of a colour pictograph's cell, in texels -- the one strike Noto's
+#: CBDT table has. Twice a large icon's device pixels at the shipped font
+#: range, so every drawn size is a minification (see ``icons._fit``).
+ICON_CELL_PX = 128
+
+#: Colour cells per band row. The band is narrower than the monospace grid
+#: (18 × 128 = 2304 < 2368), so it adds height and no width.
+ICON_COLUMNS = 18
+
+__all__ = [
+    "CHARSET", "EMOJI_CHARS", "EMOJI_FONT_SHA256", "EMOJI_FONT_URL",
+    "FONT_PT", "ICON_CELL_PX", "ICON_COLUMNS", "OUT_DIR", "SCALE", "bake",
+]
+
 
 def _face(bold: bool, scale: int | None = None):
     """Return the chrome font, at :data:`SCALE`× size.
@@ -216,14 +280,122 @@ def _rasterise_pictographs(chars, cell, ascent, pad, advance):
     return cells
 
 
+def _emoji_font():
+    """The pinned colour-emoji face, cached and hash-verified.
+
+    The cache lives under the user's cache directory; a font already there is
+    verified rather than trusted, and a download that fails the hash is
+    deleted, not baked from. ``EMTK_BAKE_EMOJI_FONT`` points the bake at
+    another installed colour face instead, for a deliberate, machine-local
+    re-bake.
+    """
+    import hashlib  # noqa: PLC0415
+    import os  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+
+    override = os.environ.get(EMOJI_FONT_OVERRIDE)
+    if override:
+        path = pathlib.Path(override)
+        if not path.is_file():
+            raise RuntimeError(f"{EMOJI_FONT_OVERRIDE}={override!r} is not a file")
+        return path, "override (not deterministic across machines)"
+
+    path = EMOJI_FONT_CACHE
+    if path.is_file():
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest == EMOJI_FONT_SHA256:
+            return path, "Noto Color Emoji v2.047 (CBDT, one 128 px strike)"
+        path.unlink(missing_ok=True)   # a corrupt or stale cache re-downloads
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with urllib.request.urlopen(EMOJI_FONT_URL, timeout=60) as response:
+            data = response.read()
+    except OSError as error:
+        raise RuntimeError(
+            f"could not fetch the pinned emoji font {EMOJI_FONT_URL} "
+            f"({error}); put a verified copy at {path} and re-run"
+        ) from error
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != EMOJI_FONT_SHA256:
+        raise RuntimeError(
+            f"the emoji font at {EMOJI_FONT_URL} hashed {digest}, not the "
+            f"pinned {EMOJI_FONT_SHA256} -- the tag moved; pin the new hash "
+            "deliberately or restore the old URL"
+        )
+    path.write_bytes(data)
+    return path, "Noto Color Emoji v2.047 (CBDT, one 128 px strike)"
+
+
+def _rasterise_colour_cells(chars):
+    """Rasterise *chars* from the pinned font into colour cells.
+
+    Returns ``{char: cell}`` for every character the font draws **in colour**,
+    each an ``(ICON_CELL_PX, ICON_CELL_PX, 4)`` RGBA array cropped to its ink
+    and centred -- the crop-and-centre the runtime icon path applies to its own
+    rasters, so a baked cell fits its box exactly as a cached one does. A
+    character that only draws as monochrome ink (or not at all) is absent: it
+    keeps the monochrome cell it already has.
+    """
+    from PIL import Image, ImageDraw  # noqa: PLC0415
+
+    import numpy as np  # noqa: PLC0415
+
+    path, source = _emoji_font()
+    from PIL import ImageFont  # noqa: PLC0415
+
+    try:
+        font = ImageFont.truetype(str(path), 109)   # the strike CBDT accepts
+    except Exception as error:  # noqa: BLE001 - a font that will not load is a named failure
+        raise RuntimeError(f"the colour font at {path} does not load: {error}") from error
+
+    cells = {}
+    for char in chars:
+        canvas = Image.new("RGBA", (ICON_CELL_PX, ICON_CELL_PX), (0, 0, 0, 0))
+        try:
+            ImageDraw.Draw(canvas).text(
+                (ICON_CELL_PX // 2, ICON_CELL_PX // 2), char,
+                font=font, anchor="mm", embedded_color=True,
+            )
+        except Exception:  # noqa: BLE001 - one stubborn glyph is a mono cell, not a failed bake
+            continue
+        box = canvas.getchannel("A").getbbox()
+        if box is None:
+            continue
+        ink = canvas.crop(box)
+        # Colour, not a monochrome mask in disguise: some pictographs the
+        # colour font covers draw as grey outlines (text presentation), and
+        # baking those grey again would be the bug this band replaces.
+        rgba = np.asarray(ink)
+        opaque = rgba[..., 3] > 0
+        coloured = bool(
+            (rgba[..., 0][opaque] != rgba[..., 1][opaque]).any()
+            or (rgba[..., 1][opaque] != rgba[..., 2][opaque]).any()
+        )
+        if not coloured:
+            continue
+        cell = Image.new("RGBA", (ICON_CELL_PX, ICON_CELL_PX), (0, 0, 0, 0))
+        cell.paste(ink, ((ICON_CELL_PX - ink.width) // 2,
+                         (ICON_CELL_PX - ink.height) // 2))
+        cells[char] = np.asarray(cell)
+    global _EMOJI_FONT_SOURCE
+    _EMOJI_FONT_SOURCE = source
+    return cells
+
+
+#: How the colour band was sourced, set by :func:`_rasterise_colour_cells` and
+#: recorded in ``chrome.json`` -- the provenance a re-bake diff is read against.
+_EMOJI_FONT_SOURCE: str | None = None
+
+
 def _paste_cells(path, placed):
-    """Write ``{char: (x, y, cell)}`` into the saved atlas PNG."""
+    """Write ``(x, y, cell)`` placements into the saved atlas PNG."""
     from PIL import Image  # noqa: PLC0415
 
     import numpy as np  # noqa: PLC0415
 
     image = np.array(Image.open(path).convert("RGBA"))
-    for x, y, cell in placed.values():
+    for x, y, cell in placed:
         height, width = cell.shape[:2]
         image[y:y + height, x:x + width] = cell
     Image.fromarray(image).save(path)
@@ -350,8 +522,19 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
     emoji_rows = (len(emoji_chars) + columns - 1) // columns
     total_rows = rows_per_face * len(faces) + 1 + emoji_rows
 
+    # The colour band goes under the monochrome one, on a grid of its own
+    # (ICON_CELL_PX cells, ICON_COLUMNS per row). It needs the pinned font,
+    # so this is also where a bake on a machine without it fails -- named,
+    # before the image is allocated. Characters the font does not colour are
+    # simply absent, and keep their monochrome cells.
+    colour_cells = _rasterise_colour_cells(emoji_chars) if emoji_chars else {}
+    icon_rows = (len(colour_cells) + ICON_COLUMNS - 1) // ICON_COLUMNS
+    colour_origin = total_rows * cell_h
+
     image = QtGui.QImage(
-        cell_w * columns, cell_h * total_rows, QtGui.QImage.Format_ARGB32
+        max(cell_w * columns, ICON_COLUMNS * ICON_CELL_PX),
+        colour_origin + icon_rows * ICON_CELL_PX,
+        QtGui.QImage.Format_ARGB32
     )
     if image.isNull():
         raise RuntimeError(f"Could not allocate glyph atlas {image.width()}x{image.height()}")
@@ -417,10 +600,24 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
             glyphs["bold"][char] = entry
             placed[char] = (x, y, cells[char])
 
+    # The colour band: the pictographs that have a colour form, from the
+    # pinned face, in cells the runtime icon path reads out of the saved PNG.
+    # A separate list, not the mono ``placed`` dict: one pictograph has a cell
+    # in *both* bands, and a shared key would paste only the second.
+    icons = {}
+    colour_placed = []
+    for index, char in enumerate(colour_cells):
+        column, row = index % ICON_COLUMNS, index // ICON_COLUMNS
+        x, y = column * ICON_CELL_PX, colour_origin + row * ICON_CELL_PX
+        colour_placed.append((x, y, colour_cells[char]))
+        icons[char] = [x, y, ICON_CELL_PX, ICON_CELL_PX]
+
     if not image.save(str(out_dir / "chrome.png")):
         raise RuntimeError("Could not write glyph atlas image")
     if placed:
-        _paste_cells(out_dir / "chrome.png", placed)
+        _paste_cells(out_dir / "chrome.png", list(placed.values()))
+    if colour_placed:
+        _paste_cells(out_dir / "chrome.png", colour_placed)
 
     # Metrics at the size the panel is *laid out* in, not the size it was baked
     # at. Font metrics do not scale linearly -- hinting and rounding make Menlo
@@ -444,6 +641,10 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
         "charset": charset + emoji_chars,
         "glyphs": glyphs,
         "solid": solid,
+        "icons": icons,
+        "icon_cell": [ICON_CELL_PX, ICON_CELL_PX],
+        "icon_columns": ICON_COLUMNS,
+        "icon_source": _EMOJI_FONT_SOURCE,
         "size": [image.width(), image.height()],
     }
     (out_dir / "chrome.json").write_text(
@@ -456,5 +657,7 @@ if __name__ == "__main__":  # pragma: no cover - a build step
     _record = bake()
     print(
         f"{len(_record['charset'])} glyphs x {len(_record['glyphs'])} faces, "
+        f"{len(_record['icons'])} colour pictographs "
+        f"({_record['icon_source']}), "
         f"cell {_record['cell'][0]}x{_record['cell'][1]} at {SCALE}x -> {OUT_DIR}"
     )

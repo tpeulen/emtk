@@ -776,6 +776,7 @@
      "cell_of": "def(self, char, bold=False)",
      "covers": "def(self, char)",
      "font_pt": "@property def(self)",
+     "icon_cell_of": "def(self, char)",
      "image_path": "@property def(self)",
      "line_height": "@property def(self)",
      "render_scale": "@property def(self)",
@@ -6246,6 +6247,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "e08d40b0523a5a11d664034aa380e173418b85a2fd37ffa328661fd86f637eb5",
- "version": "0.1.29"
+ "sha256": "88a4980b02b1542bdd5e99bf68ecd6035b1d7a360c4a56bec2d7fbeb636ba891",
+ "version": "0.1.30"
 }

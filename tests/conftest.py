@@ -20,6 +20,12 @@ from __future__ import annotations
 
 import pytest
 
+# The `slow` mark fences the tests that bake, benchmark or otherwise take
+# minutes: a fast batch is `-m 'not slow'`, the full suite runs everything.
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: minutes-long; excluded by `-m 'not slow'`")
+
+
 # The suite asserts English text: the language a test run starts in must not
 # depend on the machine's locale or an EMTK_LANG left in the shell.
 from emtk import i18n as _i18n

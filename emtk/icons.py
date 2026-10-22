@@ -12,14 +12,23 @@ emoji, since each fills its em differently, sitting on the text baseline rather
 than centred in its slot. Same manifest icon, colour and evenly sized in the Qt
 window, grey and ragged here.
 
-So an icon is an **image**: the emoji is rasterised in colour from the system's
-colour-emoji font, cropped to its own ink (not its advance, which includes the
+So an icon is an **image**: the emoji is taken **from the atlas's baked colour
+band** first -- pictographs rasterised from a pinned Noto Color Emoji at bake
+time, so every host draws the same picture, including the ones with no colour
+font at all (the web release: Pyodide ships no fonts, and before the band its
+icons fell back to the grey masks of the text path) -- or, for a pictograph the
+bake does not cover, rasterised in colour from the system's colour-emoji font.
+Either way it is cropped to its own ink (not its advance, which includes the
 font's side bearings and differs per glyph), scaled to fit a square box with
 its aspect preserved and centred in it, and drawn with ``Painter.image``. The
 box is the size *class* (:data:`SMALL_ICON`, :data:`LARGE_ICON`, both in
 line heights) -- one rule, used by every place that draws an icon, so the icons
-of one class are one size wherever they appear. It is rasterised at the device
-scale, so a Retina display gets device pixels rather than a blown-up bitmap.
+of one class are one size wherever they appear, and they scale with the font
+size the line height tracks. The texture is fitted at the device scale, so a
+Retina display gets device pixels rather than a blown-up bitmap, and the bake
+at 128 px makes every drawn size a minification -- the painter's ordinary
+filtering is all the resampling an icon needs at any size the interface asks
+for.
 
 A pictogram the colour font does not have (◐, a plain geometric mark) is
 rasterised from the first font that covers it, as a white mask the caller's
@@ -174,6 +183,43 @@ def _rasterise_colour(icon: str):
     return None
 
 
+def _atlas_ink(icon: str):
+    """The pictogram's **baked colour cell**, cropped to its ink, or ``None``.
+
+    The atlas ships a band of pictographs rasterised from a pinned Noto Color
+    Emoji at bake time (see ``tools/bake_chrome_atlas.py``). Reading the band
+    instead of a machine's colour font is what makes an icon the same picture
+    everywhere -- and the one picture there is on a host with no fonts at all,
+    which is the web release: Pyodide ships no system fonts, so
+    :func:`_rasterise_colour` finds nothing to load and every menu icon fell
+    back to the grey monochrome mask the text path draws.
+
+    Falls open on anything -- no baked cell, no Pillow to crop with -- to the
+    system-font rasters below, which is how a pictograph newer than the bake
+    still draws.
+    """
+    from PIL import Image  # noqa: PLC0415
+
+    from . import grapheme  # noqa: PLC0415
+    from .font import load_atlas  # noqa: PLC0415
+    from .gpu_atlas import png_decode  # noqa: PLC0415
+
+    atlas = load_atlas()
+    cell = atlas.icon_cell_of(grapheme.glyph_of(icon))
+    if cell is None:
+        return None
+    global _ATLAS_IMAGE
+    if _ATLAS_IMAGE is None:
+        width, height, rgba = png_decode(atlas.image_path.read_bytes())
+        _ATLAS_IMAGE = Image.frombytes("RGBA", (width, height), bytes(rgba))
+    x, y, w, h = cell
+    return _ATLAS_IMAGE.crop((x, y, x + w, y + h))
+
+
+#: The atlas PNG, decoded once -- every icon reads a crop of the same image.
+_ATLAS_IMAGE = None
+
+
 def _shaped() -> bool:
     """Whether Pillow lays text out with a shaping engine (so a sequence can compose)."""
     try:
@@ -272,8 +318,15 @@ def icon_texture(icon: str, pixels: int):
         return hit
     result = (None, False)
     try:
-        ink = _rasterise_colour(icon)
+        # The baked colour band first: the same picture on every host,
+        # including the ones with no colour font to rasterise from. The
+        # machine's faces stay as the fallback for a pictograph the bake
+        # does not cover, then the white mask a text font can still draw.
+        ink = _atlas_ink(icon)
         colour = ink is not None
+        if ink is None:
+            ink = _rasterise_colour(icon)
+            colour = ink is not None
         if ink is None:
             ink = _rasterise_mask(icon)
         if ink is not None:
