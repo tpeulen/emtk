@@ -601,7 +601,7 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         item_id = _ctx.get_id(f"##{name}")
         has_keyboard = (_ctx.state(("focus",)).get("id") == item_id
                         or _ctx.is_nav_focused(item_id))
-        if has_keyboard and _ctx.io.key in (KEY_UP, KEY_DOWN):
+        if value is not None and has_keyboard and _ctx.io.key in (KEY_UP, KEY_DOWN):
             key = _ctx.io.key
             stepped = parse_value(
                 format_value(float(value) + (1 if key == KEY_UP else -1)
@@ -621,10 +621,17 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
         delta = _stepper(name, stepper_w)
         _remember(state, f"{name}.stepper")
         wheel = _core.get_io().mouse_wheel
-        if not delta and wheel and (field_hovered or _w.is_item_hovered()):
+        focused = (
+            value is not None
+            and _core.get_current_context().state(("focus",)).get("id")
+            == _core.get_current_context().get_id(f"##{name}")
+        )
+        if not delta and wheel and (field_hovered or _w.is_item_hovered() or focused):
             # One step a notch, as a spin box does: the frame loop spends the wheel once, so
             # three notches delivered before a frame are three steps in that frame. A
             # fractional (trackpad) remainder still counts as one step in its direction.
+            # The *focused* field steps wherever the pointer is -- WheelFocus, as the
+            # spin boxes the desktop shell ships: click a number, wheel anywhere.
             delta = int(wheel) or (1 if wheel > 0 else -1)
         if delta and value is not None:
             state.buffers.pop(name, None)

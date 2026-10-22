@@ -89,3 +89,30 @@ def test_a_family_without_the_requested_cut_falls_back_to_regular(caplog):
         face = _face(FontSpec(family=family, bold=True))
     assert not face.bold
     assert any("regular face" in r.getMessage() for r in caplog.records)
+
+
+def test_the_baked_atlas_face_measures_like_pil_with_anchors(empty_face_world):
+    """A theme switch once blanked the page: the stylesheet asked for a font
+    nobody installed, the synthetic ``:baked-atlas:`` face answered, and its
+    ``getbbox`` rejected the ``anchor`` keyword ``_glyph`` measures glyphs
+    with -- the frame died, and the frame-error panel died the same way."""
+    from emtk.font_render import FontSpec, _face, _loaded
+
+    face = _face(FontSpec(family="anything-at-all"))
+    assert face.path == ":baked-atlas:"
+    font = _loaded(face, 32)
+    # the default (la): pen at the left, y down from the ascender
+    x0, y0, x1, y1 = font.getbbox("Ag")
+    assert (x0, x1) == (0, font.getlength("Ag"))
+    assert y0 == 0
+    # ls: the anchor _glyph uses -- y measured from the baseline
+    lx0, ly0, lx1, ly1 = font.getbbox("Ag", anchor="ls")
+    assert (lx0, lx1) == (x0, x1)
+    ascent, descent = font.getmetrics()
+    assert ly0 == -ascent
+    assert ly1 == descent
+    # centred and right anchors keep the width
+    m0 = font.getbbox("Ag", anchor="ms")
+    r0 = font.getbbox("Ag", anchor="rs")
+    assert m0[0] < 0 < m0[2]
+    assert r0[0] == -font.getlength("Ag")

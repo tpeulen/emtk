@@ -786,3 +786,38 @@ def test_an_info_line_reads_a_method_or_a_property():
         emtk.end()
     shown = " ".join(painter.strings)
     assert "from a property" in shown and "from a method" in shown and "the fallback" in shown
+
+
+def test_a_focused_spin_value_steps_wherever_the_pointer_is():
+    """WheelFocus, as the desktop spin boxes have it: click into the number,
+    wheel anywhere on the page -- the field takes a step a notch. The pointer
+    can sit on empty space far from the field."""
+    spec = {"sections": [
+        {"type": "value", "attr": "don_value", "label": "Min", "kind": "float",
+         "style": "spin"},
+        {"type": "value", "attr": "accept_value", "label": "Max", "kind": "float",
+         "style": "spin"},
+    ]}
+    model = Model()
+    model.don = True
+    model.don_value = 6.0
+    model.accept_value = 1.0
+    driver = Driver(spec, model)
+    driver.frame()
+    fx, fy, fw, fh = driver.state.rects["don_value"]
+    # focus the first field by clicking it
+    io = driver.io
+    io.mouse_pos = io.mouse_clicked_pos[0] = (fx + 5, fy + fh / 2)
+    io.mouse_down[0] = io.mouse_clicked[0] = True
+    driver.frame()
+    io.mouse_down[0] = False
+    io.mouse_released[0] = True
+    # pointer far away, on empty space
+    io.mouse_pos = (2.0, 2.0)
+    io.mouse_wheel = 2.0
+    driver.frame()
+    assert model.don_value == 6.2                      # two notches, two steps
+    assert model.accept_value == 1.0                   # the unfocused field keeps still
+    io.mouse_wheel = -1.0
+    driver.frame()
+    assert model.don_value == 6.1

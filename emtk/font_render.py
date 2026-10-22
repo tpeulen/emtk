@@ -424,10 +424,28 @@ class _BakedAtlasFace:
     def getmetrics(self) -> tuple[int, int]:
         return self._ascent, int(self._atlas.line_height * self._scale) - self._ascent
 
-    def getbbox(self, text: str) -> tuple[int, int, int, int]:
-        """PIL's ``(x0, y0, x1, y1)`` relative to the pen, as FreeTypeFont gives it."""
-        descent = int(self._atlas.line_height * self._scale) - self._ascent
-        return 0, -self._ascent, int(self.getlength(text)), descent
+    def getbbox(self, text: str, mode: str = "", *args, **kwargs) -> tuple[int, int, int, int]:
+        """PIL's ``(x0, y0, x1, y1)`` for *text*, honouring ``anchor``.
+
+        The real ``FreeTypeFont.getbbox`` takes ``anchor`` (and friends), and
+        :func:`_glyph` measures single characters with ``anchor="ls"`` --
+        a face that rejects the keyword kills the whole frame, and with it
+        the frame-error panel too, which is how a theme switch once left the
+        page a flat colour.
+        """
+        width = int(self.getlength(text))
+        height = self._ascent + (int(self._atlas.line_height * self._scale) - self._ascent)
+        anchor = str(kwargs.get("anchor") or "la")
+        horizontal = anchor[0] if len(anchor) > 0 else "l"
+        vertical = anchor[1] if len(anchor) > 1 else "a"
+        x0 = {"l": 0, "s": 0, "m": -width // 2, "r": -width}.get(horizontal, 0)
+        y0 = {
+            "a": 0, "t": 0,
+            "m": -(self._ascent + height - self._ascent) // 2,
+            "s": -self._ascent,
+            "b": -(height), "d": -self._ascent,
+        }.get(vertical, -self._ascent)
+        return x0, y0, x0 + width, y0 + height
 
 
 @lru_cache(maxsize=128)
