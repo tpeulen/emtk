@@ -253,12 +253,29 @@ class WebPage:
         return element
 
     def _mirror_frame_error(self, record) -> None:
-        """Put *record*'s text on the page; never raises over the error."""
+        """Put *record*'s text on the page; never raises over the error.
+
+        Also posts it once per record to the serving page's
+        ``/emtk-frame-error`` -- the server logs it -- so a blank page on the
+        user's machine can be read from the server's log. Fire and forget.
+        """
+        text = str(getattr(record, "text", record) or "")
         try:
             element = self._error_element()
             if element is not None:
-                element.textContent = str(getattr(record, "text", record) or "")
+                element.textContent = text
         except Exception:  # noqa: BLE001 - mirroring must not mask the error
+            pass
+        try:
+            from js import window  # noqa: PLC0415 - only exists on the page
+
+            from pyodide.ffi import to_js  # noqa: PLC0415
+
+            window.fetch(
+                "/emtk-frame-error",
+                to_js({"method": "POST", "body": text}),
+            )
+        except Exception:  # noqa: BLE001 - off the page, or a broken bridge
             pass
 
     def _clear_mirrored_frame_error(self) -> None:

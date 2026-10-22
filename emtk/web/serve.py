@@ -404,6 +404,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if "404" in (fmt % args):
             super().log_message(fmt, *args)
 
+    # -- what the page tells us when it cannot draw ---------------------- #
+
+    #: The one POST the page makes: a frame's traceback, mirrored from
+    #: :meth:`emtk.web.page.WebPage._mirror_frame_error` so a blank page on
+    #: the user's machine can be read from the server's log.
+    ERROR_REPORT_PATH = "/emtk-frame-error"
+
+    def do_POST(self) -> None:  # noqa: N802 - http.server's spelling
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length) if length else b""
+        if self.path.split("?")[0] != self.ERROR_REPORT_PATH:
+            self.send_error(404)
+            return
+        print("FRAME-ERROR-REPORT:", body.decode("utf-8", "replace"), file=sys.stderr, flush=True)
+        self.send_response(204)
+        self.end_headers()
+
 
 def already_serving(port: int, app: str) -> bool:
     """Whether *port* already serves a page for *app*."""

@@ -312,3 +312,33 @@ def test_a_failing_frame_never_raises_from_the_mirroring(page, monkeypatch):
     surface.render = boom
     with pytest.raises(RuntimeError, match="still reported"):
         web.draw()
+
+
+def test_a_failing_frame_posts_its_traceback_to_the_server(page, monkeypatch):
+    web, surface = page
+    posts = []
+
+    class _Window:
+        @staticmethod
+        def fetch(url, options):
+            posts.append((url, options))
+
+    js = ModuleType("js")
+    js.document = _Document()  # type: ignore[attr-defined] - a stand-in module
+    js.window = _Window()  # type: ignore[attr-defined] - same
+    monkeypatch.setitem(sys.modules, "js", js)
+    pyodide = ModuleType("pyodide")
+    pyodide_ffi = ModuleType("pyodide.ffi")
+    pyodide_ffi.to_js = lambda value: value
+    monkeypatch.setitem(sys.modules, "pyodide", pyodide)
+    monkeypatch.setitem(sys.modules, "pyodide.ffi", pyodide_ffi)
+
+    def boom(view):
+        raise RuntimeError("posted up")
+
+    surface.render = boom
+    with pytest.raises(RuntimeError, match="posted up"):
+        web.draw()
+
+    assert posts and posts[0][0] == "/emtk-frame-error"
+    assert "RuntimeError" in posts[0][1]["body"] and "posted up" in posts[0][1]["body"]

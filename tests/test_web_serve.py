@@ -228,3 +228,25 @@ def test_the_server_sends_no_store_and_isolation_only_when_asked():
     assert ("Cache-Control", "no-store") in sent
     assert not [k for k, _ in sent if k.startswith("Cross-Origin")]
     assert serve.Handler.extensions_map[".wasm"] == "application/wasm"
+
+
+def test_the_server_logs_a_frame_error_report_from_the_page(tmp_path, capsys):
+    site = build(Bundle(app="demoapp.main:make_app", packages=[_app(tmp_path)]),
+                 tmp_path / "site")
+    handler = functools.partial(serve.Handler, directory=str(site))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}/"
+        request = urllib.request.Request(
+            base + serve.Handler.ERROR_REPORT_PATH, method="POST",
+            data="RuntimeError: the panel died too".encode(), )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            assert response.status == 204
+        logged = capsys.readouterr().err
+        assert "FRAME-ERROR-REPORT:" in logged
+        assert "RuntimeError: the panel died too" in logged
+    finally:
+        server.shutdown()
+        server.server_close()
