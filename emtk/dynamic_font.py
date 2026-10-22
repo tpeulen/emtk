@@ -299,15 +299,32 @@ class GlyphCache:
         the details inside the shape) are kept, its light fill is thinned.
         """
         try:
-            from PIL import Image, ImageDraw  # noqa: PLC0415
+            from PIL import Image, ImageDraw, ImageFont  # noqa: PLC0415
 
-            side = int(font.size * 1.6)
-            canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-            ImageDraw.Draw(canvas).text(
-                (side // 2, side // 2), char, font=font, anchor="mm", embedded_color=True
-            )
-            bbox = canvas.getbbox()
-            if bbox is None:
+            # The strike nearest the cell can lack a glyph the font has at
+            # another one -- 🧾 draws blank at 40 px and whole at 160 -- so the
+            # strikes are walked outwards until one inks. Giving up on the
+            # nearest is how a pictograph drew the placeholder on a machine
+            # whose colour font has it.
+            canvas = bbox = None
+            strikes = sorted((20, 32, 40, 48, 64, 96, 160),
+                             key=lambda size: abs(size - font.size))
+            for strike in strikes:
+                try:
+                    face = font if strike == font.size else ImageFont.truetype(
+                        str(getattr(font, "path", "")), strike
+                    )
+                except Exception:  # noqa: BLE001 - a size the font refuses
+                    continue
+                side = int(strike * 1.6)
+                canvas = Image.new("RGBA", (side, side), (0, 0, 0, 0))
+                ImageDraw.Draw(canvas).text(
+                    (side // 2, side // 2), char, font=face, anchor="mm", embedded_color=True
+                )
+                bbox = canvas.getbbox()
+                if bbox is not None:
+                    break
+            if canvas is None or bbox is None:
                 return None
             canvas = canvas.crop(bbox)
             target = max(int(self.cell_h * 0.78), 6)

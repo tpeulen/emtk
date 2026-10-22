@@ -83,7 +83,7 @@ AA_MARGIN = 2
 #: fixed-size image, and what is *not* in it has to be a decision someone made
 #: rather than a discovery someone makes. Anything outside this set now draws a
 #: visible placeholder instead of vanishing -- see `Atlas.cell`.
-_SYMBOLS = "─▴▸▾◀■▶▼…"
+_SYMBOLS = "─│├└▴▸▾◀■▶▼…"
 
 #: What a scientific table writes: an unbounded side (``−∞``, ``∞``), a
 #: comparison, an arrow, a sub/superscript index (``R₀``, ``τ²``). Greek is
@@ -95,6 +95,41 @@ _MATH = '±²³µ·¹×÷ʰʲʳʷʸˡˢˣ̂̃̄̇̈ΑΒΓΔΕΖΗΘΙΚΛΜΝΞ�
 #: because a missing glyph that renders as another missing glyph is the bug
 #: twice.
 MISSING_GLYPH = "\u00a4"  # ¤, which no keyboard produces by accident
+
+#: The pictographs the interface and the applications on it spell their icons
+#: with. The same "enumerated, not a range" rule as the charset above: one
+#: cell each, and a pictograph not in here is a decision someone made.
+#:
+#: Why these specifically: the **web release** has no font engine. Pyodide
+#: ships no system fonts, so the runtime glyph cache (:mod:`emtk.dynamic_font`)
+#: has nothing to load there and an unbaked codepoint draws the atlas
+#: placeholder -- which is how the chisurf web page came up with "all emoticons
+#: and icons are missing": every plugin menu icon its manifest declares as an
+#: emoji string drew as ``¤``. Baking them makes the committed PNG the only
+#: thing a host needs, which is the atlas's whole design.
+#:
+#: The emoji are stored under their **base** codepoint, because that is the one
+#: code point a cluster is drawn as (:func:`emtk.grapheme.glyph_of`): the
+#: manifest's ``⚖️`` is looked up as ``⚖``.
+EMOJI_CHARS: str = (
+    # chisurf/plugins/**/manifest.json `icon` fields -- every plugin menu,
+    # top-level hubs and sub-tools alike (test_web_release.py checks the
+    # packed manifests against the shipped atlas):
+    "🤖🧬🧵🔭📊💧🌈🎏⚖"
+    "🎯🚦⚡💥🌑📇🪜🌀🔀📈☀🧿🧭ℹ📷📝🗄📖🔦🔌🔎🐍🔢👤▮📦👥💨📡🔁〰🎚🎲🟦⏳🌡⚗🖌🔬🎛📌🌊◎🔆✨🐜💠🧩🧱💣🏓🧾🧲🎞🔋📐♻🧷💢🔃🎵📶⏲🔂📟🏷🖼🧮✂"
+    # chisurf's shell strings (chisurf/emtk): view badges, button captions,
+    # job gates, language rows:
+    "⌾⏺►◄⚙⚠⛔✓✕❎➕⟳↩↪🌐"
+    "🎨💡📏📚📤📥📸🔄🔗🕘🗂🗃🚚🚪🧹🪟💾📂📋🧪"
+    # emtk's own strings and help views (captions, formula renderer):
+    "◐❓⏱🌍📉⇋⇌≔≲≳⊤⋂⋃⋅∙⟵⟶⟸⟹⟺⟼⨁⨂"
+)
+# Regional indicators (🇩 🇪 …) are deliberately absent: no installed face draws
+# one standalone, so a bake of them fails named rather than writing blanks. A
+# flag pair is one cluster, and on the monospace path it draws as its first
+# indicator -- which, with no cell, is the placeholder. Language rows lose
+# their flag on the web page; the pictographs above are the ones that had a
+# picture to lose.
 
 CHARSET: str = "".join(
     sorted(
@@ -149,6 +184,49 @@ def _padding(paths, advance: int, ascent: int, height: int) -> int:
         overhang = max(overhang, -ink.x(), ink.right() - advance,
                        -(ascent + ink.y()), ascent + ink.bottom() - height)
     return max(AA_MARGIN + math.ceil(overhang), AA_MARGIN)
+
+
+def _rasterise_pictographs(chars, cell, ascent, pad, advance):
+    """Rasterise *chars* with the runtime cache's own rasteriser.
+
+    :class:`emtk.dynamic_font.GlyphCache` is what a desktop draws an unbaked
+    codepoint with, colour emoji included (as a one-colour mask); using it here
+    makes a baked pictograph pixel-identical to the one the same machine would
+    cache at run time, and keeps that logic in exactly one place. It needs the
+    system fonts, so a bake on a machine without them fails here, named,
+    rather than writing cells that draw blank.
+
+    Returns ``{char: cell}``, each cell an ``(h, w, 4)`` RGBA array (white ink,
+    alpha mask) sized exactly like a baked text cell.
+    """
+    from emtk.dynamic_font import GlyphCache  # noqa: PLC0415
+    from emtk.font import PX_PER_PT  # noqa: PLC0415
+
+    cache = GlyphCache(cell, ascent, pad=pad, advance=advance,
+                       em=FONT_PT * PX_PER_PT * SCALE)
+    cells = {}
+    for char in chars:
+        rendered = cache._rasterise(char)
+        if rendered is None:
+            raise RuntimeError(
+                f"no font on this machine draws pictograph {char!r} "
+                f"(U+{ord(char):04X}); it would bake blank"
+            )
+        cells[char] = rendered
+    return cells
+
+
+def _paste_cells(path, placed):
+    """Write ``{char: (x, y, cell)}`` into the saved atlas PNG."""
+    from PIL import Image  # noqa: PLC0415
+
+    import numpy as np  # noqa: PLC0415
+
+    image = np.array(Image.open(path).convert("RGBA"))
+    for x, y, cell in placed.values():
+        height, width = cell.shape[:2]
+        image[y:y + height, x:x + width] = cell
+    Image.fromarray(image).save(path)
 
 
 def bake(out_dir: pathlib.Path | None = None) -> dict:
@@ -255,6 +333,8 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
     if missing:
         raise RuntimeError("Installed fonts cannot bake requested glyphs: " + " ".join(missing))
     charset = CHARSET
+    # A pictograph the charset already covers needs no second cell.
+    emoji_chars = "".join(dict.fromkeys(c for c in EMOJI_CHARS if c not in charset))
     ascent = max(m.ascent() for m in metrics.values())
     base_height = max(m.height() for m in metrics.values())
     pad = _padding((path for _font, path in resolved.values()), advance, ascent, base_height)
@@ -264,8 +344,11 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
 
     columns = 32
     rows_per_face = (len(charset) + columns - 1) // columns
-    # One extra row for the solid block; see below.
-    total_rows = rows_per_face * len(faces) + 1
+    # One extra row for the solid block; see below. The pictographs follow as
+    # their own band after it -- appended, so a re-bake never moves a cell an
+    # earlier atlas had already promised coordinates for.
+    emoji_rows = (len(emoji_chars) + columns - 1) // columns
+    total_rows = rows_per_face * len(faces) + 1 + emoji_rows
 
     image = QtGui.QImage(
         cell_w * columns, cell_h * total_rows, QtGui.QImage.Format_ARGB32
@@ -319,8 +402,25 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
     finally:
         painter.end()
 
+    # The pictographs: rasterised from the system's faces -- colour emoji as
+    # the one-colour mask the runtime cache draws -- into their own band after
+    # the solid row, and written straight into the saved PNG.
+    placed = {}
+    if emoji_chars:
+        cells = _rasterise_pictographs(emoji_chars, (cell_w, cell_h), ascent, pad, advance)
+        origin = (rows_per_face * len(faces) + 1) * cell_h
+        for index, char in enumerate(emoji_chars):
+            column, row = index % columns, index // columns
+            x, y = column * cell_w, origin + row * cell_h
+            entry = [x, y, cell_w, cell_h, advance]
+            glyphs["regular"][char] = entry
+            glyphs["bold"][char] = entry
+            placed[char] = (x, y, cells[char])
+
     if not image.save(str(out_dir / "chrome.png")):
         raise RuntimeError("Could not write glyph atlas image")
+    if placed:
+        _paste_cells(out_dir / "chrome.png", placed)
 
     # Metrics at the size the panel is *laid out* in, not the size it was baked
     # at. Font metrics do not scale linearly -- hinting and rounding make Menlo
@@ -341,7 +441,7 @@ def bake(out_dir: pathlib.Path | None = None) -> dict:
         "descent": max(m.descent() for m in metrics.values()),
         "line_height": cell_h,
         "columns": columns,
-        "charset": charset,
+        "charset": charset + emoji_chars,
         "glyphs": glyphs,
         "solid": solid,
         "size": [image.width(), image.height()],
