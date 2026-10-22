@@ -840,7 +840,12 @@ def _wrap_label(label: str, width: float) -> list[str]:
 
 
 def _draw_mermaid(block: MarkdownBlock, avail_w: float) -> bool:
-    """Draw a parsed Mermaid ``graph TD`` as boxes and arrows.
+    """Draw a parsed Mermaid ``graph TD`` as an indented tree panel.
+
+    Node-link diagrams are unreadable for the record layouts (many long
+    folder-name nodes in a narrow pane), so children are drawn indented under
+    their parent and cross-links (``-.label.->``) become an inline tag on the
+    row instead of a line across the diagram.
 
     Returns ``False`` when the text is not in the supported subset, so the
     caller can fall back to rendering the source as a code block.
@@ -850,60 +855,55 @@ def _draw_mermaid(block: MarkdownBlock, avail_w: float) -> bool:
         return False
     nodes, edges = parsed
     label_of = {n[0]: n[1] for n in nodes}
-    depth = {n[0]: 0 for n in nodes}
-    for _ in range(len(nodes)):
-        for s, d, _st, _l in edges:
-            depth[d] = max(depth[d], depth[s] + 1)
-    levels: dict[int, list[str]] = {}
-    for n in nodes:
-        levels.setdefault(depth[n[0]], []).append(n[0])
 
-    pad, gap_x, gap_y, line_h = 7.0, 10.0, 30.0, 15.0
-    cols = max(1, int((avail_w + gap_x) / (130.0 + gap_x)))
-    node_w = min(230.0, (avail_w - (cols - 1) * gap_x) / cols)
+    children: dict[str, list[str]] = {}
+    parent_of: dict[str, str] = {}
+    cross: dict[str, list[tuple[str, str]]] = {}
+    for s, d, st, lab in edges:
+        if st == "dotted":
+            cross.setdefault(s, []).append((d, lab))
+        elif d not in parent_of:
+            parent_of[d] = s
+            children.setdefault(s, []).append(d)
+        else:
+            cross.setdefault(d, []).append((s, lab))
+    roots = [n[0] for n in nodes if n[0] not in parent_of]
+    if not roots:  # cyclic solid edges: no tree to draw
+        return False
+
     dl = im.get_window_draw_list()
     ox, oy = im.get_cursor_screen_pos()
+    pad, line_h, indent_step, row_gap = 6.0, 15.0, 16.0, 3.0
+    max_w = max(60.0, avail_w - 2.0)
 
-    boxes: dict[str, tuple[tuple[float, float], tuple[float, float], list[str]]] = {}
+    # Row heights need wrapped widths; compute rows first, then draw.
+    rows: list[tuple[str, float, list[str]]] = []  # (nid, indent, lines)
+
+    def emit(nid: str, indent: float) -> None:
+        label = label_of.get(nid, nid).replace("\n", " ")
+        for dst, lab in cross.get(nid, []):
+            label += f"   \u2192 {lab or 'uses'}: {label_of.get(dst, dst).replace(chr(10), ' ')}"
+        lines = _wrap_label(label, max_w - 2 * pad - indent)
+        rows.append((nid, indent, lines))
+        for child in children.get(nid, []):
+            emit(child, indent + indent_step)
+
+    for r in roots:
+        emit(r, 0.0)
+
     y = oy + 2.0
-    for lvl in sorted(levels):
-        row = levels[lvl]
-        for k0 in range(0, len(row), cols):
-            chunk = row[k0:k0 + cols]
-            row_h = 0.0
-            for k, nid in enumerate(chunk):
-                lines = _wrap_label(label_of.get(nid, nid), node_w - 2 * pad)
-                h = 2 * pad + len(lines) * line_h
-                x = ox + k * (node_w + gap_x)
-                boxes[nid] = ((x, y), (x + node_w, y + h), lines)
-                row_h = max(row_h, h)
-            y += row_h + gap_y
-
-    for nid, ((x0, y0), (x1, y1), lines) in boxes.items():
-        dl.add_rect_filled((x0, y0), (x1, y1), _style.CODE_BG, rounding=4.0)
-        dl.add_rect((x0, y0), (x1, y1), _style.FRAME_BG, rounding=4.0)
+    for nid, indent, lines in rows:
+        h = 2 * pad + len(lines) * line_h - 2.0
+        depth = int(indent // indent_step)
+        bg = (36, 40, 48, 255) if depth == 0 else ((28, 32, 38, 255) if depth == 1 else _style.CODE_BG)
+        dl.add_rect_filled((ox + indent, y), (ox + max_w, y + h), bg, rounding=3.0)
+        if depth == 0:
+            dl.add_rect((ox + indent, y), (ox + max_w, y + h), _style.FRAME_BG, rounding=3.0)
+        col = _style.HEADING_4 if depth == 0 else (_style.TEXT if depth == 1 else _style.TEXT_DISABLED)
         for j, ln in enumerate(lines):
-            dl.add_text((x0 + pad, y0 + pad + j * line_h), _style.TEXT, ln)
-
-    for s, d, st, elabel in edges:
-        if s not in boxes or d not in boxes:
-            continue
-        (sx0, sy0), (sx1, sy1), _ = boxes[s]
-        (dx0, dy0), (dx1, dy1), _ = boxes[d]
-        s_mid, d_mid = ((sx0 + sx1) / 2.0, sy1), ((dx0 + dx1) / 2.0, dy0)
-        col = _style.TEXT_DISABLED if st == "dotted" else (110, 110, 120, 255)
-        dl.add_bezier_cubic(s_mid, (s_mid[0], s_mid[1] + gap_y * 0.5),
-                            (d_mid[0], d_mid[1] - gap_y * 0.5), (d_mid[0], d_mid[1] + 7.0),
-                            col, thickness=1.4 if st != "dotted" else 1.0)
-        dl.add_triangle_filled((d_mid[0] - 4.0, d_mid[1]), (d_mid[0] + 4.0, d_mid[1]),
-                               (d_mid[0], d_mid[1] + 7.0), col)
-        if elabel:
-            lx = (s_mid[0] + d_mid[0]) / 2.0
-            ly = (s_mid[1] + d_mid[1]) / 2.0 - 8.0
-            dl.add_text((lx - im.calc_text_size(elabel)[0] / 2.0, ly), col, elabel)
-
-    total_h = y - oy - gap_y + 8.0
-    im.dummy(0.0, max(total_h, 10.0))
+            dl.add_text((ox + indent + pad, y + pad - 2.0 + j * line_h), col, ln)
+        y += h + row_gap
+    im.dummy(0.0, max(y - oy - row_gap + 6.0, 10.0))
     return True
 
 
