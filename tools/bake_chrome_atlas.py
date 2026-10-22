@@ -106,11 +106,38 @@ AA_MARGIN = 2
 #: visible placeholder instead of vanishing -- see `Atlas.cell`.
 _SYMBOLS = "─│├└▴▸▾◀■▶▼…"
 
+#: Symbols later UI added -- each entry earned its cell by drawing as the
+#: ``¤`` placeholder somewhere real. ``⇥``/``⇣`` are the Console dock's
+#: *Split ⇥* / *Split ⇣* buttons (chisurf terminal app); ``⏸⏹⏭⏮`` the movie
+#: transport glyphs chisurf's glyph vocabulary spells (``core/glyphs.py``);
+#: ``①②`` the LUT tools' numbered steps; ``↺↻⬆⬇`` the shifter's reset and
+#: the vocabulary's sort arrows.
+_UI_SYMBOLS = "⇥⇣⇄↺↻⬆⬇⏸⏹⏭⏮①②●◉⦿★☆☐☑✎✏✖✗∠′†ϵℓ⊛"
+
 #: What a scientific table writes: an unbounded side (``−∞``, ``∞``), a
 #: comparison, an arrow, a sub/superscript index (``R₀``, ``τ²``). Greek is
 #: added below: a FRET factor is γ, β, α or δ, and a missing glyph turns the
 #: name into ``¤``.
 _MATH = '±²³µ·¹×÷ʰʲʳʷʸˡˢˣ̂̃̄̇̈ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩαβγδεζηθικλνξοπρςστυφχψωϑϕϖϰϱբᑫᑯᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁᵂᵃᵇᵈᵉᵍᵏᵐᵒᵖᵗᵘᵛᵢᵣᵤᵥᵦᵧᵨᵩᵪᶜᶠᶻ‖•…⁰ⁱ⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜ⃗←↑→↓↔↗↦⇐⇒⇔∀∂∃∄∅∆∇∈∉∋∏∐∑−∓∖∗∘√∝∞∥∧∨∩∪∫∬∭∮∼≃≅≈≠≡≤≥≪≫⊂⊃⊆⊇⊕⊖⊗⊙⊥⋆⋮⋯⋱⌀⌈⌉⌊⌋⟨⟩ⱼⱽ꜀𝓏'
+
+#: The LaTeX-ish names the two formula renderers emit (emtk ``tex.py`` and
+#: chisurf's mathtext): script and black-letter capitals for
+#: ``\\mathscr``/``\\mathfrak``, double-struck for ``\\mathbb``, the modifier
+#: letters and combining marks accents map onto, and the punctuation a
+#: formatted number can carry. Help pages draw formulas with these.
+_TEX_GLYPHS = (
+    "ˆˇ˘˙˜"
+    "ℂℋℌℍℏℐℑℒℕℙℚℛℜℝℤℨℬℭℰℱℳ𝒟𝒪𝒫"
+    "̀́̆̊̌"
+    "‐‑›＋"
+)
+
+#: The language rows' own names (chisurf ``emtk/i18n.py``: 中文, 日本語 …),
+#: the IME's demo kana (emtk ``ime.py``) and the CJK punctuation the text
+#: widget measures (emtk ``widgets/text.py``). Full CJK stays desktop-only,
+#: where the runtime glyph cache can rasterise it; these few cells keep the
+#: language picker and the IME legible on the web page.
+_CJK = "中文日本語、。　にほんんア"
 
 #: The placeholder for a character with no glyph. In the set by construction,
 #: because a missing glyph that renders as another missing glyph is the bug
@@ -144,6 +171,11 @@ EMOJI_CHARS: str = (
     "🎨💡📏📚📤📥📸🔄🔗🕘🗂🗃🚚🚪🧹🪟💾📂📋🧪"
     # emtk's own strings and help views (captions, formula renderer):
     "◐❓⏱🌍📉⇋⇌≔≲≳⊤⋂⋃⋅∙⟵⟶⟸⟹⟺⟼⨁⨂"
+    # chisurf's glyph vocabulary (chisurf/core/glyphs.py) and the plugin UI
+    # strings that spell captions with pictographs -- every one of these drew
+    # as ¤ on the web page before this block:
+    "👁⛓🔇🔊🔑🔒🔓🔍🔧🕐🚀🚩🧠🧰📁📄🗑✅❌➖"
+    "🌙🌿🏭📍📓🕸🖥🛡🧫🧴🐛👋📘🔤🛠🪄👩💻"
 )
 # Regional indicators (🇩 🇪 …) are deliberately absent: no installed face draws
 # one standalone, so a bake of them fails named rather than writing blanks. A
@@ -163,6 +195,9 @@ CHARSET: str = "".join(
         | {chr(c) for c in range(0x03B1, 0x03CA)}                   # Greek small
         | {chr(c) for c in range(0x0400, 0x0460)}   # Cyrillic, including Russian Ё/ё
         | set(_MATH)
+        | set(_UI_SYMBOLS)
+        | set(_TEX_GLYPHS)
+        | set(_CJK)
     )
 )
 
