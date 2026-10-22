@@ -253,8 +253,10 @@ class WebPage:
             from js import document  # noqa: PLC0415 - only exists on the page
         except Exception:  # noqa: BLE001 - a stand-in js namespace (a test)
             return None
+        # JS ``null`` crosses into Pyodide as a falsy ``jsnull`` proxy, not
+        # ``None``; truthiness is the test that holds on both sides.
         element = document.getElementById(self._ERROR_ELEMENT_ID)
-        if element is None:
+        if not element:
             element = document.createElement("pre")
             element.id = self._ERROR_ELEMENT_ID
             style = element.style
@@ -263,7 +265,7 @@ class WebPage:
             style.setProperty("color", "#ffb4b4")
             style.setProperty("font", "12px ui-monospace, monospace")
             body = getattr(document, "body", None)
-            if body is None:
+            if not body:
                 return None
             body.appendChild(element)
         return element
@@ -278,7 +280,7 @@ class WebPage:
         text = str(getattr(record, "text", record) or "")
         try:
             element = self._error_element()
-            if element is not None:
+            if element:
                 element.textContent = text
         except Exception:  # noqa: BLE001 - mirroring must not mask the error
             pass
@@ -298,7 +300,7 @@ class WebPage:
         """Take the mirrored text down once a frame draws again."""
         try:
             element = self._error_element()
-            if element is not None and element.textContent:
+            if element and element.textContent:
                 element.textContent = ""
         except Exception:  # noqa: BLE001 - same
             pass
