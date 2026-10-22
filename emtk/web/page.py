@@ -198,6 +198,14 @@ class WebPage:
         self.format = str(format or "bgra8unorm")
         self.surface.attach(device, self.format, self.width, self.height, self.dpr)
         self.frames = 0
+        # Every frame error on this page reaches the DOM and the server's log,
+        # including one the control's own pass catches and draws as its error
+        # panel -- a panel whose text is worth mirroring off the canvas anyway.
+        from ..frame_errors import add_frame_error_handler  # noqa: PLC0415
+
+        #: Whether the frame being drawn reported a frame error.
+        self._frame_failed = False
+        add_frame_error_handler(self._on_frame_error)
 
     # -- drawing --------------------------------------------------------- #
     def draw(self):
@@ -217,15 +225,23 @@ class WebPage:
         from ..frame_errors import report_frame_error  # noqa: PLC0415
 
         context = self.canvas.getContext("webgpu")
+        self._frame_failed = False
         try:
             result = self.surface.render(context.getCurrentTexture().createView())
         except Exception as error:  # noqa: BLE001 - reported, drawn, mirrored
             record = report_frame_error(error)
+            self._frame_failed = True
             self._mirror_frame_error(record)
             raise
         self.frames += 1
-        self._clear_mirrored_frame_error()
+        if not self._frame_failed:
+            self._clear_mirrored_frame_error()
         return result
+
+    def _on_frame_error(self, record) -> None:
+        """A frame error the control's own pass reported (and panel-drew)."""
+        self._frame_failed = True
+        self._mirror_frame_error(record)
 
     # -- a frame error the page can always show -------------------------- #
 

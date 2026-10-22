@@ -342,3 +342,35 @@ def test_a_failing_frame_posts_its_traceback_to_the_server(page, monkeypatch):
 
     assert posts and posts[0][0] == "/emtk-frame-error"
     assert "RuntimeError" in posts[0][1]["body"] and "posted up" in posts[0][1]["body"]
+
+
+def test_a_panel_drawn_frame_error_still_reaches_the_page(page, monkeypatch):
+    """The control's own pass catches the error and draws its panel; the page
+    mirrors that record too (and does not count the frame as drawn-clean)."""
+    import emtk.frame_errors as fe
+
+    web, surface = page
+    document = _Document()
+    js = ModuleType("js")
+    js.document = document  # type: ignore[attr-defined] - a stand-in module
+    monkeypatch.setitem(sys.modules, "js", js)
+    fe._seen.clear()
+    seen = []
+    fe.add_frame_error_handler(lambda record: seen.append(record))
+    try:
+        def boom(view):
+            raise RuntimeError("caught by the control pass")
+
+        surface.render = boom
+        with pytest.raises(RuntimeError, match="caught by the control pass"):
+            web.draw()
+        element = document.by_id[WebPage._ERROR_ELEMENT_ID]
+        assert "caught by the control pass" in element.textContent
+        assert web._frame_failed is True
+
+        # a clean frame after it takes the mirrored text down
+        surface.render = lambda view: None
+        web.draw()
+        assert element.textContent == ""
+    finally:
+        fe._seen.clear()
