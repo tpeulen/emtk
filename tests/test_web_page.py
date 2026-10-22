@@ -9,6 +9,9 @@ against a recording surface and a stand-in canvas.
 """
 from __future__ import annotations
 
+import sys
+from types import ModuleType, SimpleNamespace
+
 import pytest
 
 from emtk.app import Surface
@@ -249,3 +252,63 @@ def test_download_hands_the_bytes_to_an_anchor_and_lets_the_url_go():
     assert log[-1] == ("revoke", "blob:1")
     assert ("remove", "shot.png") in log
     assert in_browser() is False
+
+
+# -- a frame error the page can always show --------------------------- #
+
+class _Document:
+    """The DOM's ``document`` as far as the mirror needs it."""
+
+    def __init__(self):
+        self.created = []
+        self.by_id = {}
+
+    def createElement(self, tag):  # noqa: N802 - the DOM's spelling
+        element = SimpleNamespace(tag=tag, textContent="", style=SimpleNamespace(set=lambda *a: None))
+        self.created.append(element)
+        return element
+
+    def getElementById(self, element_id):  # noqa: N802
+        return self.by_id.get(element_id)
+
+    @property
+    def body(self):
+        return SimpleNamespace(appendChild=lambda element: self.by_id.setdefault(element.id, element))
+
+
+def test_a_failing_frame_puts_its_traceback_on_the_page(page, monkeypatch):
+    web, surface = page
+    document = _Document()
+    js = ModuleType("js")
+    js.document = document  # type: ignore[attr-defined] - a stand-in module
+    monkeypatch.setitem(sys.modules, "js", js)
+
+    def boom(view):
+        raise RuntimeError("the panel died too")
+
+    surface.render = boom
+    with pytest.raises(RuntimeError, match="the panel died too"):
+        web.draw()
+
+    element = document.by_id[WebPage._ERROR_ELEMENT_ID]
+    assert "RuntimeError" in element.textContent and "the panel died too" in element.textContent
+    assert web.frames == 0  # the failing frame does not count
+
+    # a frame that draws again takes the mirrored text down
+    surface.render = lambda view: None
+    web.draw()
+    assert element.textContent == "" and web.frames == 1
+
+
+def test_a_failing_frame_never_raises_from_the_mirroring(page, monkeypatch):
+    web, surface = page
+    js = ModuleType("js")
+    js.document = None  # type: ignore[attr-defined] - a broken bridge: mirroring must swallow this
+    monkeypatch.setitem(sys.modules, "js", js)
+
+    def boom(view):
+        raise RuntimeError("still reported")
+
+    surface.render = boom
+    with pytest.raises(RuntimeError, match="still reported"):
+        web.draw()

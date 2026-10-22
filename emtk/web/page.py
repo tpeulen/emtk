@@ -205,11 +205,70 @@ class WebPage:
 
         Returns whatever the surface's ``render`` returned -- a statistic of
         the frame, if it reports one -- so a test driving the page can read it.
+
+        A frame that raises is reported and drawn as an error panel (the
+        control's own pass, :func:`emtk.frame_errors.draw_control`), and the
+        traceback is mirrored into the page as ``#emtk-frame-error`` -- a
+        ``<pre>`` the canvas cannot hide. When even the panel cannot be drawn
+        (or drawing it fails the same way), the DOM text is the one place the
+        failure is still readable, instead of a blank window and a traceback
+        buried in the console.
         """
+        from ..frame_errors import report_frame_error  # noqa: PLC0415
+
         context = self.canvas.getContext("webgpu")
-        result = self.surface.render(context.getCurrentTexture().createView())
+        try:
+            result = self.surface.render(context.getCurrentTexture().createView())
+        except Exception as error:  # noqa: BLE001 - reported, drawn, mirrored
+            record = report_frame_error(error)
+            self._mirror_frame_error(record)
+            raise
         self.frames += 1
+        self._clear_mirrored_frame_error()
         return result
+
+    # -- a frame error the page can always show -------------------------- #
+
+    _ERROR_ELEMENT_ID = "emtk-frame-error"
+
+    def _error_element(self):
+        """The ``<pre>`` below the canvas, made on first use (or ``None``)."""
+        try:
+            from js import document  # noqa: PLC0415 - only exists on the page
+        except Exception:  # noqa: BLE001 - a stand-in js namespace (a test)
+            return None
+        element = document.getElementById(self._ERROR_ELEMENT_ID)
+        if element is None:
+            element = document.createElement("pre")
+            element.id = self._ERROR_ELEMENT_ID
+            style = element.style
+            style.set("white-space", "pre-wrap")
+            style.set("margin", "0.5em 1em")
+            style.set("color", "#ffb4b4")
+            style.set("font", "12px ui-monospace, monospace")
+            body = getattr(document, "body", None)
+            if body is None:
+                return None
+            body.appendChild(element)
+        return element
+
+    def _mirror_frame_error(self, record) -> None:
+        """Put *record*'s text on the page; never raises over the error."""
+        try:
+            element = self._error_element()
+            if element is not None:
+                element.textContent = str(getattr(record, "text", record) or "")
+        except Exception:  # noqa: BLE001 - mirroring must not mask the error
+            pass
+
+    def _clear_mirrored_frame_error(self) -> None:
+        """Take the mirrored text down once a frame draws again."""
+        try:
+            element = self._error_element()
+            if element is not None and element.textContent:
+                element.textContent = ""
+        except Exception:  # noqa: BLE001 - same
+            pass
 
     def title(self) -> str:
         """The app's :func:`~emtk.app.window_title`, or ``""``: ``boot.js``
