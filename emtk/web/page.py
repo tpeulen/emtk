@@ -258,10 +258,10 @@ class WebPage:
             element = document.createElement("pre")
             element.id = self._ERROR_ELEMENT_ID
             style = element.style
-            style.set("white-space", "pre-wrap")
-            style.set("margin", "0.5em 1em")
-            style.set("color", "#ffb4b4")
-            style.set("font", "12px ui-monospace, monospace")
+            style.setProperty("white-space", "pre-wrap")
+            style.setProperty("margin", "0.5em 1em")
+            style.setProperty("color", "#ffb4b4")
+            style.setProperty("font", "12px ui-monospace, monospace")
             body = getattr(document, "body", None)
             if body is None:
                 return None

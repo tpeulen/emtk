@@ -264,7 +264,10 @@ class _Document:
         self.by_id = {}
 
     def createElement(self, tag):  # noqa: N802 - the DOM's spelling
-        element = SimpleNamespace(tag=tag, textContent="", style=SimpleNamespace(set=lambda *a: None))
+        element = SimpleNamespace(
+            tag=tag, textContent="", id="",
+            style=SimpleNamespace(setProperty=lambda name, value: None),
+        )
         self.created.append(element)
         return element
 
