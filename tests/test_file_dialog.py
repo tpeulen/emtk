@@ -424,3 +424,83 @@ def test_copy_path_puts_the_chosen_path_on_the_clipboard(folder, monkeypatch):
     dialog._copied_frames = 2
     driver.frame()
     assert "path copied." in driver.painter.strings
+
+
+def _in_browser(monkeypatch, on: bool = True):
+    """Pretend we run (or don't run) under Pyodide for the rest of the test."""
+    import emtk.file_dialog as fd
+
+    monkeypatch.setattr(fd, "_in_browser", lambda: on)
+
+
+class TestAutoPick:
+    """On a page, a dialog with nothing to offer opens the browser's file sheet."""
+
+    @pytest.fixture
+    def pick_calls(self, monkeypatch):
+        calls = []
+        import emtk.web.page as page
+
+        monkeypatch.setattr(page, "start_local_pick",
+                            lambda accept=None: calls.append(accept) or True)
+        return calls
+
+    def test_an_empty_listing_starts_the_pick(self, monkeypatch, tmp_path, pick_calls):
+        _in_browser(monkeypatch)
+        dialog = FileDialog(directory=str(tmp_path), filters=[("Data", ["*.dat"])])
+        assert dialog.should_auto_pick() is True
+        dialog._maybe_auto_pick()
+        assert pick_calls == [".dat"] and dialog._pick_pending  # the filter's accept
+
+    def test_a_listing_with_matches_does_not(self, monkeypatch, tmp_path, pick_calls):
+        _in_browser(monkeypatch)
+        (tmp_path / "x.dat").write_text("x")
+        dialog = FileDialog(directory=str(tmp_path), filters=[("Data", ["*.dat"])])
+        dialog.refresh()
+        assert dialog.should_auto_pick() is False
+        dialog._maybe_auto_pick()
+        assert pick_calls == []
+
+    def test_the_pick_starts_once_per_open(self, monkeypatch, tmp_path, pick_calls):
+        _in_browser(monkeypatch)
+        dialog = FileDialog(directory=str(tmp_path))
+        dialog._maybe_auto_pick()
+        dialog._maybe_auto_pick()
+        assert len(pick_calls) == 1
+        dialog.open()  # a host showing it again gets a fresh pick
+        dialog._maybe_auto_pick()
+        assert len(pick_calls) == 2
+
+    def test_auto_pick_true_starts_even_with_matches(self, monkeypatch, tmp_path, pick_calls):
+        _in_browser(monkeypatch)
+        (tmp_path / "x.dat").write_text("x")
+        dialog = FileDialog(directory=str(tmp_path), auto_pick=True)
+        dialog.refresh()
+        assert dialog.should_auto_pick() is True
+
+    def test_auto_pick_false_never_starts(self, tmp_path, pick_calls):
+        dialog = FileDialog(directory=str(tmp_path), auto_pick=False)
+        assert dialog.should_auto_pick() is False
+        dialog._maybe_auto_pick()
+        assert pick_calls == []
+
+    def test_save_and_folder_dialogs_never_pick(self, tmp_path, pick_calls):
+        for mode in ("save", "folder"):
+            dialog = FileDialog(mode=mode, directory=str(tmp_path))
+            assert dialog.should_auto_pick() is False
+
+
+def test_on_the_desktop_no_dialog_opens_a_picker_on_its_own(monkeypatch, tmp_path):
+    """Native: the listing is where browsing starts; the picker is a click."""
+    _in_browser(monkeypatch, on=False)
+    import emtk.file_dialog as fd
+
+    calls = []
+    monkeypatch.setattr(fd, "_module_start_local_pick",
+                        lambda accept=None: calls.append(accept) or True)
+    d = fd.FileDialog("Open", mode="open", directory=str(tmp_path), filters=[("Data", ["*.dat"])])
+    d.open()
+    assert d.should_auto_pick() is False and calls == []
+    # on a page the same dialog would have started the sheet
+    _in_browser(monkeypatch)
+    assert d._pick_tried is False  # nothing tried yet on the desktop

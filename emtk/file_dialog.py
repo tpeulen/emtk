@@ -37,9 +37,24 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import sys
 from collections.abc import Sequence
 
 from . import im_core as _core
+
+def _in_browser() -> bool:
+    """True under Pyodide, where 'load from computer' is the platform picker."""
+    return sys.platform == "emscripten" or "pyodide" in sys.modules
+
+
+def _module_start_local_pick(accept: str | None) -> bool:
+    """Module-level seam over ``emtk.web.page.start_local_pick`` for tests."""
+    try:
+        from emtk.web.page import start_local_pick  # noqa: PLC0415
+    except Exception:  # noqa: BLE001 - off a page there is nothing to start
+        return False
+    return bool(start_local_pick(accept))
+
 from . import im_widgets as _w
 from .flags import InputTextFlags as _ITF
 from .i18n import mark, tr
@@ -152,7 +167,7 @@ class FileDialog:
                  filters: Sequence | str = ((mark("All files", domain="emtk"), ("*",)),),
                  directory: str | None = None, filename: str = "",
                  multiselect: bool = False, action: str | None = None,
-                 rows: int = 12) -> None:
+                 rows: int = 12, auto_pick: bool | None = None) -> None:
         if mode not in ("open", "save", "folder"):
             raise ValueError(f"mode must be 'open', 'save' or 'folder', not {mode!r}")
         self.title = title
@@ -182,6 +197,11 @@ class FileDialog:
         #: A "Load from computer…" pick in flight (pages only): the browser's
         #: file sheet is up; each frame polls for its result.
         self._pick_pending: bool = False
+        #: On a page an open dialog starts the browser's file sheet by itself
+        #: (``None``: when its listing has nothing matching; ``True``: always;
+        #: ``False``: never). One try per :meth:`open`.
+        self.auto_pick = auto_pick
+        self._pick_tried: bool = False
         #: The address bar's text, and the folder it was last synced from:
         #: the buffer is the user's while they edit it, and follows the
         #: listing again once the shown folder moves.
@@ -189,6 +209,12 @@ class FileDialog:
         self._path_last_dir: str | None = None
         #: Frames the "path copied." note still shows.
         self._copied_frames: int = 0
+
+    def open(self) -> None:
+        """Show this dialog again: a new open may start a new computer pick."""
+        self._pick_tried = False
+        self._pick_pending = False
+        self.error = ""
 
     # -- the model, usable without drawing ----------------------------------- #
     def refresh(self) -> None:
@@ -408,6 +434,33 @@ class FileDialog:
                 extensions.append(pattern[1:])
         return " ".join(dict.fromkeys(extensions)) or None
 
+    def should_auto_pick(self) -> bool:
+        """Whether this dialog opens the browser's file sheet on its own.
+
+        On a page the sandbox's folders are empty until the user brings files
+        in, so loading from the computer *is* the default path: an open dialog
+        with nothing matching in its listing starts the sheet itself. On the
+        desktop the same surprise would be wrong -- a native dialog starts on
+        the listing, and the explicit ``Load from computer`` button (or
+        ``auto_pick=True``) opens the platform picker.
+        """
+        if self.mode != "open" or self._pick_tried:
+            return False
+        if self.auto_pick is not None:
+            return bool(self.auto_pick)
+        if not _in_browser():
+            return False
+        return not any(self.matches(name) for name in self.files)
+
+    def _maybe_auto_pick(self) -> None:
+        """Start the browser's file sheet once, when :meth:`should_auto_pick` says so."""
+        if not self.should_auto_pick():
+            return
+        self._pick_tried = True
+        if _module_start_local_pick(self._pick_accept()):
+            self._pick_pending = True
+            self.error = ""
+
     def _draw_local_pick_button(self, _w) -> bool:
         """Draw the pick button and drive a pick in flight; True while one runs.
 
@@ -480,6 +533,7 @@ class FileDialog:
             _w.set_item_tooltip(tr("Cancel saving; leave the existing file unchanged.", domain="emtk"))
             return None
         self.refresh()
+        self._maybe_auto_pick()
         result: list[str] | bool | None = None
 
         self._draw_address_bar(_w)
