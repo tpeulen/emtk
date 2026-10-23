@@ -1513,20 +1513,62 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 
         ctx.storage["__nav_id__"] = item_id
     store = ctx.get_storage(item_id)
 
+    # The spinbox steppers: an up/down pair on the right edge of the frame,
+    # stacked -- the click fields a spinbox shows. A click steps once; holding
+    # repeats after the key repeat delay, at the key repeat rate; Ctrl steps by
+    # the fast step. Everything else (scrub, typing, arrows) keeps working on
+    # the text area to the left of the column.
+    spin_w = min(field[3] * 0.9, 22.0)
+    spin_x = field[0] + field[2] - spin_w
+    spin_mid = field[1] + field[3] * 0.5
+    px_, py_ = ctx.io.mouse_pos
+    in_spin = (spin_x <= px_ <= field[0] + field[2]
+               and field[1] <= py_ <= field[1] + field[3])
+    disabled = bool(ctx.item_flags & ItemFlags.DISABLED)
+    stepped = False
+    spin_by = (step_fast if (step_fast and ctx.io.key_ctrl)
+               else (step or (1.0 if integral else speed)))
+
     # Ctrl+click or a double click turns the field into a text edit: a
-    # spinbox is typed into as well as scrubbed and stepped.
+    # spinbox is typed into as well as scrubbed and stepped. A click on the
+    # stepper column is a step, never a text edit.
     typ = ctx.state(("drag_typing", item_id))
-    if hovered and ctx.io.mouse_clicked[0]:
+    if hovered and ctx.io.mouse_clicked[0] and not in_spin:
         dbl = ctx.io.now - store.get("click_t", -10.0) < _MULTI_CLICK_S
         store["click_t"] = ctx.io.now
-        if (ctx.io.key_ctrl or dbl) and not ctx.item_flags & ItemFlags.DISABLED:
+        if (ctx.io.key_ctrl or dbl) and not disabled:
             typ["on"] = True
-    if typ.get("on") and not ctx.item_flags & ItemFlags.DISABLED:
+    if typ.get("on") and not disabled:
         changed, value = _drag_typing(ctx, typ, item_id, field, shown, value,
                                       v_min, v_max, integral, hovered)
         return (changed, int(round(value)) if integral else float(value))
 
-    if held:
+    if not disabled and _pressed and in_spin:
+        store["spin"] = 1 if py_ < spin_mid else -1
+        store["spin_t"] = ctx.io.now
+        store["spin_n"] = 1
+        value = spin_step_by(value, store["spin"], step=spin_by, dec=False,
+                             integer=integral, bounds=(v_min, v_max))
+        stepped = True
+        ctx.request_frame()
+    spin = store.get("spin", 0) if not disabled else 0
+    if spin:
+        if not ctx.io.mouse_down[0]:
+            store.pop("spin", None)
+        else:
+            elapsed = ctx.io.now - store.get("spin_t", ctx.io.now)
+            if elapsed >= ctx.key_repeat_delay:
+                want = 1 + int((elapsed - ctx.key_repeat_delay)
+                               / ctx.key_repeat_rate)
+                while store.get("spin_n", 1) < want:
+                    store["spin_n"] = store.get("spin_n", 1) + 1
+                    value = spin_step_by(value, spin, step=spin_by, dec=False,
+                                         integer=integral, bounds=(v_min, v_max))
+                    stepped = True
+                if stepped:
+                    ctx.request_frame()
+
+    if held and not spin:
         last = store.get("x", ctx.io.mouse_pos[0])
         value = value + (ctx.io.mouse_pos[0] - last) * speed
         store["x"] = ctx.io.mouse_pos[0]
@@ -1568,6 +1610,12 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 
     # reports nothing at all.
     live = bool(ctx.item_flags & (ItemFlags.LIVE_EDIT_ON_INPUT
                                   | ItemFlags.LIVE_EDIT_ON_INPUT_SCALAR))
+    if stepped:
+        # A step is an edit like a scrub: live fields report it now, the rest
+        # report it once, when the button is released.
+        store["edited"] = True
+        if live:
+            held = True
     if not live:
         if held:
             store["edited"] = True
@@ -1579,14 +1627,100 @@ def _drag(label, value, speed, v_min, v_max, fmt, integral: bool, step: float = 
                              _col(Col.BUTTON_HOVERED) if hovered else _col(Col.FRAME_BG),
                              ctx.style.frame_rounding)
     _nav_ring(ctx, field, item_id)
+    # The stepper column: two stacked halves with a divider, lit on hover and
+    # while stepping -- the up/down click fields of the spinbox.
+    if not disabled:
+        up_hot = hovered and in_spin and py_ < spin_mid
+        down_hot = hovered and in_spin and py_ >= spin_mid
+        if spin == 1 or up_hot:
+            ctx.draw.add_rect_filled((spin_x, field[1]), (field[0] + field[2], spin_mid),
+                                     _col(Col.BUTTON_ACTIVE if spin == 1 else Col.BUTTON_HOVERED),
+                                     ctx.style.frame_rounding)
+        if spin == -1 or down_hot:
+            ctx.draw.add_rect_filled((spin_x, spin_mid), (field[0] + field[2], field[1] + field[3]),
+                                     _col(Col.BUTTON_ACTIVE if spin == -1 else Col.BUTTON_HOVERED),
+                                     ctx.style.frame_rounding)
+        ctx.draw.add_line((spin_x, field[1]), (spin_x, field[1] + field[3]),
+                          _col(Col.BUTTON), 1.0)
+        ctx.draw.add_line((spin_x, spin_mid), (field[0] + field[2], spin_mid),
+                          _col(Col.BUTTON), 1.0)
+        cx = spin_x + spin_w * 0.5
+        r = min(spin_w, field[3]) * 0.18
+        ctx.draw.add_triangle_filled((cx - r, field[1] + field[3] * 0.27 + r),
+                                     (cx + r, field[1] + field[3] * 0.27 + r),
+                                     (cx, field[1] + field[3] * 0.27 - r),
+                                     _col(Col.TEXT))
+        ctx.draw.add_triangle_filled((cx - r, field[1] + field[3] * 0.73 - r),
+                                     (cx + r, field[1] + field[3] * 0.73 - r),
+                                     (cx, field[1] + field[3] * 0.73 + r),
+                                     _col(Col.TEXT))
     shown_value = fmt % value
     tw, th = ctx.draw.calc_text_size(shown_value)
-    ctx.draw.add_text((field[0] + (field[2] - tw) * 0.5, field[1] + (field[3] - th) * 0.5),
-                       _col(Col.TEXT), shown_value)
+    # The text centres in the area the stepper column leaves it.
+    tx = field[0] + ((field[2] - spin_w) - tw) * 0.5 if not disabled else \
+        field[0] + (field[2] - tw) * 0.5
+    ctx.draw.add_text((tx, field[1] + (field[3] - th) * 0.5), _col(Col.TEXT), shown_value)
     if shown:
         ctx.draw.add_text((field[0] + field[2] + ctx.style.item_inner_spacing[0], box[1]),
                           _col(Col.TEXT), shown)
     return (bool(held or keyboard_changed), value)
+
+
+def spin_step_by(value, steps, *, step=None, min_step=None, dec=True,
+                 integer=False, bounds=(None, None)):
+    """Step *value* by *steps* spinner clicks, the way pyqtgraph's SpinBox does.
+
+    Ported from ``pyqtgraph.widgets.SpinBox.SpinBox._stepByValue`` (0.14.0).
+    With decimal stepping (``dec=True``, the default) the step is
+    ``step * 10**floor(log10(|value|))`` -- a hundredth of the value's own
+    magnitude at pyqtgraph's default ``step=0.01`` -- never below *min_step*
+    (itself defaulting to *step*), and *value* snaps to zero when a step would
+    land closer to it than *min_step*. Without decimal stepping the step is
+    fixed. An integer field steps by whole numbers (*step* rounded, *min_step*
+    at least 1), and the result is clamped to *bounds*.
+
+    Used by the drag field's stepper arrows, the form's spin fields and any
+    typed number field that acts as a spinbox, so they all step identically.
+    """
+    value = float(value)
+    if integer:
+        # A whole-number field steps by whole numbers, never by decades:
+        # pyqtgraph's int spinboxes round the step and floor the minimum at 1.
+        dec = False
+        step = float(round(step if step else 1)) or 1.0
+        min_step = float(max(int(min_step or 1), 1))
+    else:
+        step = float(step) if step else (0.01 if dec else 1.0)
+        min_step = float(min_step) if min_step is not None else (step if dec else 0.0)
+    if not _math.isfinite(value):
+        return value
+    sign = 1.0 if steps >= 0 else -1.0
+    for _ in range(int(abs(steps))):
+        if dec:
+            if value == 0.0:
+                by = min_step
+            else:
+                vs = 1.0 if value >= 0 else -1.0
+                # pyqtgraph's fudge factor: at some places the step size
+                # depends on the sign of the step and of the value.
+                fudge = 1.01 ** (sign * vs)
+                exp = _math.floor(_math.log10(abs(value * fudge)))
+                by = step * 10.0 ** exp
+            if min_step:
+                by = max(by, min_step)
+            value += sign * by
+        else:
+            value += sign * step
+        if min_step and abs(value) < min_step:
+            value = 0.0
+    lo, hi = bounds
+    if lo is not None:
+        value = max(float(lo), value)
+    if hi is not None:
+        value = min(float(hi), value)
+    if integer:
+        value = int(round(value))
+    return value
 
 
 def drag_float(label: str, v: float, speed: float = 1.0, v_min=None, v_max=None,
@@ -5734,7 +5868,14 @@ def host_control(label: str, control: Any, size: tuple[float, float] | None = No
                 if callable(hover):
                     hover(px, py, *box)
 
-        if hovered and io.mouse_wheel:
+        # The wheel belongs to a control the pointer is over -- and, because
+        # that is how a click-into-it reads, to the one holding keyboard focus
+        # while the pointer stays in its window and over no other item (a spin
+        # clicked into and nudged by wheel, a pointer drifted a little off it).
+        focused_here = focus.get("id") == item_id
+        if io.mouse_wheel and (hovered or (
+                focused_here and is_window_hovered()
+                and ctx.hovered_id in (None, item_id))):
             if rich:
                 control.wheel(px, py, float(io.mouse_wheel), mods)
             else:

@@ -400,7 +400,8 @@ def test_the_autoported_knob_draws_the_same_picture_every_time():
     label and knob were off the image and its value field stretched the full
     width underneath. The golden had baked that in, so the test was pinning the
     defect rather than the picture. The current image shows both knobs, side by
-    side, with fields of equal width.
+    side, with fields of equal width. Rebaked again when the drag fields grew
+    their spinbox stepper column (up/down triangles at the field's right edge).
     """
     mod = _load("imgui_knobs")
     painter = render(_gui_knobs(__import__("emtk.im", fromlist=["im"]), mod),

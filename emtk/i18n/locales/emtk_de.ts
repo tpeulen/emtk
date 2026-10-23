@@ -236,6 +236,11 @@
             <translation>Gleiches Seitenverhältnis</translation>
         </message>
         <message>
+            <location filename="emtk/docking.py" line="2550" />
+            <source>Expand panel</source>
+            <translation>Bedienfeld erweitern</translation>
+        </message>
+        <message>
             <location filename="emtk/widgets/markdown.py" line="521" />
             <source>Figure: {caption}</source>
             <translation>Abbildung: {caption}</translation>
@@ -1079,6 +1084,54 @@
         <message>
             <source>None</source>
             <translation>Keines</translation>
+        </message>
+        <message>
+            <source>Choose a file on this computer; it is copied into the page and selected here.</source>
+            <translation>Eine Datei von diesem Rechner wählen; sie wird in die Seite kopiert und hier ausgewählt.</translation>
+        </message>
+        <message>
+            <source>Copy path</source>
+            <translation>Pfad kopieren</translation>
+        </message>
+        <message>
+            <source>Copy the chosen path to the clipboard -- the folder being shown when nothing is chosen.</source>
+            <translation>Den gewählten Pfad in die Zwischenablage kopieren -- ohne Auswahl der gerade angezeigten Ordner.</translation>
+        </message>
+        <message>
+            <source>Diagram</source>
+            <translation>Diagramm</translation>
+        </message>
+        <message>
+            <source>Drop files onto the window (or use the Mount folder button) and they appear here.</source>
+            <translation>Dateien auf das Fenster ziehen (oder die Schaltfläche Ordner einbinden verwenden) -- sie erscheinen hier.</translation>
+        </message>
+        <message>
+            <source>Load from computer…</source>
+            <translation>Vom Rechner laden …</translation>
+        </message>
+        <message>
+            <source>No such file or folder:</source>
+            <translation>Datei oder Ordner nicht gefunden:</translation>
+        </message>
+        <message>
+            <source>The folder being shown. Paste or type a path and press Return: a folder is shown, a file is selected in its folder.</source>
+            <translation>Der angezeigte Ordner. Pfad einfügen oder eintippen und Enter drücken: ein Ordner wird angezeigt, eine Datei wird in ihrem Ordner ausgewählt.</translation>
+        </message>
+        <message>
+            <source>This page cannot open the browser's file picker.</source>
+            <translation>Diese Seite kann den Dateidialog des Browsers nicht öffnen.</translation>
+        </message>
+        <message>
+            <source>choose files in the browser's dialog…</source>
+            <translation>Dateien im Browser-Dialog wählen …</translation>
+        </message>
+        <message>
+            <source>path -- paste or type, then Return</source>
+            <translation>Pfad -- einfügen oder eintippen, dann Enter</translation>
+        </message>
+        <message>
+            <source>path copied.</source>
+            <translation>Pfad kopiert.</translation>
         </message>
     </context>
 </TS>

@@ -816,20 +816,22 @@ def _draw_bare_slider(section: dict, model: Any, state: FormState, width: float,
 def spin_step(value: Any, section: dict) -> float:
     """How far one click of a spin box's arrows moves *value*.
 
-    The section's ``step`` when it names one. Otherwise ``1`` for an ``int``
-    and, for a ``float``, one tenth of the value's decade (``6`` steps by
-    ``0.1``, ``0.05`` by ``0.001``) -- a step that is always visible in the
-    number and never jumps it past its own scale.
+    The section's ``step`` when it names one; otherwise pyqtgraph's SpinBox
+    decimal stepping (:func:`emtk.im_widgets.spin_step_by`): the size of one
+    up-step from *value* -- a hundredth of its own magnitude for a float
+    (``6`` steps by ``0.01``, ``0.05`` by ``0.0005``), a whole ``1`` for an
+    ``int``. A step that is always visible in the number and never jumps it
+    past its own scale.
     """
+    from .im_widgets import spin_step_by
+
     step = section.get("step")
     if step:
         return float(step)
-    if str(section.get("kind", "")).lower() == "int":
-        return 1.0
-    number = abs(float(value or 0.0))
-    if number == 0.0 or not math.isfinite(number):
-        return 0.1
-    return 10.0 ** (math.floor(math.log10(number)) - 1)
+    return float(spin_step_by(
+        value, 1,
+        integer=str(section.get("kind", "")).lower() == "int",
+    )) - float(value or 0.0)
 
 
 def _stepper(name: str, width: float) -> int:

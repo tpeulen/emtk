@@ -721,14 +721,16 @@
     "bases": [],
     "decorators": [],
     "members": {
-     "__init__": "def(self, title=mark('Open', domain='emtk'), mode='open', filters=((mark('All files', domain='emtk'), ('*',)),), directory=None, filename='', multiselect=False, action=None, rows=12)",
+     "__init__": "def(self, title=mark('Open', domain='emtk'), mode='open', filters=((mark('All files', domain='emtk'), ('*',)),), directory=None, filename='', multiselect=False, action=None, rows=12, auto_pick=None)",
      "choose": "def(self)",
      "chosen": "def(self)",
      "draw": "def(self)",
      "enter": "def(self, folder)",
      "matches": "def(self, name)",
+     "open": "def(self)",
      "refresh": "def(self)",
-     "select": "def(self, name)"
+     "select": "def(self, name)",
+     "should_auto_pick": "def(self)"
     }
    },
    "parse_filters": "def(spec)"
@@ -3861,12 +3863,14 @@
   "emtk.web.page": {
    "DROP_DIR": "value",
    "MOUNT_DIR": "value",
+   "PICK_DIR": "value",
    "WebPage": {
     "bases": [],
     "decorators": [],
     "members": {
      "DROP_DIR": "attribute",
      "MOUNT_DIR": "attribute",
+     "PICK_DIR": "attribute",
      "__init__": "def(self, canvas, app, device=None, format=None)",
      "animating": "def(self)",
      "clear_keys": "def(self)",
@@ -3901,6 +3905,7 @@
     ],
     "members": {
      "app": "field",
+     "apps": "field=",
      "drop": "field=",
      "drop_by_reference_above": "field=",
      "exclude": "field=",
@@ -6249,6 +6254,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "f6899cd959677c46c8fce3a43f42fd1e6fa7690965f5dae623a5a669e39bba7d",
- "version": "0.1.31"
+ "sha256": "a5ebd3720d1a783dd13029c6c2a65ec8e5457823892b63bb42936c05a152471b",
+ "version": "0.1.32"
 }

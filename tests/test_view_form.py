@@ -481,8 +481,10 @@ def test_a_spin_value_steps_with_its_arrows_and_the_wheel():
     driver.io.mouse_pos = (fx + 5, fy + fh / 2)
     driver.io.mouse_wheel = -1.0
     driver.frame()
-    assert model.don_value == 5.9
-    assert spin_step(0.05, {"kind": "float"}) == 0.001
+    # pyqtgraph's decimal stepping (spin_step_by): one notch from 6 is 0.01,
+    # and the step never falls below its own floor.
+    assert model.don_value == 5.99
+    assert abs(spin_step(0.05, {"kind": "float"}) - 0.01) < 1e-12
     assert spin_step(3, {"kind": "int"}) == 1.0
     assert spin_step(1.0, {"kind": "float", "step": 0.25}) == 0.25
 
@@ -595,7 +597,8 @@ def test_spin_true_adds_arrows_to_a_scientific_value():
     io.mouse_down[0] = False
     io.mouse_released[0] = True
     driver.frame()
-    assert abs(model.don_value - 86.9) < 1e-9
+    # one up-step from 85.9 is a tenth (pyqtgraph's dec stepping), not a whole unit
+    assert abs(model.don_value - 86.0) < 1e-9
 
 
 # ------------------------------------------------------ narrow windows
@@ -816,8 +819,8 @@ def test_a_focused_spin_value_steps_wherever_the_pointer_is():
     io.mouse_pos = (2.0, 2.0)
     io.mouse_wheel = 2.0
     driver.frame()
-    assert model.don_value == 6.2                      # two notches, two steps
+    assert model.don_value == 6.02                     # two notches, two hundredths
     assert model.accept_value == 1.0                   # the unfocused field keeps still
     io.mouse_wheel = -1.0
     driver.frame()
-    assert model.don_value == 6.1
+    assert model.don_value == 6.01

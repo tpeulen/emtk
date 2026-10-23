@@ -236,6 +236,11 @@
             <translation>Échelle égale</translation>
         </message>
         <message>
+            <location filename="emtk/docking.py" line="2550" />
+            <source>Expand panel</source>
+            <translation>Agrandir le panneau</translation>
+        </message>
+        <message>
             <location filename="emtk/widgets/markdown.py" line="521" />
             <source>Figure: {caption}</source>
             <translation>Figure : {caption}</translation>
@@ -1079,6 +1084,54 @@
         <message>
             <source>None</source>
             <translation>Aucun</translation>
+        </message>
+        <message>
+            <source>Choose a file on this computer; it is copied into the page and selected here.</source>
+            <translation>Choisir un fichier sur cet ordinateur ; il est copié dans la page et sélectionné ici.</translation>
+        </message>
+        <message>
+            <source>Copy path</source>
+            <translation>Copier le chemin</translation>
+        </message>
+        <message>
+            <source>Copy the chosen path to the clipboard -- the folder being shown when nothing is chosen.</source>
+            <translation>Copier le chemin choisi dans le presse-papiers -- sans choix, le dossier affiché.</translation>
+        </message>
+        <message>
+            <source>Diagram</source>
+            <translation>Diagramme</translation>
+        </message>
+        <message>
+            <source>Drop files onto the window (or use the Mount folder button) and they appear here.</source>
+            <translation>Déposez des fichiers sur la fenêtre (ou utilisez le bouton Monter le dossier) -- ils apparaissent ici.</translation>
+        </message>
+        <message>
+            <source>Load from computer…</source>
+            <translation>Charger depuis l'ordinateur …</translation>
+        </message>
+        <message>
+            <source>No such file or folder:</source>
+            <translation>Fichier ou dossier introuvable :</translation>
+        </message>
+        <message>
+            <source>The folder being shown. Paste or type a path and press Return: a folder is shown, a file is selected in its folder.</source>
+            <translation>Le dossier affiché. Collez ou saisissez un chemin et appuyez sur Entrée : un dossier est affiché, un fichier est sélectionné dans son dossier.</translation>
+        </message>
+        <message>
+            <source>This page cannot open the browser's file picker.</source>
+            <translation>Cette page ne peut pas ouvrir le sélecteur de fichiers du navigateur.</translation>
+        </message>
+        <message>
+            <source>choose files in the browser's dialog…</source>
+            <translation>choisir des fichiers dans la boîte de dialogue du navigateur …</translation>
+        </message>
+        <message>
+            <source>path -- paste or type, then Return</source>
+            <translation>chemin -- coller ou saisir, puis Entrée</translation>
+        </message>
+        <message>
+            <source>path copied.</source>
+            <translation>chemin copié.</translation>
         </message>
     </context>
 </TS>
