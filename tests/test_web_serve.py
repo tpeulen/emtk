@@ -250,3 +250,40 @@ def test_the_server_logs_a_frame_error_report_from_the_page(tmp_path, capsys):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_bundle_with_apps_carries_them_into_the_page():
+    """A multi-app page: the config names every mountable app, the default stays.
+
+    One archive, several apps: the build declares them (``apps``), the page's
+    config carries them, and ``?app=name`` on the URL picks one at boot.
+    """
+    from emtk.web.serve import Bundle, _config, render_index
+
+    bundle = Bundle(app="chisurf.web:make_app",
+                    apps={"ndx": "ndxplorer.app.frame:make_app"})
+    config = _config(bundle, [])
+    assert config["app"] == "chisurf.web:make_app"
+    assert config["apps"]["ndx"] == "ndxplorer.app.frame:make_app"
+
+    html = render_index(bundle, config, "pyodide.js")
+    assert "ndxplorer.app.frame:make_app" in html
+    assert "chisurf.web:make_app" in html
+
+
+def test_a_bundle_without_apps_keeps_the_old_config_shape():
+    """A single-app build's config carries an empty apps map, nothing else new."""
+    from emtk.web.serve import Bundle, _config
+
+    config = _config(Bundle(app="a.web:make_app"), [])
+    assert config["apps"] == {}
+
+
+def test_an_app_spec_without_a_factory_is_rejected():
+    """Every named app must be a 'package.module:factory' spec, like the default."""
+    import pytest as _pytest
+
+    from emtk.web.serve import Bundle
+
+    with _pytest.raises(ValueError, match="apps"):
+        Bundle(app="a.web:make_app", apps={"broken": "no.factory.here"})

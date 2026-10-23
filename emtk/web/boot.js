@@ -135,6 +135,19 @@ async function boot() {
     return;
   }
 
+  // One archive can hold several apps; ?app=name picks one, the build's
+  // `app` is the default. An unknown name is said and falls back.
+  let appSpec = config.app;
+  if (config.apps && Object.keys(config.apps).length) {
+    const wanted = new URLSearchParams(globalThis.location.search).get("app");
+    if (wanted && config.apps[wanted]) {
+      appSpec = config.apps[wanted];
+      status(`app: ${wanted}`);
+    } else if (wanted) {
+      status(`no app '${wanted}' on this page -- starting the default`);
+    }
+  }
+
   // An embedding host may own a persistent interpreter and serialize its
   // calls. Ordinary pages retain their independent loader and event path.
   const runtime = typeof globalThis.emtkRuntime === "function"
@@ -143,7 +156,7 @@ async function boot() {
   let page;
   if (runtime) {
     pyodide = runtime.pyodide;
-    page = await runtime.mount(canvas, config.app);
+    page = await runtime.mount(canvas, appSpec);
   } else {
     status("loading Pyodide…");
     pyodide = await loadPyodide({ enableRunUntilComplete: true });
@@ -179,9 +192,9 @@ _emtk_adapter = await browser.request_adapter_async()
 await _emtk_adapter.request_device_async()
 `);
 
-    status(`starting ${config.app}…`);
+    status(`starting ${appSpec}…`);
     pyodide.globals.set("_emtk_canvas", canvas);
-    pyodide.globals.set("_emtk_app_spec", config.app);
+    pyodide.globals.set("_emtk_app_spec", appSpec);
     page = pyodide.runPython(`
 from emtk.web.page import mount
 mount(_emtk_canvas, _emtk_app_spec)

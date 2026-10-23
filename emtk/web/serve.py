@@ -168,6 +168,10 @@ class Bundle:
     extra_files: dict = dataclasses.field(default_factory=dict)
     pyodide_url: str = DEFAULT_PYODIDE_URL
     mount: bool = True
+    #: More apps this one archive can mount, by short name: ``{"ndx":
+    #: "ndxplorer.app.frame:make_app"}``. The page starts :attr:`app` (the
+    #: default) and switches to a named one when the URL carries ``?app=name``.
+    apps: dict = dataclasses.field(default_factory=dict)
     drop: bool = True
     drop_by_reference_above: int = 0
     ready_message: str = "ready"
@@ -176,6 +180,10 @@ class Bundle:
         module, sep, attribute = str(self.app).partition(":")
         if not sep or not module or not attribute:
             raise ValueError(f"--app is 'package.module:factory', got {self.app!r}")
+        self.apps = {str(name): str(spec) for name, spec in dict(self.apps).items()}
+        for name, spec in self.apps.items():
+            if ":" not in spec:
+                raise ValueError(f"apps[{name!r}] is 'package.module:factory', got {spec!r}")
 
     @property
     def name(self) -> str:
@@ -298,6 +306,7 @@ def versioned_url(path: pathlib.Path, name: str) -> str:
 def _config(bundle: Bundle, wheels: Sequence[str], archive: str = ARCHIVE_NAME) -> dict:
     return {
         "app": bundle.app,
+        "apps": dict(bundle.apps),
         "name": bundle.name,
         "archive": archive,
         "extract_dir": EXTRACT_DIR,
