@@ -182,13 +182,19 @@ async function boot() {
   }
 
   // One archive can hold several apps; ?app=name picks one, the build's
-  // `app` is the default. An unknown name is said and falls back.
+  // `app` is the default. A typed name answers too: lower case, everything
+  // that is not a letter or a digit an underscore -- the build's keys are
+  // made the same way. An unknown name is said and falls back.
   let appSpec = config.app;
   if (config.apps && Object.keys(config.apps).length) {
     const wanted = new URLSearchParams(globalThis.location.search).get("app");
-    if (wanted && config.apps[wanted]) {
-      appSpec = config.apps[wanted];
-      status(`app: ${wanted}`);
+    const typed = wanted && wanted.toLowerCase().replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    const key = wanted ? (config.apps[wanted] ? wanted
+      : (config.apps[typed] ? typed : null)) : null;
+    if (key) {
+      appSpec = config.apps[key];
+      status(`app: ${key}`);
     } else if (wanted) {
       status(`no app '${wanted}' on this page -- starting the default`);
     }
