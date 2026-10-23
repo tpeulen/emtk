@@ -26,6 +26,7 @@ from ..keys import key_from_dom, letter_of, modifiers_from_dom
 
 __all__ = [
     "DROP_DIR",
+    "PICK_DIR",
     "MOUNT_DIR",
     "WebPage",
     "download",
@@ -44,6 +45,11 @@ DROP_DIR = "/mnt/dropped"
 #: Where a local folder is mounted (Chrome's File System Access API, through
 #: ``pyodide.mountNativeFS``) when the page's "Mount folder" button is used.
 MOUNT_DIR = "/mnt/local"
+
+#: Where the file dialog's "Load from computer…" writes what the user picks:
+#: the browser's own file picker, copied into the filesystem by ``boot.js``
+#: and reported through :func:`local_pick_result`.
+PICK_DIR = "/mnt/user-files"
 
 
 def wheel_steps_from_dom(delta_y: float) -> int:
@@ -64,10 +70,49 @@ def wheel_steps_from_dom(delta_y: float) -> int:
 
 def user_files_dir(fallback: str = "/") -> str:
     """Where a file dialog in a page should open: the mount, else drops, else *fallback*."""
-    for candidate in (MOUNT_DIR, DROP_DIR):
+    for candidate in (MOUNT_DIR, PICK_DIR, DROP_DIR):
         if pathlib.Path(candidate).is_dir():
             return candidate
     return fallback
+
+
+def start_local_pick(accept: str | None = None) -> bool:
+    """Open the browser's file picker; ``False`` off a page or without one.
+
+    The picker itself is ``boot.js``'s: it writes what the user chooses into
+    :data:`PICK_DIR` and reports it through :func:`local_pick_result`, which
+    the file dialog polls each frame while the sheet is up.
+    """
+    if not running_on_page():
+        return False
+    import js  # noqa: PLC0415 - page-only import
+
+    picker = getattr(js.window, "emtkPickLocalFiles", None)
+    if picker is None:
+        return False
+    picker(accept or None)
+    return True
+
+
+def local_pick_result() -> tuple[str, list[str]] | str | None:
+    """The pick's state: ``(dir, names)`` once chosen, ``"waiting"``,     ``"cancel"``, ``"error: message"``, or ``None`` off a page.
+
+    ``"waiting"`` also covers the idle moment before a pick was started.
+    """
+    if not running_on_page():
+        return None
+    import js  # noqa: PLC0415 - page-only import
+
+    state = getattr(js.window, "__emtkPicked", None)
+    if state is None or not state:
+        return None
+    kind = str(state.state)
+    if kind == "done":
+        names = [str(n) for n in state.names.to_py()]
+        return str(state.dir), names
+    if kind == "error":
+        return f"error: {state.message}"
+    return kind
 
 
 def dropped_by_reference(path: str, js=None):
@@ -170,6 +215,7 @@ class WebPage:
     """
 
     DROP_DIR = DROP_DIR
+    PICK_DIR = PICK_DIR
     MOUNT_DIR = MOUNT_DIR
 
     def __init__(self, canvas, app, device=None, format: str | None = None) -> None:

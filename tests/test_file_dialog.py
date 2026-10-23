@@ -264,3 +264,76 @@ def test_a_dialog_on_a_desktop_stays_quiet(monkeypatch):
 
     monkeypatch.setattr(web_page, "ON_PAGE", False)
     assert file_dialog._local_files_hint() is None
+
+
+def test_on_a_page_an_open_dialog_offers_the_computer(folder, monkeypatch):
+    """A dialog that can reach the browser's file picker says so on its face.
+
+    The page's files were reachable only by dropping or mounting; the dialog
+    itself offered no way to a file on the user's computer. On a page it does.
+    """
+    from emtk import file_dialog
+    from emtk.web import page as web_page
+
+    dialog = file_dialog.FileDialog(directory=str(folder))
+    driver = _Driver(dialog)
+    monkeypatch.setattr(web_page, "ON_PAGE", False)
+    driver.frame()
+    assert "Load from computer…" not in driver.painter.strings
+    monkeypatch.setattr(web_page, "ON_PAGE", True)
+    driver.frame()
+    assert "Load from computer…" in driver.painter.strings
+    # a save dialog keeps its name field instead -- picking is for reading
+    save = file_dialog.FileDialog(mode="save", directory=str(folder))
+    save_driver = _Driver(save)
+    save_driver.frame()
+    assert "Load from computer…" not in save_driver.painter.strings
+
+
+def test_a_pick_from_the_computer_lands_selected(folder, monkeypatch):
+    """Choose in the browser's sheet: the dialog shows the file, chosen.
+
+    The pick's files land in the page's user-files folder; the dialog switches
+    there, preselects what was picked, and Open returns its path -- the user
+    never has to know a virtual filesystem exists.
+    """
+    from emtk import file_dialog
+    from emtk.web import page as web_page
+
+    picked = folder / "picked.csv"
+    picked.write_text("x,y\n")
+    results = iter(["waiting", (str(folder), ["picked.csv"]), (str(folder), ["picked.csv"])])
+
+    monkeypatch.setattr(web_page, "ON_PAGE", True)
+    monkeypatch.setattr(web_page, "start_local_pick", lambda accept=None: True)
+    monkeypatch.setattr(web_page, "local_pick_result", lambda: next(results))
+
+    dialog = file_dialog.FileDialog(directory=str(folder))
+    driver = _Driver(dialog)
+    driver.click("Load from computer…")
+    assert dialog._pick_pending and dialog.selection == []
+    driver.frame()  # waiting: the sheet is up, the dialog keeps drawing
+    assert dialog._pick_pending
+    driver.frame()  # done: the file is here and chosen
+    assert not dialog._pick_pending
+    assert dialog.directory == str(folder)
+    assert dialog.selection == ["picked.csv"]
+    assert driver.click("Open") == [str(picked)]
+
+
+def test_a_cancelled_pick_keeps_the_dialog_as_it_was(folder, monkeypatch):
+    """Closing the browser's sheet without a choice changes nothing."""
+    from emtk import file_dialog
+    from emtk.web import page as web_page
+
+    monkeypatch.setattr(web_page, "ON_PAGE", True)
+    monkeypatch.setattr(web_page, "start_local_pick", lambda accept=None: True)
+    monkeypatch.setattr(web_page, "local_pick_result", lambda: "cancel")
+
+    dialog = file_dialog.FileDialog(directory=str(folder))
+    driver = _Driver(dialog)
+    driver.click("Load from computer…")
+    result = driver.frame()
+    assert not dialog._pick_pending
+    assert dialog.selection == []
+    assert result is None  # the dialog stays open, unharmed

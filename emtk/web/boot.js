@@ -62,6 +62,52 @@ async function copyDropped(item, dir, FS, byReferenceAbove = 0) {
 }
 // </copy-dropped>
 
+// <copy-picked> -- tests/test_web_pick.py runs this block under node.
+// The file dialog's "Load from computer…": the browser's own file picker,
+// writing what the user chose into Pyodide's filesystem. The dialog polls
+// `__emtkPicked` each frame; the OS sheet does not block the page, so it
+// keeps drawing while the user chooses.
+async function copyPicked(fileList, dir, FS) {
+  FS.mkdirTree(dir);
+  const names = [];
+  for (const file of Array.from(fileList || [])) {
+    const path = `${dir}/${file.name}`;
+    FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
+    (globalThis.emtkDroppedFiles = globalThis.emtkDroppedFiles || {})[path] = file;
+    names.push(file.name);
+  }
+  return names;
+}
+
+function installPicker(pyodide, dir) {
+  globalThis.__emtkPicked = { state: "idle" };
+  globalThis.emtkPickLocalFiles = (accept) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    if (accept) input.accept = accept;
+    input.style.display = "none";
+    globalThis.__emtkPicked = { state: "waiting" };
+    input.addEventListener("cancel", () => {
+      globalThis.__emtkPicked = { state: "cancel" };
+      input.remove();
+    });
+    input.addEventListener("change", async () => {
+      try {
+        const names = await copyPicked(input.files, dir, pyodide.FS);
+        globalThis.__emtkPicked = { state: "done", dir, names };
+      } catch (error) {
+        globalThis.__emtkPicked = { state: "error", message: String(error) };
+      }
+      input.remove();
+    });
+    document.body.appendChild(input);
+    input.click();
+    return true;
+  };
+}
+// </copy-picked>
+
 // <clipboard> -- tests/test_web_clipboard.py runs this block under node.
 // Copy, cut and paste reach the app through the DOM's own clipboard events.
 // A page cannot read the clipboard synchronously (`navigator.clipboard.
@@ -216,10 +262,12 @@ mount(_emtk_canvas, _emtk_app_spec)
     },
     dropDir: page.DROP_DIR,
     mountDir: page.MOUNT_DIR,
+    pickDir: page.PICK_DIR,
   });
   const description = runtime && runtime.promising ? await runtime.promising(describe) : describe();
-  const {methods, dropDir, mountDir} = description;
+  const {methods, dropDir, mountDir, pickDir} = description;
   globalThis.emtkApp = description.app;
+  installPicker(pyodide, pickDir || "/mnt/user-files");
 
   // A call that may *run something* -- a menu entry, a command line's Return,
   // a dropped file -- enters Python on a suspendable stack (JSPI) when the

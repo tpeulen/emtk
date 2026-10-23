@@ -178,6 +178,9 @@ class FileDialog:
         self.folders: list[str] = []
         self.files: list[str] = []
         self._listed: tuple | None = None
+        #: A "Load from computer…" pick in flight (pages only): the browser's
+        #: file sheet is up; each frame polls for its result.
+        self._pick_pending: bool = False
 
     # -- the model, usable without drawing ----------------------------------- #
     def refresh(self) -> None:
@@ -309,6 +312,65 @@ class FileDialog:
         self.error = ""
         return paths
 
+    # -- a page's "Load from computer…" -------------------------------------- #
+
+    def _pick_accept(self) -> str | None:
+        """The current filter as the picker's ``accept``, when it can be one.
+
+        The browser's ``accept`` takes single extensions; a compound pattern
+        (``*.json.gz``) or a catch-all has no honest equivalent, so it is left
+        off and every file is offered.
+        """
+        patterns = self.filters[self.filter_index][1] if self.filters else []
+        extensions = []
+        for pattern in patterns:
+            if pattern.startswith("*.") and "." not in pattern[2:]:
+                extensions.append(pattern[1:])
+        return " ".join(dict.fromkeys(extensions)) or None
+
+    def _draw_local_pick_button(self, _w) -> bool:
+        """Draw the pick button and drive a pick in flight; True while one runs.
+
+        On a page an open-mode dialog can fetch files the way the user expects:
+        the browser's own file sheet. The chosen files land in the page's
+        user-files folder, the dialog shows it and preselects them.
+        """
+        if self.mode != "open":
+            return False
+        from emtk.web.page import local_pick_result, running_on_page, start_local_pick  # noqa: PLC0415
+
+        if not running_on_page():
+            return False
+        if self._pick_pending:
+            outcome = local_pick_result()
+            if outcome == "waiting":
+                _w.text_colored(HINT_COLOUR, tr("choose files in the browser's dialog…",
+                                                domain="emtk"))
+                return True
+            self._pick_pending = False
+            if isinstance(outcome, tuple):
+                directory, names = outcome
+                self.directory = directory if os.path.isdir(directory) else self.directory
+                self.page = 0
+                self.refresh()
+                here = set(self.files)
+                self.selection = [name for name in names if name in here]
+                return True
+            if isinstance(outcome, str) and outcome.startswith("error: "):
+                self.error = outcome[len("error: "):]
+            return False
+        _w.same_line()
+        if _w.button(tr("Load from computer…", domain="emtk")):
+            if start_local_pick(self._pick_accept()):
+                self._pick_pending = True
+                self.error = ""
+            else:
+                self.error = mark("This page cannot open the browser's file picker.",
+                                  domain="emtk")
+        _w.set_item_tooltip(tr("Choose a file on this computer; it is copied into the page "
+                               "and selected here.", domain="emtk"))
+        return False
+
     # -- the panel ----------------------------------------------------------- #
     def draw(self) -> list[str] | bool | None:
         """Draw the dialog body into the current window.
@@ -421,6 +483,8 @@ class FileDialog:
         if _w.button(tr("Cancel", domain="emtk"), (90.0, 0.0)):
             result = False
         _w.set_item_tooltip(tr("Close the file chooser without selecting a path.", domain="emtk"))
+        if self._draw_local_pick_button(_w):
+            result = None  # a pick started or resolved: not a choice's frame
         hint = _local_files_hint()
         if hint:
             _w.text_colored(HINT_COLOUR, tr(hint, domain="emtk"))
