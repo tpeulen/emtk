@@ -41,6 +41,7 @@ from collections.abc import Sequence
 
 from . import im_core as _core
 from . import im_widgets as _w
+from .flags import InputTextFlags as _ITF
 from .i18n import mark, tr
 
 __all__ = ["FileDialog", "parse_filters"]
@@ -181,6 +182,13 @@ class FileDialog:
         #: A "Load from computer…" pick in flight (pages only): the browser's
         #: file sheet is up; each frame polls for its result.
         self._pick_pending: bool = False
+        #: The address bar's text, and the folder it was last synced from:
+        #: the buffer is the user's while they edit it, and follows the
+        #: listing again once the shown folder moves.
+        self._path_edit: str = ""
+        self._path_last_dir: str | None = None
+        #: Frames the "path copied." note still shows.
+        self._copied_frames: int = 0
 
     # -- the model, usable without drawing ----------------------------------- #
     def refresh(self) -> None:
@@ -312,6 +320,78 @@ class FileDialog:
         self.error = ""
         return paths
 
+    # -- the address bar: a path can be pasted in and jumped to -------------- #
+
+    def _jump_to(self, text: str) -> None:
+        """Show the folder *text* names, or select the file it names.
+
+        A relative name resolves against the folder being shown, the way every
+        host's dialog resolves it. A path that is neither a folder nor a file
+        is said in :attr:`error`; a pasted path in quotes (macOS' "Copy as
+        Pathname", Windows' shell) has them taken off first.
+        """
+        target = text.strip().strip("\"").strip("'").strip()
+        if not target:
+            return
+        path = os.path.expanduser(target)
+        if not os.path.isabs(path):
+            path = os.path.normpath(os.path.join(self.directory, path))
+        if os.path.isdir(path):
+            self.directory = path
+            self.page = 0
+            self.selection = []
+            self.refresh()
+            self.error = ""
+        elif os.path.isfile(path):
+            self.directory, name = os.path.split(path)
+            self.page = 0
+            self.refresh()
+            # selected even when the filter hides it: the pasted path is the
+            # user's choice, and choose() validates the file itself
+            self.selection = [name]
+            self.error = ""
+        else:
+            self.error = tr("No such file or folder:", domain="emtk") + f" {target}"
+
+    def _copy_target(self) -> str:
+        """The path "Copy path" puts on the clipboard: what is chosen, else where."""
+        if self.mode == "save" and self.filename:
+            return os.path.join(self.directory, self.filename)
+        if self.selection:
+            return os.path.join(self.directory, self.selection[0])
+        return self.directory
+
+    def _draw_address_bar(self, _w) -> None:
+        """Draw the address bar: the shown folder, editable, with a copy button.
+
+        The field carries the folder while it is not being edited, so a pasted
+        or typed path (Return to go there) reads as an address bar; the copy
+        button puts the chosen path on the clipboard for the paste elsewhere.
+        """
+        if self._path_last_dir != self.directory:
+            self._path_edit = self.directory
+            self._path_last_dir = self.directory
+        _w.set_next_item_width(-76.0)
+        changed, text = _w.input_text("##file-dialog-path", self._path_edit,
+                                      hint=tr("path -- paste or type, then Return",
+                                              domain="emtk"),
+                                      flags=_ITF.ENTER_RETURNS_TRUE, elide_start=True)
+        if changed:
+            self._jump_to(text)
+        _w.set_item_tooltip(tr("The folder being shown. Paste or type a path and press "
+                               "Return: a folder is shown, a file is selected in its "
+                               "folder.", domain="emtk"))
+        _w.same_line()
+        if _w.small_button(tr("Copy path", domain="emtk")):
+            _w.set_clipboard_text(self._copy_target())
+            self._copied_frames = 90
+        _w.set_item_tooltip(tr("Copy the chosen path to the clipboard -- the folder being "
+                               "shown when nothing is chosen.", domain="emtk"))
+        if self._copied_frames:
+            self._copied_frames -= 1
+            _w.same_line()
+            _w.text_colored(HINT_COLOUR, tr("path copied.", domain="emtk"))
+
     # -- a page's "Load from computer…" -------------------------------------- #
 
     def _pick_accept(self) -> str | None:
@@ -402,7 +482,7 @@ class FileDialog:
         self.refresh()
         result: list[str] | bool | None = None
 
-        _w.text_disabled(self.directory)
+        self._draw_address_bar(_w)
         _w.separator()
 
         entries = [("..", True)] + [(n, True) for n in self.folders] + \

@@ -337,3 +337,90 @@ def test_a_cancelled_pick_keeps_the_dialog_as_it_was(folder, monkeypatch):
     assert not dialog._pick_pending
     assert dialog.selection == []
     assert result is None  # the dialog stays open, unharmed
+
+
+def test_the_address_bar_jumps_to_a_pasted_path(folder, monkeypatch):
+    """Return in the address bar goes where the pasted path says.
+
+    The dialog drew its folder as text a user could neither copy from nor
+    paste into; a path from anywhere else -- a shell, a mail, a note -- had to
+    be clicked together folder by folder. The field takes it, and Return
+    shows the folder or selects the file.
+    """
+    from emtk import file_dialog
+
+    target = folder / "bursts" / "set.csv"
+    target.parent.mkdir()
+    target.write_text("x\n")
+
+    dialog = file_dialog.FileDialog(directory=str(folder))
+    driver = _Driver(dialog)
+
+    # a file path: Return selects the file in its folder
+    monkeypatch.setattr(file_dialog._w, "input_text",
+                        lambda *a, **k: (True, str(target)))
+    driver.frame()
+    assert dialog.directory == str(target.parent)
+    assert dialog.selection == ["set.csv"]
+    assert dialog.error == ""
+
+    # a relative name resolves against the folder being shown
+    monkeypatch.setattr(file_dialog._w, "input_text", lambda *a, **k: (True, "bursts"))
+    driver.frame()
+    assert dialog.directory == str(folder / "bursts")
+
+    # a path that is nothing is said, not silently ignored
+    monkeypatch.setattr(file_dialog._w, "input_text",
+                        lambda *a, **k: (True, str(folder / "nope.csv")))
+    driver.frame()
+    assert "nope.csv" in dialog.error
+    assert dialog.directory == str(folder / "bursts")  # untouched
+
+
+def test_the_address_bar_shows_the_folder_and_the_field_keeps_the_edit(folder):
+    """The field carries the shown folder, and an edit is not stamped over.
+
+    The user types half a path; the frame redraws for a blink elsewhere. The
+    buffer is theirs until the shown folder actually moves.
+    """
+    from emtk import file_dialog
+
+    sub = folder / "sub"
+    sub.mkdir(exist_ok=True)
+    dialog = file_dialog.FileDialog(directory=str(folder))
+    driver = _Driver(dialog)
+    driver.frame()
+    assert dialog._path_edit == str(folder)
+    dialog._path_edit = "/a/path/half-typed"
+    driver.frame()  # a redraw with the folder unchanged
+    assert dialog._path_edit == "/a/path/half-typed"
+    dialog._jump_to(str(sub))
+    driver.frame()  # the folder moved: the field follows it again
+    assert dialog._path_edit == str(sub)
+
+
+def test_copy_path_puts_the_chosen_path_on_the_clipboard(folder, monkeypatch):
+    """The button copies what is chosen -- the folder when nothing is."""
+    from emtk import file_dialog
+
+    (folder / "a.dat").write_text("x")
+    dialog = file_dialog.FileDialog(directory=str(folder))
+    driver = _Driver(dialog)
+    captured = []
+    monkeypatch.setattr(file_dialog._w, "set_clipboard_text", captured.append)
+    driver.frame()
+    driver.click("Copy path")
+    assert captured == [str(folder)]
+    driver.click("a.dat")
+    driver.click("Copy path")
+    assert captured[-1] == str(folder / "a.dat")
+    dialog.mode = "save"
+    dialog.filename = "out"
+    monkeypatch.setattr(file_dialog._w, "input_text", lambda *a, **k: (False, "out"))
+    driver.frame()
+    driver.click("Copy path")
+    assert captured[-1] == str(folder / "out")
+    # the note that it copied is drawn, not only felt
+    dialog._copied_frames = 2
+    driver.frame()
+    assert "path copied." in driver.painter.strings
