@@ -122,6 +122,7 @@ class Axes:
         self.xticks: tuple[list[float], list[str] | None] | None = None
         self.yticks: tuple[list[float], list[str] | None] | None = None
         self.legend_at: str | None = None
+        self.pad: tuple | None = None  # (left, top, right, bottom) px overrides
         self.colorbar: dict | None = None
         self.yinvert = False
         self.hidden = False
@@ -433,6 +434,18 @@ class Axes:
         self.bare = True
         return self
 
+    def set_pad(self, left=None, top=None, right=None, bottom=None) -> Axes:
+        """Override the panel's plot padding on given sides (px).
+
+        A joint plot's marginal sits flush against its density: zero gap at
+        the shared boundary (``Figure(hgap=..., vgap=...)``) and zero padding
+        on the touching sides (``set_pad(bottom=0)``).
+        """
+        base = self.pad or (None, None, None, None)
+        self.pad = tuple(v if v is not None else b for v, b in
+                         zip((left, top, right, bottom), base))
+        return self
+
     def legend(self, at: str = "ne") -> Axes:
         """Show the labelled items' legend in a corner (``"ne"``, ``"nw"``, ``"se"``...)."""
         if at not in _LEGEND_AT:
@@ -460,7 +473,9 @@ class Figure:
     def __init__(self, rows: int = 1, cols: int = 1, size=(640, 480), title: str = "",
                  height_ratios: Sequence[float] | None = None,
                  width_ratios: Sequence[float] | None = None,
-                 margin: float = 0.0):
+                 margin: float = 0.0,
+                 hgap: float | Sequence[float] = _GAP,
+                 vgap: float | Sequence[float] = _GAP):
         if rows < 1 or cols < 1:
             raise ValueError("a figure has at least one row and one column")
         self.rows, self.cols = int(rows), int(cols)
@@ -469,7 +484,17 @@ class Figure:
         self.size = (int(size[0]), int(size[1]))
         self.title = str(title)
         self.margin = float(margin)  # empty border, in px: a printed page keeps it
+        self.hgap, self.vgap = hgap, vgap  # panel gaps: one number, or one per boundary
         self._axes = [[Axes(self) for _ in range(self.cols)] for _ in range(self.rows)]
+
+    @staticmethod
+    def _boundary(gap, n: int) -> list[float]:
+        """*gap* as ``n - 1`` boundary values (a scalar broadcasts; a joint
+        plot passes 0 at the boundaries its panels share)."""
+        vals = list(gap) if isinstance(gap, (list, tuple)) else [float(gap)] * max(0, n - 1)
+        if len(vals) != max(0, n - 1):
+            raise ValueError(f"gap needs {max(0, n - 1)} boundary values, got {len(vals)}")
+        return [float(v) for v in vals]
 
     def ax(self, row: int = 0, col: int = 0, span: int | None = None) -> Axes:
         """The panel at ``(row, col)``, covering *span* columns of the grid.
@@ -629,12 +654,14 @@ class Figure:
             avail_w -= 2.0 * m
             avail_h -= 2.0 * m
             top = im.get_cursor_pos()[1]
-            free_w = avail_w - (self.cols - 1) * _GAP
-            free_h = avail_h - (self.rows - 1) * _GAP
+            hgap = self._boundary(self.hgap, self.cols)
+            vgap = self._boundary(self.vgap, self.rows)
+            free_w = avail_w - sum(hgap)
+            free_h = avail_h - sum(vgap)
             widths = [free_w * f for f in self.width_ratios]
             heights = [free_h * f for f in self.height_ratios]
-            xs = [left + sum(widths[:c]) + c * _GAP for c in range(self.cols)]
-            ys = [top + sum(heights[:r]) + r * _GAP for r in range(self.rows)]
+            xs = [left + sum(widths[:c]) + sum(hgap[:c]) for c in range(self.cols)]
+            ys = [top + sum(heights[:r]) + sum(vgap[:r]) for r in range(self.rows)]
             # Column by column, one aligned group each: the panels of a column
             # share the widest y-axis gutter, so stacked panels share their x
             # position (a curve above its residuals). A group across the whole
@@ -650,7 +677,7 @@ class Figure:
                             im.dummy(widths[c], heights[r])
                             continue
                         span_w = (sum(widths[c:min(self.cols, c + a.col_span)])
-                                  + (a.col_span - 1) * _GAP)
+                                  + sum(hgap[c:min(len(hgap), c + a.col_span - 1)]))
                         im.set_cursor_pos((xs[c], ys[r]))
                         _draw_axes(a, f"##p{r}_{c}", span_w, heights[r], implot, I)
                 finally:
@@ -763,6 +790,14 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
         flags |= I.FLAGS_NO_LEGEND
     if not implot.begin_plot((axes.title or "") + ident, (plot_w, height), flags):
         return
+    if axes.pad is not None:
+        from .implot_internal import gp as _gp
+        cur = _gp.current_plot
+        if cur is not None:
+            d = _gp.style.plot_padding
+            cur.pad_override = tuple(d[0] if v is None and i % 2 == 0
+                                     else d[1] if v is None else v
+                                     for i, v in enumerate(axes.pad))
     try:
         x_flags = I.AXIS_FLAGS_NO_TICK_LABELS if axes.no_xticklabels else 0
         y_flags = (I.AXIS_FLAGS_INVERT if axes.yinvert else 0) | (

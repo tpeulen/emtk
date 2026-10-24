@@ -1,0 +1,669 @@
+{
+  "cmc": {
+    "acquisition": {
+      "backend": "auto",
+      "bin_width_s": 0.001,
+      "chunk_size_mb": 1.0,
+      "history_window_s": 20.0,
+      "photon_hub_block_size": 4096,
+      "photon_hub_ip": "127.0.0.1:5555",
+      "sample_rate_hz": 24000000,
+      "stop_at_photons_count": 1000000,
+      "stop_at_photons_enabled": false,
+      "stop_at_time_enabled": false,
+      "stop_at_time_sec": 10.0
+    },
+    "bhspc": {
+      "adc_resolution": {
+        "apply": false,
+        "bits": 0
+      },
+      "adc_sample_delay": {
+        "apply": false,
+        "value": 0.0
+      },
+      "adc_zoom": {
+        "apply": false,
+        "value": 0.0
+      },
+      "add_select": {
+        "apply": false,
+        "value": 0.0
+      },
+      "cfd_holdoff": {
+        "apply": false,
+        "value": 5.0
+      },
+      "cfd_limit_high": {
+        "apply": false,
+        "value": -5.0
+      },
+      "cfd_limit_low": {
+        "apply": false,
+        "value": -50.0
+      },
+      "cfd_zc_level": {
+        "apply": false,
+        "value": 0.0
+      },
+      "chan_enable": {
+        "apply": false,
+        "mask": 0.0
+      },
+      "chan_slope": {
+        "apply": false,
+        "mask": 0.0
+      },
+      "chan_spec_no": {
+        "apply": false,
+        "value": 0.0
+      },
+      "collect_time": {
+        "apply": false,
+        "value": 1.0
+      },
+      "count_incr": {
+        "apply": false,
+        "value": 1.0
+      },
+      "dead_time_comp": {
+        "apply": false,
+        "enabled": false
+      },
+      "detector_type": {
+        "apply": false,
+        "value": 0.0
+      },
+      "display_time": {
+        "apply": false,
+        "value": 1.0
+      },
+      "dither_range": {
+        "apply": false,
+        "value": 0.0
+      },
+      "ext_latch_delay": {
+        "apply": false,
+        "value": 0.0
+      },
+      "ini_path": "",
+      "linearization": {
+        "enabled": false,
+        "linear_start": 0,
+        "linear_stop": 0,
+        "lut_path": "",
+        "noffset": 0,
+        "ntac_required": 0
+      },
+      "macro_time_clk": {
+        "apply": false,
+        "value": 0
+      },
+      "master_clock": {
+        "apply": false,
+        "value": 0.0
+      },
+      "mem_bank": {
+        "apply": false,
+        "value": 0.0
+      },
+      "mode": {
+        "apply": false,
+        "value": 0
+      },
+      "module_index": 0,
+      "rate_count_time": {
+        "apply": false,
+        "value": 1.0
+      },
+      "repeat_time": {
+        "apply": false,
+        "value": 10.0
+      },
+      "routing_mode": {
+        "apply": false,
+        "value": 0
+      },
+      "simulation_mode": 0,
+      "stop_on_ovfl": {
+        "apply": false,
+        "enabled": false
+      },
+      "stop_on_time": {
+        "apply": false,
+        "enabled": true
+      },
+      "sync_freq_div": {
+        "apply": false,
+        "value": 4.0
+      },
+      "sync_holdoff": {
+        "apply": false,
+        "value": 4.0
+      },
+      "sync_threshold": {
+        "apply": false,
+        "value": -20.0
+      },
+      "sync_zc_level": {
+        "apply": false,
+        "value": 0.0
+      },
+      "tac_enable_hold": {
+        "apply": false,
+        "value": 10.0
+      },
+      "tac_gain": {
+        "apply": false,
+        "value": 1.0
+      },
+      "tac_limit_high": {
+        "apply": false,
+        "value": 100.0
+      },
+      "tac_limit_low": {
+        "apply": false,
+        "value": 0.0
+      },
+      "tac_offset": {
+        "apply": false,
+        "value": 0.0
+      },
+      "tac_range": {
+        "apply": false,
+        "value": 50.0
+      },
+      "trigger": {
+        "apply": false,
+        "value": 0.0
+      },
+      "xy_gain": {
+        "apply": false,
+        "value": 0.0
+      }
+    },
+    "burst": {
+      "acceptor_channels": [
+        1
+      ],
+      "channel_definition": {
+        "detectors": {
+          "green": {
+            "chs": [
+              0
+            ],
+            "g_factor": 1.0,
+            "l1": 0.0,
+            "l2": 0.0,
+            "micro_time_ranges": [
+              [
+                0,
+                4095
+              ]
+            ]
+          },
+          "red": {
+            "chs": [
+              1
+            ],
+            "g_factor": 1.0,
+            "l1": 0.0,
+            "l2": 0.0,
+            "micro_time_ranges": [
+              [
+                0,
+                4095
+              ]
+            ]
+          },
+          "yellow": {
+            "chs": [
+              1
+            ],
+            "g_factor": 1.0,
+            "l1": 0.0,
+            "l2": 0.0,
+            "micro_time_ranges": [
+              [
+                0,
+                4095
+              ]
+            ]
+          }
+        },
+        "tttr_reading": {
+          "excitation_period": 12.5,
+          "micro_time_binning": 1,
+          "micro_time_resolution": 50.0
+        },
+        "windows": {
+          "delayed": [
+            2048,
+            4095
+          ],
+          "prompt": [
+            0,
+            2048
+          ]
+        }
+      },
+      "donor_channels": [
+        0
+      ],
+      "max_arrival_time_ms": 0.2,
+      "micro_time_start": 0,
+      "micro_time_stop": 4096,
+      "min_photons": 30,
+      "mle": {
+        "green_name": "bg4",
+        "red_name": "br4",
+        "yellow_name": "by4"
+      },
+      "mle_enabled": false
+    },
+    "fcs": {
+      "analysis": {
+        "bounds": {
+          "N_max": 1000000000.0,
+          "N_min": 1e-06,
+          "S_max": 20.0,
+          "S_min": 0.5,
+          "T_max": 0.95,
+          "T_min": 0.0,
+          "tau_d_max_s": 10.0,
+          "tau_d_min_s": 1e-09,
+          "tau_trip_max_s": 0.01,
+          "tau_trip_min_s": 1e-09
+        },
+        "cpm_rate_source": "sum",
+        "enabled": true,
+        "fit": {
+          "N": true,
+          "S": false,
+          "T": false,
+          "tau_d": true,
+          "tau_trip": false
+        },
+        "fit_interval_s": 0.5,
+        "initial": {
+          "N": 5.0,
+          "S": 5.0,
+          "T": 0.2,
+          "tau_d_ms": 0.5,
+          "tau_trip_us": 2.0
+        },
+        "min_photons": 500,
+        "min_points": 15,
+        "model": "gauss3d",
+        "tau_max_s": 0.2,
+        "tau_min_s": 2e-06
+      },
+      "ch_a": 0,
+      "ch_b": 0,
+      "correlator_type": "streaming",
+      "enabled": false,
+      "n_bins": 17,
+      "n_casc": 25,
+      "plot": {
+        "auto_range": true,
+        "current_line_thickness": 2.6,
+        "curve_colors": [
+          [
+            100,
+            200,
+            255
+          ],
+          [
+            255,
+            150,
+            100
+          ],
+          [
+            150,
+            255,
+            100
+          ]
+        ],
+        "history": {
+          "alpha_max": 0.16,
+          "alpha_min": 0.04,
+          "capacity": 120,
+          "enabled": true,
+          "line_thickness": 1.0
+        },
+        "y_max": 2.0,
+        "y_min": 0.0
+      },
+      "refresh_rate_s": 0.03333333333333333
+    },
+    "general": {
+      "auto_save": true,
+      "bhspc_ini_path": "",
+      "bhspc_module_index": 0,
+      "bhspc_preset_path": "",
+      "default_output_path": "",
+      "driver_mode": "native",
+      "output_path": "capture",
+      "picoquant_preset_path": "",
+      "tcp_secret_key": "",
+      "tcp_server_port": 5555
+    },
+    "gui": {
+      "show_burst_window": false,
+      "show_fcs_window": true,
+      "show_image_window": false
+    },
+    "image": {
+      "auto_scale": true,
+      "controls_width": 350.0,
+      "display_max": 10.0,
+      "display_min": 0.0,
+      "display_mode": 0,
+      "view_mode": 0
+    },
+    "picoquant": {
+      "acquisition_ms": -1,
+      "binning": {
+        "apply": false,
+        "value": 0
+      },
+      "channels": [
+        {
+          "cfd": {
+            "apply": false,
+            "level_mv": -50,
+            "zero_cross_mv": -10
+          },
+          "dead_time": {
+            "apply": false,
+            "value": 0
+          },
+          "edge_trig": {
+            "apply": false,
+            "edge": 0,
+            "level_mv": -50
+          },
+          "enable": {
+            "apply": false,
+            "enabled": true
+          },
+          "index": 1,
+          "offset": {
+            "apply": false,
+            "value": 0
+          },
+          "trig_mode": {
+            "apply": false,
+            "mode": 0
+          }
+        },
+        {
+          "cfd": {
+            "apply": false,
+            "level_mv": -50,
+            "zero_cross_mv": -10
+          },
+          "dead_time": {
+            "apply": false,
+            "value": 0
+          },
+          "edge_trig": {
+            "apply": false,
+            "edge": 0,
+            "level_mv": -50
+          },
+          "enable": {
+            "apply": false,
+            "enabled": true
+          },
+          "index": 2,
+          "offset": {
+            "apply": false,
+            "value": 0
+          },
+          "trig_mode": {
+            "apply": false,
+            "mode": 0
+          }
+        },
+        {
+          "cfd": {
+            "apply": false,
+            "level_mv": -50,
+            "zero_cross_mv": -10
+          },
+          "dead_time": {
+            "apply": false,
+            "value": 0
+          },
+          "edge_trig": {
+            "apply": false,
+            "edge": 0,
+            "level_mv": -50
+          },
+          "enable": {
+            "apply": false,
+            "enabled": true
+          },
+          "index": 3,
+          "offset": {
+            "apply": false,
+            "value": 0
+          },
+          "trig_mode": {
+            "apply": false,
+            "mode": 0
+          }
+        },
+        {
+          "cfd": {
+            "apply": false,
+            "level_mv": -50,
+            "zero_cross_mv": -10
+          },
+          "dead_time": {
+            "apply": false,
+            "value": 0
+          },
+          "edge_trig": {
+            "apply": false,
+            "edge": 0,
+            "level_mv": -50
+          },
+          "enable": {
+            "apply": false,
+            "enabled": true
+          },
+          "index": 4,
+          "offset": {
+            "apply": false,
+            "value": 0
+          },
+          "trig_mode": {
+            "apply": false,
+            "mode": 0
+          }
+        }
+      ],
+      "device_id": "",
+      "filter_test_mode": {
+        "apply": false,
+        "enabled": false
+      },
+      "ini_path": "",
+      "input_hysteresis": {
+        "apply": false,
+        "code": 0
+      },
+      "main_filter": {
+        "apply": false,
+        "inverse": false,
+        "match_count": 1,
+        "time_range": 0
+      },
+      "main_filter_enable": {
+        "apply": false,
+        "enabled": false
+      },
+      "marker_edges": {
+        "apply": false,
+        "m1": 1,
+        "m2": 1,
+        "m3": 1,
+        "m4": 1
+      },
+      "marker_enable": {
+        "apply": false,
+        "m1": false,
+        "m2": false,
+        "m3": false,
+        "m4": false
+      },
+      "marker_holdoff": {
+        "apply": false,
+        "value": 0
+      },
+      "meas_control": {
+        "apply": false,
+        "mode": 0,
+        "start_edge": 1,
+        "stop_edge": 1
+      },
+      "mode": "T2",
+      "offset": {
+        "apply": false,
+        "value": 0
+      },
+      "ofl_compression": {
+        "apply": false,
+        "holdtime": 0
+      },
+      "ptu_path": "",
+      "ref_source": 0,
+      "stop_overflow": {
+        "apply": false,
+        "count": 0
+      },
+      "sync_cfd": {
+        "apply": false,
+        "level_mv": -50,
+        "zero_cross_mv": -10
+      },
+      "sync_dead_time": {
+        "apply": false,
+        "value": 0
+      },
+      "sync_divider": {
+        "apply": false,
+        "value": 1
+      },
+      "sync_edge_trig": {
+        "apply": false,
+        "edge": 0,
+        "level_mv": -50
+      },
+      "sync_enable": {
+        "apply": false,
+        "enabled": true
+      },
+      "sync_offset": {
+        "apply": false,
+        "value": 0
+      },
+      "sync_trig_mode": {
+        "apply": false,
+        "mode": 0
+      },
+      "timing_mode": {
+        "apply": false,
+        "mode": 0
+      },
+      "trigger_output": {
+        "apply": false,
+        "period": 0
+      }
+    },
+    "plotting": {
+      "styles": {
+        "colors": [
+          [
+            46,
+            204,
+            113
+          ],
+          [
+            52,
+            152,
+            219
+          ],
+          [
+            155,
+            89,
+            182
+          ],
+          [
+            241,
+            196,
+            15
+          ],
+          [
+            230,
+            126,
+            34
+          ],
+          [
+            231,
+            76,
+            60
+          ],
+          [
+            26,
+            188,
+            156
+          ],
+          [
+            149,
+            165,
+            166
+          ]
+        ],
+        "curve_alpha": 150,
+        "curve_width": 1.5
+      }
+    },
+    "simulation": {
+      "M": [
+        1.0,
+        6.0,
+        4.0
+      ],
+      "axial_waist_um": 1.5,
+      "beam_waist_um": 0.3,
+      "box_size_scalar": 3.0,
+      "brightness_khz": 50.0,
+      "concentration_nM": 10.0,
+      "diffusion_time_us": 100.0,
+      "pre_equilibration_ms": 1000.0,
+      "sample_rate_hz": 24000000
+    },
+    "trace": {
+      "enabled": true,
+      "plot": {
+        "auto_range": true,
+        "fix_mean": false,
+        "log_scale": false,
+        "show_mean_lines": false,
+        "y_max_khz": 300.0,
+        "y_min_khz": 0.0
+      },
+      "refresh_rate_s": 0.03333333333333333,
+      "visible_channels": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    "version": "1.0"
+  }
+}

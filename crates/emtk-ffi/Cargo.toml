@@ -1,0 +1,16 @@
+[package]
+name = "emtk-ffi"
+version = "0.1.22"
+edition = "2021"
+authors = ["Thomas-Otavio Peulen"]
+license = "MIT"
+description = "C ABI export for EMTK (generating emtk.h and native libraries for C++ and C)"
+
+[lib]
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[dependencies]
+emtk-core = { path = "../emtk-core" }
+emtk-font = { path = "../emtk-font" }
+emtk-implot = { path = "../emtk-implot" }
+emtk-imnodes = { path = "../emtk-imnodes" }

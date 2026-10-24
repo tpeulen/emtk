@@ -397,3 +397,23 @@ def test_fetching_a_panel_again_keeps_its_span():
     assert fig.ax(0, 0) is a and a.col_span == 2  # fetch again, same span
     fig.ax(0, 2).hide()
     assert fig.pdf_bytes()[:4] == b"%PDF"
+
+
+def test_joint_plot_panels_share_a_boundary():
+    """Zero gap + zero padding at a shared edge: the marginal sits flush."""
+    import numpy as np
+    from emtk.figure import Figure
+
+    fig = Figure(rows=2, cols=2, size=(320, 240), hgap=[0], vgap=[0])
+    top = fig.ax(0, 0)
+    top.set_pad(bottom=0)
+    density = fig.ax(1, 0)
+    density.set_pad(top=0)
+    side = fig.ax(1, 1)
+    side.set_pad(left=0)
+    x = np.linspace(0.0, 1.0, 11)
+    top.bars(0.5 * (x[:-1] + x[1:]), np.full(10, 5.0), width=0.1)
+    density.mesh(x, x, np.random.default_rng(0).random((10, 10)))
+    side.bars(0.5 * (x[:-1] + x[1:]), np.full(10, 3.0), width=0.1, horizontal=True)
+    fig.ax(0, 1).hide()
+    assert fig.pdf_bytes()[:4] == b"%PDF"

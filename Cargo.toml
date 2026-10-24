@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/emtk-core",
+    "crates/emtk-font",
+    "crates/emtk-implot",
+    "crates/emtk-imnodes",
+    "crates/emtk-wgpu",
+    "crates/emtk-ffi",
+    "examples/rust_demo",
+]
+
+[workspace.package]
+version = "0.1.22"
+edition = "2021"
+authors = ["Thomas-Otavio Peulen"]
+license = "MIT"
+repository = "https://github.com/tpeulen/emtk"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1

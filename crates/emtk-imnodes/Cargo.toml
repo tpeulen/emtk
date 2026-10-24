@@ -1,0 +1,11 @@
+[package]
+name = "emtk-imnodes"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "EMTK immediate-mode node graph editor (imnodes compatible)"
+
+[dependencies]
+emtk-core = { path = "../emtk-core" }
+emtk-font = { path = "../emtk-font" }

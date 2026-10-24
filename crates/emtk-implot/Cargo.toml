@@ -1,0 +1,12 @@
+[package]
+name = "emtk-implot"
+version = "0.1.22"
+edition = "2021"
+authors = ["Thomas-Otavio Peulen"]
+license = "MIT"
+description = "High-performance 2D scientific plotting library for EMTK (ImPlot in Rust)"
+
+[dependencies]
+emtk-core = { path = "../emtk-core" }
+emtk-font = { path = "../emtk-font" }
+serde = { version = "1.0", features = ["derive"] }

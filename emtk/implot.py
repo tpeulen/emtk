@@ -607,8 +607,13 @@ def _layout(plot, first_pass: bool) -> None:
     """The layout half of ``SetupFinish``: rects, tickers, pixel spans."""
     style = gp.style
     fr = plot.frame_rect
-    plot.canvas_rect = (fr[0] + style.plot_padding[0], fr[1] + style.plot_padding[1],
-                        fr[2] - style.plot_padding[0], fr[3] - style.plot_padding[1])
+    ov = getattr(plot, "pad_override", None)
+    if ov is not None:  # per-side overrides (a marginal flush with its density)
+        pl, pt_, pr, pb = ov
+    else:
+        pl = pr = style.plot_padding[0]
+        pt_ = pb = style.plot_padding[1]
+    plot.canvas_rect = (fr[0] + pl, fr[1] + pt_, fr[2] - pr, fr[3] - pb)
     plot.axes_rect = fr
     legend = plot.items.legend
     if (not has_flag(plot.flags, I.FLAGS_NO_LEGEND) and plot.items.get_legend_count() > 0
@@ -623,23 +628,23 @@ def _layout(plot, first_pass: bool) -> None:
         c, a = list(plot.canvas_rect), list(plot.axes_rect)
         if (west and not horz) or (west and horz and not north and not south):
             c[0] += lsize[0] + style.legend_padding[0]
-            a[0] += lsize[0] + style.plot_padding[0]
+            a[0] += lsize[0] + pl
         if (east and not horz) or (east and horz and not north and not south):
             c[2] -= lsize[0] + style.legend_padding[0]
-            a[2] -= lsize[0] + style.plot_padding[0]
+            a[2] -= lsize[0] + pr
         if (north and horz) or (north and not horz and not west and not east):
             c[1] += lsize[1] + style.legend_padding[1]
-            a[1] += lsize[1] + style.plot_padding[1]
+            a[1] += lsize[1] + pt_
         if (south and horz) or (south and not horz and not west and not east):
             c[3] -= lsize[1] + style.legend_padding[1]
-            a[3] -= lsize[1] + style.plot_padding[1]
+            a[3] -= lsize[1] + pb
         plot.canvas_rect, plot.axes_rect = tuple(c), tuple(a)
     pad_top = pad_bot = pad_left = pad_right = 0.0
     title_size = I.calc_text_size(plot.title) if plot.has_title() else (0.0, 0.0)
     if title_size[0] > 0:
         pad_top += title_size[1] + style.label_padding[1]
         a = list(plot.axes_rect)
-        a[1] += style.plot_padding[1] + pad_top
+        a[1] += pt_ + pad_top
         plot.axes_rect = tuple(a)
     pad_top, pad_bot = _pad_and_datum_axes_x(plot, pad_top, pad_bot, gp.current_alignment_h)
     plot_height = (plot.canvas_rect[3] - plot.canvas_rect[1]) - pad_top - pad_bot
@@ -657,7 +662,7 @@ def _layout(plot, first_pass: bool) -> None:
     pad_top, pad_bot = _pad_and_datum_axes_x(plot, title_pad, 0.0, gp.current_alignment_h)
     if title_size[0] > 0:
         a = list(plot.axes_rect)
-        a[1] = fr[1] + style.plot_padding[1] + title_pad
+        a[1] = fr[1] + pt_ + title_pad
         plot.axes_rect = tuple(a)
     cr = plot.canvas_rect
     plot.plot_rect = (cr[0] + pad_left, cr[1] + pad_top, cr[2] - pad_right, cr[3] - pad_bot)

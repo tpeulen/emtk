@@ -1,0 +1,16 @@
+[package]
+name = "emtk-wgpu"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "EMTK WebGPU native single-draw-call presentation engine"
+
+[dependencies]
+emtk-core = { path = "../emtk-core" }
+emtk-font = { path = "../emtk-font" }
+wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
+bytemuck = { version = "1.20", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }

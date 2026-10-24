@@ -1,0 +1,13 @@
+[package]
+name = "rust_demo"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "EMTK Pure Rust Application Example"
+
+[dependencies]
+emtk-core = { path = "../../crates/emtk-core" }
+emtk-font = { path = "../../crates/emtk-font" }
+emtk-implot = { path = "../../crates/emtk-implot" }
+emtk-imnodes = { path = "../../crates/emtk-imnodes" }

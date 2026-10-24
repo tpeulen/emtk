@@ -2,7 +2,10 @@
 __pycache__/
 *.py[cod]
 build/
+examples/**/build/
 dist/
+target/
+*.png
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
