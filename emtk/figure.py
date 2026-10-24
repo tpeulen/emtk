@@ -129,6 +129,7 @@ class Axes:
         self.y2label = ""
         self.no_xticklabels = False
         self.no_yticklabels = False
+        self.bare = False
 
     # -- colours ----------------------------------------------------------
     def _colour(self, colour, alpha: float | None = None) -> tuple[float, float, float, float]:
@@ -402,6 +403,17 @@ class Axes:
     def hide(self) -> Axes:
         """Leave this panel's cell empty (an unused cell of a grid)."""
         self.hidden = True
+        return self
+
+    def set_bare(self) -> Axes:
+        """Draw this panel's items without the plot frame or any axis decoration.
+
+        A text-only cell of a report page -- a header, a values table -- sits in
+        the same grid as the plots beside it, as plain text on the page. Give the
+        panel explicit limits (:meth:`set_xlim`, :meth:`set_ylim`) so the text's
+        data coordinates stay put without a fit.
+        """
+        self.bare = True
         return self
 
     def legend(self, at: str = "ne") -> Axes:
@@ -701,6 +713,8 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
 
     plot_w = width - (colorbar_space(axes.colorbar.get("log", False)) if axes.colorbar else 0.0)
     flags = I.FLAGS_NO_MENUS | I.FLAGS_NO_MOUSE_TEXT | I.FLAGS_NO_INPUTS
+    if axes.bare:
+        flags |= I.FLAGS_NO_FRAME
     if not axes.title:
         flags |= I.FLAGS_NO_TITLE
     labelled = any(data.get("label") for _, data in axes._items)
@@ -712,6 +726,9 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
         x_flags = I.AXIS_FLAGS_NO_TICK_LABELS if axes.no_xticklabels else 0
         y_flags = (I.AXIS_FLAGS_INVERT if axes.yinvert else 0) | (
             I.AXIS_FLAGS_NO_TICK_LABELS if axes.no_yticklabels else 0)
+        if axes.bare:
+            x_flags |= I.AXIS_FLAGS_NO_DECORATIONS
+            y_flags |= I.AXIS_FLAGS_NO_DECORATIONS
         implot.setup_axes(axes.xlabel or None, axes.ylabel or None, x_flags, y_flags)
         if axes.has_right:
             implot.setup_axis(I.AXIS_Y2, axes.y2label or None, I.AXIS_FLAGS_AUX_DEFAULT)

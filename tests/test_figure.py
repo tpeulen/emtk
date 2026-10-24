@@ -319,3 +319,16 @@ def test_a_figure_saved_on_a_worker_thread_waits_for_the_gui_frame():
     assert not errors, errors
     assert saved and saved[-1][:4] == b"\x89PNG"
     app.draw(PixelPainter(300, 200), 0.0, 0.0, 300.0, 200.0)  # and the next frame is clean
+
+
+def test_a_bare_panel_draws_its_text_without_a_frame():
+    """A text-only cell: the words land in the PDF, with no plot frame around them."""
+    from emtk.figure import Figure
+
+    fig = Figure(rows=1, cols=1, size=(300, 200))
+    ax = fig.ax().set_bare()
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.text(0.5, 0.5, "report header")
+    pdf = fig.pdf_bytes()
+    assert pdf[:4] == b"%PDF" and b"%%EOF" in pdf[-32:]
