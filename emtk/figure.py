@@ -434,6 +434,11 @@ class Axes:
         self.bare = True
         return self
 
+    def set_aligned(self, aligned: bool = True) -> Axes:
+        """Join (default) or leave the column's shared y-axis datum group."""
+        self.datum_free = not aligned
+        return self
+
     def set_pad(self, left=None, top=None, right=None, bottom=None) -> Axes:
         """Override the panel's plot padding on given sides (px).
 
@@ -672,14 +677,19 @@ class Figure:
                 try:
                     for r in range(self.rows):
                         a = self._axes[r][c]
+                        solo = getattr(a, "datum_free", False)
+                        if solo and aligned:
+                            implot.end_aligned_plots()
                         if a._covered:
                             im.set_cursor_pos((xs[c], ys[r]))
                             im.dummy(widths[c], heights[r])
-                            continue
-                        span_w = (sum(widths[c:min(self.cols, c + a.col_span)])
-                                  + sum(hgap[c:min(len(hgap), c + a.col_span - 1)]))
-                        im.set_cursor_pos((xs[c], ys[r]))
-                        _draw_axes(a, f"##p{r}_{c}", span_w, heights[r], implot, I)
+                        else:
+                            span_w = (sum(widths[c:min(self.cols, c + a.col_span)])
+                                      + sum(hgap[c:min(len(hgap), c + a.col_span - 1)]))
+                            im.set_cursor_pos((xs[c], ys[r]))
+                            _draw_axes(a, f"##p{r}_{c}", span_w, heights[r], implot, I)
+                        if solo and aligned:
+                            implot.begin_aligned_plots(f"##emtk-figure-col{c}-b")
                 finally:
                     if aligned:
                         implot.end_aligned_plots()

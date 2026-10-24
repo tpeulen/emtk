@@ -399,6 +399,35 @@ def test_fetching_a_panel_again_keeps_its_span():
     assert fig.pdf_bytes()[:4] == b"%PDF"
 
 
+def test_joint_plot_marginal_leaves_the_column_group():
+    """set_aligned(False): a marginal keeps its own y gutter, so a wide tick
+    label in the same column (another row's panel) cannot push it off its
+    density."""
+    import numpy as np
+    import pymupdf
+
+    fig = Figure(rows=2, cols=2, size=(300, 200), hgap=[0], vgap=[4])
+    dens = fig.ax(0, 0)
+    dens.mesh(np.linspace(0, 1, 4), np.linspace(0, 1, 4),
+              np.random.default_rng(1).random((3, 3)))
+    dens.set_labels(x="E", y="S")
+    marg = fig.ax(1, 0)
+    marg.bars([2, 5, 3], [0.2, 0.5, 0.8], width=0.2, horizontal=True)
+    marg.hide_tick_labels(y=True)
+    marg.set_aligned(False)  # keeps its own gutter, not the column's widest
+    wide = fig.ax(1, 1)  # same column-index basis as marg via col 0? no: col 1
+    wide.line(np.linspace(0, 1, 10), np.linspace(0, 1, 10))
+    wide.set_yticks([-12345.678])  # a very wide label in the column below
+    page = pymupdf.open(stream=fig.pdf_bytes(), filetype="pdf")[0]
+    # the marginal's bars start where the density's plot ends (flush)
+    dens_r = max(d["rect"].x1 for d in page.get_drawings()
+                 if d["rect"].width > 30 and d["rect"].y1 < 110)
+    bar_l = min(d["rect"].x0 for d in page.get_drawings()
+                if d["rect"].width > 5 and d["rect"].width < 30
+                and 110 < d["rect"].y0 < 190)
+    assert bar_l - dens_r < 12, (dens_r, bar_l)
+
+
 def test_joint_plot_panels_share_a_boundary():
     """Zero gap + zero padding at a shared edge: the marginal sits flush."""
     import numpy as np
