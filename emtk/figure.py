@@ -330,10 +330,18 @@ class Axes:
         return self._add("mesh", cells=cells, extent=(xs[0], xs[-1], ys[0], ys[-1]),
                          label=label)
 
-    def text(self, x: float, y: float, s: str, *, color="k", offset=(0.0, 0.0)) -> Axes:
-        """``s`` centred on the data point ``(x, y)``, shifted by ``offset`` pixels."""
+    def text(self, x: float, y: float, s: str, *, color="k", offset=(0.0, 0.0),
+             align: str = "center") -> Axes:
+        """``s`` on the data point ``(x, y)``, shifted by ``offset`` pixels.
+
+        ``align="center"`` centres the string on the point; ``"left"`` puts its
+        left edge there -- a report's values column reads as a column, not a
+        pile of centred lines.
+        """
+        if align not in ("center", "left"):
+            raise ValueError(f"align is 'center' or 'left', got {align!r}")
         return self._add("text", x=float(x), y=float(y), s=str(s), color=_rgba(color),
-                         offset=(float(offset[0]), float(offset[1])))
+                         offset=(float(offset[0]), float(offset[1])), align=align)
 
     # -- decoration -------------------------------------------------------
     def set_title(self, title: str) -> Axes:
@@ -451,7 +459,8 @@ class Figure:
 
     def __init__(self, rows: int = 1, cols: int = 1, size=(640, 480), title: str = "",
                  height_ratios: Sequence[float] | None = None,
-                 width_ratios: Sequence[float] | None = None):
+                 width_ratios: Sequence[float] | None = None,
+                 margin: float = 0.0):
         if rows < 1 or cols < 1:
             raise ValueError("a figure has at least one row and one column")
         self.rows, self.cols = int(rows), int(cols)
@@ -459,6 +468,7 @@ class Figure:
         self.width_ratios = _ratios(width_ratios, self.cols, "width_ratios")
         self.size = (int(size[0]), int(size[1]))
         self.title = str(title)
+        self.margin = float(margin)  # empty border, in px: a printed page keeps it
         self._axes = [[Axes(self) for _ in range(self.cols)] for _ in range(self.rows)]
 
     def ax(self, row: int = 0, col: int = 0, span: int = 1) -> Axes:
@@ -605,13 +615,17 @@ class Figure:
             im.push_style_color(Col.BORDER, (255, 255, 255, 255))
             im.push_style_color(Col.TEXT, (0, 0, 0, 255))
             pushed = 3
+            m = float(getattr(self, "margin", 0.0))
             im.begin("##emtk-figure", (0.0, 0.0, w, h))
-            left = im.get_cursor_pos()[0]
+            left = im.get_cursor_pos()[0] + m
+            im.set_cursor_pos_y(im.get_cursor_pos()[1] + m)
             if self.title:
                 text_w = im.calc_text_size(self.title)[0]
                 im.set_cursor_pos_x(max(0.0, (im.get_content_region_avail()[0] - text_w) / 2.0))
                 im.text(self.title)
             avail_w, avail_h = im.get_content_region_avail()
+            avail_w -= 2.0 * m
+            avail_h -= 2.0 * m
             top = im.get_cursor_pos()[1]
             free_w = avail_w - (self.cols - 1) * _GAP
             free_h = avail_h - (self.rows - 1) * _GAP
@@ -936,11 +950,14 @@ def _draw_item(kind: str, d: dict, label: str, implot, I) -> None:
     elif kind == "mesh":
         _draw_mesh(d["cells"], implot)
     elif kind == "text":
-        from . import implot_internal
+        from . import im, implot_internal
 
         implot.push_style_color(implot_internal.COL_INLAY_TEXT, d["color"])
         try:
-            implot.plot_text(d["s"], d["x"], d["y"], d["offset"])
+            off = d["offset"]
+            if d.get("align") == "left":  # half the string right of the anchor
+                off = (off[0] + im.calc_text_size(d["s"])[0] / 2.0, off[1])
+            implot.plot_text(d["s"], d["x"], d["y"], off)
         finally:
             implot.pop_style_color()
     else:  # pragma: no cover - every recorder above maps to one branch

@@ -361,3 +361,28 @@ def test_grid_lines_can_be_turned_off():
     a = fig.ax().set_grid(False)
     assert a is fig.ax() and a.grid is False
     assert fig.pdf_bytes()[:4] == b"%PDF"
+
+
+def test_left_aligned_text_keeps_its_column():
+    """align='left' anchors a string's left edge -- columns read as columns."""
+    from emtk.figure import Figure
+
+    fig = Figure(rows=1, cols=1, size=(300, 200))
+    ax = fig.ax().set_bare()
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.text(0.1, 0.7, "alpha", align="left")
+    ax.text(0.1, 0.3, "beta-beta-beta", align="left")
+    import pymupdf
+    words = {w[4]: (w[0], w[1]) for w in pymupdf.open("pdf", fig.pdf_bytes())[0].get_text("words")}
+    assert abs(words["alpha"][0] - words["beta-beta-beta"][0]) < 1.5  # same left edge
+    assert words["alpha"][1] != words["beta-beta-beta"][1]  # different lines
+
+
+def test_a_margin_keeps_the_page_border_empty():
+    from emtk.figure import Figure
+
+    fig = Figure(rows=1, cols=1, size=(300, 200), margin=20.0)
+    ax = fig.ax()
+    ax.line([0, 1], [0, 1])
+    assert fig.pdf_bytes()[:4] == b"%PDF"
