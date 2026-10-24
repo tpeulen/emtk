@@ -386,3 +386,14 @@ def test_a_margin_keeps_the_page_border_empty():
     ax = fig.ax()
     ax.line([0, 1], [0, 1])
     assert fig.pdf_bytes()[:4] == b"%PDF"
+
+
+def test_fetching_a_panel_again_keeps_its_span():
+    """Decorating a spanned panel (ax(r, c) without span) must not shrink it."""
+    from emtk.figure import Figure
+
+    fig = Figure(rows=1, cols=3, size=(300, 150))
+    a = fig.ax(0, 0, span=2)
+    assert fig.ax(0, 0) is a and a.col_span == 2  # fetch again, same span
+    fig.ax(0, 2).hide()
+    assert fig.pdf_bytes()[:4] == b"%PDF"

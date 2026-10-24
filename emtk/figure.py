@@ -471,18 +471,20 @@ class Figure:
         self.margin = float(margin)  # empty border, in px: a printed page keeps it
         self._axes = [[Axes(self) for _ in range(self.cols)] for _ in range(self.rows)]
 
-    def ax(self, row: int = 0, col: int = 0, span: int = 1) -> Axes:
+    def ax(self, row: int = 0, col: int = 0, span: int | None = None) -> Axes:
         """The panel at ``(row, col)``, covering *span* columns of the grid.
 
         A page composes rows of different shapes: a density panel with its
         marginal column beside it, then a trace panel across the whole width.
-        The covered cells are left empty (a later ``ax`` of them returns the
-        same panel -- spanning is bookkeeping, not splitting).
+        The covered cells are left empty. ``span`` only sticks when given:
+        fetching a panel again (to decorate it) keeps its span, so a report
+        can fetch ``ax(r, c)`` freely after laying the panel out.
         """
         a = self._axes[row][col]
-        a.col_span = max(1, int(span))
-        for c in range(col + 1, min(self.cols, col + a.col_span)):
-            self._axes[row][c]._covered = True
+        if span is not None:
+            a.col_span = max(1, int(span))
+            for c in range(col + 1, min(self.cols, col + a.col_span)):
+                self._axes[row][c]._covered = True
         return a
 
     def __getitem__(self, key) -> Axes:
