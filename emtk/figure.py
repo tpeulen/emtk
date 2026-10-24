@@ -130,6 +130,9 @@ class Axes:
         self.no_xticklabels = False
         self.no_yticklabels = False
         self.bare = False
+        self.grid = True
+        self.col_span = 1
+        self._covered = False
 
     # -- colours ----------------------------------------------------------
     def _colour(self, colour, alpha: float | None = None) -> tuple[float, float, float, float]:
@@ -405,6 +408,12 @@ class Axes:
         self.hidden = True
         return self
 
+    def set_grid(self, on: bool = True) -> Axes:
+        """Draw grid lines inside the panel (``False`` turns them off -- a
+        2D histogram's bins read cleaner without lines through them)."""
+        self.grid = bool(on)
+        return self
+
     def set_bare(self) -> Axes:
         """Draw this panel's items without the plot frame or any axis decoration.
 
@@ -452,9 +461,19 @@ class Figure:
         self.title = str(title)
         self._axes = [[Axes(self) for _ in range(self.cols)] for _ in range(self.rows)]
 
-    def ax(self, row: int = 0, col: int = 0) -> Axes:
-        """The panel at ``(row, col)``."""
-        return self._axes[row][col]
+    def ax(self, row: int = 0, col: int = 0, span: int = 1) -> Axes:
+        """The panel at ``(row, col)``, covering *span* columns of the grid.
+
+        A page composes rows of different shapes: a density panel with its
+        marginal column beside it, then a trace panel across the whole width.
+        The covered cells are left empty (a later ``ax`` of them returns the
+        same panel -- spanning is bookkeeping, not splitting).
+        """
+        a = self._axes[row][col]
+        a.col_span = max(1, int(span))
+        for c in range(col + 1, min(self.cols, col + a.col_span)):
+            self._axes[row][c]._covered = True
+        return a
 
     def __getitem__(self, key) -> Axes:
         if isinstance(key, tuple):
@@ -609,9 +628,15 @@ class Figure:
                 aligned = self.rows > 1 and implot.begin_aligned_plots(f"##emtk-figure-col{c}")
                 try:
                     for r in range(self.rows):
+                        a = self._axes[r][c]
+                        if a._covered:
+                            im.set_cursor_pos((xs[c], ys[r]))
+                            im.dummy(widths[c], heights[r])
+                            continue
+                        span_w = (sum(widths[c:min(self.cols, c + a.col_span)])
+                                  + (a.col_span - 1) * _GAP)
                         im.set_cursor_pos((xs[c], ys[r]))
-                        _draw_axes(self._axes[r][c], f"##p{r}_{c}", widths[c], heights[r],
-                                   implot, I)
+                        _draw_axes(a, f"##p{r}_{c}", span_w, heights[r], implot, I)
                 finally:
                     if aligned:
                         implot.end_aligned_plots()
@@ -729,6 +754,9 @@ def _draw_axes(axes: Axes, ident: str, width: float, height: float, implot, I) -
         if axes.bare:
             x_flags |= I.AXIS_FLAGS_NO_DECORATIONS
             y_flags |= I.AXIS_FLAGS_NO_DECORATIONS
+        if not axes.grid:
+            x_flags |= I.AXIS_FLAGS_NO_GRID_LINES
+            y_flags |= I.AXIS_FLAGS_NO_GRID_LINES
         implot.setup_axes(axes.xlabel or None, axes.ylabel or None, x_flags, y_flags)
         if axes.has_right:
             implot.setup_axis(I.AXIS_Y2, axes.y2label or None, I.AXIS_FLAGS_AUX_DEFAULT)

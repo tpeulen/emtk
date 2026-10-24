@@ -332,3 +332,32 @@ def test_a_bare_panel_draws_its_text_without_a_frame():
     ax.text(0.5, 0.5, "report header")
     pdf = fig.pdf_bytes()
     assert pdf[:4] == b"%PDF" and b"%%EOF" in pdf[-32:]
+
+
+def test_a_panel_spans_columns_of_the_grid():
+    """A spanned panel composes rows of different shapes beside each other."""
+    from emtk.figure import Figure
+
+    fig = Figure(rows=2, cols=2, size=(300, 200), width_ratios=[200.0, 100.0])
+    top = fig.ax(0, 0, span=2).set_bare()
+    top.set_xlim(0.0, 1.0)
+    top.set_ylim(0.0, 1.0)
+    top.text(0.5, 0.5, "full width row")
+    fig.ax(1, 0).line([0, 1], [0, 1])
+    fig.ax(1, 1).hide()
+    pdf = fig.pdf_bytes()
+    assert pdf[:4] == b"%PDF" and b"%%EOF" in pdf[-32:]
+    import io
+    import pymupdf
+    words = [w[4] for w in pymupdf.open("pdf", pdf)[0].get_text("words")]
+    assert "full width row" in " ".join(words)
+
+
+def test_grid_lines_can_be_turned_off():
+    """set_grid(False) is part of the panel API (bins read cleaner)."""
+    from emtk.figure import Figure
+
+    fig = Figure(rows=1, cols=1, size=(200, 150))
+    a = fig.ax().set_grid(False)
+    assert a is fig.ax() and a.grid is False
+    assert fig.pdf_bytes()[:4] == b"%PDF"
