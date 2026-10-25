@@ -267,9 +267,17 @@ def draw_chat_transcript(
                 t_name = tc.get("name", "tool")
                 t_status = tc.get("status", "running")
                 status_icon = "..." if t_status == "running" else ("[ok]" if t_status == "success" else "[x]")
-                
+
                 header_title = f"{status_icon} " + tr("Tool: {name}", domain="emtk").format(name=t_name)
-                if im.collapsing_header(header_title):
+                # Tool details are collapsed by default: the transcript reads
+                # as the conversation, and the arguments/output stay one click
+                # away. The open/closed state is owned per tool call (storage
+                # keyed by the push_id above), so the user's toggles stick
+                # across frames; ``open_=`` forces the state each call and the
+                # return value carries the user's click back into storage.
+                store = im.get_current_context().get_storage(im.get_current_context().get_id(f"tc_{t_idx}"))
+                if im.collapsing_header(header_title, open_=store.setdefault("open", False)):
+                    store["open"] = True
                     args_str = str(tc.get("arguments", ""))
                     if args_str:
                         im.text_disabled(tr("Arguments:", domain="emtk"))
@@ -278,6 +286,8 @@ def draw_chat_transcript(
                     if output_str:
                         im.text_disabled(tr("Output:", domain="emtk"))
                         im.text_wrapped(output_str)
+                else:
+                    store["open"] = False
                 im.pop_id()
 
         if msg.status == "streaming":
