@@ -30,7 +30,9 @@ visible -- the failure this whole module exists to stop being an invisible one.
 """
 from __future__ import annotations
 
+import functools
 import logging
+import os
 import pathlib
 
 import numpy as np
@@ -65,6 +67,78 @@ FONT_CANDIDATES: tuple[str, ...] = (
     "C:/Windows/Fonts/consola.ttf",
     "C:/Windows/Fonts/arialuni.ttf",
 )
+
+#: Font files looked up **by name** under :data:`_FONT_ROOTS`, after the paths above.
+#: Distributions disagree on where a font lives -- Debian keeps DejaVu under
+#: ``truetype/dejavu/``, Fedora under ``dejavu-sans-fonts/``, Symbola under
+#: ``gdouros-symbola/`` -- so a fixed path finds the font on one and nothing on the
+#: other, and on Fedora every Greek, Cyrillic, CJK and symbol glyph drew as nothing.
+#: Mono faces first (the layout is monospaced), then coverage.
+FONT_FILE_NAMES: tuple[str, ...] = (
+    "DejaVuSansMono.ttf",
+    "NotoSansMono-Regular.ttf",
+    "NotoSansMonoCJK-VF.ttc",
+    "NotoSansMonoCJKsc-Regular.otf",
+    "NotoSansCJK-Regular.ttc",
+    "NotoSansCJK-VF.ttc",
+    "DroidSansFallbackFull.ttf",
+    "NotoSans-Regular.ttf",
+    "NotoSansSymbols2-Regular.ttf",
+    "NotoSansSymbols-Regular.ttf",
+    "Symbola.ttf",
+    "DejaVuSans.ttf",
+    "NotoColorEmoji.ttf",
+)
+
+#: Where font files are searched by name (recursively), in order.
+_FONT_ROOTS: tuple[str, ...] = (
+    "/usr/share/fonts",
+    "/usr/local/share/fonts",
+    "~/.local/share/fonts",
+    "~/.fonts",
+    "/System/Library/Fonts",
+    "/Library/Fonts",
+    "~/Library/Fonts",
+    os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts"),
+)
+
+_FONT_SUFFIXES = (".ttf", ".ttc", ".otf", ".otc")
+
+
+@functools.lru_cache(maxsize=1)
+def _font_index() -> dict[str, str]:
+    """``{file name: path}`` of every font file under :data:`_FONT_ROOTS` (first root wins).
+
+    One walk per process: the font directories do not change while it runs, and the
+    walk is only paid when a glyph outside the baked atlas is first drawn.
+    """
+    index: dict[str, str] = {}
+    for root in _FONT_ROOTS:
+        base = pathlib.Path(root).expanduser()
+        if not base.is_dir():
+            continue
+        for directory, _dirs, files in os.walk(base):
+            for name in files:
+                if name.lower().endswith(_FONT_SUFFIXES):
+                    index.setdefault(name, os.path.join(directory, name))
+    return index
+
+
+@functools.lru_cache(maxsize=1)
+def _candidate_paths() -> tuple[str, ...]:
+    """The fonts to try, in order: :data:`FONT_CANDIDATES` where they are, else found by
+    name, then :data:`FONT_FILE_NAMES` found by name; duplicates and missing files dropped."""
+    found: list[str] = []
+    for path in FONT_CANDIDATES:
+        if not pathlib.Path(path).exists():
+            path = _font_index().get(pathlib.PurePath(path).name, "")
+        if path and path not in found:
+            found.append(path)
+    for name in FONT_FILE_NAMES:
+        path = _font_index().get(name, "")
+        if path and path not in found:
+            found.append(path)
+    return tuple(found)
 
 
 class GlyphCache:
@@ -181,7 +255,7 @@ class GlyphCache:
         kanji, and was drawing the box.
         """
         code = ord(char)
-        for path in FONT_CANDIDATES:
+        for path in _candidate_paths():
             covered = self._coverage(path)
             if covered is None or code not in covered:
                 continue

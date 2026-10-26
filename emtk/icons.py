@@ -254,9 +254,8 @@ def _rasterise_mask(icon: str):
     """A pictogram no colour font has, as a white mask from the first text font that covers it."""
     from PIL import Image, ImageDraw  # noqa: PLC0415
 
-    from .dynamic_font import FONT_CANDIDATES  # noqa: PLC0415
-
     from . import grapheme  # noqa: PLC0415
+    from .dynamic_font import _candidate_paths  # noqa: PLC0415
 
     text = icon.translate(_MODIFIERS)
     if len(text) > 1:
@@ -264,7 +263,7 @@ def _rasterise_mask(icon: str):
     if not text:
         return None
     code = ord(text[0])
-    for path in FONT_CANDIDATES:
+    for path in _candidate_paths():
         if "emoji" in path.lower() or not _covers(path, code):
             continue
         font = _font(path, (128,))

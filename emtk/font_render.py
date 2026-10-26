@@ -605,9 +605,9 @@ def _face_for(face: Face, char: str, chain: tuple = ()) -> Face:
         other = _cmap(other_face.path, other_face.index)
         if other is not None and ord(char) in other:
             return other_face
-    from .dynamic_font import FONT_CANDIDATES  # noqa: PLC0415
+    from .dynamic_font import _candidate_paths  # noqa: PLC0415
 
-    for path in FONT_CANDIDATES:
+    for path in _candidate_paths():
         if "emoji" in path.lower() or not os.path.exists(path):
             continue  # colour strikes cannot be rasterised as outlines
         other = _cmap(path, 0)
