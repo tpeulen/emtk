@@ -16,6 +16,13 @@ row it was opened on. A method that takes a second positional argument is also
 handed the key of the column under the pointer (``None`` from the keyboard).
 ``enabled_when`` names a model attribute or method (called with the row) that
 says whether the item can run; a disabled item is still shown, dimmed.
+
+An item with ``items_source`` instead of ``call`` is filled from the model when
+the menu opens: the method (called with the row) returns a list of
+``{"label", "call", "description", "enabled"}`` dicts whose ``call`` is a
+callable taking the row -- the items a menu cannot know beforehand ("Open in
+<tool>" for the tools that take this row). An empty list draws the item's own
+``label`` dimmed, so the menu says the action exists but has nothing to offer.
 Labels and descriptions go through ``tr()``; a description is the item's tooltip.
 """
 from __future__ import annotations
@@ -41,6 +48,22 @@ def _entries(binding: Any, record: Any):
 
     entries, calls = [], []
     for spec in binding.context_menu:
+        if spec.get("items_source"):
+            source = binding._lookup(str(spec["items_source"]))
+            items = []
+            if callable(source):
+                items = list((source(record) if _accepts(source, 1) else source()) or [])
+            if not items and spec.get("label"):
+                entries.append(MenuItem(str(spec["label"]), enabled=False,
+                                        tooltip=spec.get("description") or None))
+                calls.append(None)
+            for item in items:
+                call = item.get("call")
+                entries.append(MenuItem(str(item.get("label", "")),
+                                        enabled=bool(item.get("enabled", True)) and callable(call),
+                                        tooltip=item.get("description") or None))
+                calls.append(_RowCall(call) if callable(call) else None)
+            continue
         if spec.get("separator") or not spec.get("label"):
             entries.append(None)
             calls.append(None)
@@ -56,6 +79,16 @@ def _entries(binding: Any, record: Any):
                                 tooltip=spec.get("description") or None))
         calls.append(call)
     return entries, calls
+
+
+class _RowCall:
+    """An ``items_source`` entry's call: it takes the row only, whatever else its signature allows."""
+
+    def __init__(self, call: Any) -> None:
+        self.call = call
+
+    def __call__(self, record: Any) -> Any:
+        return self.call(record)
 
 
 def _accepts(fn: Any, n: int) -> bool:

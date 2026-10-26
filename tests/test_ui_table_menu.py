@@ -143,3 +143,65 @@ def test_shift_f10_and_the_menu_key_open_it_on_the_selected_row():
     h.frame()
     h.frame()
     assert h.binding.menu_panel is not None
+
+
+
+class OfferingRows(Rows):
+    """A model whose menu offers per-row items (the tools that take a row)."""
+
+    def __init__(self):
+        super().__init__()
+        self.offers = {"n2": ["Tool A", "Tool B"]}
+
+    def open_in(self, record):
+        return [
+            {"label": f"Open in {tool}",
+             "call": (lambda row, t=tool: self.calls.append((t, row["name"]))),
+             "description": f"Give the row to {tool}."}
+            for tool in self.offers.get(record["name"], [])
+        ]
+
+
+OFFERING_SPEC = {"sections": [{
+    "type": "custom", "key": "data_table",
+    "options": {
+        "source": "listing", "row_key": "_id", "height": 200,
+        "columns": [{"key": "_id", "title": "ID"}, {"key": "name", "title": "Name"}],
+        "context_menu": [
+            {"label": "Copy row", "call": "copy_row"},
+            {"label": "Open in…", "items_source": "open_in", "description": "No tool takes it."},
+        ],
+    },
+}]}
+
+
+class OfferingHarness(Harness):
+    def __init__(self):
+        self.model = OfferingRows()
+        self.io, self.storage, self.state = emtk.IO(), {}, FormState()
+        self.frame()
+
+    def frame(self):
+        with emtk.frame(RecordingPainter(), (0, 0, 480, 360), io=self.io, storage=self.storage):
+            emtk.begin("form", (0, 0, 480, 360))
+            draw_form(OFFERING_SPEC, self.model, self.state)
+            emtk.end()
+        io = self.io
+        for i in range(3):
+            io.mouse_clicked[i] = io.mouse_released[i] = False
+        io.key, io.text = 0, ""
+        io.key_shift = False
+
+
+def test_items_source_fills_the_menu_from_the_model_when_it_opens():
+    """An ``items_source`` item asks the model for its entries per row (Open in <tool>)."""
+    h = OfferingHarness()
+    h.click(h.row_xy(2), button=1)
+    assert [e.label for e in h.binding.menu_panel.entries] == [
+        "Copy row", "Open in Tool A", "Open in Tool B"]
+    h.click(h.item_xy(2))
+    assert h.model.calls[-1] == ("Tool B", "n2")
+    # a row no tool takes: the item's own label, dimmed
+    h.click(h.row_xy(0), button=1)
+    last = h.binding.menu_panel.entries[-1]
+    assert last.label == "Open in…" and not last.enabled
