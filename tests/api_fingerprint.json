@@ -684,8 +684,12 @@
      "line": "def(self, x, y, *, color=None, width=1.5, dash='-', marker=None, marker_size=4.0, alpha=None, label=None, right=False)",
      "mesh": "def(self, x_edges, y_edges, values, *, colormap='viridis', levels=None, log=False, colorbar=None, label=None)",
      "scatter": "def(self, x, y, *, color=None, colors=None, size=3.0, alpha=None, marker='o', label=None)",
+     "set_aligned": "def(self, aligned=True)",
+     "set_bare": "def(self)",
+     "set_grid": "def(self, on=True)",
      "set_labels": "def(self, x=None, y=None)",
      "set_log": "def(self, x=None, y=None)",
+     "set_pad": "def(self, left=None, top=None, right=None, bottom=None)",
      "set_right_label": "def(self, label)",
      "set_title": "def(self, title)",
      "set_xlim": "def(self, low, high)",
@@ -693,7 +697,7 @@
      "set_ylim": "def(self, low, high)",
      "set_yticks": "def(self, values, labels=None)",
      "stairs": "def(self, x, y, *, color=None, width=1.5, label=None)",
-     "text": "def(self, x, y, s, *, color='k', offset=(0.0, 0.0))",
+     "text": "def(self, x, y, s, *, color='k', offset=(0.0, 0.0), align='center')",
      "vline": "def(self, x, *, color='0.5', width=1.0, dash='-', label=None)",
      "vspan": "def(self, x0, x1, *, color='C3', alpha=0.1, label=None)"
     }
@@ -703,8 +707,8 @@
     "decorators": [],
     "members": {
      "__getitem__": "def(self, key)",
-     "__init__": "def(self, rows=1, cols=1, size=(640, 480), title='', height_ratios=None, width_ratios=None)",
-     "ax": "def(self, row=0, col=0)",
+     "__init__": "def(self, rows=1, cols=1, size=(640, 480), title='', height_ratios=None, width_ratios=None, margin=0.0, hgap=_GAP, vgap=_GAP)",
+     "ax": "def(self, row=0, col=0, span=None)",
      "axes": "@property def(self)",
      "pdf_bytes": "def(self)",
      "png_bytes": "def(self, dpi=None)",
@@ -6254,6 +6258,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "a5ebd3720d1a783dd13029c6c2a65ec8e5457823892b63bb42936c05a152471b",
- "version": "0.1.32"
+ "sha256": "89948923b41cc46f09c819a032d8c57d6aaccf0916e57afac516c72661566009",
+ "version": "0.1.33"
 }
