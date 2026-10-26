@@ -261,7 +261,7 @@ mount(_emtk_canvas, _emtk_app_spec)
   const describe = () => ({
     app: page.app,
     methods: {
-      draw: page.draw, title: page.title, animating: page.animating, wake_in: page.wake_in,
+      draw: page.draw, title: page.title, cursor: page.cursor, animating: page.animating, wake_in: page.wake_in,
       press: page.press, release: page.release, move: page.move, wheel: page.wheel,
       resize: page.resize, key: page.key, key_up: page.key_up, clear_keys: page.clear_keys,
       copy: page.copy, paste: page.paste, open_path: page.open_path,
@@ -315,6 +315,8 @@ mount(_emtk_canvas, _emtk_app_spec)
       call(methods.draw);
       const title = call(methods.title);
       if (title && document.title !== title) document.title = title;
+      const cursor = call(methods.cursor);
+      if (cursor && canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
       if (call(methods.animating)) { redraw(); return; }
       const due = call(methods.wake_in);
       if (due >= 0) wake = setTimeout(() => { wake = null; redraw(); }, due * 1000);

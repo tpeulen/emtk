@@ -87,6 +87,35 @@ def window_title(app) -> str | None:
     return None if title is None else str(title)
 
 
+#: :data:`emtk.flags.MouseCursor` values as CSS cursor names -- what a page's canvas and
+#: ``rendercanvas`` take, and what the Qt and Tk hosts map onto their own shapes.
+CURSOR_CSS = {
+    -1: "none", 0: "default", 1: "text", 2: "move", 3: "ns-resize", 4: "ew-resize",
+    5: "nesw-resize", 6: "nwse-resize", 7: "pointer", 8: "not-allowed",
+}
+
+
+def mouse_cursor(app) -> str:
+    """The pointer shape *app* asked for in its last frame, as a CSS cursor name.
+
+    An app says so with a ``mouse_cursor`` attribute (a :data:`~emtk.flags.MouseCursor`
+    value or a callable returning one); an app with an ``io`` (:class:`ImApp`) is read
+    from :attr:`emtk.im_core.IO.mouse_cursor`. ``"default"`` when it says nothing.
+    Hosts read it after each frame, beside :func:`window_title`.
+    """
+    shape = getattr(app, "mouse_cursor", None)
+    if callable(shape):
+        shape = shape()
+    if shape is None:
+        shape = getattr(getattr(app, "io", None), "mouse_cursor", 0)
+    if isinstance(shape, str):
+        return shape
+    try:
+        return CURSOR_CSS.get(int(shape), "default")
+    except (TypeError, ValueError):
+        return "default"
+
+
 def next_frame_in(app) -> float | None:
     """Seconds until *app* wants a frame although no event arrives, or ``None``.
 

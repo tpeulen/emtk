@@ -178,6 +178,11 @@ class IO:
     #: :meth:`Context.end_frame` from :meth:`Context.request_frame_at`; a host
     #: reads it (:func:`emtk.app.next_frame_in`) and schedules one wake-up.
     next_frame_in: Optional[float] = None
+    #: ``ImGui::GetMouseCursor``: the pointer shape the frame asks for, one of
+    #: :data:`emtk.flags.MouseCursor` (``0`` the arrow). Reset to the arrow when the
+    #: outermost frame begins; a widget under the pointer (a splitter, a window
+    #: edge) sets it; a host reads it after the frame (:func:`emtk.app.mouse_cursor`).
+    mouse_cursor: int = 0
     #: Frames currently open on this IO. A frame drawn *inside* another one on the same IO
     #: (a child app sharing its parent's input) is part of the outer frame; the one-shot
     #: edges are spent when the outermost frame ends (:meth:`Context.end_frame`).
@@ -661,6 +666,7 @@ class Context:
         self.io.frames_open += 1
         if self.io.frames_open == 1:
             self.io.begin_frame(now)
+            self.io.mouse_cursor = 0
         self.io.backend_flags = painter_capabilities(self.p)
         self.hovered_id_previous_frame = self.hovered_id
         self.active_id_previous_frame = self.active_id

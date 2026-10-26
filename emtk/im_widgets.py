@@ -4673,11 +4673,13 @@ def get_mouse_clicked_count(button: int = 0) -> int:
 
 
 def get_mouse_cursor() -> int:
-    return get_current_context().state(("cursor",)).get("shape", 0)
+    """The pointer shape this frame asks for (:data:`MouseCursor`)."""
+    return int(get_current_context().io.mouse_cursor)
 
 
 def set_mouse_cursor(shape: int) -> None:
-    get_current_context().state(("cursor",))["shape"] = int(shape)
+    """Ask for a pointer shape for this frame; the host shows it after the frame."""
+    get_current_context().io.mouse_cursor = int(shape)
 
 
 # --------------------------------------------------------------------------- #

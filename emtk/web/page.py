@@ -358,6 +358,13 @@ class WebPage:
 
         return window_title(self.app) or ""
 
+    def cursor(self) -> str:
+        """The app's :func:`~emtk.app.mouse_cursor` (a CSS name): ``boot.js`` sets the
+        canvas' ``style.cursor`` from it after each frame."""
+        from ..app import mouse_cursor  # noqa: PLC0415
+
+        return mouse_cursor(self.app)
+
     def animating(self) -> bool:
         """Whether ``boot.js`` should keep a frame loop going."""
         try:

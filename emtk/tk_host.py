@@ -377,6 +377,20 @@ class TkHost:
         title = window_title(self.control)
         if title is not None and title != self.root.title():
             self.root.title(title)
+        from .app import mouse_cursor  # noqa: PLC0415
+
+        shape = mouse_cursor(self.control)
+        if shape != getattr(self, "_cursor_shape", "default"):
+            self._cursor_shape = shape
+            # Tk's portable names; the diagonals use the corner shapes every Tk has.
+            names = {"default": "", "text": "xterm", "move": "fleur", "ns-resize": "sb_v_double_arrow",
+                     "ew-resize": "sb_h_double_arrow", "nesw-resize": "bottom_left_corner",
+                     "nwse-resize": "bottom_right_corner", "pointer": "hand2",
+                     "not-allowed": "X_cursor", "none": "none"}
+            try:
+                self.canvas.configure(cursor=names.get(shape, ""))
+            except Exception:  # noqa: BLE001 - a shape this Tk does not know: keep the arrow
+                self.canvas.configure(cursor="")
         self._schedule_wake()
         return frame
 

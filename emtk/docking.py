@@ -51,8 +51,13 @@ What the user can do:
   box and to other floating windows, and windows stuck to it travel with it
   (shift-drag to take it alone). A band along a glued edge and an accent
   border on the partner windows show the snap while the drag lasts;
-* resize it by its bottom-right grip, fold it with the arrow or a double
-  click on the title, close it with ``×``;
+* resize it from any edge or corner (:func:`resize_zones`: the outermost
+  pixels of the frame; the pointer shows the matching resize arrow, the
+  bottom-right grip is the visible handle) -- only the edges dragged move,
+  they snap like a move does, and a window left flush with an edge is
+  anchored there; fold it to its title with the arrow or a double click on
+  the title (not on its buttons) and unfold it at the height it had -- a
+  folded window resizes sideways only; close it with ``×``;
 * while a window is dragged, every region shows a drop target -- a pad in
   its middle, and its tab strip. Over one, the whole region lights up where
   the window will go, and releasing docks it there: it sticks to the region
@@ -717,6 +722,95 @@ PAD_MAX = 110.0
 UNDOCK_DISTANCE = 14.0
 #: The resize grip's side.
 GRIP = 14.0
+#: The resize band along every edge of a floating window: the outermost pixels belong to
+#: resizing, everything inside them to the title, its buttons and the content.
+EDGE = 5.0
+#: The band along the top edge, thinner: the title bar under it still drags the window.
+TOP_EDGE = 3.0
+#: How far a corner zone reaches along each of its two edges.
+CORNER = GRIP
+
+#: A resize zone's pointer shape (:data:`emtk.flags.MouseCursor` values).
+ZONE_CURSORS = {"n": 3, "s": 3, "e": 4, "w": 4, "ne": 5, "sw": 5, "nw": 6, "se": 6}
+
+
+def resize_zones(frame: Rect, folded: bool = False) -> Dict[str, Tuple[Rect, ...]]:
+    """The eight resize zones of a window frame ``(x, y, w, h)``, each one or two rects.
+
+    Every zone lies *inside* the frame, so it never takes a click from a neighbour.
+    The corners are L-shaped bands :data:`CORNER` long (the bottom-right one the full
+    :data:`GRIP` square, the grip drawn there); the top band is :data:`TOP_EDGE` thin so
+    the title bar below it still drags. A *folded* window (title only) resizes sideways
+    only: its two side bands, no top, bottom or corners.
+    """
+    x, y, w, h = (float(v) for v in frame)
+    e, c, t = EDGE, min(CORNER, w / 2.0, h / 2.0), TOP_EDGE
+    if folded:
+        return {"w": ((x, y, e, h),), "e": ((x + w - e, y, e, h),)}
+    return {
+        "nw": ((x, y, c, t), (x, y, e, c)),
+        "ne": ((x + w - c, y, c, t), (x + w - e, y, e, c)),
+        "sw": ((x, y + h - c, e, c), (x, y + h - e, c, e)),
+        "se": ((x + w - GRIP, y + h - GRIP, GRIP, GRIP),),
+        "n": ((x + c, y, max(w - 2.0 * c, 0.0), t),),
+        "s": ((x + c, y + h - e, max(w - 2.0 * c, 0.0), e),),
+        "w": ((x, y + c, e, max(h - 2.0 * c, 0.0)),),
+        "e": ((x + w - e, y + c, e, max(h - 2.0 * c, 0.0)),),
+    }
+
+
+def resize_frame(zone: str, origin: Sequence[float], dx: float, dy: float,
+                 min_size: Tuple[float, float], bounds: Rect,
+                 others: Iterable[Rect] = (), snap: float = 0.0) -> Rect:
+    """The frame ``(x, y, w, h)`` after dragging the *zone* of *origin* by ``(dx, dy)``.
+
+    Only the dragged edges move: the left/top ones move the origin and keep the
+    opposite edge where it was. Each moved edge snaps (within *snap*) flush to the
+    *bounds* and to the edges of the *others*, stays inside the bounds (or where it
+    already was, for a window hanging past them), and the size never drops below
+    *min_size* -- a too-small drag from the left or top stops with the right or
+    bottom edge still fixed.
+    """
+    x0, y0, w0, h0 = (float(v) for v in origin)
+    bx, by, bw, bh = (float(v) for v in bounds)
+    mw, mh = (float(v) for v in min_size)
+    left, top, right, bottom = x0, y0, x0 + w0, y0 + h0
+    others = [tuple(float(v) for v in o[:4]) for o in others]
+    verticals = [bx, bx + bw] + [v for o in others for v in (o[0], o[0] + o[2])]
+    horizontals = [by, by + bh] + [v for o in others for v in (o[1], o[1] + o[3])]
+
+    def snapped(value: float, lines: list) -> float:
+        if snap <= 0.0:
+            return value
+        best = min(lines, key=lambda line: abs(line - value), default=value)
+        return best if abs(best - value) <= snap else value
+
+    if "w" in zone:
+        left = snapped(x0 + dx, verticals)
+        left = max(left, min(bx, x0))
+        left = min(left, right - mw)
+    if "e" in zone:
+        right = snapped(x0 + w0 + dx, verticals)
+        right = min(right, max(bx + bw, x0 + w0))
+        right = max(right, left + mw)
+    if "n" in zone:
+        top = snapped(y0 + dy, horizontals)
+        top = max(top, min(by, y0))
+        top = min(top, bottom - mh)
+    if "s" in zone:
+        bottom = snapped(y0 + h0 + dy, horizontals)
+        bottom = min(bottom, max(by + bh, y0 + h0))
+        bottom = max(bottom, top + mh)
+    return (left, top, right - left, bottom - top)
+
+
+def anchor_of(frame: Rect, bounds: Rect, slack: float = 0.5) -> Optional[str]:
+    """The edge or corner of *bounds* a frame is flush with (as :func:`snap` names it), or ``None``."""
+    x, y, w, h = (float(v) for v in frame)
+    bx, by, bw, bh = (float(v) for v in bounds)
+    vertical = "top" if abs(y - by) <= slack else ("bottom" if abs(y + h - (by + bh)) <= slack else "")
+    horizontal = "left" if abs(x - bx) <= slack else ("right" if abs(x + w - (bx + bw)) <= slack else "")
+    return "-".join(part for part in (vertical, horizontal) if part) or None
 #: The band drawn along an edge a dragged window is glued to.
 HINT_BAND = 3.0
 #: The accent stripe under a tab strip and along an inactive accented tab, logical pixels.
@@ -785,6 +879,8 @@ class DockManager:
         self._defaults: Dict[str, dict] = {}
         self._saved: dict = {}
         self._drag: Optional[dict] = None
+        #: The resize zone under the pointer (or being dragged) per window, last drawn.
+        self._zone_hot: Dict[str, Optional[str]] = {}
         self._context_targets: Dict[str, Optional[str]] = {}
         self._context_positions: Dict[str, Tuple[float, float]] = {}
         self._context_heights: Dict[str, float] = {}
@@ -2074,12 +2170,7 @@ class DockManager:
         if kind == "move":
             self._drag_move(drag, px, py)
         elif kind == "resize":
-            win = self.windows.get(drag["key"])
-            if win is not None and win.box is not None:
-                ox, oy, ow, oh = drag["origin"]
-                x, y, _w, _h = win.box
-                win.box = (x, y, max(ow + px - ox, win.min_size[0]),
-                           max(oh + py - oy, win.min_size[1], self._title_h))
+            self._drag_resize(drag, px, py)
         elif kind == "split":
             split, rect = drag["split"], drag["rect"]
             x, y, w, h = rect
@@ -2088,6 +2179,25 @@ class DockManager:
                 at = (px - x if split.axis == "h" else py - y) - drag["grab"]
                 low = min(split.min_size, span / 2.0)
                 split.ratio = min(max(at, low), span - low) / span
+
+    def _drag_resize(self, drag: dict, px: float, py: float) -> None:
+        """Move the dragged edges of a floating window (:func:`resize_frame`)."""
+        win = self.windows.get(drag["key"])
+        if win is None or win.box is None:
+            return
+        ox, oy, x, y, w, h = drag["origin"]
+        folded = win.collapsed
+        bounds = self._bounds_of(win)
+        others = [frame for key, frame in self._frames(
+            k for k in self.z if k != win.key and self.windows[k].workspace == win.workspace).items()]
+        min_h = max(win.min_size[1], self._title_h)
+        nx, ny, nw, nh = resize_frame(drag["zone"], (x, y, w, h), px - ox, py - oy,
+                                      (win.min_size[0], min_h), bounds, others,
+                                      snap=SNAP_DISTANCE if self.snapping else 0.0)
+        # A folded window keeps its unfolded height, restored exactly when it unfolds.
+        win.box = (nx, ny if not folded else y, nw, h if folded else nh)
+        frame = (nx, win.box[1], nw, self._title_h if folded else nh)
+        win.anchor = anchor_of(frame, bounds)
 
     def _drag_move(self, drag: dict, px: float, py: float) -> None:
         key = drag["key"]
@@ -2681,7 +2791,12 @@ class DockManager:
             draw.add_rect_filled((x, y), (x + w, y + th), title_bg)
             if not front:
                 draw.add_rect_filled((x, y), (x + w, y + ACCENT_STRIPE), accent.fill)
-        # The buttons first: the first item to claim the pointer keeps it.
+        # The resize bands first: the outermost pixels of every edge resize the window
+        # (the first item to claim the pointer keeps it); the buttons and the title own
+        # everything inside them.
+        if win.resizable:
+            self._resize_zones(ctx, win, frame)
+        # The buttons next.
         fold = (x, y, th, th)
         if self._button(ctx, fold, self._id("fold", win.key), None):
             win.collapsed = not win.collapsed
@@ -2761,19 +2876,35 @@ class DockManager:
         grip_hot = False
         if win.resizable:
             grip = (x + w - GRIP, y + fh - GRIP, GRIP, GRIP)
-            item = self._id("grip", win.key)
-            grip_hot = ctx.item_add(grip, item)
-            if grip_hot and io.mouse_clicked[0] and self._drag is None:
-                self._drag = {"kind": "resize", "key": win.key, "id": item,
-                              "origin": (io.mouse_pos[0], io.mouse_pos[1],
-                                         w, win.box[3] if win.box else fh)}
-                ctx.set_active_id(item)
-            grip_hot = grip_hot or (self._drag is not None and self._drag.get("id") == item)
+            grip_hot = self._zone_hot.get(win.key) == "se"
         self._draw_content(ctx, win, (x, y + th, w, fh - th))
         if grip is not None:
             gx, gy, gw, gh = grip
             colour = style.color(_core.Col.BUTTON_HOVERED if grip_hot else _core.Col.HEADER)
             draw.add_triangle_filled((gx + gw, gy), (gx + gw, gy + gh), (gx, gy + gh), colour)
+
+    def _resize_zones(self, ctx, win: DockWindow, frame: Rect) -> None:
+        """Claim the eight resize zones of *win* (:func:`resize_zones`): the pointer shape
+        over them, and a press there starts a resize of those edges."""
+        io = ctx.io
+        dragging = self._drag if (self._drag or {}).get("kind") == "resize" else None
+        hot = None
+        for zone, rects in resize_zones(frame, folded=win.collapsed).items():
+            for index, rect in enumerate(rects):
+                item = self._id("edge", win.key, zone, index)
+                if ctx.item_add(rect, item) and self._drag is None:
+                    hot = zone
+                    if io.mouse_clicked[0]:
+                        box = win.box if win.box is not None else frame
+                        self._drag = {"kind": "resize", "key": win.key, "id": item,
+                                      "zone": zone,
+                                      "origin": (io.mouse_pos[0], io.mouse_pos[1], *box)}
+                        ctx.set_active_id(item)
+        if dragging is not None and dragging.get("key") == win.key:
+            hot = dragging["zone"]
+        self._zone_hot[win.key] = hot
+        if hot is not None:
+            ctx.io.mouse_cursor = 4 if win.collapsed else ZONE_CURSORS[hot]
 
     def _open_context(self, ctx, scope: str, key: Optional[str]) -> None:
         self._context_targets[scope] = key

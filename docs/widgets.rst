@@ -587,6 +587,27 @@ section.
 
     assert painter.triangles
 
+Window edges, folding and the pointer shape
+-------------------------------------------
+
+Floating dock windows (``emtk.docking``) and dialog windows
+(``emtk.dialog_window.DialogWindow`` -- the help, message and file dialogs are
+drawn in one) resize from **every edge and corner**: the outermost few pixels
+of the frame (``docking.resize_zones``) belong to resizing, everything inside
+them to the title bar, its buttons and the content. Only the dragged edges
+move (``docking.resize_frame``): a drag on the left or top edge keeps the right
+or bottom edge where it was, the minimum size stops it, and dock windows snap
+the moved edges to the box and to other windows. A double click on the title
+folds a window to its title bar and a second one unfolds it at the height it
+had; a folded window resizes sideways only.
+
+The pointer shape follows: a widget asks for one with
+``im.set_mouse_cursor(MouseCursor.RESIZE_EW)`` (reset to the arrow every
+frame), and every host shows it after the frame -- ``canvas.set_cursor`` on the
+native host (a platform without the diagonal shapes gets the nearest one), the
+widget cursor in Qt and Tk, ``canvas.style.cursor`` on a page
+(``emtk.app.mouse_cursor`` gives the CSS name).
+
 File dialog
 -----------
 

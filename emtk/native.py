@@ -1315,6 +1315,7 @@ class NativeHost:
 
             self._render_error_panel(view, report_frame_error(error))
         self._retitle()
+        self._recursor()
         if getattr(self.app, "close_requested", False):
             if self._loop is not None and not getattr(self, "_close_scheduled", False):
                 self._close_scheduled = True
@@ -1375,6 +1376,32 @@ class NativeHost:
             set_title = getattr(self.canvas, "set_title", None)
             if callable(set_title):
                 set_title(title)
+
+    #: What a diagonal or move shape falls back to on a platform whose cursor set lacks
+    #: it (GLFW before 3.4 has no diagonal resize cursors): the nearest one it has.
+    CURSOR_FALLBACK = {"nwse-resize": "crosshair", "nesw-resize": "crosshair",
+                       "move": "crosshair"}
+
+    def _recursor(self) -> None:
+        """Show the pointer shape the app asked for (:func:`~emtk.app.mouse_cursor`)."""
+        from .app import mouse_cursor  # noqa: PLC0415
+
+        shape = mouse_cursor(self.app)
+        if shape == getattr(self, "_cursor", "default"):
+            return
+        set_cursor = getattr(self.canvas, "set_cursor", None)
+        if not callable(set_cursor):
+            return
+        for name in (shape, self.CURSOR_FALLBACK.get(shape), "default"):
+            if name is None:
+                continue
+            try:
+                set_cursor(name)
+            except Exception as error:  # noqa: BLE001 - an unknown shape here: try the next
+                logging.getLogger(__name__).debug("cursor %r not available: %s", name, error)
+                continue
+            self._cursor = shape
+            return
 
     def request_draw(self) -> None:
         """Ask for a frame; the canvas coalesces requests."""

@@ -272,6 +272,27 @@ def host_class():
             else:
                 self._background = tuple(int(round(c)) for c in bg_vals)
 
+        #: CSS cursor names (:func:`emtk.app.mouse_cursor`) as Qt shapes.
+        _QT_CURSORS = {
+            "default": "ArrowCursor", "text": "IBeamCursor", "move": "SizeAllCursor",
+            "ns-resize": "SizeVerCursor", "ew-resize": "SizeHorCursor",
+            "nesw-resize": "SizeBDiagCursor", "nwse-resize": "SizeFDiagCursor",
+            "pointer": "PointingHandCursor", "not-allowed": "ForbiddenCursor",
+            "none": "BlankCursor",
+        }
+
+        def _recursor(self) -> None:
+            """Show the pointer shape the control asked for in its last frame."""
+            from .app import mouse_cursor  # noqa: PLC0415
+
+            shape = mouse_cursor(self.control)
+            if shape == getattr(self, "_cursor_shape", "default"):
+                return
+            self._cursor_shape = shape
+            name = self._QT_CURSORS.get(shape, "ArrowCursor")
+            holder = getattr(QtCore.Qt, "CursorShape", QtCore.Qt)
+            self.setCursor(getattr(holder, name, holder.ArrowCursor))
+
         def paintEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
             """Draw the control across the whole widget."""
             from .qt_painter import QtPainter
@@ -299,6 +320,7 @@ def host_class():
             title = window_title(self.control)
             if title is not None and title != self.window().windowTitle():
                 self.window().setWindowTitle(title)
+            self._recursor()
             # A control that is animating (a playback, results streaming in)
             # needs frames without input, as it gets in every other host:
             # ask for the next one once this one is on screen.
