@@ -20,6 +20,11 @@ from __future__ import annotations
 
 import math
 
+try:  # optional (emtk has no hard dependency): vectorised axis fitting
+    import numpy as np
+except ImportError:  # pragma: no cover - the per-point loop below
+    np = None
+
 from . import implot_internal as I
 from . import im_core as _core
 from .implot_internal import gp, has_flag
@@ -299,20 +304,49 @@ def fit_point(p) -> None:
     ya.extend_fit_with(xa, p[1], p[0])
 
 
-def _fitter1(points):
-    def fit(xa, ya):
+def _extend_axis(axis, alt, v, v_alt) -> None:
+    """``Axis.extend_fit_with`` over arrays: the same rules (finite, inside the constraint range,
+    positive on a log axis, inside the other axis' range when this one fits to it), one pass."""
+    keep = np.isfinite(v) & (v >= axis.constraint_range[0]) & (v <= axis.constraint_range[1])
+    if axis.scale == I.SCALE_LOG10:
+        keep &= v > 0.0
+    if has_flag(axis.flags, I.AXIS_FLAGS_RANGE_FIT):
+        keep &= (v_alt >= alt.range_min) & (v_alt <= alt.range_max)
+    if keep.any():
+        sel = v[keep]
+        axis.fit_min = min(axis.fit_min, float(sel.min()))
+        axis.fit_max = max(axis.fit_max, float(sel.max()))
+
+
+def _fit_points(xa, ya, points) -> None:
+    """Fit both axes to *points* (``(x, y)`` pairs). Vectorised: a plot of tens of thousands of
+    points was walked point by point in Python on every fitted frame -- a live view refitting
+    each frame stuttered on it."""
+    try:
+        if np is None:
+            raise TypeError
+        arr = np.asarray(points, dtype=float).reshape(-1, 2)
+    except (TypeError, ValueError):  # no numpy, or an iterable that is not a sequence of pairs
         for x, y in points:
             xa.extend_fit_with(ya, x, y)
             ya.extend_fit_with(xa, y, x)
+        return
+    if arr.size:
+        x, y = arr[:, 0], arr[:, 1]
+        _extend_axis(xa, ya, x, y)
+        _extend_axis(ya, xa, y, x)
+
+
+def _fitter1(points):
+    def fit(xa, ya):
+        _fit_points(xa, ya, points)
     return fit
 
 
 def _fitter2(points1, points2):
     def fit(xa, ya):
         for pts in (points1, points2):
-            for x, y in pts:
-                xa.extend_fit_with(ya, x, y)
-                ya.extend_fit_with(xa, y, x)
+            _fit_points(xa, ya, pts)
     return fit
 
 
@@ -1658,6 +1692,10 @@ def _render_heatmap(vals, rows, cols, scale_min, scale_max, fmt, bmin, bmax, rev
     h = (bmax[1] - bmin[1]) / rows
     xe = [t(bmin[0] + c * w, 0.0)[0] for c in range(cols + 1)]
     ye = [t(0.0, yref + ydir * r * h)[1] for r in range(rows + 1)]
+    if not fmt:
+        _render_heatmap_runs(p, vals, rows, cols, scale_min, scale_max, col_maj, cmap_colour,
+                             xe, ye, cull)
+        return
     labels = []
     for idx in range(rows * cols):
         if col_maj:
@@ -1685,6 +1723,42 @@ def _render_heatmap(vals, rows, cols, scale_min, scale_max, fmt, bmin, bmax, rev
             text = I.format_printf(fmt, v)
             size = I.calc_text_size(text)
             dl.add_text((cx - size[0] * 0.5, cy - size[1] * 0.5), I.calc_text_color(col), text)
+
+
+def _render_heatmap_runs(p, vals, rows, cols, scale_min, scale_max, col_maj, cmap_colour, xe, ye,
+                         cull) -> None:
+    """The cells of a label-free heatmap, a row at a time, neighbours of one colour filled as one
+    rectangle. The same pixels as cell by cell (the edges are the same rounded grid); a live
+    histogram, mostly empty cells of one colour, is redrawn at display rate and paid for each."""
+    span = scale_max - scale_min
+    for r in range(rows):
+        y0, y1 = round(ye[r]), round(ye[r + 1])
+        if y1 < y0:
+            y0, y1 = y1, y0
+        if not (y0 < cull[3] and y1 > cull[1]):
+            continue
+        run = None  # [x0, x1, colour]
+        for c in range(cols):
+            v = vals[c * rows + r] if col_maj else vals[r * cols + c]
+            tt = (v - scale_min) / span
+            tt = min(max(tt, 0.0), 1.0) if tt == tt else 0.0
+            col = cmap_colour(tt)
+            x0, x1 = round(xe[c]), round(xe[c + 1])
+            if x1 < x0:
+                x0, x1 = x1, x0
+            if col[3] == 0 or not (x0 < cull[2] and x1 > cull[0]):
+                if run is not None:
+                    p.fill_rect(run[0], y0, max(run[1] - run[0], 1), max(y1 - y0, 1), run[2])
+                    run = None
+                continue
+            if run is not None and run[2] == col and run[1] == x0:
+                run[1] = x1
+                continue
+            if run is not None:
+                p.fill_rect(run[0], y0, max(run[1] - run[0], 1), max(y1 - y0, 1), run[2])
+            run = [x0, x1, col]
+        if run is not None:
+            p.fill_rect(run[0], y0, max(run[1] - run[0], 1), max(y1 - y0, 1), run[2])
 
 
 def _flat(values) -> list:
