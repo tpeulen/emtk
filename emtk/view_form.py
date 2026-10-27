@@ -590,8 +590,12 @@ def _draw_value(section: dict, model: Any, state: FormState, width: float) -> No
     if kind == "password":
         # A spec that says ``kind: "password"`` gets a masked field: the text is never drawn.
         flags |= InputTextFlags.PASSWORD
+    # read-only: shown dimmed, as the date and text-block fields are, so it reads as a value the
+    # form reports rather than one to edit
+    _w.begin_disabled(read_only)
     entered, text = _w.input_text(f"##{name}", shown, str(section.get("placeholder", "")), flags,
                                   elide_start=str(section.get("elide", "")).lower() == "start")
+    _w.end_disabled()
     _remember(state, f"{name}.edit" if slider else name)
     _tooltip(section)
     if kind in ("int", "float") and not read_only and value is not None:
