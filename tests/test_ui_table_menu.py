@@ -205,3 +205,23 @@ def test_items_source_fills_the_menu_from_the_model_when_it_opens():
     h.click(h.row_xy(0), button=1)
     last = h.binding.menu_panel.entries[-1]
     assert last.label == "Open in…" and not last.enabled
+
+
+def test_items_source_group_nests_the_items_in_submenus():
+    """Items with a ``group`` hang under the item's label as ``Open in… > group > tool``."""
+    from emtk.widgets import table_menu
+    from emtk.widgets.menus import Menu
+
+    h = OfferingHarness()
+    picked = []
+    h.model.open_in = lambda row: [
+        {"label": "Tool A", "group": "Imaging", "call": lambda r: picked.append("A")},
+        {"label": "Tool B", "group": "Photon data", "call": lambda r: picked.append("B")},
+    ]
+    entries, _calls = table_menu._entries(h.binding, h.binding.record(2))
+    menu = next(e for e in entries if isinstance(e, Menu))
+    assert menu.label == "Open in…"
+    assert [(m.label, [i.label for i in m.entries]) for m in menu.entries] == [
+        ("Imaging", ["Tool A"]), ("Photon data", ["Tool B"])]
+    item = menu.entries[1].entries[0]
+    assert callable(h.binding._menu_picks[id(item)])

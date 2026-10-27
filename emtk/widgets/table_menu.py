@@ -21,7 +21,8 @@ An item with ``items_source`` instead of ``call`` is filled from the model when
 the menu opens: the method (called with the row) returns a list of
 ``{"label", "call", "description", "enabled"}`` dicts whose ``call`` is a
 callable taking the row -- the items a menu cannot know beforehand ("Open in
-<tool>" for the tools that take this row). An empty list draws the item's own
+<tool>" for the tools that take this row). A dict with a ``group`` lands in a submenu of that
+name. An empty list draws the item's own
 ``label`` dimmed, so the menu says the action exists but has nothing to offer.
 Labels and descriptions go through ``tr()``; a description is the item's tooltip.
 """
@@ -43,10 +44,13 @@ def request(binding: Any, record: Any, column: Any, x: float, y: float) -> None:
 
 
 def _entries(binding: Any, record: Any):
-    """Build ``(entries, calls)`` for the declared items; *calls* is parallel to entries."""
-    from .menus import MenuItem
+    """Build ``(entries, calls)`` for the declared items; *calls* is parallel to entries.
 
-    entries, calls = [], []
+    An ``items_source`` item may carry ``group``: those items go into a submenu of that name
+    (their calls are found by item through ``binding._menu_picks``)."""
+    from .menus import Menu, MenuItem
+
+    entries, calls, picks = [], [], {}
     for spec in binding.context_menu:
         if spec.get("items_source"):
             source = binding._lookup(str(spec["items_source"]))
@@ -57,12 +61,29 @@ def _entries(binding: Any, record: Any):
                 entries.append(MenuItem(str(spec["label"]), enabled=False,
                                         tooltip=spec.get("description") or None))
                 calls.append(None)
+            submenus: dict[str, list] = {}
+            loose: list = []
             for item in items:
                 call = item.get("call")
-                entries.append(MenuItem(str(item.get("label", "")),
-                                        enabled=bool(item.get("enabled", True)) and callable(call),
-                                        tooltip=item.get("description") or None))
-                calls.append(_RowCall(call) if callable(call) else None)
+                entry = MenuItem(str(item.get("label", "")),
+                                 enabled=bool(item.get("enabled", True)) and callable(call),
+                                 tooltip=item.get("description") or None)
+                bound = _RowCall(call) if callable(call) else None
+                group = str(item.get("group") or "")
+                if group:
+                    submenus.setdefault(group, []).append(entry)
+                else:
+                    loose.append((entry, bound))
+                picks[id(entry)] = bound
+            if submenus:
+                # the grouped items hang under the item's own label: Open in… > group > tool
+                entries.append(Menu(str(spec.get("label") or ""),
+                                    [e for e, _ in loose] + [Menu(g, m) for g, m in submenus.items()]))
+                calls.append(None)
+            else:
+                for entry, bound in loose:
+                    entries.append(entry)
+                    calls.append(bound)
             continue
         if spec.get("separator") or not spec.get("label"):
             entries.append(None)
@@ -78,6 +99,7 @@ def _entries(binding: Any, record: Any):
         entries.append(MenuItem(str(spec["label"]), enabled=enabled and callable(call),
                                 tooltip=spec.get("description") or None))
         calls.append(call)
+    binding._menu_picks = picks
     return entries, calls
 
 
@@ -152,9 +174,11 @@ def draw(binding: Any, name: str, hovered: bool) -> None:
         index = next((i for i, row in enumerate(panel.entries) if row is item), None)
         calls = binding._menu_calls
         record, column = binding._menu_target
+        fn = calls[index] if index is not None and index < len(calls) else None
+        if not callable(fn):
+            fn = getattr(binding, "_menu_picks", {}).get(id(item))
         close()
-        if index is not None and index < len(calls) and callable(calls[index]):
-            fn = calls[index]
+        if callable(fn):
             fn(record, column) if _accepts(fn, 2) else fn(record)
 
     overlays.popup(("table-menu", name), panel, on_close=close, on_pick=picked)
