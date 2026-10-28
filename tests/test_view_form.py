@@ -824,3 +824,34 @@ def test_a_focused_spin_value_steps_wherever_the_pointer_is():
     io.mouse_wheel = -1.0
     driver.frame()
     assert model.don_value == 6.01
+
+
+class Toggle:
+    def __init__(self):
+        self.on = False
+
+    def toggle(self):
+        self.on = not self.on
+
+    def toggle_label(self):
+        return "Laser off" if self.on else "Laser on"
+
+    def toggle_role(self):
+        return "danger" if self.on else "success"
+
+
+def test_a_toggle_button_takes_its_label_and_colour_from_the_model():
+    from emtk.style import BUTTON_ROLES  # noqa: F401 - the roles the spec names
+
+    spec = {"sections": [{"type": "button_row", "buttons": [
+        {"label": "Laser", "action": "toggle", "label_source": "toggle_label",
+         "role_source": "toggle_role"}]}]}
+    model = Toggle()
+    driver = Driver(spec, model)
+    driver.frame()
+    assert "Laser on" in driver.painter.strings
+    off_fills = list(driver.painter.fills)
+    driver.click("toggle")
+    driver.frame()
+    assert model.on and "Laser off" in driver.painter.strings
+    assert list(driver.painter.fills) != off_fills          # another colour for the other role

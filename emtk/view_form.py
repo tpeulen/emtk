@@ -30,7 +30,8 @@ search box's "go"), ``live`` (a ``str`` field that commits every edit as it is t
 search-as-you-type box; the model debounces if it must); a slider with ``"field": false`` is the slider alone, its value
 written on it, a double click to type one), ``choice`` (``options``, ``labels``, ``descriptions`` (a tooltip per radio option), ``options_source``,
 ``style`` ``"radio"`` (inline) or ``"radio_list"`` (stacked), ``call``), ``toggle``, ``toggle_row``, ``button_row`` (a button's
-``icon`` is drawn in front of its ``label``; its ``role`` -- ``"primary"`` for the panel's one
+``icon`` is drawn in front of its ``label``; ``label_source`` / ``role_source`` take the caption / role from
+the model (a toggle); its ``role`` -- ``"primary"`` for the panel's one
 main action, ``"success"``, ``"danger"`` for a destructive one -- colours it from the theme,
 :data:`emtk.style.BUTTON_ROLES`),
 ``info``, ``progress`` (a bar over a fraction, indeterminate while it is
@@ -1038,6 +1039,15 @@ def _button_label(item: dict, model: Any) -> str:
     return icon_caption(str(item.get("icon") or ""), _tr_label(label))
 
 
+def _button_role(item: dict, model: Any):
+    """A button-row entry's colour role: its ``role``, or the model's ``role_source()`` --
+    a toggle that changes colour with its state (Laser on green, Laser off red)."""
+    source = item.get("role_source")
+    if source and callable(getattr(model, source, None)):
+        return getattr(model, source)() or None
+    return item.get("role")
+
+
 #: The narrowest a button-row button is drawn, however short its label.
 BUTTON_MIN_WIDTH = 16.0
 
@@ -1126,7 +1136,7 @@ def _draw_buttons(section: dict, model: Any, state: FormState, width: float) -> 
             action = str(item.get("action", ""))
             _w.begin_disabled(not _enabled(model, action))
             pressed = _w.button(_id(labels[i], action), (button_w, 0.0),
-                                role=item.get("role"))
+                                role=_button_role(item, model))
             _remember(state, action)
             if item.get("description"):
                 _w.set_item_tooltip(str(item["description"]))
