@@ -1275,6 +1275,11 @@ class NativeHost:
                     size = (width, height) if width > 0 and height > 0 else DEFAULT_WINDOW_SIZE
                 except (TypeError, ValueError, OverflowError, IndexError):
                     size = DEFAULT_WINDOW_SIZE
+            app_id = getattr(app, "app_id", None)
+            if app_id:   # Windows: its own task-bar entry and icon, not python.exe's
+                from .logo import set_app_id  # noqa: PLC0415
+
+                set_app_id(app_id)
             module = canvas_module(backend)
             self._loop = getattr(module, "loop", None)
             self.backend = module.__name__.rsplit(".", 1)[-1]
@@ -1290,6 +1295,11 @@ class NativeHost:
             self._loop = None
             self.backend = type(canvas).__module__.rsplit(".", 1)[-1]
         self.canvas = canvas
+        icon = getattr(app, "window_icon", None)
+        if icon is not None:   # an .ico, .svg, .png ... (emtk.logo)
+            from .logo import set_window_icon  # noqa: PLC0415
+
+            set_window_icon(canvas, icon)
         self._wake_loop = loop
         if self.backend == "glfw":    # copy *and* paste through glfw
             from . import clipboard  # noqa: PLC0415

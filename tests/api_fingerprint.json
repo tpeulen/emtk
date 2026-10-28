@@ -2640,6 +2640,15 @@
     }
    }
   },
+  "emtk.logo": {
+   "WINDOW_ICON_SIZES": "value",
+   "install_shortcut": "def(name, target, arguments='', icon=None, app_id=None, working_dir=None, start_menu=True, desktop=False, minimized=False)",
+   "load_logo": "def(source, size=None)",
+   "logo_texture": "def(source, size=None, filter='linear')",
+   "set_app_id": "def(app_id)",
+   "set_window_icon": "def(canvas, source)",
+   "write_ico": "def(source, path, sizes=WINDOW_ICON_SIZES)"
+  },
   "emtk.mathtext": {
    "MathTextureCache": {
     "bases": [],
@@ -6265,6 +6274,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "60190ba37b7c76931b1184d4d798e3efc73ed18ae735a996465b93b4b85b2144",
- "version": "0.1.35"
+ "sha256": "0a13b93c099c8425cecef5f1f9790404ac0d237a672fe6e51b842b2e0c386936",
+ "version": "0.1.36"
 }
