@@ -107,6 +107,8 @@ class DialogWindow:
         #: the height it had. The content still runs, clipped away and inert.
         self.folded = False
         self._resize: tuple | None = None
+        #: The user dragged or resized it: from then on it stays where they put it.
+        self._moved = False
 
     # ---------------------------------------------------------------- state
     def show(self) -> None:
@@ -128,7 +130,11 @@ class DialogWindow:
         fx, fy, fw, fh = frame
         w = min(self.size[0], max(fw - 20.0, 80.0))
         h = min(self.size[1], max(fh - 20.0, self.HEADER_H + 20.0))
-        if self.pos is None:
+        if self.pos is None or (self.fit_height and not self._moved):
+            # Centred in the frame. A fit_height window learns its real height from its
+            # first frames (size[1] is only a guess until then), so it is centred again on
+            # that height until the user moves it -- else it grows down from a top placed
+            # for the guess and sits low.
             self.pos = (fx + (fw - w) / 2.0, fy + (fh - h) / 2.0)
         # Clamp the complete window, not merely a visible title/header strip. A
         # dialog can outlive a host resize (or a host can be recreated smaller),
@@ -164,6 +170,8 @@ class DialogWindow:
         draw = _core.get_window_draw_list()
         io = _core.get_io()
         resizing = self._resize_zones(frame, (x, y, w, h))
+        if resizing or self._resize is not None:
+            self._moved = True
         r, g, b = style.color(_core.Col.WINDOW_BG)[:3]
         draw.add_rect_filled((x, y), (x + w, y + h), (r, g, b, 255))
         draw.add_rect_filled((x, y), (x + w, y + self.HEADER_H),
@@ -210,6 +218,7 @@ class DialogWindow:
                 _core.get_current_context().request_frame()
             else:
                 self._drag = (mx - x, my - y)
+                self._moved = True
         if self._drag is not None:
             if io.mouse_down[0]:
                 self.pos = (mx - self._drag[0], my - self._drag[1])

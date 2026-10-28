@@ -320,7 +320,7 @@
     "members": {
      "HEADER_H": "attribute",
      "PADDING": "attribute",
-     "__init__": "def(self, title, size=(420.0, 300.0), pos=None, key='', escape_closes=True, fit_height=False, close_button=True, modal=True)",
+     "__init__": "def(self, title, size=(420.0, 300.0), pos=None, key='', escape_closes=True, fit_height=False, close_button=True, modal=True, resizable=True, min_size=(160.0, 80.0))",
      "begin": "def(self, frame, buttons=())",
      "contains": "def(self, x, y)",
      "end": "def(self)",
@@ -1459,6 +1459,7 @@
      "key_super": "field=",
      "mouse_clicked": "field=",
      "mouse_clicked_pos": "field=",
+     "mouse_cursor": "field=",
      "mouse_delta": "@property def(self)",
      "mouse_double_clicked": "field=",
      "mouse_down": "field=",
@@ -2658,6 +2659,7 @@
    "render_math_to_texture": "def(formula, colour=(255, 255, 255, 255), font_size=14.0, dpi=144, cache=None)"
   },
   "emtk.message_dialog": {
+   "CONFIRM_COLOURS": "value",
    "KINDS": "value",
    "MessageDialogs": {
     "bases": [],
@@ -2727,7 +2729,8 @@
     "bases": [],
     "decorators": [],
     "members": {
-     "__init__": "def(self, app, size=None, title='emtk', backend=None, canvas=None, device=None, loop=None, decorated=True, floating=False, transparent=False, centred=False)",
+     "CURSOR_FALLBACK": "attribute",
+     "__init__": "def(self, app, size=None, title='emtk', backend=None, canvas=None, device=None, loop=None, decorated=True, floating=False, transparent=False, centred=False, fullscreen=False)",
      "close": "def(self)",
      "draw_frame": "def(self)",
      "is_interactive": "def(self)",
@@ -3879,6 +3882,7 @@
      "animating": "def(self)",
      "clear_keys": "def(self)",
      "copy": "def(self, cut=False)",
+     "cursor": "def(self)",
      "draw": "def(self)",
      "key": "def(self, name, text='', ctrl=False, shift=False, alt=False, meta=False)",
      "key_up": "def(self, name, ctrl=False, shift=False, alt=False, meta=False)",
@@ -6258,6 +6262,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "89948923b41cc46f09c819a032d8c57d6aaccf0916e57afac516c72661566009",
- "version": "0.1.33"
+ "sha256": "39d3d8941b804c5136db8e5b1a6d629f49c9265578428411098af97c0524d49b",
+ "version": "0.1.34"
 }

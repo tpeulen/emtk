@@ -20,13 +20,24 @@ class Host:
         self.painter = None
 
     def frame(self):
-        self.painter = RecordingPainter()
-        with emtk.frame(self.painter, FRAME, io=self.io, storage=self.storage):
-            self.dialogs.draw(FRAME)
+        # Draw until the open question's window has settled: a fit_height window learns its
+        # height in its first frame and is centred on it in the next, as a running app shows
+        # it before anyone can click.
+        for _ in range(4):
+            before = dict(self.dialogs.current.rects) if self.dialogs.current else None
+            self._draw()
+            after = self.dialogs.current.rects if self.dialogs.current else None
+            if before is None or after is None or before.get("window") == after.get("window"):
+                break
         self.io.mouse_clicked[0] = False
         self.io.mouse_released[0] = False
         self.io.key = 0
         self.io.text = ""
+
+    def _draw(self):
+        self.painter = RecordingPainter()
+        with emtk.frame(self.painter, FRAME, io=self.io, storage=self.storage):
+            self.dialogs.draw(FRAME)
 
     def click(self, rect):
         x, y, w, h = rect
@@ -179,3 +190,56 @@ def test_escape_dismisses_a_question_wherever_the_pointer_is():
     host.frame()
     host.key(KEY_ESCAPE)
     assert answers == [None, False], "Escape declines a confirm"
+
+
+def _colours_inside(painter, rect):
+    """Fill colours the painter drew inside *rect*, as 0..255 RGB."""
+    x, y, w, h = rect
+    out = []
+    for fx, fy, fw, fh, *rest in [*painter.fills, *[(s[0], s[1], s[2], s[3], s[5]) for s in
+                                                    painter.strokes]]:
+        colour = rest[0]
+        if colour is None or not (x - 1 <= fx and fy >= y - 1 and fx + fw <= x + w + 1
+                                  and fy + fh <= y + h + 1):
+            continue
+        rgb = tuple(colour)[:3]
+        if max(rgb) <= 1.0:
+            rgb = tuple(round(c * 255) for c in rgb)
+        out.append(tuple(int(round(c)) for c in rgb))
+    return out
+
+
+def test_a_confirm_shows_yes_green_and_no_red():
+    from emtk.message_dialog import CONFIRM_COLOURS
+
+    dialogs = MessageDialogs()
+    dialogs.confirm("Update Available", "A new version is available.", lambda yes: None)
+    host = Host(dialogs)
+    host.frame()
+    rects = dialogs.current.rects
+    assert CONFIRM_COLOURS["yes"][0][:3] in _colours_inside(host.painter, rects["button.yes"])
+    assert CONFIRM_COLOURS["no"][0][:3] in _colours_inside(host.painter, rects["button.no"])
+    # a message's OK keeps the theme's colour
+    dialogs.answer(True)
+    dialogs.message("Note", "Saved.")
+    host.frame()
+    ok = _colours_inside(host.painter, dialogs.current.rects["button.ok"])
+    assert ok and all(c not in (CONFIRM_COLOURS["yes"][0][:3], CONFIRM_COLOURS["no"][0][:3])
+                      for c in ok)
+
+
+def test_a_long_question_is_centred_on_its_real_height():
+    """The window's first height is a guess; a long message makes it grow, and it is centred
+    again on the height it really has (it used to grow downward from a top placed for the
+    guess, and sat low)."""
+    dialogs = MessageDialogs()
+    text = "\n".join(f"- change number {i}" for i in range(25))
+    dialogs.confirm("Update Available", text, lambda yes: None)
+    host = Host(dialogs)
+    for _ in range(4):
+        host.frame()
+    x, y, w, h = dialogs.current.rects["window"]
+    assert h > 300                                   # it grew to its content
+    fx, fy, fw, fh = FRAME
+    assert abs((y + h / 2) - (fy + fh / 2)) < 2.0
+    assert abs((x + w / 2) - (fx + fw / 2)) < 2.0

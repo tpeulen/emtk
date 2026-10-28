@@ -48,12 +48,19 @@ from .dialog_window import DialogWindow
 from .i18n import mark, tr
 from .keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN
 
-__all__ = ["KINDS", "MessageDialogs", "Question", "auto_answer"]
+__all__ = ["CONFIRM_COLOURS", "KINDS", "MessageDialogs", "Question", "auto_answer"]
 
 _log = logging.getLogger("emtk.message_dialog")
 
 #: The question kinds :func:`auto_answer` takes keywords for.
 KINDS = ("message", "confirm", "choice", "text")
+
+#: A confirm's buttons: *Yes* green, *No* red (button, hovered, pressed, text) -- white text
+#: at a WCAG contrast above 4.5 on each, in the light and the dark theme alike.
+CONFIRM_COLOURS = {
+    "yes": ((46, 125, 50, 255), (56, 142, 60, 255), (27, 94, 32, 255), (255, 255, 255, 255)),
+    "no": ((183, 28, 28, 255), (198, 40, 40, 255), (140, 18, 18, 255), (255, 255, 255, 255)),
+}
 
 #: Scripted answers installed by :func:`auto_answer` (kind -> value; ``"defaults"`` -> bool).
 _AUTO: dict[str, Any] = {}
@@ -326,8 +333,15 @@ class MessageDialogs:
         for index, (key, label) in enumerate(question.options):
             if index:
                 _w.same_line()
+            colours = CONFIRM_COLOURS.get(key) if question.kind == "confirm" else None
+            if colours:
+                for which, colour in zip((_core.Col.BUTTON, _core.Col.BUTTON_HOVERED,
+                                          _core.Col.BUTTON_ACTIVE, _core.Col.TEXT), colours):
+                    _w.push_style_color(which, colour)
             if _w.button(f"{tr(label)}##{window.key}.{key}"):
                 chosen = key
+            if colours:
+                _w.pop_style_color(4)
             question.rects[f"button.{key}"] = _w.get_item_rect()
         window.end()
         if window.box is not None:
