@@ -2660,6 +2660,7 @@
   },
   "emtk.message_dialog": {
    "CONFIRM_COLOURS": "value",
+   "KEY_ROLES": "value",
    "KINDS": "value",
    "MessageDialogs": {
     "bases": [],
@@ -2667,7 +2668,7 @@
     "members": {
      "__init__": "def(self, wake=None, width=440.0)",
      "answer": "def(self, value=None, *, key=None)",
-     "choice": "def(self, title, message, options, on_answer=None, *, default=None, detail='')",
+     "choice": "def(self, title, message, options, on_answer=None, *, default=None, detail='', roles=None)",
      "confirm": "def(self, title, message, on_answer=None, *, default=False, detail='', yes=mark('Yes', domain='emtk'), no=mark('No', domain='emtk'))",
      "contains": "def(self, x, y)",
      "current": "@property def(self)",
@@ -2691,11 +2692,13 @@
      "on_answer": "field=",
      "options": "field",
      "rects": "field=",
+     "roles": "field=",
      "title": "field",
      "value": "field=",
      "window": "field="
     }
    },
+   "ROLE_COLOURS": "value",
    "auto_answer": "@contextlib.contextmanager def(**answers)"
   },
   "emtk.native": {
@@ -6262,6 +6265,6 @@
    "unsupported_sections": "def(spec, model)"
   }
  },
- "sha256": "39d3d8941b804c5136db8e5b1a6d629f49c9265578428411098af97c0524d49b",
- "version": "0.1.34"
+ "sha256": "60190ba37b7c76931b1184d4d798e3efc73ed18ae735a996465b93b4b85b2144",
+ "version": "0.1.35"
 }

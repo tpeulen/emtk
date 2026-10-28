@@ -48,19 +48,32 @@ from .dialog_window import DialogWindow
 from .i18n import mark, tr
 from .keys import KEY_ENTER, KEY_ESCAPE, KEY_RETURN
 
-__all__ = ["CONFIRM_COLOURS", "KINDS", "MessageDialogs", "Question", "auto_answer"]
+__all__ = ["CONFIRM_COLOURS", "KEY_ROLES", "KINDS", "MessageDialogs", "Question", "ROLE_COLOURS",
+           "auto_answer"]
 
 _log = logging.getLogger("emtk.message_dialog")
 
 #: The question kinds :func:`auto_answer` takes keywords for.
 KINDS = ("message", "confirm", "choice", "text")
 
-#: A confirm's buttons: *Yes* green, *No* red (button, hovered, pressed, text) -- white text
-#: at a WCAG contrast above 4.5 on each, in the light and the dark theme alike.
-CONFIRM_COLOURS = {
+#: Button colours by role (button, hovered, pressed, text): go ahead green, the negative answer
+#: red, backing out yellow. White text on green and red, dark text on yellow -- each at a WCAG
+#: contrast above 4.5, in the light and the dark theme alike.
+ROLE_COLOURS = {
     "yes": ((46, 125, 50, 255), (56, 142, 60, 255), (27, 94, 32, 255), (255, 255, 255, 255)),
     "no": ((183, 28, 28, 255), (198, 40, 40, 255), (140, 18, 18, 255), (255, 255, 255, 255)),
+    "cancel": ((240, 190, 30, 255), (250, 205, 60, 255), (205, 160, 20, 255), (25, 25, 25, 255)),
 }
+#: The role of a button by its key, for every question: Yes/Save/OK go ahead, No/Don't Save/Skip
+#: are the negative answer, Cancel backs out. A question may name others (``roles=``).
+KEY_ROLES = {
+    "yes": "yes", "ok": "yes", "save": "yes", "apply": "yes", "import": "yes",
+    "overwrite": "yes", "continue": "yes",
+    "no": "no", "discard": "no", "dont_save": "no", "skip": "no",
+    "cancel": "cancel",
+}
+#: A confirm's two buttons (kept for callers that read it).
+CONFIRM_COLOURS = {"yes": ROLE_COLOURS["yes"], "no": ROLE_COLOURS["no"]}
 
 #: Scripted answers installed by :func:`auto_answer` (kind -> value; ``"defaults"`` -> bool).
 _AUTO: dict[str, Any] = {}
@@ -147,6 +160,8 @@ class Question:
     value: str = ""
     detail: str = ""
     on_answer: Callable[[Any], None] | None = None
+    #: Button colour roles by key (``"yes"``/``"no"``/``"cancel"``) beyond :data:`KEY_ROLES`.
+    roles: dict[str, str] = field(default_factory=dict)
     rects: dict[str, Rect] = field(default_factory=dict)
     window: DialogWindow | None = None
     _focused: bool = False
@@ -221,7 +236,8 @@ class MessageDialogs:
     def choice(self, title: str, message: str,
                options: Mapping[str, str] | Iterable[tuple[str, str]],
                on_answer: Callable[[str | None], None] | None = None, *,
-               default: str | None = None, detail: str = "") -> Question | None:
+               default: str | None = None, detail: str = "",
+               roles: Mapping[str, str] | None = None) -> Question | None:
         """Offer one button per option; the answer is the pressed option's key.
 
         Parameters
@@ -231,13 +247,17 @@ class MessageDialogs:
         default : str, optional
             Enter's answer and the scripted ``defaults`` answer; ``None`` (no
             choice) is the safe default for an overwrite or a deletion.
+        roles : mapping, optional
+            Colour role per key -- ``"yes"`` green, ``"no"`` red, ``"cancel"`` yellow -- for keys
+            :data:`KEY_ROLES` does not know (``save``/``discard``/``cancel`` it does).
         """
         pairs = list(options.items()) if isinstance(options, Mapping) else list(options)
         pairs = [(str(key), str(label)) for key, label in pairs]
         if default is not None and default not in {key for key, _label in pairs}:
             raise ValueError(f"default {default!r} is not among the options")
         return self._ask(Question("choice", str(title), str(message), pairs, default=default,
-                                  dismissed=None, detail=str(detail), on_answer=on_answer))
+                                  dismissed=None, detail=str(detail), on_answer=on_answer,
+                                  roles=dict(roles or {})))
 
     def text(self, title: str, message: str, on_answer: Callable[[str | None], None] | None = None,
              *, value: str = "", default: str | None = None, detail: str = "") -> Question | None:
@@ -333,7 +353,8 @@ class MessageDialogs:
         for index, (key, label) in enumerate(question.options):
             if index:
                 _w.same_line()
-            colours = CONFIRM_COLOURS.get(key) if question.kind == "confirm" else None
+            role = (question.roles or {}).get(key) or KEY_ROLES.get(key)
+            colours = ROLE_COLOURS.get(role) if role else None
             if colours:
                 for which, colour in zip((_core.Col.BUTTON, _core.Col.BUTTON_HOVERED,
                                           _core.Col.BUTTON_ACTIVE, _core.Col.TEXT), colours):

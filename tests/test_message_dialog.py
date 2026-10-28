@@ -219,13 +219,12 @@ def test_a_confirm_shows_yes_green_and_no_red():
     rects = dialogs.current.rects
     assert CONFIRM_COLOURS["yes"][0][:3] in _colours_inside(host.painter, rects["button.yes"])
     assert CONFIRM_COLOURS["no"][0][:3] in _colours_inside(host.painter, rects["button.no"])
-    # a message's OK keeps the theme's colour
+    # a message's OK goes ahead: green too
     dialogs.answer(True)
     dialogs.message("Note", "Saved.")
     host.frame()
-    ok = _colours_inside(host.painter, dialogs.current.rects["button.ok"])
-    assert ok and all(c not in (CONFIRM_COLOURS["yes"][0][:3], CONFIRM_COLOURS["no"][0][:3])
-                      for c in ok)
+    assert CONFIRM_COLOURS["yes"][0][:3] in _colours_inside(host.painter,
+                                                            dialogs.current.rects["button.ok"])
 
 
 def test_a_long_question_is_centred_on_its_real_height():
@@ -243,3 +242,34 @@ def test_a_long_question_is_centred_on_its_real_height():
     fx, fy, fw, fh = FRAME
     assert abs((y + h / 2) - (fy + fh / 2)) < 2.0
     assert abs((x + w / 2) - (fx + fw / 2)) < 2.0
+
+
+def test_every_question_colours_its_buttons_by_role():
+    """Save / Don't Save / Cancel as Yes / No / Cancel: green, red, yellow -- and a caller's own
+    keys by the roles it names."""
+    from emtk.message_dialog import ROLE_COLOURS
+
+    green, red, yellow = (ROLE_COLOURS[r][0][:3] for r in ("yes", "no", "cancel"))
+    dialogs = MessageDialogs()
+    dialogs.choice("Unsaved Project", "Save changes?",
+                   [("save", "Save"), ("discard", "Don't Save"), ("cancel", "Cancel")],
+                   default="cancel")
+    host = Host(dialogs)
+    host.frame()
+    rects = dialogs.current.rects
+    assert green in _colours_inside(host.painter, rects["button.save"])
+    assert red in _colours_inside(host.painter, rects["button.discard"])
+    assert yellow in _colours_inside(host.painter, rects["button.cancel"])
+    dialogs.answer(key="cancel")
+    dialogs.choice("Folders exist", "Overwrite?",
+                   [("overwrite", "Overwrite"), ("keep", "Keep both")], roles={"keep": "no"})
+    host.frame()
+    rects = dialogs.current.rects
+    assert green in _colours_inside(host.painter, rects["button.overwrite"])
+    assert red in _colours_inside(host.painter, rects["button.keep"])
+    dialogs.answer(key="keep")
+    dialogs.text("Name", "A name:")
+    host.frame()
+    rects = dialogs.current.rects
+    assert green in _colours_inside(host.painter, rects["button.ok"])
+    assert yellow in _colours_inside(host.painter, rects["button.cancel"])
