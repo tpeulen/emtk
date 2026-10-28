@@ -190,7 +190,7 @@ def install_shortcut(name: str, target: str, arguments: str = "", icon=None,
 
 
 def _stamp_app_id(link: str, app_id: str) -> None:
-    """Set System.AppUserModel.ID on a .lnk (through the shell's property store)."""
+    """Set System.AppUserModel.ID on a .lnk (the shell link's property store)."""
     import ctypes  # noqa: PLC0415
     from ctypes import wintypes  # noqa: PLC0415
 
@@ -209,23 +209,34 @@ def _stamp_app_id(link: str, app_id: str) -> None:
         _fields_ = [("vt", ctypes.c_ushort), ("r1", ctypes.c_ushort), ("r2", ctypes.c_ushort),
                     ("r3", ctypes.c_ushort), ("pwsz", ctypes.c_wchar_p), ("pad", ctypes.c_void_p)]
 
-    ole32, shell32 = ctypes.oledll.ole32, ctypes.oledll.shell32
+    ole32 = ctypes.oledll.ole32
     ole32.CoInitialize(None)
-    store = ctypes.c_void_p()
-    iid = GUID("{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}")             # IPropertyStore
-    shell32.SHGetPropertyStoreFromParsingPath(link, None, 2, ctypes.byref(iid),   # GPS_READWRITE
-                                              ctypes.byref(store))
-    vtbl = ctypes.cast(ctypes.cast(store, ctypes.POINTER(ctypes.c_void_p))[0],
-                       ctypes.POINTER(ctypes.c_void_p))
-    proto = ctypes.WINFUNCTYPE
-    set_value = proto(ctypes.HRESULT, ctypes.c_void_p, ctypes.POINTER(PROPERTYKEY),
-                      ctypes.POINTER(PROPVARIANT))(vtbl[6])
-    commit = proto(ctypes.HRESULT, ctypes.c_void_p)(vtbl[7])
-    release = proto(ctypes.c_ulong, ctypes.c_void_p)(vtbl[2])
-    key = PROPERTYKEY(GUID("{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}"), 5)  # AppUserModel.ID
-    value = PROPVARIANT(vt=31, pwsz=app_id)                            # VT_LPWSTR
+
+    def method(obj, index, *argtypes):
+        vtbl = ctypes.cast(ctypes.cast(obj, ctypes.POINTER(ctypes.c_void_p))[0],
+                           ctypes.POINTER(ctypes.c_void_p))
+        return ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, *argtypes)(vtbl[index])
+
+    link_obj, persist, store = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
+    ole32.CoCreateInstance(ctypes.byref(GUID("{00021401-0000-0000-C000-000000000046}")),  # ShellLink
+                           None, 1, ctypes.byref(GUID("{000214F9-0000-0000-C000-000000000046}")),
+                           ctypes.byref(link_obj))                    # IShellLinkW
+    query = method(link_obj, 0, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p))
+    query(link_obj, ctypes.byref(GUID("{0000010B-0000-0000-C000-000000000046}")),  # IPersistFile
+          ctypes.byref(persist))
+    query(link_obj, ctypes.byref(GUID("{886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99}")),  # IPropertyStore
+          ctypes.byref(store))
     try:
-        set_value(store, ctypes.byref(key), ctypes.byref(value))
-        commit(store)
+        method(persist, 5, ctypes.c_wchar_p, wintypes.DWORD)(persist, link, 2)        # Load
+        key = PROPERTYKEY(GUID("{9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3}"), 5)  # AppUserModel.ID
+        value = PROPVARIANT(vt=31, pwsz=app_id)                                     # VT_LPWSTR
+        method(store, 6, ctypes.POINTER(PROPERTYKEY), ctypes.POINTER(PROPVARIANT))(
+            store, ctypes.byref(key), ctypes.byref(value))                          # SetValue
+        method(store, 7)(store)                                                     # Commit
+        method(persist, 6, ctypes.c_wchar_p, wintypes.BOOL)(persist, link, True)    # Save
     finally:
-        release(store)
+        for obj in (store, persist, link_obj):
+            if obj:
+                ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(
+                    ctypes.cast(ctypes.cast(obj, ctypes.POINTER(ctypes.c_void_p))[0],
+                                ctypes.POINTER(ctypes.c_void_p))[2])(obj)          # Release
