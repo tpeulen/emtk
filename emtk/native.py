@@ -291,6 +291,34 @@ def open_canvas(module, size=DEFAULT_WINDOW_SIZE, title: str = "emtk",
                                        update_mode="ondemand")
 
 
+def make_fullscreen(canvas) -> bool:
+    """Make *canvas*' window cover its whole monitor, borderless (windowed fullscreen).
+
+    The window keeps its monitor and video mode (no mode switch, so alt-tab and a second
+    screen keep working); only the glfw backend can do it. Returns whether it did.
+    """
+    window = getattr(canvas, "_window", None)
+    if window is None or type(canvas).__module__.rsplit(".", 1)[-1] != "glfw":
+        return False
+    import glfw  # noqa: PLC0415
+
+    monitor = glfw.get_primary_monitor()
+    monitors = glfw.get_monitors() or [monitor]
+    wx, wy = glfw.get_window_pos(window)
+    for m in monitors:   # the monitor the window opened on
+        mx, my = glfw.get_monitor_pos(m)
+        mode = glfw.get_video_mode(m)
+        if mx <= wx < mx + mode.size.width and my <= wy < my + mode.size.height:
+            monitor = m
+            break
+    mx, my = glfw.get_monitor_pos(monitor)
+    mode = glfw.get_video_mode(monitor)
+    glfw.set_window_attrib(window, glfw.DECORATED, False)
+    glfw.set_window_pos(window, mx, my)
+    glfw.set_window_size(window, mode.size.width, mode.size.height)
+    return True
+
+
 def window_hints(decorated: bool = True, floating: bool = False, transparent: bool = False,
                  position: tuple | None = None) -> dict:
     """The glfw window hints for a window of this kind, by glfw attribute name.
@@ -1217,12 +1245,16 @@ class NativeHost:
         configures the surface premultiplied when the platform offers it, so
         a surface cleared to alpha 0 (``ControlSurface(background=(0, 0, 0, 0))``)
         shows the desktop through.
+    fullscreen : bool, optional
+        Cover the whole monitor, borderless (:func:`make_fullscreen`; glfw only) -- an
+        instrument's application window.
     """
 
     def __init__(self, app, size=None, title: str = "emtk",
                  backend: str | None = None, canvas=None, device=None,
                  loop=None, decorated: bool = True, floating: bool = False,
-                 transparent: bool = False, centred: bool = False) -> None:
+                 transparent: bool = False, centred: bool = False,
+                 fullscreen: bool = False) -> None:
         from .app import as_surface  # noqa: PLC0415
 
         self.app = app
@@ -1252,6 +1284,8 @@ class NativeHost:
                                                   ("centred", centred))
                     if value != (key == "decorated")}
             canvas = open_canvas(module, size=size, title=title, **kind)
+            if fullscreen:
+                make_fullscreen(canvas)
         else:
             self._loop = None
             self.backend = type(canvas).__module__.rsplit(".", 1)[-1]

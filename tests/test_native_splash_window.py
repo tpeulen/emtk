@@ -174,3 +174,53 @@ def test_a_cancelled_frame_asks_for_another(device):
     with pytest.raises(DrawCancelled):
         host._draw_frame()
     assert asked, "an occluded frame must be asked for again, or the window stays blank"
+
+
+class _FullscreenGlfw(types.ModuleType):
+    DECORATED = 1
+
+    def __init__(self):
+        super().__init__("glfw")
+        self.calls = []
+        self.mon = [object(), object()]
+
+    def get_primary_monitor(self):
+        return self.mon[0]
+
+    def get_monitors(self):
+        return self.mon
+
+    def get_window_pos(self, window):
+        return (2000, 100)                                   # opened on the second monitor
+
+    def get_monitor_pos(self, m):
+        return (0, 0) if m is self.mon[0] else (1920, 0)
+
+    def get_video_mode(self, m):
+        w, h = (1920, 1080) if m is self.mon[0] else (2560, 1440)
+        return types.SimpleNamespace(size=types.SimpleNamespace(width=w, height=h))
+
+    def set_window_attrib(self, window, attr, value):
+        self.calls.append(("attrib", attr, value))
+
+    def set_window_pos(self, window, x, y):
+        self.calls.append(("pos", x, y))
+
+    def set_window_size(self, window, w, h):
+        self.calls.append(("size", w, h))
+
+
+def test_fullscreen_covers_the_monitor_the_window_is_on(monkeypatch):
+    fake = _FullscreenGlfw()
+    monkeypatch.setitem(sys.modules, "glfw", fake)
+    canvas_cls = type("RenderCanvas", (), {"__module__": "rendercanvas.glfw"})
+    canvas = canvas_cls()
+    canvas._window = object()
+    assert native.make_fullscreen(canvas)
+    assert fake.calls == [("attrib", 1, False), ("pos", 1920, 0), ("size", 2560, 1440)]
+
+
+def test_fullscreen_is_a_no_op_off_glfw():
+    canvas = type("RenderCanvas", (), {"__module__": "rendercanvas.qt"})()
+    canvas._window = object()
+    assert not native.make_fullscreen(canvas)
